@@ -4,117 +4,222 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>White Kitchen Guides Export</title>
-  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/html-to-image/1.11.11/html-to-image.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
   <style>
-    * { font-family: "Bricolage Grotesque", system-ui, sans-serif; }
+    * { font-family: "Bricolage Grotesque", system-ui, sans-serif; box-sizing: border-box; margin: 0; padding: 0; }
     .mono { font-family: "JetBrains Mono", monospace; }
-    .page { width: 794px; min-height: 1123px; }
-    @media print {
-      body { background: white !important; }
-      .no-print { display: none !important; }
-      .page { box-shadow: none !important; margin: 0 !important; page-break-after: always; }
-    }
+    .page { width: 794px; min-height: 1123px; background: #ffffff; }
+    .dl-btn { cursor: pointer; user-select: none; border: none; }
+    .no-print { display: block; }
   </style>
 </head>
-<body class="bg-[#F5EFE7] text-[#201C19]">
-  <header class="no-print sticky top-0 z-20 bg-[#F5EFE7]/90 backdrop-blur-xl border-b border-[#E5D8CA]">
-    <div class="max-w-6xl mx-auto px-4 py-4 flex flex-col md:flex-row md:items-center justify-between gap-3">
+<body style="background:#F5EFE7;color:#201C19;margin:0;padding:0;">
+
+  <header class="no-print" style="position:sticky;top:0;z-index:20;background:rgba(245,239,231,0.95);backdrop-filter:blur(12px);border-bottom:1px solid #E5D8CA;">
+    <div style="max-width:1152px;margin:0 auto;padding:16px;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;">
       <div>
-        <div class="mono text-[11px] tracking-[0.22em] uppercase opacity-60">White Kitchen Pickleball</div>
-        <h1 class="text-2xl md:text-3xl font-[850] tracking-[-0.04em]">Guide Export Center</h1>
-        <p class="mono text-xs opacity-60 mt-1">Download the admin guide and user one-pager as PDF or PNG.</p>
+        <div class="mono" style="font-size:11px;letter-spacing:0.22em;text-transform:uppercase;opacity:0.6;">White Kitchen Pickleball</div>
+        <h1 style="font-size:28px;font-weight:850;letter-spacing:-0.04em;line-height:1.1;margin-top:4px;">Guide Export Center</h1>
+        <p class="mono" style="font-size:11px;opacity:0.6;margin-top:4px;">Download the admin guide and user one-pager as PDF or PNG.</p>
       </div>
-      <div class="flex flex-wrap gap-2">
-        <button id="adminPdfBtn" type="button" class="h-10 px-4 rounded-full bg-[#201C19] text-white text-sm font-bold cursor-pointer active:scale-[0.98] transition">Admin PDF</button>
-        <button id="adminPngBtn" type="button" class="h-10 px-4 rounded-full bg-white border border-[#DACBBB] text-sm font-bold cursor-pointer active:scale-[0.98] transition">Admin PNG</button>
-        <button id="userPdfBtn" type="button" class="h-10 px-4 rounded-full bg-[#D6FF5F] text-[#201C19] text-sm font-bold border border-[#201C19]/10 cursor-pointer active:scale-[0.98] transition">User PDF</button>
-        <button id="userPngBtn" type="button" class="h-10 px-4 rounded-full bg-white border border-[#DACBBB] text-sm font-bold cursor-pointer active:scale-[0.98] transition">User PNG</button>
+      <div id="statusMsg" class="mono" style="font-size:12px;color:#8C2C10;background:#FFE9E0;border:1px solid #FFC9B6;border-radius:999px;padding:8px 16px;display:none;">Preparing...</div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;">
+        <button id="btnAdminPdf" class="dl-btn" style="height:40px;padding:0 16px;border-radius:999px;background:#201C19;color:#ffffff;font-size:14px;font-weight:700;font-family:inherit;">Admin PDF</button>
+        <button id="btnAdminPng" class="dl-btn" style="height:40px;padding:0 16px;border-radius:999px;background:#ffffff;border:1px solid #DACBBB;font-size:14px;font-weight:700;font-family:inherit;">Admin PNG</button>
+        <button id="btnUserPdf" class="dl-btn" style="height:40px;padding:0 16px;border-radius:999px;background:#D6FF5F;color:#201C19;font-size:14px;font-weight:700;font-family:inherit;border:1px solid rgba(32,28,25,0.1);">User PDF</button>
+        <button id="btnUserPng" class="dl-btn" style="height:40px;padding:0 16px;border-radius:999px;background:#ffffff;border:1px solid #DACBBB;font-size:14px;font-weight:700;font-family:inherit;">User PNG</button>
       </div>
-      <p id="exportStatus" class="hidden mono text-[11px] text-[#725E50]"></p>
     </div>
   </header>
 
-  <main class="py-8 px-4 overflow-x-auto">
-    <div class="flex flex-col xl:flex-row gap-8 items-start justify-center">
-      <section id="adminGuide" class="page bg-white shadow-2xl p-12 relative overflow-hidden">
-        <div class="absolute -right-24 -top-24 w-72 h-72 rounded-full bg-[#D6FF5F]/25"></div>
-        <div class="relative z-10">
-          <div class="flex items-start justify-between border-b-4 border-[#201C19] pb-5">
+  <main style="padding:32px 16px;overflow-x:auto;">
+    <div style="display:flex;flex-direction:column;gap:32px;align-items:center;justify-content:center;">
+
+      <!-- ADMIN GUIDE PAGE -->
+      <section id="adminGuide" class="page" style="padding:48px;position:relative;overflow:hidden;box-shadow:0 25px 50px -12px rgba(0,0,0,0.25);">
+        <div style="position:absolute;right:-96px;top:-96px;width:288px;height:288px;border-radius:50%;background:rgba(214,255,95,0.25);"></div>
+        <div style="position:relative;z-index:10;">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;border-bottom:4px solid #201C19;padding-bottom:20px;">
             <div>
-              <div class="mono text-[11px] tracking-[0.25em] uppercase opacity-60">Admin Guide</div>
-              <h2 class="text-4xl font-[900] tracking-[-0.05em] leading-none mt-1">White Kitchen<br>Pickleball Court</h2>
+              <div class="mono" style="font-size:11px;letter-spacing:0.25em;text-transform:uppercase;opacity:0.6;">Admin Guide</div>
+              <h2 style="font-size:36px;font-weight:900;letter-spacing:-0.05em;line-height:1.08;margin-top:6px;">
+                <span style="display:block;">White Kitchen</span>
+                <span style="display:block;">Pickleball Court</span>
+              </h2>
             </div>
-            <div class="w-14 h-14 rounded-full bg-[#201C19] text-[#D6FF5F] grid place-items-center font-black text-lg">WK</div>
+            <div style="width:56px;height:56px;border-radius:50%;background:#201C19;color:#D6FF5F;display:grid;place-items:center;font-weight:900;font-size:18px;">WK</div>
           </div>
 
-          <div class="grid grid-cols-2 gap-5 mt-7">
-            <info-card title="Recommended Live Link" body="Use Vercel as the official customer portal. Keep Firebase as backup or future database platform."></info-card>
-            <info-card title="Admin Access" body="Click Staff, enter the admin PIN. Default PIN is 1234 unless changed in Admin > Security."></info-card>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:28px;">
+            <div style="border-radius:24px;background:#FFFBF5;border:1px solid #EAE0D5;padding:20px;">
+              <h3 style="font-weight:850;font-size:18px;letter-spacing:-0.03em;">Recommended Live Link</h3>
+              <p style="font-size:14px;line-height:1.5;margin-top:8px;opacity:0.75;">Use Vercel as the official customer portal. Keep Firebase as backup or future database platform.</p>
+            </div>
+            <div style="border-radius:24px;background:#FFFBF5;border:1px solid #EAE0D5;padding:20px;">
+              <h3 style="font-weight:850;font-size:18px;letter-spacing:-0.03em;">Admin Access</h3>
+              <p style="font-size:14px;line-height:1.5;margin-top:8px;opacity:0.75;">Click Staff, enter the admin PIN. Default PIN is 1234 unless changed in Admin &gt; Security.</p>
+            </div>
           </div>
 
-          <guide-block title="Public vs Admin Tabs" items='["Public users see Book, Queue, and Payment.","Admins unlock Bookings and Admin tabs after entering the staff PIN.","Use one dedicated admin device/browser because current data uses localStorage."]'></guide-block>
-
-          <guide-block title="Confirm Reservations" items='["Open Admin > Confirm & Tag Bookings.","Verify payment externally through GCash, Maya, BPI, or bank transfer.","Change Pending to Reserved only after payment is verified.","The app uses only two booking statuses: Pending and Reserved."]'></guide-block>
-
-          <div class="grid grid-cols-2 gap-5 mt-6">
-            <mini-card title="Morning Booking" rows='["7AM-12PM is walk-in queue by default.","Toggle individual morning hours if booking is allowed.","Enabled hours become public bookable slots."]'></mini-card>
-            <mini-card title="Open Play Blocks" rows='["Create date + time range entries.","Blocks reservations for that slot.","Displays as Reserved - Open Play."]'></mini-card>
+          <div style="margin-top:24px;">
+            <h3 style="font-size:20px;font-weight:850;letter-spacing:-0.03em;border-bottom:1px solid #EAE0D5;padding-bottom:8px;">Public vs Admin Tabs</h3>
+            <ul style="margin-top:12px;display:grid;gap:8px;font-size:14px;line-height:1.5;list-style:none;padding:0;">
+              <li style="display:flex;gap:8px;"><span style="width:6px;height:6px;border-radius:50%;background:#201C19;margin-top:8px;flex-shrink:0;"></span><span>Public users see Book, Queue, and Payment.</span></li>
+              <li style="display:flex;gap:8px;"><span style="width:6px;height:6px;border-radius:50%;background:#201C19;margin-top:8px;flex-shrink:0;"></span><span>Admins unlock Bookings and Admin tabs after entering the staff PIN.</span></li>
+              <li style="display:flex;gap:8px;"><span style="width:6px;height:6px;border-radius:50%;background:#201C19;margin-top:8px;flex-shrink:0;"></span><span>Use one dedicated admin device/browser because current data uses localStorage.</span></li>
+            </ul>
           </div>
 
-          <guide-block title="Payment QR Management" items='["Open Admin > Payment QR Code & Channels Manager.","Select GCash, Maya, or BPI / Bank.","Upload QR image or paste direct image URL.","Update account label and save.","Users can switch QR codes in Payment tab."]'></guide-block>
+          <div style="margin-top:24px;">
+            <h3 style="font-size:20px;font-weight:850;letter-spacing:-0.03em;border-bottom:1px solid #EAE0D5;padding-bottom:8px;">Confirm Reservations</h3>
+            <ul style="margin-top:12px;display:grid;gap:8px;font-size:14px;line-height:1.5;list-style:none;padding:0;">
+              <li style="display:flex;gap:8px;"><span style="width:6px;height:6px;border-radius:50%;background:#201C19;margin-top:8px;flex-shrink:0;"></span><span>Open Admin &gt; Confirm &amp; Tag Bookings.</span></li>
+              <li style="display:flex;gap:8px;"><span style="width:6px;height:6px;border-radius:50%;background:#201C19;margin-top:8px;flex-shrink:0;"></span><span>Verify payment externally through GCash, Maya, BPI, or bank transfer.</span></li>
+              <li style="display:flex;gap:8px;"><span style="width:6px;height:6px;border-radius:50%;background:#201C19;margin-top:8px;flex-shrink:0;"></span><span>Change Pending to Reserved only after payment is verified.</span></li>
+              <li style="display:flex;gap:8px;"><span style="width:6px;height:6px;border-radius:50%;background:#201C19;margin-top:8px;flex-shrink:0;"></span><span>The app uses only two booking statuses: Pending and Reserved.</span></li>
+            </ul>
+          </div>
 
-          <guide-block title="Queue Module Notes" items='["Queue is public and standalone, not tied to reservations.","Multiple queue sessions can exist at once.","Supports singles, doubles, exact scores, Winner Stays, and Fixed Order.","Queue creator PIN protects reset, delete, and player removal.","Queues expire and auto-clear after midnight."]'></guide-block>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:24px;">
+            <div style="border-radius:24px;background:#FFFBF5;border:1px solid #EAE0D5;padding:20px;height:100%;">
+              <h3 style="font-weight:850;font-size:18px;letter-spacing:-0.03em;">Morning Booking</h3>
+              <ul style="margin-top:12px;list-style:none;padding:0;font-size:14px;line-height:1.5;opacity:0.8;">
+                <li>7AM-12PM is walk-in queue by default.</li>
+                <li style="margin-top:6px;">Toggle individual morning hours if booking is allowed.</li>
+                <li style="margin-top:6px;">Enabled hours become public bookable slots.</li>
+              </ul>
+            </div>
+            <div style="border-radius:24px;background:#FFFBF5;border:1px solid #EAE0D5;padding:20px;height:100%;">
+              <h3 style="font-weight:850;font-size:18px;letter-spacing:-0.03em;">Open Play Blocks</h3>
+              <ul style="margin-top:12px;list-style:none;padding:0;font-size:14px;line-height:1.5;opacity:0.8;">
+                <li>Create date + time range entries.</li>
+                <li style="margin-top:6px;">Blocks reservations for that slot.</li>
+                <li style="margin-top:6px;">Displays as Reserved - Open Play.</li>
+              </ul>
+            </div>
+          </div>
 
-          <div class="mt-7 bg-[#201C19] text-white rounded-3xl p-5">
-            <div class="mono text-[10px] tracking-[0.2em] uppercase text-[#D6FF5F]">Important</div>
-            <p class="text-sm leading-relaxed mt-2">This version stores data in the browser using localStorage. For shared live bookings across all users and devices, upgrade to Firebase Firestore or Realtime Database.</p>
+          <div style="margin-top:24px;">
+            <h3 style="font-size:20px;font-weight:850;letter-spacing:-0.03em;border-bottom:1px solid #EAE0D5;padding-bottom:8px;">Payment QR Management</h3>
+            <ul style="margin-top:12px;display:grid;gap:8px;font-size:14px;line-height:1.5;list-style:none;padding:0;">
+              <li style="display:flex;gap:8px;"><span style="width:6px;height:6px;border-radius:50%;background:#201C19;margin-top:8px;flex-shrink:0;"></span><span>Open Admin &gt; Payment QR Code &amp; Channels Manager.</span></li>
+              <li style="display:flex;gap:8px;"><span style="width:6px;height:6px;border-radius:50%;background:#201C19;margin-top:8px;flex-shrink:0;"></span><span>Select GCash, Maya, or BPI / Bank.</span></li>
+              <li style="display:flex;gap:8px;"><span style="width:6px;height:6px;border-radius:50%;background:#201C19;margin-top:8px;flex-shrink:0;"></span><span>Upload QR image or paste direct image URL.</span></li>
+              <li style="display:flex;gap:8px;"><span style="width:6px;height:6px;border-radius:50%;background:#201C19;margin-top:8px;flex-shrink:0;"></span><span>Update account label and save.</span></li>
+              <li style="display:flex;gap:8px;"><span style="width:6px;height:6px;border-radius:50%;background:#201C19;margin-top:8px;flex-shrink:0;"></span><span>Users can switch QR codes in Payment tab.</span></li>
+            </ul>
+          </div>
+
+          <div style="margin-top:24px;">
+            <h3 style="font-size:20px;font-weight:850;letter-spacing:-0.03em;border-bottom:1px solid #EAE0D5;padding-bottom:8px;">Queue Module Notes</h3>
+            <ul style="margin-top:12px;display:grid;gap:8px;font-size:14px;line-height:1.5;list-style:none;padding:0;">
+              <li style="display:flex;gap:8px;"><span style="width:6px;height:6px;border-radius:50%;background:#201C19;margin-top:8px;flex-shrink:0;"></span><span>Queue is public and standalone, not tied to reservations.</span></li>
+              <li style="display:flex;gap:8px;"><span style="width:6px;height:6px;border-radius:50%;background:#201C19;margin-top:8px;flex-shrink:0;"></span><span>Multiple queue sessions can exist at once.</span></li>
+              <li style="display:flex;gap:8px;"><span style="width:6px;height:6px;border-radius:50%;background:#201C19;margin-top:8px;flex-shrink:0;"></span><span>Supports singles, doubles, exact scores, Winner Stays, and Fixed Order.</span></li>
+              <li style="display:flex;gap:8px;"><span style="width:6px;height:6px;border-radius:50%;background:#201C19;margin-top:8px;flex-shrink:0;"></span><span>Queue creator PIN protects reset, delete, and player removal.</span></li>
+              <li style="display:flex;gap:8px;"><span style="width:6px;height:6px;border-radius:50%;background:#201C19;margin-top:8px;flex-shrink:0;"></span><span>Queues expire and auto-clear after midnight.</span></li>
+            </ul>
+          </div>
+
+          <div style="margin-top:28px;background:#201C19;color:#ffffff;border-radius:24px;padding:20px;">
+            <div class="mono" style="font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:#D6FF5F;">Important</div>
+            <p style="font-size:14px;line-height:1.6;margin-top:8px;">This version stores data in the browser using localStorage. For shared live bookings across all users and devices, upgrade to Firebase Firestore or Realtime Database.</p>
           </div>
         </div>
       </section>
 
-      <section id="userGuide" class="page bg-white shadow-2xl p-12 relative overflow-hidden">
-        <div class="absolute -left-20 -bottom-20 w-72 h-72 rounded-full bg-[#D6FF5F]/25"></div>
-        <div class="relative z-10">
-          <div class="flex items-start justify-between border-b-4 border-[#201C19] pb-5">
+      <!-- USER GUIDE PAGE -->
+      <section id="userGuide" class="page" style="padding:48px;position:relative;overflow:hidden;box-shadow:0 25px 50px -12px rgba(0,0,0,0.25);">
+        <div style="position:absolute;left:-80px;bottom:-80px;width:288px;height:288px;border-radius:50%;background:rgba(214,255,95,0.25);"></div>
+        <div style="position:relative;z-index:10;">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;border-bottom:4px solid #201C19;padding-bottom:20px;">
             <div>
-              <div class="mono text-[11px] tracking-[0.25em] uppercase opacity-60">User One-Pager</div>
-              <h2 class="text-4xl font-[900] tracking-[-0.05em] leading-none mt-1">Book. Queue.<br>Pay. Play.</h2>
+              <div class="mono" style="font-size:11px;letter-spacing:0.25em;text-transform:uppercase;opacity:0.6;">User One-Pager</div>
+              <h2 style="font-size:36px;font-weight:900;letter-spacing:-0.05em;line-height:1.08;margin-top:6px;">
+                <span style="display:block;">Book.</span>
+                <span style="display:block;">Queue.</span>
+                <span style="display:block;">Pay. Play.</span>
+              </h2>
             </div>
-            <div class="w-14 h-14 rounded-full bg-[#201C19] text-[#D6FF5F] grid place-items-center font-black text-lg">WK</div>
+            <div style="width:56px;height:56px;border-radius:50%;background:#201C19;color:#D6FF5F;display:grid;place-items:center;font-weight:900;font-size:18px;">WK</div>
           </div>
 
-          <div class="grid grid-cols-3 gap-3 mt-7">
-            <guide-step n="1" title="Book" text="Choose date and open hourly slot."></guide-step>
-            <guide-step n="2" title="Pay" text="Scan GCash, Maya, or BPI QR."></guide-step>
-            <guide-step n="3" title="Play" text="Admin verifies and marks Reserved."></guide-step>
-          </div>
-
-          <div class="mt-7 rounded-3xl bg-[#201C19] text-white p-6">
-            <div class="mono text-[10px] tracking-[0.2em] uppercase text-[#D6FF5F]">Schedule</div>
-            <div class="grid grid-cols-3 gap-3 mt-4 text-sm">
-              <div><b>7AM-12PM</b><br><span class="opacity-70">Walk-in / Queue<br>₱100 per head</span></div>
-              <div><b>1PM-10PM</b><br><span class="opacity-70">Reservation<br>₱300 per hour</span></div>
-              <div><b>Staff Block</b><br><span class="opacity-70">Tue/Thu/Sat/Sun<br>5PM-10PM</span></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-top:28px;">
+            <div style="border-radius:24px;background:#FFFBF5;border:1px solid #EAE0D5;padding:20px;">
+              <div style="width:32px;height:32px;border-radius:50%;background:#201C19;color:#D6FF5F;display:grid;place-items:center;font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;">1</div>
+              <h3 style="font-weight:850;font-size:18px;letter-spacing:-0.03em;margin-top:12px;">Book</h3>
+              <p style="font-size:14px;line-height:1.5;margin-top:4px;opacity:0.7;">Choose date and open hourly slot.</p>
+            </div>
+            <div style="border-radius:24px;background:#FFFBF5;border:1px solid #EAE0D5;padding:20px;">
+              <div style="width:32px;height:32px;border-radius:50%;background:#201C19;color:#D6FF5F;display:grid;place-items:center;font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;">2</div>
+              <h3 style="font-weight:850;font-size:18px;letter-spacing:-0.03em;margin-top:12px;">Pay</h3>
+              <p style="font-size:14px;line-height:1.5;margin-top:4px;opacity:0.7;">Scan GCash, Maya, or BPI QR.</p>
+            </div>
+            <div style="border-radius:24px;background:#FFFBF5;border:1px solid #EAE0D5;padding:20px;">
+              <div style="width:32px;height:32px;border-radius:50%;background:#201C19;color:#D6FF5F;display:grid;place-items:center;font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;">3</div>
+              <h3 style="font-weight:850;font-size:18px;letter-spacing:-0.03em;margin-top:12px;">Play</h3>
+              <p style="font-size:14px;line-height:1.5;margin-top:4px;opacity:0.7;">Admin verifies and marks Reserved.</p>
             </div>
           </div>
 
-          <guide-block title="How to Reserve" items='["Open the Book tab.","Check Today&apos;s Schedule or choose another date in the calendar.","Select start and end time.","Enter name, email, and group notes.","Click Confirm Reservation."]'></guide-block>
-
-          <div class="grid grid-cols-2 gap-5 mt-6">
-            <mini-card title="Booking Status" rows='["Pending: reservation submitted, payment not yet verified.","Reserved: admin verified your external payment."]'></mini-card>
-            <mini-card title="Payment" rows='["Open Payment tab.","Choose GCash, Maya, or BPI / Bank.","Scan QR and pay externally.","Keep your reference screenshot."]'></mini-card>
+          <div style="margin-top:28px;border-radius:24px;background:#201C19;color:#ffffff;padding:24px;">
+            <div class="mono" style="font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:#D6FF5F;">Schedule</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-top:16px;font-size:14px;">
+              <div><b>7AM-12PM</b><br><span style="opacity:0.7;">Walk-in / Queue<br>₱100 per head</span></div>
+              <div><b>1PM-10PM</b><br><span style="opacity:0.7;">Reservation<br>₱300 per hour</span></div>
+              <div><b>Staff Block</b><br><span style="opacity:0.7;">Tue/Thu/Sat/Sun<br>5PM-10PM</span></div>
+            </div>
           </div>
 
-          <guide-block title="Using The Queue Tab" items='["Create or join a public queue board.","Choose singles or doubles.","Use Winner Stays or Fixed Order rotation.","Enter exact final scores after matches.","Queue creator PIN protects reset/delete/player removal.","Queues auto-clear after midnight."]'></guide-block>
+          <div style="margin-top:24px;">
+            <h3 style="font-size:20px;font-weight:850;letter-spacing:-0.03em;border-bottom:1px solid #EAE0D5;padding-bottom:8px;">How to Reserve</h3>
+            <ul style="margin-top:12px;display:grid;gap:8px;font-size:14px;line-height:1.5;list-style:none;padding:0;">
+              <li style="display:flex;gap:8px;"><span style="width:6px;height:6px;border-radius:50%;background:#201C19;margin-top:8px;flex-shrink:0;"></span><span>Open the Book tab.</span></li>
+              <li style="display:flex;gap:8px;"><span style="width:6px;height:6px;border-radius:50%;background:#201C19;margin-top:8px;flex-shrink:0;"></span><span>Check Today's Schedule or choose another date in the calendar.</span></li>
+              <li style="display:flex;gap:8px;"><span style="width:6px;height:6px;border-radius:50%;background:#201C19;margin-top:8px;flex-shrink:0;"></span><span>Select start and end time.</span></li>
+              <li style="display:flex;gap:8px;"><span style="width:6px;height:6px;border-radius:50%;background:#201C19;margin-top:8px;flex-shrink:0;"></span><span>Enter name, email, and group notes.</span></li>
+              <li style="display:flex;gap:8px;"><span style="width:6px;height:6px;border-radius:50%;background:#201C19;margin-top:8px;flex-shrink:0;"></span><span>Click Confirm Reservation.</span></li>
+            </ul>
+          </div>
 
-          <div class="mt-7 rounded-3xl border-2 border-[#201C19] p-5">
-            <div class="mono text-[10px] tracking-[0.2em] uppercase opacity-60">Reminders</div>
-            <ul class="mt-3 space-y-2 text-sm leading-snug">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:24px;">
+            <div style="border-radius:24px;background:#FFFBF5;border:1px solid #EAE0D5;padding:20px;height:100%;">
+              <h3 style="font-weight:850;font-size:18px;letter-spacing:-0.03em;">Booking Status</h3>
+              <ul style="margin-top:12px;list-style:none;padding:0;font-size:14px;line-height:1.5;opacity:0.8;">
+                <li>Pending: reservation submitted, payment not yet verified.</li>
+                <li style="margin-top:6px;">Reserved: admin verified your external payment.</li>
+              </ul>
+            </div>
+            <div style="border-radius:24px;background:#FFFBF5;border:1px solid #EAE0D5;padding:20px;height:100%;">
+              <h3 style="font-weight:850;font-size:18px;letter-spacing:-0.03em;">Payment</h3>
+              <ul style="margin-top:12px;list-style:none;padding:0;font-size:14px;line-height:1.5;opacity:0.8;">
+                <li>Open Payment tab.</li>
+                <li style="margin-top:6px;">Choose GCash, Maya, or BPI / Bank.</li>
+                <li style="margin-top:6px;">Scan QR and pay externally.</li>
+                <li style="margin-top:6px;">Keep your reference screenshot.</li>
+              </ul>
+            </div>
+          </div>
+
+          <div style="margin-top:24px;">
+            <h3 style="font-size:20px;font-weight:850;letter-spacing:-0.03em;border-bottom:1px solid #EAE0D5;padding-bottom:8px;">Using The Queue Tab</h3>
+            <ul style="margin-top:12px;display:grid;gap:8px;font-size:14px;line-height:1.5;list-style:none;padding:0;">
+              <li style="display:flex;gap:8px;"><span style="width:6px;height:6px;border-radius:50%;background:#201C19;margin-top:8px;flex-shrink:0;"></span><span>Create or join a public queue board.</span></li>
+              <li style="display:flex;gap:8px;"><span style="width:6px;height:6px;border-radius:50%;background:#201C19;margin-top:8px;flex-shrink:0;"></span><span>Choose singles or doubles.</span></li>
+              <li style="display:flex;gap:8px;"><span style="width:6px;height:6px;border-radius:50%;background:#201C19;margin-top:8px;flex-shrink:0;"></span><span>Use Winner Stays or Fixed Order rotation.</span></li>
+              <li style="display:flex;gap:8px;"><span style="width:6px;height:6px;border-radius:50%;background:#201C19;margin-top:8px;flex-shrink:0;"></span><span>Enter exact final scores after matches.</span></li>
+              <li style="display:flex;gap:8px;"><span style="width:6px;height:6px;border-radius:50%;background:#201C19;margin-top:8px;flex-shrink:0;"></span><span>Queue creator PIN protects reset/delete/player removal.</span></li>
+              <li style="display:flex;gap:8px;"><span style="width:6px;height:6px;border-radius:50%;background:#201C19;margin-top:8px;flex-shrink:0;"></span><span>Queues auto-clear after midnight.</span></li>
+            </ul>
+          </div>
+
+          <div style="margin-top:28px;border-radius:24px;border:2px solid #201C19;padding:20px;">
+            <div class="mono" style="font-size:10px;letter-spacing:0.2em;text-transform:uppercase;opacity:0.6;">Reminders</div>
+            <ul style="margin-top:12px;list-style:none;padding:0;font-size:14px;line-height:1.5;">
               <li>Arrive before your reserved time.</li>
               <li>Bring your payment reference if staff asks for verification.</li>
               <li>Morning play is usually walk-in queue unless admin enables booking.</li>
@@ -123,131 +228,107 @@
           </div>
         </div>
       </section>
+
     </div>
   </main>
 
   <script>
-    customElements.define('guide-block', class extends HTMLElement {
-      connectedCallback() {
-        const title = this.getAttribute('title') || '';
-        const items = JSON.parse((this.getAttribute('items') || '[]').replaceAll('&apos;', "'"));
-        this.innerHTML = `
-          <div class="mt-6">
-            <h3 class="text-xl font-[850] tracking-[-0.03em] border-b border-[#EAE0D5] pb-2">${title}</h3>
-            <ul class="mt-3 grid gap-2 text-sm leading-snug">
-              ${items.map(item => `<li class="flex gap-2"><span class="w-1.5 h-1.5 rounded-full bg-[#201C19] mt-1.5 shrink-0"></span><span>${item}</span></li>`).join('')}
-            </ul>
-          </div>
-        `;
+    window.addEventListener('load', () => {
+      const statusMsg = document.getElementById('statusMsg');
+      const librariesLoaded = typeof html2canvas !== 'undefined' && typeof jspdf !== 'undefined';
+
+      function showStatus(msg, isError) {
+        if (!statusMsg) return;
+        statusMsg.textContent = msg;
+        statusMsg.style.color = isError ? '#8C2C10' : '#2D6A2E';
+        statusMsg.style.background = isError ? '#FFE9E0' : '#E8F5D8';
+        statusMsg.style.borderColor = isError ? '#FFC9B6' : '#CFE8B5';
+        statusMsg.style.display = 'block';
+        clearTimeout(window._statusTimer);
+        window._statusTimer = setTimeout(() => statusMsg.style.display = 'none', 4000);
       }
+
+      function disableButtons(disabled) {
+        ['btnAdminPdf', 'btnAdminPng', 'btnUserPdf', 'btnUserPng'].forEach(id => {
+          const b = document.getElementById(id);
+          if (b) b.disabled = disabled;
+        });
+      }
+
+      if (!librariesLoaded) {
+        showStatus('Libraries not loaded. Check your internet connection.', true);
+        disableButtons(true);
+        return;
+      }
+
+      async function captureElement(id) {
+        const element = document.getElementById(id);
+        if (!element) throw new Error('Element not found: ' + id);
+
+        if (document.fonts && document.fonts.ready) {
+          await document.fonts.ready;
+        }
+        await new Promise(resolve => setTimeout(resolve, 250));
+
+        return html2canvas(element, {
+          scale: 2,
+          backgroundColor: '#ffffff',
+          useCORS: true,
+          logging: false,
+          allowTaint: true,
+          foreignObjectRendering: false
+        });
+      }
+
+      async function downloadPng(id, filename) {
+        try {
+          disableButtons(true);
+          showStatus('Generating PNG...', false);
+          const canvas = await captureElement(id);
+          const link = document.createElement('a');
+          link.download = filename;
+          link.href = canvas.toDataURL('image/png');
+          link.click();
+          showStatus('PNG downloaded!', false);
+        } catch (err) {
+          console.error(err);
+          showStatus('PNG failed: ' + err.message, true);
+        } finally {
+          disableButtons(false);
+        }
+      }
+
+      async function downloadPdf(id, filename) {
+        try {
+          disableButtons(true);
+          showStatus('Generating PDF...', false);
+          const canvas = await captureElement(id);
+          const imgData = canvas.toDataURL('image/png');
+          const { jsPDF } = window.jspdf;
+          const pdf = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
+          const pageWidth = pdf.internal.pageSize.getWidth();
+          const pageHeight = pdf.internal.pageSize.getHeight();
+          pdf.addImage(imgData, 'PNG', 0, 0, pageWidth, pageHeight);
+          pdf.save(filename);
+          showStatus('PDF downloaded!', false);
+        } catch (err) {
+          console.error(err);
+          showStatus('PDF failed: ' + err.message, true);
+        } finally {
+          disableButtons(false);
+        }
+      }
+
+      const a1 = document.getElementById('btnAdminPdf');
+      const a2 = document.getElementById('btnAdminPng');
+      const u1 = document.getElementById('btnUserPdf');
+      const u2 = document.getElementById('btnUserPng');
+
+      if (a1) a1.addEventListener('click', () => downloadPdf('adminGuide', 'white-kitchen-admin-guide.pdf'));
+      if (a2) a2.addEventListener('click', () => downloadPng('adminGuide', 'white-kitchen-admin-guide.png'));
+      if (u1) u1.addEventListener('click', () => downloadPdf('userGuide', 'white-kitchen-user-one-pager.pdf'));
+      if (u2) u2.addEventListener('click', () => downloadPng('userGuide', 'white-kitchen-user-one-pager.png'));
     });
-
-    customElements.define('mini-card', class extends HTMLElement {
-      connectedCallback() {
-        const title = this.getAttribute('title') || '';
-        const rows = JSON.parse(this.getAttribute('rows') || '[]');
-        this.innerHTML = `
-          <div class="rounded-3xl bg-[#FFFBF5] border border-[#EAE0D5] p-5 h-full">
-            <h3 class="font-[850] text-lg tracking-[-0.03em]">${title}</h3>
-            <ul class="mt-3 space-y-2 text-sm leading-snug opacity-80">
-              ${rows.map(row => `<li>${row}</li>`).join('')}
-            </ul>
-          </div>
-        `;
-      }
-    });
-
-    customElements.define('info-card', class extends HTMLElement {
-      connectedCallback() {
-        this.innerHTML = `
-          <div class="rounded-3xl bg-[#FFFBF5] border border-[#EAE0D5] p-5">
-            <h3 class="font-[850] text-lg tracking-[-0.03em]">${this.getAttribute('title')}</h3>
-            <p class="text-sm leading-snug mt-2 opacity-75">${this.getAttribute('body')}</p>
-          </div>
-        `;
-      }
-    });
-
-    customElements.define('guide-step', class extends HTMLElement {
-      connectedCallback() {
-        this.innerHTML = `
-          <div class="rounded-3xl bg-[#FFFBF5] border border-[#EAE0D5] p-5">
-            <div class="w-8 h-8 rounded-full bg-[#201C19] text-[#D6FF5F] grid place-items-center mono text-xs font-bold">${this.getAttribute('n')}</div>
-            <h3 class="font-[850] text-lg tracking-[-0.03em] mt-3">${this.getAttribute('title')}</h3>
-            <p class="text-sm leading-snug mt-1 opacity-70">${this.getAttribute('text')}</p>
-          </div>
-        `;
-      }
-    });
-
-    async function captureElement(id) {
-      const element = document.getElementById(id);
-      if (!window.htmlToImage) throw new Error('The image export library could not load. Check your internet connection and refresh the page.');
-      return htmlToImage.toPng(element, {
-        backgroundColor: '#ffffff',
-        pixelRatio: 2,
-        cacheBust: true
-      });
-    }
-
-    function setStatus(message, isError = false) {
-      const status = document.getElementById('exportStatus');
-      status.textContent = message;
-      status.classList.remove('hidden', 'text-[#725E50]', 'text-[#A13B20]');
-      status.classList.add(isError ? 'text-[#A13B20]' : 'text-[#725E50]');
-    }
-
-    function setButtonsDisabled(disabled) {
-      document.querySelectorAll('#adminPdfBtn, #adminPngBtn, #userPdfBtn, #userPngBtn').forEach(button => {
-        button.disabled = disabled;
-        button.classList.toggle('opacity-60', disabled);
-        button.classList.toggle('cursor-wait', disabled);
-      });
-    }
-
-    async function downloadPng(id, filename) {
-      try {
-        setButtonsDisabled(true);
-        setStatus('Preparing PNG download...');
-        const imageData = await captureElement(id);
-        const link = document.createElement('a');
-        link.download = filename;
-        link.href = imageData;
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
-        setStatus('PNG downloaded successfully.');
-      } catch (error) {
-        setStatus(error.message || 'PNG export failed. Please refresh and try again.', true);
-      } finally {
-        setButtonsDisabled(false);
-      }
-    }
-
-    async function downloadPdf(id, filename) {
-      try {
-        if (!window.jspdf) throw new Error('The PDF export library could not load. Check your internet connection and refresh the page.');
-        setButtonsDisabled(true);
-        setStatus('Preparing PDF download...');
-        const imgData = await captureElement(id);
-        const { jsPDF } = window.jspdf;
-        const pdf = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
-        const pageWidth = pdf.internal.pageSize.getWidth();
-        const pageHeight = pdf.internal.pageSize.getHeight();
-        pdf.addImage(imgData, 'PNG', 0, 0, pageWidth, pageHeight);
-        pdf.save(filename);
-        setStatus('PDF downloaded successfully.');
-      } catch (error) {
-        setStatus(error.message || 'PDF export failed. Please refresh and try again.', true);
-      } finally {
-        setButtonsDisabled(false);
-      }
-    }
-
-    document.getElementById('adminPdfBtn').addEventListener('click', () => downloadPdf('adminGuide', 'white-kitchen-admin-guide.pdf'));
-    document.getElementById('adminPngBtn').addEventListener('click', () => downloadPng('adminGuide', 'white-kitchen-admin-guide.png'));
-    document.getElementById('userPdfBtn').addEventListener('click', () => downloadPdf('userGuide', 'white-kitchen-user-one-pager.pdf'));
-    document.getElementById('userPngBtn').addEventListener('click', () => downloadPng('userGuide', 'white-kitchen-user-one-pager.png'));
   </script>
 </body>
 </html>

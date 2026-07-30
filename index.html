@@ -5,6 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>White Kitchen — Pickleball Court Booking</title>
 <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
@@ -791,7 +794,7 @@
               <input id="newPinInput" placeholder="New PIN" maxlength="8" class="flex-1 h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-4 mono text-[12px] font-[700] outline-none"/>
               <button id="savePinBtn" class="h-10 px-5 rounded-full bg-[#201C19] text-white mono text-[11px] font-[700]">Save PIN</button>
             </div>
-            <div class="mono text-[10px] opacity-50 mt-2">Stored in localStorage only. No backend.</div>
+            <div class="mono text-[10px] opacity-50 mt-2">Synced to Firebase Firestore. Shared across all devices.</div>
           </div>
         </div>
       </div>
@@ -858,25 +861,61 @@
 </div>
 
 <script>
-/* ---------- State & Storage ---------- */
+/* ================================================================
+   FIREBASE INIT + FIRESTORE DATA LAYER
+   All data syncs globally across all devices in real-time.
+   localStorage is used ONLY as offline cache / fallback.
+   ================================================================ */
+const firebaseConfig = {
+  apiKey: "AIzaSyAkf7GJ3mrEUtykHLQ3wizwfGpl5OugE2I",
+  authDomain: "courtbooking-85175.firebaseapp.com",
+  projectId: "courtbooking-85175",
+  storageBucket: "courtbooking-85175.firebasestorage.app",
+  messagingSenderId: "291819153596",
+  appId: "1:291819153596:web:f31c27b24a5eaa718088b9"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+
+/* ---------- Local cache keys (offline fallback only) ---------- */
 const LS = {
-  bookings: 'wk_bookings_v5',
-  morning: 'wk_morning_v5',
-  openPlay: 'wk_openPlay_v5',
-  qrUrl: 'wk_qrUrl_v5',
-  pin: 'wk_adminPin_v5',
-  adminUnlocked: 'wk_admin_unlocked_v5',
-  payMethods: 'wk_pay_methods_v5',
-  queues: 'wk_queues_v5'
+  bookings: 'wk_bookings_v6',
+  morning: 'wk_morning_v6',
+  openPlay: 'wk_openPlay_v6',
+  pin: 'wk_adminPin_v6',
+  adminUnlocked: 'wk_admin_unlocked_v6',
+  payMethods: 'wk_pay_methods_v6',
+  queues: 'wk_queues_v6'
 };
 
+/* ---------- Firestore document paths ---------- */
+const DOCS = {
+  bookings: db.collection('app').doc('bookings'),
+  openPlay: db.collection('app').doc('openPlay'),
+  morning:  db.collection('app').doc('morning'),
+  settings: db.collection('app').doc('settings'),    // pin + payMethods
+  queues:   db.collection('app').doc('queues')
+};
+
+/* ---------- Firestore helper: save + cache ---------- */
+async function fbSave(docRef, lsKey, data) {
+  localStorage.setItem(lsKey, JSON.stringify(data));
+  try { await docRef.set({ data: JSON.stringify(data) }, { merge: true }); } catch(e) { console.warn('Firestore write failed, cached locally:', e.message); }
+}
+
+function fbLoadCache(lsKey, fallback) {
+  try { const v = JSON.parse(localStorage.getItem(lsKey)); return v != null ? v : fallback; } catch { return fallback; }
+}
+
+/* ---------- Constants ---------- */
 const STAFF_DAYS = [0,2,4,6]; // Sun, Tue, Thu, Sat
 const HOURS = {
-  morning: [7,8,9,10,11], // start hours, end = start+1 => 7-8 ... 11-12
-  afternoon: [13,14,15,16,17,18,19,20,21] // 13-14 ... 21-22
+  morning: [7,8,9,10,11],
+  afternoon: [13,14,15,16,17,18,19,20,21]
 };
-const ALL_HOURS_START = [...HOURS.morning, ...HOURS.afternoon]; // 7..21 except 12
+const ALL_HOURS_START = [...HOURS.morning, ...HOURS.afternoon];
 
+/* ---------- Formatters ---------- */
 function todayISO(){
   const d=new Date(); d.setHours(0,0,0,0);
   return d.toISOString().slice(0,10);
@@ -895,36 +934,155 @@ function fmtTime(h){
 }
 function to12Range(s,e){ return `${fmtTime(s)} – ${fmtTime(e)}`; }
 
-function loadBookings(){ try{return JSON.parse(localStorage.getItem(LS.bookings)||'[]')}catch{return []} }
-function saveBookings(arr){ localStorage.setItem(LS.bookings, JSON.stringify(arr)); }
-function loadMorning(){ try{return JSON.parse(localStorage.getItem(LS.morning)||'{"7":false,"8":false,"9":false,"10":false,"11":false}')}catch{return {"7":false,"8":false,"9":false,"10":false,"11":false}} }
-function saveMorning(obj){ localStorage.setItem(LS.morning, JSON.stringify(obj)); }
-function loadOpenPlay(){ try{return JSON.parse(localStorage.getItem(LS.openPlay)||'[]')}catch{return []} }
-function saveOpenPlay(arr){ localStorage.setItem(LS.openPlay, JSON.stringify(arr)); }
+/* ---------- Load / Save wrappers (Firestore + localStorage cache) ---------- */
+function loadBookings(){ return fbLoadCache(LS.bookings, []); }
+function saveBookings(arr){ bookings = arr; fbSave(DOCS.bookings, LS.bookings, arr); }
 
-/* Seed sample data for the current day: Reserved, Pending, Open Play + upcoming */
-(function seed(){
-  const t = todayISO();
-  const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate()+1);
-  const tom = tomorrow.toISOString().slice(0,10);
-  if(!localStorage.getItem(LS.bookings)){
-    saveBookings([
-      {id:'b_seed_res', name:'Alex Rivera', email:'alex.rivera@example.com', date:t, start:13, end:14, status:'Reserved', group:'4 players', createdAt:Date.now()-7200000},
-      {id:'b_seed_pen', name:'Mika Tan', email:'mika.tan@example.com', date:t, start:14, end:15, status:'Pending', group:'2 players', createdAt:Date.now()-3600000},
-      {id:'op_seed_today', name:'Open Play', email:'', date:t, start:15, end:17, status:'OpenPlay', group:'Community open play', createdAt:Date.now()-3000000},
-      {id:'b_seed_tom', name:'JC Dela Cruz', email:'jc@example.com', date:tom, start:13, end:14, status:'Pending', group:'3 players', createdAt:Date.now()-1800000},
-    ]);
-  }
-  if(!localStorage.getItem(LS.openPlay)){
-    saveOpenPlay([{id:'op_seed_today', date:t, start:15, end:17}]);
-  }
-})();
+function loadMorning(){ return fbLoadCache(LS.morning, {"7":false,"8":false,"9":false,"10":false,"11":false}); }
+function saveMorning(obj){ morningEnabled = obj; fbSave(DOCS.morning, LS.morning, obj); }
 
+function loadOpenPlay(){ return fbLoadCache(LS.openPlay, []); }
+function saveOpenPlay(arr){ openPlays = arr; fbSave(DOCS.openPlay, LS.openPlay, arr); }
+
+/* ---------- App state ---------- */
 let selectedDate = todayISO();
 let calCursor = new Date(selectedDate+'T12:00:00');
 let bookings = loadBookings();
 let morningEnabled = loadMorning();
 let openPlays = loadOpenPlay();
+let _firebaseReady = false;
+
+/* ---------- Firestore real-time listeners ---------- */
+function startRealtimeListeners() {
+  // Bookings
+  DOCS.bookings.onSnapshot(snap => {
+    if (snap.exists) {
+      try {
+        const d = JSON.parse(snap.data().data);
+        bookings = d;
+        localStorage.setItem(LS.bookings, JSON.stringify(d));
+        renderSchedule(); renderBookingsList();
+        if (typeof renderAdminBookings === 'function') renderAdminBookings();
+        if (typeof renderDateSlotPreview === 'function') renderDateSlotPreview();
+      } catch(e){}
+    }
+  });
+
+  // Open Play
+  DOCS.openPlay.onSnapshot(snap => {
+    if (snap.exists) {
+      try {
+        openPlays = JSON.parse(snap.data().data);
+        localStorage.setItem(LS.openPlay, JSON.stringify(openPlays));
+        renderSchedule();
+        if (typeof renderOpenPlayList === 'function') renderOpenPlayList();
+        if (typeof renderDateSlotPreview === 'function') renderDateSlotPreview();
+      } catch(e){}
+    }
+  });
+
+  // Morning toggles
+  DOCS.morning.onSnapshot(snap => {
+    if (snap.exists) {
+      try {
+        morningEnabled = JSON.parse(snap.data().data);
+        localStorage.setItem(LS.morning, JSON.stringify(morningEnabled));
+        renderSchedule();
+        if (typeof populateTimeOptions === 'function') populateTimeOptions();
+        if (typeof renderMorningToggles === 'function') renderMorningToggles();
+      } catch(e){}
+    }
+  });
+
+  // Settings (PIN + payMethods)
+  DOCS.settings.onSnapshot(snap => {
+    if (snap.exists) {
+      try {
+        const d = snap.data();
+        if (d.pin) localStorage.setItem(LS.pin, d.pin);
+        if (d.payMethods) {
+          const pm = JSON.parse(d.payMethods);
+          payMethods = pm;
+          localStorage.setItem(LS.payMethods, JSON.stringify(pm));
+          if (typeof renderPublicPayTab === 'function') renderPublicPayTab();
+          if (typeof renderAdminQrManager === 'function') renderAdminQrManager();
+        }
+      } catch(e){}
+    }
+  });
+
+  // Queues
+  DOCS.queues.onSnapshot(snap => {
+    if (snap.exists) {
+      try {
+        const d = JSON.parse(snap.data().data);
+        localStorage.setItem(LS.queues, JSON.stringify(d));
+        if (typeof renderQueueModule === 'function') renderQueueModule();
+      } catch(e){}
+    }
+  });
+
+  _firebaseReady = true;
+}
+
+/* ---------- Seed data (only if Firestore doc is empty) ---------- */
+async function seedIfEmpty() {
+  try {
+    const bSnap = await DOCS.bookings.get();
+    if (!bSnap.exists) {
+      const t = todayISO();
+      const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate()+1);
+      const tom = tomorrow.toISOString().slice(0,10);
+      const seedData = [
+        {id:'b_seed_res', name:'Alex Rivera', email:'alex.rivera@example.com', date:t, start:13, end:14, status:'Reserved', group:'4 players', createdAt:Date.now()-7200000},
+        {id:'b_seed_pen', name:'Mika Tan', email:'mika.tan@example.com', date:t, start:14, end:15, status:'Pending', group:'2 players', createdAt:Date.now()-3600000},
+        {id:'op_seed_today', name:'Open Play', email:'', date:t, start:15, end:17, status:'OpenPlay', group:'Community open play', createdAt:Date.now()-3000000},
+        {id:'b_seed_tom', name:'JC Dela Cruz', email:'jc@example.com', date:tom, start:13, end:14, status:'Pending', group:'3 players', createdAt:Date.now()-1800000},
+      ];
+      await DOCS.bookings.set({ data: JSON.stringify(seedData) });
+      bookings = seedData;
+    } else {
+      bookings = JSON.parse(bSnap.data().data);
+    }
+    localStorage.setItem(LS.bookings, JSON.stringify(bookings));
+
+    const oSnap = await DOCS.openPlay.get();
+    if (!oSnap.exists) {
+      const t = todayISO();
+      const seedOp = [{id:'op_seed_today', date:t, start:15, end:17}];
+      await DOCS.openPlay.set({ data: JSON.stringify(seedOp) });
+      openPlays = seedOp;
+    } else {
+      openPlays = JSON.parse(oSnap.data().data);
+    }
+    localStorage.setItem(LS.openPlay, JSON.stringify(openPlays));
+
+    const mSnap = await DOCS.morning.get();
+    if (!mSnap.exists) {
+      const def = {"7":false,"8":false,"9":false,"10":false,"11":false};
+      await DOCS.morning.set({ data: JSON.stringify(def) });
+      morningEnabled = def;
+    } else {
+      morningEnabled = JSON.parse(mSnap.data().data);
+    }
+    localStorage.setItem(LS.morning, JSON.stringify(morningEnabled));
+
+    const sSnap = await DOCS.settings.get();
+    if (!sSnap.exists) {
+      await DOCS.settings.set({ pin: '1234', payMethods: '{}' });
+    }
+
+  } catch(e) {
+    console.warn('Firestore seed/fetch failed, using local cache:', e.message);
+  }
+  // Re-render with fresh data
+  renderSchedule(); renderBookingsList();
+  if (typeof populateTimeOptions === 'function') populateTimeOptions();
+  if (typeof renderDateSlotPreview === 'function') renderDateSlotPreview();
+}
+
+// Kick off Firebase
+seedIfEmpty().then(() => startRealtimeListeners());
 
 /* ---------- Header ---------- */
 document.getElementById('hdrDate').textContent = new Date().toLocaleDateString('en-US',{month:'short', day:'numeric'});
@@ -1607,6 +1765,7 @@ function loadPayMethods(){
 
 function savePayMethods(methods){
   localStorage.setItem(LS.payMethods, JSON.stringify(methods));
+  DOCS.settings.update({ payMethods: JSON.stringify(methods) }).catch(()=>{});
 }
 
 let payMethods = loadPayMethods();
@@ -1819,6 +1978,7 @@ renderAdminQrManager('gcash');
 
 /* ---------- Admin ---------- */
 function getPin(){ return localStorage.getItem(LS.pin) || '1234'; }
+function savePin(pin){ localStorage.setItem(LS.pin, pin); DOCS.settings.update({ pin: pin }).catch(()=>{}); }
 
 document.getElementById('adminUnlockBtn').addEventListener('click', ()=>{
   const input = document.getElementById('adminPinInput').value.trim();
@@ -1989,9 +2149,9 @@ document.getElementById('openPlayForm').addEventListener('submit', e=>{
 document.getElementById('savePinBtn').addEventListener('click', ()=>{
   const v=document.getElementById('newPinInput').value.trim();
   if(v.length<3){ toast('PIN too short'); return; }
-  localStorage.setItem(LS.pin, v);
+  savePin(v);
   document.getElementById('newPinInput').value='';
-  toast('PIN updated');
+  toast('PIN updated & synced');
 });
 
 document.getElementById('exportBtn').addEventListener('click', ()=>{
@@ -2003,15 +2163,14 @@ document.getElementById('exportBtn').addEventListener('click', ()=>{
   URL.revokeObjectURL(url);
 });
 document.getElementById('resetBtn').addEventListener('click', ()=>{
-  if(confirm('Wipe all local bookings, open play blocks, morning toggles, QR overrides, and queues?')){
-    localStorage.removeItem(LS.bookings); localStorage.removeItem(LS.openPlay); localStorage.removeItem(LS.morning); localStorage.removeItem(LS.payMethods); localStorage.removeItem(LS.queues);
+  if(confirm('Wipe ALL data globally (bookings, open play, morning toggles, QR codes, queues)? This affects all devices.')){
     bookings=[]; openPlays=[]; morningEnabled={"7":false,"8":false,"9":false,"10":false,"11":false};
     payMethods = JSON.parse(JSON.stringify(DEFAULT_PAY_METHODS));
     selectedQueueSessionId = null;
-    saveBookings(bookings); saveOpenPlay(openPlays); saveMorning(morningEnabled); savePayMethods(payMethods);
-    seedQueueSessionIfEmpty();
+    saveBookings(bookings); saveOpenPlay(openPlays); saveMorning(morningEnabled); savePayMethods(payMethods); saveQueues([]);
+    localStorage.removeItem(LS.queues);
     renderSchedule(); renderBookingsList(); renderAdminBookings(); renderMorningToggles(); renderOpenPlayList(); renderPublicPayTab(); renderAdminQrManager(); renderQueueModule();
-    toast('Data wiped (reload to re-seed samples)');
+    toast('All data wiped globally across all devices');
   }
 });
 
@@ -2042,6 +2201,7 @@ function loadQueues() {
 
 function saveQueues(arr) {
   localStorage.setItem(LS.queues, JSON.stringify(arr));
+  DOCS.queues.set({ data: JSON.stringify(arr) }).catch(()=>{});
 }
 
 // Initial seed helper if none exist for active demo

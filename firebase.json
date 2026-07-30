@@ -1,9 +1,13 @@
 {
+  "firestore": {
+    "rules": "firestore.rules"
+  },
   "hosting": {
     "public": ".",
     "ignore": [
       "firebase.json",
       ".firebaserc",
+      "firestore.rules",
       ".firebase/**",
       ".git/**",
       ".gitignore",
@@ -13,7 +17,9 @@
       "package-lock.json",
       "vercel.json",
       "copy-to-public.sh",
-      "public/**"
+      "public/**",
+      "ADMIN_GUIDE.md",
+      "USER_ONE_PAGER.md"
     ],
     "rewrites": [
       {

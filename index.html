@@ -330,8 +330,19 @@
                 <label class="block mono text-[10px] uppercase tracking-widest font-[700] mb-1">Rotation Rule</label>
                 <select id="qRule" class="w-full h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-3.5 text-[13px] font-[650] outline-none focus:border-[#201C19]">
                   <option value="winner_stays">Winner Stays</option>
-                  <option value="fixed_order">Fixed Order (FIFO)</option>
+                  <option value="four_off_four_on">Four Off, Four On</option>
+                  <option value="fixed_rotation">Fixed Rotation</option>
+                  <option value="timed_rotation">Timed Rotation</option>
+                  <option value="partner_rotation">Partner Rotation</option>
                 </select>
+              </div>
+            </div>
+
+            <div id="qTimedMinutesWrap" class="hidden rounded-[14px] bg-[#FFFBF5] border border-[#EAE0D5] p-3">
+              <label class="block mono text-[10px] uppercase tracking-widest font-[700] mb-1">Timed Rotation Limit</label>
+              <div class="flex items-center gap-2">
+                <input id="qTimedMinutes" type="number" min="1" max="120" value="15" class="w-24 h-10 rounded-full border border-[#EAE0D5] bg-white px-3 mono text-[13px] font-[700] text-center outline-none focus:border-[#201C19]"/>
+                <span class="mono text-[11px] opacity-60">minutes per game. Score can still be saved after time expires.</span>
               </div>
             </div>
 
@@ -425,8 +436,18 @@
             </div>
 
             <!-- Submit Button -->
+            <div id="queueTimerBox" class="hidden relative mb-3 bg-white/5 rounded-2xl p-3 border border-white/5">
+              <div class="flex items-center justify-between gap-3">
+                <div>
+                  <div class="mono text-[10px] uppercase tracking-widest opacity-50">Timed Rotation</div>
+                  <div id="queueTimerLabel" class="font-[850] text-[20px] tracking-[-0.03em] text-[#D6FF5F] mt-0.5">15:00</div>
+                </div>
+                <button type="button" id="queueTimerRestartBtn" class="h-9 px-4 rounded-full bg-white/10 hover:bg-white/20 border border-white/10 mono text-[11px] font-[700] transition cursor-pointer">Restart Timer</button>
+              </div>
+            </div>
+
             <div class="relative flex flex-col sm:flex-row items-center justify-between gap-3 bg-white/5 rounded-2xl p-3 border border-white/5">
-              <span class="mono text-[11px] opacity-60 text-center sm:text-left">Enter both final scores and submit to advance the queue.</span>
+              <span id="queueRuleHint" class="mono text-[11px] opacity-60 text-center sm:text-left">Enter both final scores and submit to advance the queue.</span>
               <button type="button" id="submitScoreBtn" class="h-10 px-5 rounded-full bg-[#D6FF5F] hover:bg-[#CBF052] text-[#201C19] font-[800] text-[13px] transition cursor-pointer shrink-0">
                 Submit & Rotate Queue →
               </button>
@@ -762,6 +783,19 @@
             <div class="mt-4 p-3 rounded-[12px] bg-[#FFFBF5] border border-[#F1E9DF] mono text-[10px] leading-[1.4] opacity-70">When enabled, morning hour becomes bookable via form and appears as "Book Now" in Today's Schedule. When disabled, shows "Queue — Walk-in".</div>
           </div>
 
+          <!-- Staff Reserve Toggle -->
+          <div class="rounded-[24px] bg-white border border-[#EAE0D5] p-5">
+            <div class="flex items-center justify-between">
+              <div class="font-[750] text-[14px]">Staff Reserve Toggle</div>
+              <span id="staffWeekBadge" class="mono text-[9px] px-2.5 py-0.5 rounded-full bg-[#FF8A5B]/15 text-[#8C2C10] font-[700]"></span>
+            </div>
+            <div class="mono text-[11px] opacity-60 mt-1">Enable/disable staff reservation per day. Default: Tue, Thu, Sat, Sun (5PM–10PM).</div>
+            <div id="staffReserveToggles" class="mt-4 space-y-2.5"></div>
+            <div class="mt-4 p-3 rounded-[12px] bg-[#FFE0D1]/40 border border-[#FFC9B6]/50 mono text-[10px] leading-[1.4] text-[#6B3A20]">
+              <b>Weekly reset:</b> Changes apply for this week only (Mon–Sun). Every Monday at midnight, all toggles auto-reset back to the default schedule (Sun/Tue/Thu/Sat enabled).
+            </div>
+          </div>
+
           <!-- Open Play -->
           <div class="rounded-[24px] bg-[#201C19] text-white p-5">
             <div class="font-[750] text-[14px]">Create Open Play Entry</div>
@@ -882,6 +916,7 @@ const LS = {
   bookings: 'wk_bookings_v6',
   morning: 'wk_morning_v6',
   openPlay: 'wk_openPlay_v6',
+  staffReserve: 'wk_staffReserve_v6',
   pin: 'wk_adminPin_v6',
   adminUnlocked: 'wk_admin_unlocked_v6',
   payMethods: 'wk_pay_methods_v6',
@@ -893,6 +928,7 @@ const DOCS = {
   bookings: db.collection('app').doc('bookings'),
   openPlay: db.collection('app').doc('openPlay'),
   morning:  db.collection('app').doc('morning'),
+  staffReserve: db.collection('app').doc('staffReserve'),
   settings: db.collection('app').doc('settings'),    // pin + payMethods
   queues:   db.collection('app').doc('queues')
 };
@@ -944,12 +980,47 @@ function saveMorning(obj){ morningEnabled = obj; fbSave(DOCS.morning, LS.morning
 function loadOpenPlay(){ return fbLoadCache(LS.openPlay, []); }
 function saveOpenPlay(arr){ openPlays = arr; fbSave(DOCS.openPlay, LS.openPlay, arr); }
 
+const STAFF_RESERVE_DEFAULTS = {"0":true,"2":true,"4":true,"6":true};
+
+function getCurrentWeekId(){
+  // Returns ISO date string of this week's Monday (Mon-Sun week boundary)
+  const now = new Date();
+  const day = now.getDay(); // 0=Sun ... 6=Sat
+  const diff = day === 0 ? -6 : 1 - day; // offset to Monday
+  const mon = new Date(now.getFullYear(), now.getMonth(), now.getDate() + diff);
+  return mon.toISOString().slice(0,10); // e.g. "2026-01-05"
+}
+
+function loadStaffReserve(){
+  const raw = fbLoadCache(LS.staffReserve, { weekId: getCurrentWeekId(), days: {...STAFF_RESERVE_DEFAULTS} });
+  // If raw is old format (no weekId), migrate
+  if(!raw.weekId){
+    return { weekId: getCurrentWeekId(), days: {...STAFF_RESERVE_DEFAULTS, ...raw} };
+  }
+  // Weekly reset: if stored weekId doesn't match current week's Monday, reset to defaults
+  if(raw.weekId !== getCurrentWeekId()){
+    const reset = { weekId: getCurrentWeekId(), days: {...STAFF_RESERVE_DEFAULTS} };
+    // Save the reset immediately
+    fbSave(DOCS.staffReserve, LS.staffReserve, reset);
+    return reset;
+  }
+  return raw;
+}
+
+function saveStaffReserve(obj){
+  // Always stamp with current weekId
+  obj.weekId = getCurrentWeekId();
+  staffReserveEnabled = obj;
+  fbSave(DOCS.staffReserve, LS.staffReserve, obj);
+}
+
 /* ---------- App state ---------- */
 let selectedDate = todayISO();
 let calCursor = new Date(selectedDate+'T12:00:00');
 let bookings = loadBookings();
 let morningEnabled = loadMorning();
 let openPlays = loadOpenPlay();
+let staffReserveEnabled = loadStaffReserve();
 let _firebaseReady = false;
 
 /* ---------- Firestore real-time listeners ---------- */
@@ -990,6 +1061,26 @@ function startRealtimeListeners() {
         renderSchedule();
         if (typeof populateTimeOptions === 'function') populateTimeOptions();
         if (typeof renderMorningToggles === 'function') renderMorningToggles();
+      } catch(e){}
+    }
+  });
+
+  // Staff Reserve toggles (weekly-scoped)
+  DOCS.staffReserve.onSnapshot(snap => {
+    if (snap.exists) {
+      try {
+        const parsed = JSON.parse(snap.data().data);
+        // Weekly auto-reset check on live sync
+        if(!parsed.weekId || parsed.weekId !== getCurrentWeekId()){
+          staffReserveEnabled = { weekId: getCurrentWeekId(), days: {...STAFF_RESERVE_DEFAULTS} };
+          // Write the reset back
+          DOCS.staffReserve.set({ data: JSON.stringify(staffReserveEnabled) }).catch(()=>{});
+        } else {
+          staffReserveEnabled = parsed;
+        }
+        localStorage.setItem(LS.staffReserve, JSON.stringify(staffReserveEnabled));
+        renderSchedule();
+        if (typeof renderStaffReserveToggles === 'function') renderStaffReserveToggles();
       } catch(e){}
     }
   });
@@ -1067,6 +1158,23 @@ async function seedIfEmpty() {
     }
     localStorage.setItem(LS.morning, JSON.stringify(morningEnabled));
 
+    const srSnap = await DOCS.staffReserve.get();
+    if (!srSnap.exists) {
+      const def = { weekId: getCurrentWeekId(), days: {...STAFF_RESERVE_DEFAULTS} };
+      await DOCS.staffReserve.set({ data: JSON.stringify(def) });
+      staffReserveEnabled = def;
+    } else {
+      const parsed = JSON.parse(srSnap.data().data);
+      // Weekly auto-reset check
+      if(!parsed.weekId || parsed.weekId !== getCurrentWeekId()){
+        staffReserveEnabled = { weekId: getCurrentWeekId(), days: {...STAFF_RESERVE_DEFAULTS} };
+        await DOCS.staffReserve.set({ data: JSON.stringify(staffReserveEnabled) });
+      } else {
+        staffReserveEnabled = parsed;
+      }
+    }
+    localStorage.setItem(LS.staffReserve, JSON.stringify(staffReserveEnabled));
+
     const sSnap = await DOCS.settings.get();
     if (!sSnap.exists) {
       await DOCS.settings.set({ pin: '1234', payMethods: '{}' });
@@ -1090,10 +1198,12 @@ document.getElementById('todayLabel').textContent = fmtDateLabel(todayISO());
 const staffNoteEl = document.getElementById('staffNote');
 function updateStaffNote(){
   const day = new Date().getDay();
-  if(STAFF_DAYS.includes(day)){
+  const srDays = (staffReserveEnabled && staffReserveEnabled.days) ? staffReserveEnabled.days : staffReserveEnabled || {};
+  const todayBlocked = srDays[String(day)] === true;
+  if(todayBlocked){
     staffNoteEl.textContent = `${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][day]} 5PM–10PM is staff-reserved. Public booking blocked during that window.`;
   } else {
-    staffNoteEl.textContent = `Public hours all day today. Tomorrow staff block may apply (Tue/Thu/Sat/Sun 5PM–10PM).`;
+    staffNoteEl.textContent = `Public hours all day today. No staff reserve block active.`;
   }
 }
 updateStaffNote();
@@ -1259,7 +1369,10 @@ document.getElementById('mobBackToScheduleBtn')?.addEventListener('click', ()=> 
 function isStaffBlocked(dateISO, hourStart, hourEnd){
   const d = new Date(dateISO+'T12:00:00'); const dow = d.getDay();
   if(!STAFF_DAYS.includes(dow)) return false;
-  // staff 17-22
+  // Check if staff reserve is enabled for this day (weekly-scoped)
+  const srDays = staffReserveEnabled.days || staffReserveEnabled;
+  if(srDays[String(dow)] === false) return false;
+  // staff 17-22 (5PM-10PM)
   return !(hourEnd<=17 || hourStart>=22);
 }
 function getBookingsForDate(dateISO){
@@ -2007,6 +2120,7 @@ function renderAdminBookings(){
   const count = document.getElementById('adminBookingsCount');
   count.textContent=bookings.length;
   list.innerHTML='';
+  if (typeof renderStaffReserveToggles === 'function') renderStaffReserveToggles();
   if(bookings.length===0){
     list.innerHTML=`<div class="p-10 text-center mono text-[12px] opacity-60">No bookings</div>`;
     return;
@@ -2093,6 +2207,65 @@ function renderMorningToggles(){
   });
 }
 
+function renderStaffReserveToggles(){
+  const container = document.getElementById('staffReserveToggles');
+  if(!container) return;
+  container.innerHTML='';
+
+  // Show current week badge
+  const weekBadge = document.getElementById('staffWeekBadge');
+  if(weekBadge){
+    const monDate = getCurrentWeekId();
+    const sunDate = new Date(monDate+'T12:00:00');
+    sunDate.setDate(sunDate.getDate()+6);
+    const monLabel = new Date(monDate+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'});
+    const sunLabel = sunDate.toLocaleDateString('en-US',{month:'short',day:'numeric'});
+    weekBadge.textContent = `Week of ${monLabel} – ${sunLabel}`;
+  }
+
+  const days = [
+    {dow:0, name:'Sunday'},
+    {dow:1, name:'Monday'},
+    {dow:2, name:'Tuesday'},
+    {dow:3, name:'Wednesday'},
+    {dow:4, name:'Thursday'},
+    {dow:5, name:'Friday'},
+    {dow:6, name:'Saturday'}
+  ];
+  days.forEach(day=>{
+    const srDays = staffReserveEnabled.days || staffReserveEnabled;
+    const enabled = srDays[String(day.dow)] === true;
+    const isDefault = [0,2,4,6].includes(day.dow);
+    const div=document.createElement('div');
+    div.className='flex items-center justify-between p-3 rounded-[14px] border border-[#F1E9DF] bg-[#FFFBF5]';
+    const defaultTag = isDefault ? `<span class="mono text-[8px] px-1.5 py-0.5 rounded-full bg-[#F1E9DF] text-[#201C19]/60 font-[600] uppercase ml-1">default</span>` : '';
+    div.innerHTML=`
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-full ${enabled?'bg-[#FF8A5B]':'bg-white'} ${enabled?'text-white':'text-[#201C19]'} border border-[#EAE0D5] grid place-items-center mono text-[10px] font-[800]">${day.name.slice(0,3)}</div>
+        <div>
+          <div class="flex items-center gap-1"><span class="mono text-[12px] font-[700]">${day.name}</span>${defaultTag}</div>
+          <div class="mono text-[10px] opacity-60">${enabled?'5PM–10PM Staff Reserved':'Public booking open all evening'}</div>
+        </div>
+      </div>
+      <label class="relative inline-flex items-center cursor-pointer">
+        <input type="checkbox" data-staff="${day.dow}" class="sr-only peer" ${enabled?'checked':''}>
+        <div class="w-11 h-6 bg-[#E9DDD0] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#FF8A5B]"></div>
+      </label>
+    `;
+    container.appendChild(div);
+  });
+  container.querySelectorAll('input[data-staff]').forEach(inp=>{
+    inp.addEventListener('change', ()=>{
+      const dow=inp.dataset.staff;
+      if(!staffReserveEnabled.days) staffReserveEnabled = { weekId: getCurrentWeekId(), days: {...STAFF_RESERVE_DEFAULTS} };
+      staffReserveEnabled.days[dow]=inp.checked;
+      saveStaffReserve(staffReserveEnabled);
+      renderSchedule(); renderStaffReserveToggles();
+      toast(inp.checked? `${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][dow]} staff reserve enabled` : `${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][dow]} staff reserve disabled`);
+    });
+  });
+}
+
 function renderOpenPlayList(){
   const list = document.getElementById('openPlayList');
   list.innerHTML='';
@@ -2163,13 +2336,14 @@ document.getElementById('exportBtn').addEventListener('click', ()=>{
   URL.revokeObjectURL(url);
 });
 document.getElementById('resetBtn').addEventListener('click', ()=>{
-  if(confirm('Wipe ALL data globally (bookings, open play, morning toggles, QR codes, queues)? This affects all devices.')){
+  if(confirm('Wipe ALL data globally (bookings, open play, morning toggles, staff reserve, QR codes, queues)? This affects all devices.')){
     bookings=[]; openPlays=[]; morningEnabled={"7":false,"8":false,"9":false,"10":false,"11":false};
+    staffReserveEnabled={ weekId: getCurrentWeekId(), days: {...STAFF_RESERVE_DEFAULTS} };
     payMethods = JSON.parse(JSON.stringify(DEFAULT_PAY_METHODS));
     selectedQueueSessionId = null;
-    saveBookings(bookings); saveOpenPlay(openPlays); saveMorning(morningEnabled); savePayMethods(payMethods); saveQueues([]);
+    saveBookings(bookings); saveOpenPlay(openPlays); saveMorning(morningEnabled); saveStaffReserve(staffReserveEnabled); savePayMethods(payMethods); saveQueues([]);
     localStorage.removeItem(LS.queues);
-    renderSchedule(); renderBookingsList(); renderAdminBookings(); renderMorningToggles(); renderOpenPlayList(); renderPublicPayTab(); renderAdminQrManager(); renderQueueModule();
+    renderSchedule(); renderBookingsList(); renderAdminBookings(); renderMorningToggles(); renderStaffReserveToggles(); renderOpenPlayList(); renderPublicPayTab(); renderAdminQrManager(); renderQueueModule();
     toast('All data wiped globally across all devices');
   }
 });
@@ -2238,6 +2412,92 @@ function seedQueueSessionIfEmpty() {
 }
 seedQueueSessionIfEmpty();
 
+function queueRuleLabel(rule){
+  return ({
+    winner_stays: 'Winner Stays',
+    four_off_four_on: 'Four Off, Four On',
+    fixed_rotation: 'Fixed Rotation',
+    timed_rotation: 'Timed Rotation',
+    partner_rotation: 'Partner Rotation',
+    fixed_order: 'Fixed Rotation'
+  })[rule] || 'Fixed Rotation';
+}
+
+function queueRuleDescription(rule){
+  return ({
+    winner_stays: 'Winners remain on court; losers rejoin the queue.',
+    four_off_four_on: 'All players rotate off after each game.',
+    fixed_rotation: 'Players follow a predetermined order regardless of results.',
+    timed_rotation: 'Players rotate after a set time limit instead of relying only on game end.',
+    partner_rotation: 'Partners change each game according to the queue order.',
+    fixed_order: 'Players follow a predetermined order regardless of results.'
+  })[rule] || 'Players follow a predetermined order regardless of results.';
+}
+
+function getTeamSize(session){
+  return session.mode === 'doubles' ? 2 : 1;
+}
+
+function pushWaiting(session, names, paired=true){
+  if(!names || names.length===0) return;
+  if(paired){
+    session.waiting.push({ id: 'w_' + Date.now() + Math.random().toString(36).slice(2,7), names: [...names] });
+  } else {
+    names.forEach(n => session.waiting.push({ id: 'w_' + Date.now() + Math.random().toString(36).slice(2,7), names: [n] }));
+  }
+}
+
+function startTimedRotationIfNeeded(session){
+  if(session.rule !== 'timed_rotation' || !session.activeMatch) return;
+  if(!session.timeLimitMinutes) session.timeLimitMinutes = 15;
+  if(!session.timerEndAt || session.timerEndAt < Date.now()){
+    session.timerEndAt = Date.now() + (session.timeLimitMinutes * 60 * 1000);
+  }
+}
+
+function updateTimedRuleInputs(){
+  const rule = document.getElementById('qRule')?.value;
+  const wrap = document.getElementById('qTimedMinutesWrap');
+  if(wrap) wrap.classList.toggle('hidden', rule !== 'timed_rotation');
+}
+
+document.getElementById('qRule')?.addEventListener('change', updateTimedRuleInputs);
+updateTimedRuleInputs();
+
+let queueTimerInterval;
+function renderQueueTimer(session){
+  const box = document.getElementById('queueTimerBox');
+  const label = document.getElementById('queueTimerLabel');
+  if(!box || !label) return;
+  clearInterval(queueTimerInterval);
+  if(!session || session.rule !== 'timed_rotation' || !session.activeMatch){
+    box.classList.add('hidden');
+    return;
+  }
+  box.classList.remove('hidden');
+  const tick = () => {
+    const remaining = Math.max(0, (session.timerEndAt || Date.now()) - Date.now());
+    const mins = Math.floor(remaining / 60000);
+    const secs = Math.floor((remaining % 60000) / 1000);
+    label.textContent = `${String(mins).padStart(2,'0')}:${String(secs).padStart(2,'0')}`;
+    label.classList.toggle('text-[#FF8A5B]', remaining === 0);
+    label.classList.toggle('text-[#D6FF5F]', remaining > 0);
+  };
+  tick();
+  queueTimerInterval = setInterval(tick, 1000);
+}
+
+document.getElementById('queueTimerRestartBtn')?.addEventListener('click', () => {
+  if(!selectedQueueSessionId) return;
+  const sessions = loadQueues();
+  const session = sessions.find(s => s.id === selectedQueueSessionId);
+  if(!session || session.rule !== 'timed_rotation') return;
+  session.timerEndAt = Date.now() + ((session.timeLimitMinutes || 15) * 60 * 1000);
+  saveQueues(sessions);
+  renderActiveQueueDashboard();
+  toast('Timed rotation restarted');
+});
+
 function renderQueueModule() {
   const sessions = loadQueues();
   const countBadge = document.getElementById('activeQueueCountBadge');
@@ -2269,7 +2529,7 @@ function renderQueueModule() {
             <div class="font-[800] text-[14px] leading-tight truncate">${escapeHtml(s.name)}</div>
             <div class="flex items-center gap-1.5 mt-1.5 flex-wrap">
               <span class="mono text-[9px] px-2 py-0.5 rounded-full ${isSelected ? 'bg-white/10 text-[#D6FF5F]' : 'bg-[#201C19]/5 text-[#201C19]'} font-[800] uppercase">${s.mode}</span>
-              <span class="mono text-[9px] px-2 py-0.5 rounded-full ${isSelected ? 'bg-white/10 text-white/75' : 'bg-[#F1E9DF] text-[#201C19]/70'}">${s.rule === 'winner_stays' ? 'Winner Stays' : 'Fixed Order'}</span>
+              <span class="mono text-[9px] px-2 py-0.5 rounded-full ${isSelected ? 'bg-white/10 text-white/75' : 'bg-[#F1E9DF] text-[#201C19]/70'}">${queueRuleLabel(s.rule)}</span>
             </div>
           </div>
           <div class="text-right shrink-0">
@@ -2323,14 +2583,17 @@ function renderActiveQueueDashboard() {
   const modeBadge = document.getElementById('dashboardSessionModeBadge');
   const ruleEl = document.getElementById('dashboardSessionRule');
   const matchNumEl = document.getElementById('dashboardMatchNum');
+  const ruleHintEl = document.getElementById('queueRuleHint');
 
   if (nameEl) nameEl.textContent = session.name;
   if (modeBadge) {
     modeBadge.textContent = session.mode === 'doubles' ? 'DOUBLES MATCH' : 'SINGLES MATCH';
     modeBadge.className = `mono text-[10px] px-2.5 py-0.5 rounded-full font-[800] uppercase ${session.mode === 'doubles' ? 'bg-[#D6FF5F] text-[#201C19]' : 'bg-[#EDE8FF] text-[#3B2A9E]'}`;
   }
-  if (ruleEl) ruleEl.textContent = session.rule === 'winner_stays' ? 'Winner Stays' : 'Fixed Order';
+  if (ruleEl) ruleEl.textContent = queueRuleLabel(session.rule);
+  if (ruleHintEl) ruleHintEl.textContent = queueRuleDescription(session.rule);
   if (matchNumEl) matchNumEl.textContent = `Match #${session.matches.length + 1}`;
+  renderQueueTimer(session);
 
   // Hide or Show Partner name field based on game mode
   const jPlayer2Wrapper = document.getElementById('jPlayer2Wrapper');
@@ -2511,6 +2774,7 @@ function checkAndFillActiveMatch(session) {
       teamA: sideA,
       teamB: sideB
     };
+    startTimedRotationIfNeeded(session);
   }
 }
 
@@ -2520,6 +2784,7 @@ document.getElementById('createQueueForm')?.addEventListener('submit', (e) => {
   const name = document.getElementById('qName').value.trim();
   const mode = document.getElementById('qMode').value;
   const rule = document.getElementById('qRule').value;
+  const timeLimitMinutes = Math.max(1, parseInt(document.getElementById('qTimedMinutes')?.value || '15', 10));
   const pin = document.getElementById('qPin').value.trim();
   const allowJoin = document.getElementById('qAllowJoin').value === 'true';
   const initialText = document.getElementById('qInitialPlayers').value.trim();
@@ -2548,6 +2813,8 @@ document.getElementById('createQueueForm')?.addEventListener('submit', (e) => {
     name,
     mode,
     rule,
+    timeLimitMinutes,
+    timerEndAt: null,
     pin,
     allowJoin,
     waiting,
@@ -2650,18 +2917,13 @@ document.getElementById('submitScoreBtn')?.addEventListener('click', () => {
     timestamp: Date.now()
   });
 
-  // Rotate based on rules
-  if (session.rule === 'winner_stays') {
-    // Winner stays as Team A on court. Loser goes to end of waiting list
-    session.waiting.push({
-      id: 'w_rot_' + Date.now(),
-      names: loserNames
-    });
+  const rule = session.rule === 'fixed_order' ? 'fixed_rotation' : session.rule;
+  const teamSize = getTeamSize(session);
 
-    // Bring in new challenger from waiting list to play as Team B
-    const teamSize = session.mode === 'doubles' ? 2 : 1;
+  if (rule === 'winner_stays') {
+    // Winners remain on court; losers rejoin queue.
+    pushWaiting(session, loserNames, true);
     const nextChallengers = [];
-
     while (nextChallengers.length < teamSize && session.waiting.length > 0) {
       const nextGroup = session.waiting[0];
       if (nextChallengers.length + nextGroup.names.length <= teamSize) {
@@ -2673,31 +2935,35 @@ document.getElementById('submitScoreBtn')?.addEventListener('click', () => {
         nextGroup.names = nextGroup.names.slice(take);
       }
     }
-
     if (nextChallengers.length === teamSize) {
-      session.activeMatch = {
-        id: 'match_' + Date.now(),
-        teamA: winnerNames, // stays on court as side A
-        teamB: nextChallengers // side B challenger
-      };
+      session.activeMatch = { id: 'match_' + Date.now(), teamA: winnerNames, teamB: nextChallengers };
+      session.timerEndAt = null;
+      startTimedRotationIfNeeded(session);
     } else {
-      // Not enough waiting players to form a challenger Team B. Both winner and challenger must wait.
-      // Re-queue the winners
       session.waiting.unshift({ id: 'w_win_' + Date.now(), names: winnerNames });
-      if (nextChallengers.length > 0) {
-        session.waiting.unshift({ id: 'w_chal_' + Date.now(), names: nextChallengers });
-      }
+      if (nextChallengers.length > 0) session.waiting.unshift({ id: 'w_chal_' + Date.now(), names: nextChallengers });
       session.activeMatch = null;
     }
 
-  } else {
-    // Fixed Order (FIFO): Both rotate out to the end of the waiting list
-    session.waiting.push({ id: 'w_rot_A_' + Date.now(), names: match.teamA });
-    session.waiting.push({ id: 'w_rot_B_' + Date.now(), names: match.teamB });
+  } else if (rule === 'partner_rotation') {
+    // Break current pairs into individuals so partners can change in the next game.
+    pushWaiting(session, [...match.teamA, ...match.teamB], false);
     session.activeMatch = null;
+
+  } else {
+    // Four Off/Four On, Fixed Rotation, and Timed Rotation: all active players rotate off.
+    // Four Off/Four On keeps sides grouped as teams; Fixed/Timed keep the same queue order.
+    if (rule === 'four_off_four_on') {
+      pushWaiting(session, match.teamA, true);
+      pushWaiting(session, match.teamB, true);
+    } else {
+      pushWaiting(session, [...match.teamA, ...match.teamB], false);
+    }
+    session.activeMatch = null;
+    session.timerEndAt = null;
   }
 
-  // Try to fill match with next set of players
+  // Try to fill match with next set of players.
   checkAndFillActiveMatch(session);
 
   saveQueues(sessions);
@@ -2775,6 +3041,16 @@ recalcTotal();
 renderDateSlotPreview();
 renderQueueModule();       // renders the queueing session lists and dashboards
 updateAdminTabsVisibility();   // Public Portal mode by default (Book + Payment only)
+
+// Render admin toggles when admin panel is shown
+const _origUpdateAdmin = updateAdminTabsVisibility;
+updateAdminTabsVisibility = function() {
+  _origUpdateAdmin();
+  if(adminUnlocked) {
+    if (typeof renderMorningToggles === 'function') renderMorningToggles();
+    if (typeof renderStaffReserveToggles === 'function') renderStaffReserveToggles();
+  }
+};
 </script>
 </body>
 </html>

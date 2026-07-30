@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>White Kitchen Guides Export</title>
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { font-family: "Bricolage Grotesque", system-ui, sans-serif; }
+    .mono { font-family: "JetBrains Mono", monospace; }
+    .page { width: 794px; min-height: 1123px; }
+    .dl-btn { cursor: pointer; user-select: none; }
+    @media print {
+      body { background: white !important; }
+      .no-print { display: none !important; }
+      .page { box-shadow: none !important; margin: 0 !important; page-break-after: always; }
+    }
+  </style>
+</head>
+<body class="bg-[#F5EFE7] text-[#201C19]">
+  <header class="no-print sticky top-0 z-20 bg-[#F5EFE7]/90 backdrop-blur-xl border-b border-[#E5D8CA]">
+    <div class="max-w-6xl mx-auto px-4 py-4 flex flex-col md:flex-row md:items-center justify-between gap-3">
+      <div>
+        <div class="mono text-[11px] tracking-[0.22em] uppercase opacity-60">White Kitchen Pickleball</div>
+        <h1 class="text-2xl md:text-3xl font-[850] tracking-[-0.04em]">Guide Export Center</h1>
+        <p class="mono text-xs opacity-60 mt-1">Download the admin guide and user one-pager as PDF or PNG.</p>
+      </div>
+      <div id="statusMsg" class="mono text-xs text-[#8C2C10] bg-[#FFE9E0] border border-[#FFC9B6] rounded-full px-4 py-2 hidden">Preparing download...</div>
+      <div class="flex flex-wrap gap-2">
+        <button id="btnAdminPdf" class="dl-btn h-10 px-4 rounded-full bg-[#201C19] text-white text-sm font-bold hover:opacity-90 transition">Admin PDF</button>
+        <button id="btnAdminPng" class="dl-btn h-10 px-4 rounded-full bg-white border border-[#DACBBB] text-sm font-bold hover:bg-[#FFFBF5] transition">Admin PNG</button>
+        <button id="btnUserPdf" class="dl-btn h-10 px-4 rounded-full bg-[#D6FF5F] text-[#201C19] text-sm font-bold border border-[#201C19]/10 hover:opacity-90 transition">User PDF</button>
+        <button id="btnUserPng" class="dl-btn h-10 px-4 rounded-full bg-white border border-[#DACBBB] text-sm font-bold hover:bg-[#FFFBF5] transition">User PNG</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="py-8 px-4 overflow-x-auto">
+    <div class="flex flex-col xl:flex-row gap-8 items-start justify-center">
+
+      <!-- ADMIN GUIDE PAGE -->
+      <section id="adminGuide" class="page bg-white shadow-2xl p-12 relative overflow-hidden">
+        <div class="absolute -right-24 -top-24 w-72 h-72 rounded-full bg-[#D6FF5F]/25"></div>
+        <div class="relative z-10">
+          <div class="flex items-start justify-between border-b-4 border-[#201C19] pb-5">
+            <div>
+              <div class="mono text-[11px] tracking-[0.25em] uppercase opacity-60">Admin Guide</div>
+              <h2 class="text-4xl font-[900] tracking-[-0.05em] leading-none mt-1">White Kitchen<br>Pickleball Court</h2>
+            </div>
+            <div class="w-14 h-14 rounded-full bg-[#201C19] text-[#D6FF5F] grid place-items-center font-black text-lg">WK</div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-5 mt-7">
+            <div class="rounded-3xl bg-[#FFFBF5] border border-[#EAE0D5] p-5">
+              <h3 class="font-[850] text-lg tracking-[-0.03em]">Recommended Live Link</h3>
+              <p class="text-sm leading-snug mt-2 opacity-75">Use Vercel as the official customer portal. Keep Firebase as backup or future database platform.</p>
+            </div>
+            <div class="rounded-3xl bg-[#FFFBF5] border border-[#EAE0D5] p-5">
+              <h3 class="font-[850] text-lg tracking-[-0.03em]">Admin Access</h3>
+              <p class="text-sm leading-snug mt-2 opacity-75">Click Staff, enter the admin PIN. Default PIN is 1234 unless changed in Admin &gt; Security.</p>
+            </div>
+          </div>
+
+          <div class="mt-6">
+            <h3 class="text-xl font-[850] tracking-[-0.03em] border-b border-[#EAE0D5] pb-2">Public vs Admin Tabs</h3>
+            <ul class="mt-3 grid gap-2 text-sm leading-snug">
+              <li class="flex gap-2"><span class="w-1.5 h-1.5 rounded-full bg-[#201C19] mt-1.5 shrink-0"></span><span>Public users see Book, Queue, and Payment.</span></li>
+              <li class="flex gap-2"><span class="w-1.5 h-1.5 rounded-full bg-[#201C19] mt-1.5 shrink-0"></span><span>Admins unlock Bookings and Admin tabs after entering the staff PIN.</span></li>
+              <li class="flex gap-2"><span class="w-1.5 h-1.5 rounded-full bg-[#201C19] mt-1.5 shrink-0"></span><span>Use one dedicated admin device/browser because current data uses localStorage.</span></li>
+            </ul>
+          </div>
+
+          <div class="mt-6">
+            <h3 class="text-xl font-[850] tracking-[-0.03em] border-b border-[#EAE0D5] pb-2">Confirm Reservations</h3>
+            <ul class="mt-3 grid gap-2 text-sm leading-snug">
+              <li class="flex gap-2"><span class="w-1.5 h-1.5 rounded-full bg-[#201C19] mt-1.5 shrink-0"></span><span>Open Admin &gt; Confirm &amp; Tag Bookings.</span></li>
+              <li class="flex gap-2"><span class="w-1.5 h-1.5 rounded-full bg-[#201C19] mt-1.5 shrink-0"></span><span>Verify payment externally through GCash, Maya, BPI, or bank transfer.</span></li>
+              <li class="flex gap-2"><span class="w-1.5 h-1.5 rounded-full bg-[#201C19] mt-1.5 shrink-0"></span><span>Change Pending to Reserved only after payment is verified.</span></li>
+              <li class="flex gap-2"><span class="w-1.5 h-1.5 rounded-full bg-[#201C19] mt-1.5 shrink-0"></span><span>The app uses only two booking statuses: Pending and Reserved.</span></li>
+            </ul>
+          </div>
+
+          <div class="grid grid-cols-2 gap-5 mt-6">
+            <div class="rounded-3xl bg-[#FFFBF5] border border-[#EAE0D5] p-5 h-full">
+              <h3 class="font-[850] text-lg tracking-[-0.03em]">Morning Booking</h3>
+              <ul class="mt-3 space-y-2 text-sm leading-snug opacity-80">
+                <li>7AM-12PM is walk-in queue by default.</li>
+                <li>Toggle individual morning hours if booking is allowed.</li>
+                <li>Enabled hours become public bookable slots.</li>
+              </ul>
+            </div>
+            <div class="rounded-3xl bg-[#FFFBF5] border border-[#EAE0D5] p-5 h-full">
+              <h3 class="font-[850] text-lg tracking-[-0.03em]">Open Play Blocks</h3>
+              <ul class="mt-3 space-y-2 text-sm leading-snug opacity-80">
+                <li>Create date + time range entries.</li>
+                <li>Blocks reservations for that slot.</li>
+                <li>Displays as Reserved - Open Play.</li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="mt-6">
+            <h3 class="text-xl font-[850] tracking-[-0.03em] border-b border-[#EAE0D5] pb-2">Payment QR Management</h3>
+            <ul class="mt-3 grid gap-2 text-sm leading-snug">
+              <li class="flex gap-2"><span class="w-1.5 h-1.5 rounded-full bg-[#201C19] mt-1.5 shrink-0"></span><span>Open Admin &gt; Payment QR Code &amp; Channels Manager.</span></li>
+              <li class="flex gap-2"><span class="w-1.5 h-1.5 rounded-full bg-[#201C19] mt-1.5 shrink-0"></span><span>Select GCash, Maya, or BPI / Bank.</span></li>
+              <li class="flex gap-2"><span class="w-1.5 h-1.5 rounded-full bg-[#201C19] mt-1.5 shrink-0"></span><span>Upload QR image or paste direct image URL.</span></li>
+              <li class="flex gap-2"><span class="w-1.5 h-1.5 rounded-full bg-[#201C19] mt-1.5 shrink-0"></span><span>Update account label and save.</span></li>
+              <li class="flex gap-2"><span class="w-1.5 h-1.5 rounded-full bg-[#201C19] mt-1.5 shrink-0"></span><span>Users can switch QR codes in Payment tab.</span></li>
+            </ul>
+          </div>
+
+          <div class="mt-6">
+            <h3 class="text-xl font-[850] tracking-[-0.03em] border-b border-[#EAE0D5] pb-2">Queue Module Notes</h3>
+            <ul class="mt-3 grid gap-2 text-sm leading-snug">
+              <li class="flex gap-2"><span class="w-1.5 h-1.5 rounded-full bg-[#201C19] mt-1.5 shrink-0"></span><span>Queue is public and standalone, not tied to reservations.</span></li>
+              <li class="flex gap-2"><span class="w-1.5 h-1.5 rounded-full bg-[#201C19] mt-1.5 shrink-0"></span><span>Multiple queue sessions can exist at once.</span></li>
+              <li class="flex gap-2"><span class="w-1.5 h-1.5 rounded-full bg-[#201C19] mt-1.5 shrink-0"></span><span>Supports singles, doubles, exact scores, Winner Stays, and Fixed Order.</span></li>
+              <li class="flex gap-2"><span class="w-1.5 h-1.5 rounded-full bg-[#201C19] mt-1.5 shrink-0"></span><span>Queue creator PIN protects reset, delete, and player removal.</span></li>
+              <li class="flex gap-2"><span class="w-1.5 h-1.5 rounded-full bg-[#201C19] mt-1.5 shrink-0"></span><span>Queues expire and auto-clear after midnight.</span></li>
+            </ul>
+          </div>
+
+          <div class="mt-7 bg-[#201C19] text-white rounded-3xl p-5">
+            <div class="mono text-[10px] tracking-[0.2em] uppercase text-[#D6FF5F]">Important</div>
+            <p class="text-sm leading-relaxed mt-2">This version stores data in the browser using localStorage. For shared live bookings across all users and devices, upgrade to Firebase Firestore or Realtime Database.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- USER GUIDE PAGE -->
+      <section id="userGuide" class="page bg-white shadow-2xl p-12 relative overflow-hidden">
+        <div class="absolute -left-20 -bottom-20 w-72 h-72 rounded-full bg-[#D6FF5F]/25"></div>
+        <div class="relative z-10">
+          <div class="flex items-start justify-between border-b-4 border-[#201C19] pb-5">
+            <div>
+              <div class="mono text-[11px] tracking-[0.25em] uppercase opacity-60">User One-Pager</div>
+              <h2 class="text-4xl font-[900] tracking-[-0.05em] leading-none mt-1">Book. Queue.<br>Pay. Play.</h2>
+            </div>
+            <div class="w-14 h-14 rounded-full bg-[#201C19] text-[#D6FF5F] grid place-items-center font-black text-lg">WK</div>
+          </div>
+
+          <div class="grid grid-cols-3 gap-3 mt-7">
+            <div class="rounded-3xl bg-[#FFFBF5] border border-[#EAE0D5] p-5">
+              <div class="w-8 h-8 rounded-full bg-[#201C19] text-[#D6FF5F] grid place-items-center mono text-xs font-bold">1</div>
+              <h3 class="font-[850] text-lg tracking-[-0.03em] mt-3">Book</h3>
+              <p class="text-sm leading-snug mt-1 opacity-70">Choose date and open hourly slot.</p>
+            </div>
+            <div class="rounded-3xl bg-[#FFFBF5] border border-[#EAE0D5] p-5">
+              <div class="w-8 h-8 rounded-full bg-[#201C19] text-[#D6FF5F] grid place-items-center mono text-xs font-bold">2</div>
+              <h3 class="font-[850] text-lg tracking-[-0.03em] mt-3">Pay</h3>
+              <p class="text-sm leading-snug mt-1 opacity-70">Scan GCash, Maya, or BPI QR.</p>
+            </div>
+            <div class="rounded-3xl bg-[#FFFBF5] border border-[#EAE0D5] p-5">
+              <div class="w-8 h-8 rounded-full bg-[#201C19] text-[#D6FF5F] grid place-items-center mono text-xs font-bold">3</div>
+              <h3 class="font-[850] text-lg tracking-[-0.03em] mt-3">Play</h3>
+              <p class="text-sm leading-snug mt-1 opacity-70">Admin verifies and marks Reserved.</p>
+            </div>
+          </div>
+
+          <div class="mt-7 rounded-3xl bg-[#201C19] text-white p-6">
+            <div class="mono text-[10px] tracking-[0.2em] uppercase text-[#D6FF5F]">Schedule</div>
+            <div class="grid grid-cols-3 gap-3 mt-4 text-sm">
+              <div><b>7AM-12PM</b><br><span class="opacity-70">Walk-in / Queue<br>&#8369;100 per head</span></div>
+              <div><b>1PM-10PM</b><br><span class="opacity-70">Reservation<br>&#8369;300 per hour</span></div>
+              <div><b>Staff Block</b><br><span class="opacity-70">Tue/Thu/Sat/Sun<br>5PM-10PM</span></div>
+            </div>
+          </div>
+
+          <div class="mt-6">
+            <h3 class="text-xl font-[850] tracking-[-0.03em] border-b border-[#EAE0D5] pb-2">How to Reserve</h3>
+            <ul class="mt-3 grid gap-2 text-sm leading-snug">
+              <li class="flex gap-2"><span class="w-1.5 h-1.5 rounded-full bg-[#201C19] mt-1.5 shrink-0"></span><span>Open the Book tab.</span></li>
+              <li class="flex gap-2"><span class="w-1.5 h-1.5 rounded-full bg-[#201C19] mt-1.5 shrink-0"></span><span>Check Today's Schedule or choose another date in the calendar.</span></li>
+              <li class="flex gap-2"><span class="w-1.5 h-1.5 rounded-full bg-[#201C19] mt-1.5 shrink-0"></span><span>Select start and end time.</span></li>
+              <li class="flex gap-2"><span class="w-1.5 h-1.5 rounded-full bg-[#201C19] mt-1.5 shrink-0"></span><span>Enter name, email, and group notes.</span></li>
+              <li class="flex gap-2"><span class="w-1.5 h-1.5 rounded-full bg-[#201C19] mt-1.5 shrink-0"></span><span>Click Confirm Reservation.</span></li>
+            </ul>
+          </div>
+
+          <div class="grid grid-cols-2 gap-5 mt-6">
+            <div class="rounded-3xl bg-[#FFFBF5] border border-[#EAE0D5] p-5 h-full">
+              <h3 class="font-[850] text-lg tracking-[-0.03em]">Booking Status</h3>
+              <ul class="mt-3 space-y-2 text-sm leading-snug opacity-80">
+                <li>Pending: reservation submitted, payment not yet verified.</li>
+                <li>Reserved: admin verified your external payment.</li>
+              </ul>
+            </div>
+            <div class="rounded-3xl bg-[#FFFBF5] border border-[#EAE0D5] p-5 h-full">
+              <h3 class="font-[850] text-lg tracking-[-0.03em]">Payment</h3>
+              <ul class="mt-3 space-y-2 text-sm leading-snug opacity-80">
+                <li>Open Payment tab.</li>
+                <li>Choose GCash, Maya, or BPI / Bank.</li>
+                <li>Scan QR and pay externally.</li>
+                <li>Keep your reference screenshot.</li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="mt-6">
+            <h3 class="text-xl font-[850] tracking-[-0.03em] border-b border-[#EAE0D5] pb-2">Using The Queue Tab</h3>
+            <ul class="mt-3 grid gap-2 text-sm leading-snug">
+              <li class="flex gap-2"><span class="w-1.5 h-1.5 rounded-full bg-[#201C19] mt-1.5 shrink-0"></span><span>Create or join a public queue board.</span></li>
+              <li class="flex gap-2"><span class="w-1.5 h-1.5 rounded-full bg-[#201C19] mt-1.5 shrink-0"></span><span>Choose singles or doubles.</span></li>
+              <li class="flex gap-2"><span class="w-1.5 h-1.5 rounded-full bg-[#201C19] mt-1.5 shrink-0"></span><span>Use Winner Stays or Fixed Order rotation.</span></li>
+              <li class="flex gap-2"><span class="w-1.5 h-1.5 rounded-full bg-[#201C19] mt-1.5 shrink-0"></span><span>Enter exact final scores after matches.</span></li>
+              <li class="flex gap-2"><span class="w-1.5 h-1.5 rounded-full bg-[#201C19] mt-1.5 shrink-0"></span><span>Queue creator PIN protects reset/delete/player removal.</span></li>
+              <li class="flex gap-2"><span class="w-1.5 h-1.5 rounded-full bg-[#201C19] mt-1.5 shrink-0"></span><span>Queues auto-clear after midnight.</span></li>
+            </ul>
+          </div>
+
+          <div class="mt-7 rounded-3xl border-2 border-[#201C19] p-5">
+            <div class="mono text-[10px] tracking-[0.2em] uppercase opacity-60">Reminders</div>
+            <ul class="mt-3 space-y-2 text-sm leading-snug">
+              <li>Arrive before your reserved time.</li>
+              <li>Bring your payment reference if staff asks for verification.</li>
+              <li>Morning play is usually walk-in queue unless admin enables booking.</li>
+              <li>Staff-reserved hours are not available for public booking.</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </main>
+
+  <script>
+    window.addEventListener('load', () => {
+      const statusMsg = document.getElementById('statusMsg');
+      const librariesLoaded = typeof html2canvas !== 'undefined' && typeof jspdf !== 'undefined';
+
+      function showStatus(msg, isError) {
+        if (!statusMsg) return;
+        statusMsg.textContent = msg;
+        statusMsg.className = 'mono text-xs rounded-full px-4 py-2 border ' +
+          (isError
+            ? 'text-[#8C2C10] bg-[#FFE9E0] border-[#FFC9B6]'
+            : 'text-[#2D6A2E] bg-[#E8F5D8] border-[#CFE8B5]');
+        statusMsg.classList.remove('hidden');
+        clearTimeout(window._statusTimer);
+        window._statusTimer = setTimeout(() => statusMsg.classList.add('hidden'), 4000);
+      }
+
+      function disableButtons(disabled) {
+        ['btnAdminPdf', 'btnAdminPng', 'btnUserPdf', 'btnUserPng'].forEach(id => {
+          const b = document.getElementById(id);
+          if (b) b.disabled = disabled;
+        });
+      }
+
+      if (!librariesLoaded) {
+        showStatus('Libraries not loaded. Check your internet connection.', true);
+        disableButtons(true);
+        return;
+      }
+
+      async function captureElement(id) {
+        const element = document.getElementById(id);
+        if (!element) throw new Error('Element not found: ' + id);
+        return html2canvas(element, {
+          scale: 2,
+          backgroundColor: '#ffffff',
+          useCORS: true,
+          logging: false
+        });
+      }
+
+      async function downloadPng(id, filename) {
+        try {
+          disableButtons(true);
+          showStatus('Generating PNG...', false);
+          const canvas = await captureElement(id);
+          const link = document.createElement('a');
+          link.download = filename;
+          link.href = canvas.toDataURL('image/png');
+          link.click();
+          showStatus('PNG downloaded!', false);
+        } catch (err) {
+          console.error(err);
+          showStatus('PNG failed: ' + err.message, true);
+        } finally {
+          disableButtons(false);
+        }
+      }
+
+      async function downloadPdf(id, filename) {
+        try {
+          disableButtons(true);
+          showStatus('Generating PDF...', false);
+          const canvas = await captureElement(id);
+          const imgData = canvas.toDataURL('image/png');
+          const { jsPDF } = window.jspdf;
+          const pdf = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
+          const pageWidth = pdf.internal.pageSize.getWidth();
+          const pageHeight = pdf.internal.pageSize.getHeight();
+          pdf.addImage(imgData, 'PNG', 0, 0, pageWidth, pageHeight);
+          pdf.save(filename);
+          showStatus('PDF downloaded!', false);
+        } catch (err) {
+          console.error(err);
+          showStatus('PDF failed: ' + err.message, true);
+        } finally {
+          disableButtons(false);
+        }
+      }
+
+      const a1 = document.getElementById('btnAdminPdf');
+      const a2 = document.getElementById('btnAdminPng');
+      const u1 = document.getElementById('btnUserPdf');
+      const u2 = document.getElementById('btnUserPng');
+
+      if (a1) a1.addEventListener('click', () => downloadPdf('adminGuide', 'white-kitchen-admin-guide.pdf'));
+      if (a2) a2.addEventListener('click', () => downloadPng('adminGuide', 'white-kitchen-admin-guide.png'));
+      if (u1) u1.addEventListener('click', () => downloadPdf('userGuide', 'white-kitchen-user-one-pager.pdf'));
+      if (u2) u2.addEventListener('click', () => downloadPng('userGuide', 'white-kitchen-user-one-pager.png'));
+    });
+  </script>
+</body>
+</html>

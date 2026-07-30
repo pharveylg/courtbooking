@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # White Kitchen — Pickleball Court Booking App
 
 A responsive, single-file web app for managing court reservations at **White Kitchen Pickleball Court**. Built with pure HTML, CSS, and JavaScript — no backend required. Data is stored in `localStorage` for persistence across reloads.
@@ -220,6 +219,3 @@ git add . && git commit -m "update" && git push
 ## 📝 License
 
 MIT — Free to use and modify.
-=======
-# courtbooking
->>>>>>> 5ab289aba805b655e30e4912a0fc45728f561520

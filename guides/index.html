@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>White Kitchen Guides Export</title>
   <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html-to-image/1.11.11/html-to-image.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -14,7 +14,6 @@
     * { font-family: "Bricolage Grotesque", system-ui, sans-serif; }
     .mono { font-family: "JetBrains Mono", monospace; }
     .page { width: 794px; min-height: 1123px; }
-    .dl-btn { cursor: pointer; user-select: none; }
     @media print {
       body { background: white !important; }
       .no-print { display: none !important; }
@@ -30,20 +29,18 @@
         <h1 class="text-2xl md:text-3xl font-[850] tracking-[-0.04em]">Guide Export Center</h1>
         <p class="mono text-xs opacity-60 mt-1">Download the admin guide and user one-pager as PDF or PNG.</p>
       </div>
-      <div id="statusMsg" class="mono text-xs text-[#8C2C10] bg-[#FFE9E0] border border-[#FFC9B6] rounded-full px-4 py-2 hidden">Preparing download...</div>
       <div class="flex flex-wrap gap-2">
-        <button id="btnAdminPdf" class="dl-btn h-10 px-4 rounded-full bg-[#201C19] text-white text-sm font-bold hover:opacity-90 transition">Admin PDF</button>
-        <button id="btnAdminPng" class="dl-btn h-10 px-4 rounded-full bg-white border border-[#DACBBB] text-sm font-bold hover:bg-[#FFFBF5] transition">Admin PNG</button>
-        <button id="btnUserPdf" class="dl-btn h-10 px-4 rounded-full bg-[#D6FF5F] text-[#201C19] text-sm font-bold border border-[#201C19]/10 hover:opacity-90 transition">User PDF</button>
-        <button id="btnUserPng" class="dl-btn h-10 px-4 rounded-full bg-white border border-[#DACBBB] text-sm font-bold hover:bg-[#FFFBF5] transition">User PNG</button>
+        <button id="adminPdfBtn" type="button" class="h-10 px-4 rounded-full bg-[#201C19] text-white text-sm font-bold cursor-pointer active:scale-[0.98] transition">Admin PDF</button>
+        <button id="adminPngBtn" type="button" class="h-10 px-4 rounded-full bg-white border border-[#DACBBB] text-sm font-bold cursor-pointer active:scale-[0.98] transition">Admin PNG</button>
+        <button id="userPdfBtn" type="button" class="h-10 px-4 rounded-full bg-[#D6FF5F] text-[#201C19] text-sm font-bold border border-[#201C19]/10 cursor-pointer active:scale-[0.98] transition">User PDF</button>
+        <button id="userPngBtn" type="button" class="h-10 px-4 rounded-full bg-white border border-[#DACBBB] text-sm font-bold cursor-pointer active:scale-[0.98] transition">User PNG</button>
       </div>
+      <p id="exportStatus" class="hidden mono text-[11px] text-[#725E50]"></p>
     </div>
   </header>
 
   <main class="py-8 px-4 overflow-x-auto">
     <div class="flex flex-col xl:flex-row gap-8 items-start justify-center">
-
-      <!-- ADMIN GUIDE PAGE -->
       <section id="adminGuide" class="page bg-white shadow-2xl p-12 relative overflow-hidden">
         <div class="absolute -right-24 -top-24 w-72 h-72 rounded-full bg-[#D6FF5F]/25"></div>
         <div class="relative z-10">
@@ -56,75 +53,22 @@
           </div>
 
           <div class="grid grid-cols-2 gap-5 mt-7">
-            <div class="rounded-3xl bg-[#FFFBF5] border border-[#EAE0D5] p-5">
-              <h3 class="font-[850] text-lg tracking-[-0.03em]">Recommended Live Link</h3>
-              <p class="text-sm leading-snug mt-2 opacity-75">Use Vercel as the official customer portal. Keep Firebase as backup or future database platform.</p>
-            </div>
-            <div class="rounded-3xl bg-[#FFFBF5] border border-[#EAE0D5] p-5">
-              <h3 class="font-[850] text-lg tracking-[-0.03em]">Admin Access</h3>
-              <p class="text-sm leading-snug mt-2 opacity-75">Click Staff, enter the admin PIN. Default PIN is 1234 unless changed in Admin &gt; Security.</p>
-            </div>
+            <info-card title="Recommended Live Link" body="Use Vercel as the official customer portal. Keep Firebase as backup or future database platform."></info-card>
+            <info-card title="Admin Access" body="Click Staff, enter the admin PIN. Default PIN is 1234 unless changed in Admin > Security."></info-card>
           </div>
 
-          <div class="mt-6">
-            <h3 class="text-xl font-[850] tracking-[-0.03em] border-b border-[#EAE0D5] pb-2">Public vs Admin Tabs</h3>
-            <ul class="mt-3 grid gap-2 text-sm leading-snug">
-              <li class="flex gap-2"><span class="w-1.5 h-1.5 rounded-full bg-[#201C19] mt-1.5 shrink-0"></span><span>Public users see Book, Queue, and Payment.</span></li>
-              <li class="flex gap-2"><span class="w-1.5 h-1.5 rounded-full bg-[#201C19] mt-1.5 shrink-0"></span><span>Admins unlock Bookings and Admin tabs after entering the staff PIN.</span></li>
-              <li class="flex gap-2"><span class="w-1.5 h-1.5 rounded-full bg-[#201C19] mt-1.5 shrink-0"></span><span>Use one dedicated admin device/browser because current data uses localStorage.</span></li>
-            </ul>
-          </div>
+          <guide-block title="Public vs Admin Tabs" items='["Public users see Book, Queue, and Payment.","Admins unlock Bookings and Admin tabs after entering the staff PIN.","Use one dedicated admin device/browser because current data uses localStorage."]'></guide-block>
 
-          <div class="mt-6">
-            <h3 class="text-xl font-[850] tracking-[-0.03em] border-b border-[#EAE0D5] pb-2">Confirm Reservations</h3>
-            <ul class="mt-3 grid gap-2 text-sm leading-snug">
-              <li class="flex gap-2"><span class="w-1.5 h-1.5 rounded-full bg-[#201C19] mt-1.5 shrink-0"></span><span>Open Admin &gt; Confirm &amp; Tag Bookings.</span></li>
-              <li class="flex gap-2"><span class="w-1.5 h-1.5 rounded-full bg-[#201C19] mt-1.5 shrink-0"></span><span>Verify payment externally through GCash, Maya, BPI, or bank transfer.</span></li>
-              <li class="flex gap-2"><span class="w-1.5 h-1.5 rounded-full bg-[#201C19] mt-1.5 shrink-0"></span><span>Change Pending to Reserved only after payment is verified.</span></li>
-              <li class="flex gap-2"><span class="w-1.5 h-1.5 rounded-full bg-[#201C19] mt-1.5 shrink-0"></span><span>The app uses only two booking statuses: Pending and Reserved.</span></li>
-            </ul>
-          </div>
+          <guide-block title="Confirm Reservations" items='["Open Admin > Confirm & Tag Bookings.","Verify payment externally through GCash, Maya, BPI, or bank transfer.","Change Pending to Reserved only after payment is verified.","The app uses only two booking statuses: Pending and Reserved."]'></guide-block>
 
           <div class="grid grid-cols-2 gap-5 mt-6">
-            <div class="rounded-3xl bg-[#FFFBF5] border border-[#EAE0D5] p-5 h-full">
-              <h3 class="font-[850] text-lg tracking-[-0.03em]">Morning Booking</h3>
-              <ul class="mt-3 space-y-2 text-sm leading-snug opacity-80">
-                <li>7AM-12PM is walk-in queue by default.</li>
-                <li>Toggle individual morning hours if booking is allowed.</li>
-                <li>Enabled hours become public bookable slots.</li>
-              </ul>
-            </div>
-            <div class="rounded-3xl bg-[#FFFBF5] border border-[#EAE0D5] p-5 h-full">
-              <h3 class="font-[850] text-lg tracking-[-0.03em]">Open Play Blocks</h3>
-              <ul class="mt-3 space-y-2 text-sm leading-snug opacity-80">
-                <li>Create date + time range entries.</li>
-                <li>Blocks reservations for that slot.</li>
-                <li>Displays as Reserved - Open Play.</li>
-              </ul>
-            </div>
+            <mini-card title="Morning Booking" rows='["7AM-12PM is walk-in queue by default.","Toggle individual morning hours if booking is allowed.","Enabled hours become public bookable slots."]'></mini-card>
+            <mini-card title="Open Play Blocks" rows='["Create date + time range entries.","Blocks reservations for that slot.","Displays as Reserved - Open Play."]'></mini-card>
           </div>
 
-          <div class="mt-6">
-            <h3 class="text-xl font-[850] tracking-[-0.03em] border-b border-[#EAE0D5] pb-2">Payment QR Management</h3>
-            <ul class="mt-3 grid gap-2 text-sm leading-snug">
-              <li class="flex gap-2"><span class="w-1.5 h-1.5 rounded-full bg-[#201C19] mt-1.5 shrink-0"></span><span>Open Admin &gt; Payment QR Code &amp; Channels Manager.</span></li>
-              <li class="flex gap-2"><span class="w-1.5 h-1.5 rounded-full bg-[#201C19] mt-1.5 shrink-0"></span><span>Select GCash, Maya, or BPI / Bank.</span></li>
-              <li class="flex gap-2"><span class="w-1.5 h-1.5 rounded-full bg-[#201C19] mt-1.5 shrink-0"></span><span>Upload QR image or paste direct image URL.</span></li>
-              <li class="flex gap-2"><span class="w-1.5 h-1.5 rounded-full bg-[#201C19] mt-1.5 shrink-0"></span><span>Update account label and save.</span></li>
-              <li class="flex gap-2"><span class="w-1.5 h-1.5 rounded-full bg-[#201C19] mt-1.5 shrink-0"></span><span>Users can switch QR codes in Payment tab.</span></li>
-            </ul>
-          </div>
+          <guide-block title="Payment QR Management" items='["Open Admin > Payment QR Code & Channels Manager.","Select GCash, Maya, or BPI / Bank.","Upload QR image or paste direct image URL.","Update account label and save.","Users can switch QR codes in Payment tab."]'></guide-block>
 
-          <div class="mt-6">
-            <h3 class="text-xl font-[850] tracking-[-0.03em] border-b border-[#EAE0D5] pb-2">Queue Module Notes</h3>
-            <ul class="mt-3 grid gap-2 text-sm leading-snug">
-              <li class="flex gap-2"><span class="w-1.5 h-1.5 rounded-full bg-[#201C19] mt-1.5 shrink-0"></span><span>Queue is public and standalone, not tied to reservations.</span></li>
-              <li class="flex gap-2"><span class="w-1.5 h-1.5 rounded-full bg-[#201C19] mt-1.5 shrink-0"></span><span>Multiple queue sessions can exist at once.</span></li>
-              <li class="flex gap-2"><span class="w-1.5 h-1.5 rounded-full bg-[#201C19] mt-1.5 shrink-0"></span><span>Supports singles, doubles, exact scores, Winner Stays, and Fixed Order.</span></li>
-              <li class="flex gap-2"><span class="w-1.5 h-1.5 rounded-full bg-[#201C19] mt-1.5 shrink-0"></span><span>Queue creator PIN protects reset, delete, and player removal.</span></li>
-              <li class="flex gap-2"><span class="w-1.5 h-1.5 rounded-full bg-[#201C19] mt-1.5 shrink-0"></span><span>Queues expire and auto-clear after midnight.</span></li>
-            </ul>
-          </div>
+          <guide-block title="Queue Module Notes" items='["Queue is public and standalone, not tied to reservations.","Multiple queue sessions can exist at once.","Supports singles, doubles, exact scores, Winner Stays, and Fixed Order.","Queue creator PIN protects reset, delete, and player removal.","Queues expire and auto-clear after midnight."]'></guide-block>
 
           <div class="mt-7 bg-[#201C19] text-white rounded-3xl p-5">
             <div class="mono text-[10px] tracking-[0.2em] uppercase text-[#D6FF5F]">Important</div>
@@ -133,7 +77,6 @@
         </div>
       </section>
 
-      <!-- USER GUIDE PAGE -->
       <section id="userGuide" class="page bg-white shadow-2xl p-12 relative overflow-hidden">
         <div class="absolute -left-20 -bottom-20 w-72 h-72 rounded-full bg-[#D6FF5F]/25"></div>
         <div class="relative z-10">
@@ -146,73 +89,28 @@
           </div>
 
           <div class="grid grid-cols-3 gap-3 mt-7">
-            <div class="rounded-3xl bg-[#FFFBF5] border border-[#EAE0D5] p-5">
-              <div class="w-8 h-8 rounded-full bg-[#201C19] text-[#D6FF5F] grid place-items-center mono text-xs font-bold">1</div>
-              <h3 class="font-[850] text-lg tracking-[-0.03em] mt-3">Book</h3>
-              <p class="text-sm leading-snug mt-1 opacity-70">Choose date and open hourly slot.</p>
-            </div>
-            <div class="rounded-3xl bg-[#FFFBF5] border border-[#EAE0D5] p-5">
-              <div class="w-8 h-8 rounded-full bg-[#201C19] text-[#D6FF5F] grid place-items-center mono text-xs font-bold">2</div>
-              <h3 class="font-[850] text-lg tracking-[-0.03em] mt-3">Pay</h3>
-              <p class="text-sm leading-snug mt-1 opacity-70">Scan GCash, Maya, or BPI QR.</p>
-            </div>
-            <div class="rounded-3xl bg-[#FFFBF5] border border-[#EAE0D5] p-5">
-              <div class="w-8 h-8 rounded-full bg-[#201C19] text-[#D6FF5F] grid place-items-center mono text-xs font-bold">3</div>
-              <h3 class="font-[850] text-lg tracking-[-0.03em] mt-3">Play</h3>
-              <p class="text-sm leading-snug mt-1 opacity-70">Admin verifies and marks Reserved.</p>
-            </div>
+            <guide-step n="1" title="Book" text="Choose date and open hourly slot."></guide-step>
+            <guide-step n="2" title="Pay" text="Scan GCash, Maya, or BPI QR."></guide-step>
+            <guide-step n="3" title="Play" text="Admin verifies and marks Reserved."></guide-step>
           </div>
 
           <div class="mt-7 rounded-3xl bg-[#201C19] text-white p-6">
             <div class="mono text-[10px] tracking-[0.2em] uppercase text-[#D6FF5F]">Schedule</div>
             <div class="grid grid-cols-3 gap-3 mt-4 text-sm">
-              <div><b>7AM-12PM</b><br><span class="opacity-70">Walk-in / Queue<br>&#8369;100 per head</span></div>
-              <div><b>1PM-10PM</b><br><span class="opacity-70">Reservation<br>&#8369;300 per hour</span></div>
+              <div><b>7AM-12PM</b><br><span class="opacity-70">Walk-in / Queue<br>₱100 per head</span></div>
+              <div><b>1PM-10PM</b><br><span class="opacity-70">Reservation<br>₱300 per hour</span></div>
               <div><b>Staff Block</b><br><span class="opacity-70">Tue/Thu/Sat/Sun<br>5PM-10PM</span></div>
             </div>
           </div>
 
-          <div class="mt-6">
-            <h3 class="text-xl font-[850] tracking-[-0.03em] border-b border-[#EAE0D5] pb-2">How to Reserve</h3>
-            <ul class="mt-3 grid gap-2 text-sm leading-snug">
-              <li class="flex gap-2"><span class="w-1.5 h-1.5 rounded-full bg-[#201C19] mt-1.5 shrink-0"></span><span>Open the Book tab.</span></li>
-              <li class="flex gap-2"><span class="w-1.5 h-1.5 rounded-full bg-[#201C19] mt-1.5 shrink-0"></span><span>Check Today's Schedule or choose another date in the calendar.</span></li>
-              <li class="flex gap-2"><span class="w-1.5 h-1.5 rounded-full bg-[#201C19] mt-1.5 shrink-0"></span><span>Select start and end time.</span></li>
-              <li class="flex gap-2"><span class="w-1.5 h-1.5 rounded-full bg-[#201C19] mt-1.5 shrink-0"></span><span>Enter name, email, and group notes.</span></li>
-              <li class="flex gap-2"><span class="w-1.5 h-1.5 rounded-full bg-[#201C19] mt-1.5 shrink-0"></span><span>Click Confirm Reservation.</span></li>
-            </ul>
-          </div>
+          <guide-block title="How to Reserve" items='["Open the Book tab.","Check Today&apos;s Schedule or choose another date in the calendar.","Select start and end time.","Enter name, email, and group notes.","Click Confirm Reservation."]'></guide-block>
 
           <div class="grid grid-cols-2 gap-5 mt-6">
-            <div class="rounded-3xl bg-[#FFFBF5] border border-[#EAE0D5] p-5 h-full">
-              <h3 class="font-[850] text-lg tracking-[-0.03em]">Booking Status</h3>
-              <ul class="mt-3 space-y-2 text-sm leading-snug opacity-80">
-                <li>Pending: reservation submitted, payment not yet verified.</li>
-                <li>Reserved: admin verified your external payment.</li>
-              </ul>
-            </div>
-            <div class="rounded-3xl bg-[#FFFBF5] border border-[#EAE0D5] p-5 h-full">
-              <h3 class="font-[850] text-lg tracking-[-0.03em]">Payment</h3>
-              <ul class="mt-3 space-y-2 text-sm leading-snug opacity-80">
-                <li>Open Payment tab.</li>
-                <li>Choose GCash, Maya, or BPI / Bank.</li>
-                <li>Scan QR and pay externally.</li>
-                <li>Keep your reference screenshot.</li>
-              </ul>
-            </div>
+            <mini-card title="Booking Status" rows='["Pending: reservation submitted, payment not yet verified.","Reserved: admin verified your external payment."]'></mini-card>
+            <mini-card title="Payment" rows='["Open Payment tab.","Choose GCash, Maya, or BPI / Bank.","Scan QR and pay externally.","Keep your reference screenshot."]'></mini-card>
           </div>
 
-          <div class="mt-6">
-            <h3 class="text-xl font-[850] tracking-[-0.03em] border-b border-[#EAE0D5] pb-2">Using The Queue Tab</h3>
-            <ul class="mt-3 grid gap-2 text-sm leading-snug">
-              <li class="flex gap-2"><span class="w-1.5 h-1.5 rounded-full bg-[#201C19] mt-1.5 shrink-0"></span><span>Create or join a public queue board.</span></li>
-              <li class="flex gap-2"><span class="w-1.5 h-1.5 rounded-full bg-[#201C19] mt-1.5 shrink-0"></span><span>Choose singles or doubles.</span></li>
-              <li class="flex gap-2"><span class="w-1.5 h-1.5 rounded-full bg-[#201C19] mt-1.5 shrink-0"></span><span>Use Winner Stays or Fixed Order rotation.</span></li>
-              <li class="flex gap-2"><span class="w-1.5 h-1.5 rounded-full bg-[#201C19] mt-1.5 shrink-0"></span><span>Enter exact final scores after matches.</span></li>
-              <li class="flex gap-2"><span class="w-1.5 h-1.5 rounded-full bg-[#201C19] mt-1.5 shrink-0"></span><span>Queue creator PIN protects reset/delete/player removal.</span></li>
-              <li class="flex gap-2"><span class="w-1.5 h-1.5 rounded-full bg-[#201C19] mt-1.5 shrink-0"></span><span>Queues auto-clear after midnight.</span></li>
-            </ul>
-          </div>
+          <guide-block title="Using The Queue Tab" items='["Create or join a public queue board.","Choose singles or doubles.","Use Winner Stays or Fixed Order rotation.","Enter exact final scores after matches.","Queue creator PIN protects reset/delete/player removal.","Queues auto-clear after midnight."]'></guide-block>
 
           <div class="mt-7 rounded-3xl border-2 border-[#201C19] p-5">
             <div class="mono text-[10px] tracking-[0.2em] uppercase opacity-60">Reminders</div>
@@ -225,100 +123,131 @@
           </div>
         </div>
       </section>
-
     </div>
   </main>
 
   <script>
-    window.addEventListener('load', () => {
-      const statusMsg = document.getElementById('statusMsg');
-      const librariesLoaded = typeof html2canvas !== 'undefined' && typeof jspdf !== 'undefined';
-
-      function showStatus(msg, isError) {
-        if (!statusMsg) return;
-        statusMsg.textContent = msg;
-        statusMsg.className = 'mono text-xs rounded-full px-4 py-2 border ' +
-          (isError
-            ? 'text-[#8C2C10] bg-[#FFE9E0] border-[#FFC9B6]'
-            : 'text-[#2D6A2E] bg-[#E8F5D8] border-[#CFE8B5]');
-        statusMsg.classList.remove('hidden');
-        clearTimeout(window._statusTimer);
-        window._statusTimer = setTimeout(() => statusMsg.classList.add('hidden'), 4000);
+    customElements.define('guide-block', class extends HTMLElement {
+      connectedCallback() {
+        const title = this.getAttribute('title') || '';
+        const items = JSON.parse((this.getAttribute('items') || '[]').replaceAll('&apos;', "'"));
+        this.innerHTML = `
+          <div class="mt-6">
+            <h3 class="text-xl font-[850] tracking-[-0.03em] border-b border-[#EAE0D5] pb-2">${title}</h3>
+            <ul class="mt-3 grid gap-2 text-sm leading-snug">
+              ${items.map(item => `<li class="flex gap-2"><span class="w-1.5 h-1.5 rounded-full bg-[#201C19] mt-1.5 shrink-0"></span><span>${item}</span></li>`).join('')}
+            </ul>
+          </div>
+        `;
       }
-
-      function disableButtons(disabled) {
-        ['btnAdminPdf', 'btnAdminPng', 'btnUserPdf', 'btnUserPng'].forEach(id => {
-          const b = document.getElementById(id);
-          if (b) b.disabled = disabled;
-        });
-      }
-
-      if (!librariesLoaded) {
-        showStatus('Libraries not loaded. Check your internet connection.', true);
-        disableButtons(true);
-        return;
-      }
-
-      async function captureElement(id) {
-        const element = document.getElementById(id);
-        if (!element) throw new Error('Element not found: ' + id);
-        return html2canvas(element, {
-          scale: 2,
-          backgroundColor: '#ffffff',
-          useCORS: true,
-          logging: false
-        });
-      }
-
-      async function downloadPng(id, filename) {
-        try {
-          disableButtons(true);
-          showStatus('Generating PNG...', false);
-          const canvas = await captureElement(id);
-          const link = document.createElement('a');
-          link.download = filename;
-          link.href = canvas.toDataURL('image/png');
-          link.click();
-          showStatus('PNG downloaded!', false);
-        } catch (err) {
-          console.error(err);
-          showStatus('PNG failed: ' + err.message, true);
-        } finally {
-          disableButtons(false);
-        }
-      }
-
-      async function downloadPdf(id, filename) {
-        try {
-          disableButtons(true);
-          showStatus('Generating PDF...', false);
-          const canvas = await captureElement(id);
-          const imgData = canvas.toDataURL('image/png');
-          const { jsPDF } = window.jspdf;
-          const pdf = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
-          const pageWidth = pdf.internal.pageSize.getWidth();
-          const pageHeight = pdf.internal.pageSize.getHeight();
-          pdf.addImage(imgData, 'PNG', 0, 0, pageWidth, pageHeight);
-          pdf.save(filename);
-          showStatus('PDF downloaded!', false);
-        } catch (err) {
-          console.error(err);
-          showStatus('PDF failed: ' + err.message, true);
-        } finally {
-          disableButtons(false);
-        }
-      }
-
-      const a1 = document.getElementById('btnAdminPdf');
-      const a2 = document.getElementById('btnAdminPng');
-      const u1 = document.getElementById('btnUserPdf');
-      const u2 = document.getElementById('btnUserPng');
-
-      if (a1) a1.addEventListener('click', () => downloadPdf('adminGuide', 'white-kitchen-admin-guide.pdf'));
-      if (a2) a2.addEventListener('click', () => downloadPng('adminGuide', 'white-kitchen-admin-guide.png'));
-      if (u1) u1.addEventListener('click', () => downloadPdf('userGuide', 'white-kitchen-user-one-pager.pdf'));
-      if (u2) u2.addEventListener('click', () => downloadPng('userGuide', 'white-kitchen-user-one-pager.png'));
     });
+
+    customElements.define('mini-card', class extends HTMLElement {
+      connectedCallback() {
+        const title = this.getAttribute('title') || '';
+        const rows = JSON.parse(this.getAttribute('rows') || '[]');
+        this.innerHTML = `
+          <div class="rounded-3xl bg-[#FFFBF5] border border-[#EAE0D5] p-5 h-full">
+            <h3 class="font-[850] text-lg tracking-[-0.03em]">${title}</h3>
+            <ul class="mt-3 space-y-2 text-sm leading-snug opacity-80">
+              ${rows.map(row => `<li>${row}</li>`).join('')}
+            </ul>
+          </div>
+        `;
+      }
+    });
+
+    customElements.define('info-card', class extends HTMLElement {
+      connectedCallback() {
+        this.innerHTML = `
+          <div class="rounded-3xl bg-[#FFFBF5] border border-[#EAE0D5] p-5">
+            <h3 class="font-[850] text-lg tracking-[-0.03em]">${this.getAttribute('title')}</h3>
+            <p class="text-sm leading-snug mt-2 opacity-75">${this.getAttribute('body')}</p>
+          </div>
+        `;
+      }
+    });
+
+    customElements.define('guide-step', class extends HTMLElement {
+      connectedCallback() {
+        this.innerHTML = `
+          <div class="rounded-3xl bg-[#FFFBF5] border border-[#EAE0D5] p-5">
+            <div class="w-8 h-8 rounded-full bg-[#201C19] text-[#D6FF5F] grid place-items-center mono text-xs font-bold">${this.getAttribute('n')}</div>
+            <h3 class="font-[850] text-lg tracking-[-0.03em] mt-3">${this.getAttribute('title')}</h3>
+            <p class="text-sm leading-snug mt-1 opacity-70">${this.getAttribute('text')}</p>
+          </div>
+        `;
+      }
+    });
+
+    async function captureElement(id) {
+      const element = document.getElementById(id);
+      if (!window.htmlToImage) throw new Error('The image export library could not load. Check your internet connection and refresh the page.');
+      return htmlToImage.toPng(element, {
+        backgroundColor: '#ffffff',
+        pixelRatio: 2,
+        cacheBust: true
+      });
+    }
+
+    function setStatus(message, isError = false) {
+      const status = document.getElementById('exportStatus');
+      status.textContent = message;
+      status.classList.remove('hidden', 'text-[#725E50]', 'text-[#A13B20]');
+      status.classList.add(isError ? 'text-[#A13B20]' : 'text-[#725E50]');
+    }
+
+    function setButtonsDisabled(disabled) {
+      document.querySelectorAll('#adminPdfBtn, #adminPngBtn, #userPdfBtn, #userPngBtn').forEach(button => {
+        button.disabled = disabled;
+        button.classList.toggle('opacity-60', disabled);
+        button.classList.toggle('cursor-wait', disabled);
+      });
+    }
+
+    async function downloadPng(id, filename) {
+      try {
+        setButtonsDisabled(true);
+        setStatus('Preparing PNG download...');
+        const imageData = await captureElement(id);
+        const link = document.createElement('a');
+        link.download = filename;
+        link.href = imageData;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        setStatus('PNG downloaded successfully.');
+      } catch (error) {
+        setStatus(error.message || 'PNG export failed. Please refresh and try again.', true);
+      } finally {
+        setButtonsDisabled(false);
+      }
+    }
+
+    async function downloadPdf(id, filename) {
+      try {
+        if (!window.jspdf) throw new Error('The PDF export library could not load. Check your internet connection and refresh the page.');
+        setButtonsDisabled(true);
+        setStatus('Preparing PDF download...');
+        const imgData = await captureElement(id);
+        const { jsPDF } = window.jspdf;
+        const pdf = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
+        const pageWidth = pdf.internal.pageSize.getWidth();
+        const pageHeight = pdf.internal.pageSize.getHeight();
+        pdf.addImage(imgData, 'PNG', 0, 0, pageWidth, pageHeight);
+        pdf.save(filename);
+        setStatus('PDF downloaded successfully.');
+      } catch (error) {
+        setStatus(error.message || 'PDF export failed. Please refresh and try again.', true);
+      } finally {
+        setButtonsDisabled(false);
+      }
+    }
+
+    document.getElementById('adminPdfBtn').addEventListener('click', () => downloadPdf('adminGuide', 'white-kitchen-admin-guide.pdf'));
+    document.getElementById('adminPngBtn').addEventListener('click', () => downloadPng('adminGuide', 'white-kitchen-admin-guide.png'));
+    document.getElementById('userPdfBtn').addEventListener('click', () => downloadPdf('userGuide', 'white-kitchen-user-one-pager.pdf'));
+    document.getElementById('userPngBtn').addEventListener('click', () => downloadPng('userGuide', 'white-kitchen-user-one-pager.png'));
   </script>
 </body>
 </html>

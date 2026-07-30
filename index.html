@@ -1,0 +1,2620 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>White Kitchen — Pickleball Court Booking</title>
+<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+*{font-family:"Bricolage Grotesque",system-ui,sans-serif}
+.mono{font-family:"JetBrains Mono",monospace}
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-thumb{background:#e5ddd4;border-radius:999px}
+.cal-day:disabled{opacity:.28;pointer-events:none}
+.range-track{background:repeating-linear-gradient(90deg,#f3ece3 0 12px, transparent 12px 13px)}
+@media (min-width: 1024px) {
+  #colSchedule, #colReserve { display: flex !important; }
+}
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+</style>
+</head>
+<body class="bg-[#FFFBF5] text-[#201C19] antialiased selection:bg-[#D6FF5F]">
+
+<!-- Header -->
+<header class="sticky top-0 z-30 backdrop-blur-xl bg-[#FFFBF5]/90 border-b border-[#EAE0D5] shadow-xs">
+  <div class="max-w-[1320px] mx-auto px-3.5 md:px-6 h-[64px] md:h-[68px] flex items-center justify-between gap-2 md:gap-4">
+    <div class="flex items-center gap-2.5 md:gap-3 min-w-0">
+      <div class="w-8 h-8 md:w-9 md:h-9 rounded-full bg-[#201C19] text-[#D6FF5F] grid place-items-center font-black text-[12px] md:text-[13px] tracking-[-0.02em] shrink-0">WK</div>
+      <div class="leading-[0.95] min-w-0">
+        <div class="font-[800] text-[15px] md:text-[16px] tracking-[-0.02em] truncate">WHITE KITCHEN</div>
+        <div class="mono text-[9px] md:text-[10px] tracking-[0.16em] uppercase opacity-60 -mt-[2px] truncate">Pickleball Court • Single Court</div>
+      </div>
+      <div class="hidden lg:flex items-center gap-2 ml-5 pl-5 border-l border-[#EAE0D5]">
+        <div class="w-2 h-2 rounded-full bg-[#4ADE80] animate-pulse"></div>
+        <span class="mono text-[11px] uppercase tracking-widest">Court Open • <span id="hdrDate"></span></span>
+      </div>
+    </div>
+
+    <div class="flex items-center gap-2">
+      <!-- Public + Admin Nav -->
+      <nav class="flex items-center gap-1 p-1 rounded-full bg-[#F1E9DF] border border-[#E9DDD0]">
+        <button data-nav="book" class="nav-btn active px-3.5 md:px-5 h-8 rounded-full text-[12px] md:text-[13px] font-[650] tracking-[-0.01em] bg-[#201C19] text-white shadow-sm transition">Book</button>
+        <button data-nav="queue" class="nav-btn px-3.5 md:px-5 h-8 rounded-full text-[12px] md:text-[13px] font-[550] opacity-70 hover:opacity-100 transition">Queue</button>
+        <button data-nav="payment" class="nav-btn px-3.5 md:px-5 h-8 rounded-full text-[12px] md:text-[13px] font-[550] opacity-70 hover:opacity-100 transition">Payment</button>
+        <!-- Admin-only tabs (hidden for public portal users) -->
+        <button data-nav="bookings" class="nav-btn admin-only-tab hidden px-3.5 md:px-5 h-8 rounded-full text-[12px] md:text-[13px] font-[550] opacity-70 hover:opacity-100 transition">
+          Bookings <span id="hdrBookingsBadge" class="ml-1 px-1.5 py-0.5 rounded-full bg-[#201C19]/10 text-[10px]">0</span>
+        </button>
+        <button data-nav="admin" class="nav-btn admin-only-tab hidden px-3.5 md:px-5 h-8 rounded-full text-[12px] md:text-[13px] font-[550] opacity-70 hover:opacity-100 transition">Admin</button>
+      </nav>
+
+      <!-- Staff / Admin Lock Button -->
+      <button id="headerAdminToggle" title="Staff / Admin Access" class="flex items-center justify-center gap-1.5 px-3 md:px-3.5 h-8 rounded-full bg-white border border-[#EAE0D5] hover:border-[#201C19] text-[11px] md:text-[12px] font-[700] transition shrink-0 cursor-pointer shadow-xs">
+        <span id="headerAdminIcon" class="grid place-items-center"><svg id="headerAdminSvg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span>
+        <span id="headerAdminText" class="hidden sm:inline">Staff</span>
+      </button>
+    </div>
+  </div>
+</header>
+
+<main class="max-w-[1320px] mx-auto px-3.5 md:px-6 py-4 md:py-8">
+
+  <!-- VIEW: BOOK -->
+  <section id="view-book" class="view">
+    <!-- Mobile Segment Switcher (< lg breakpoint only) -->
+    <div class="lg:hidden flex p-1.5 rounded-full bg-[#F1E9DF] border border-[#EAE0D5] mb-4">
+      <button id="mobTabSchedule" class="flex-1 py-2 rounded-full text-[13px] font-[700] bg-[#201C19] text-white shadow-xs transition">Today's Schedule</button>
+      <button id="mobTabReserve" class="flex-1 py-2 rounded-full text-[13px] font-[650] text-[#201C19] opacity-70 hover:opacity-100 transition">Reserve Court Form</button>
+    </div>
+
+    <!-- top bar -->
+    <div class="grid grid-cols-12 gap-4 md:gap-5">
+      <!-- Left: schedule + info -->
+      <div id="colSchedule" class="col-span-12 lg:col-span-7 flex flex-col gap-4">
+        <!-- Hero strip -->
+        <div class="rounded-[24px] md:rounded-[28px] bg-[#201C19] text-[#FFFBF5] p-5 md:p-7 relative overflow-hidden">
+          <div class="absolute -right-12 -top-12 w-[280px] h-[280px] rounded-full bg-[#D6FF5F] opacity-[0.18] blur-[2px]"></div>
+          <div class="absolute right-[-20px] bottom-[-30px] rotate-[-10deg] mono text-[96px] leading-none font-[800] tracking-[-0.08em] text-white/[0.06]">PICKLE</div>
+          <div class="relative z-10 flex flex-wrap items-start justify-between gap-6">
+            <div>
+              <div class="inline-flex items-center gap-2 px-3 h-7 rounded-full bg-white/10 border border-white/10 mono text-[11px] tracking-widest uppercase">Single Court • Davao</div>
+              <h1 class="mt-4 text-[32px] md:text-[44px] font-[800] leading-[0.92] tracking-[-0.04em] max-w-[14ch]">Reserve the court.<br/>Own the rally.</h1>
+              <div class="mt-4 flex flex-wrap gap-2">
+                <div class="px-3 py-1.5 rounded-full bg-[#D6FF5F] text-[#201C19] mono text-[11px] font-[700]">₱300 / hour • 1PM–10PM</div>
+                <div class="px-3 py-1.5 rounded-full bg-white/10 border border-white/15 mono text-[11px]">₱100 / head • 7AM–12PM Queue</div>
+              </div>
+            </div>
+            <div class="bg-white/5 border border-white/10 rounded-[16px] p-3 w-full md:w-[240px]">
+              <div class="mono text-[10px] tracking-widest uppercase opacity-60">Today's Blocked</div>
+              <div id="staffNote" class="mt-2 text-[13px] leading-[1.35] font-[500]"></div>
+              <div class="mt-3 flex gap-1.5">
+                <span class="inline-flex items-center px-2 h-6 rounded-full bg-[#FF8A5B] text-[#201C19] mono text-[10px] font-[700]">STAFF 5–10PM</span>
+                <span class="inline-flex items-center px-2 h-6 rounded-full bg-white text-[#201C19] mono text-[10px] font-[700]">ONE COURT ONLY</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Today's Schedule -->
+        <div class="rounded-[24px] md:rounded-[28px] bg-white border border-[#EAE0D5] shadow-[0_8px_30px_rgba(32,28,25,0.04)] overflow-hidden">
+          <div class="px-5 md:px-7 h-[64px] flex items-center justify-between border-b border-[#F1E9DF]">
+            <div class="flex items-center gap-3">
+              <h2 class="text-[18px] font-[800] tracking-[-0.02em]">Today's Schedule</h2>
+              <span id="todayLabel" class="mono text-[11px] px-2.5 h-6 grid place-items-center rounded-full bg-[#F1E9DF]"></span>
+            </div>
+            <div class="hidden md:flex items-center gap-3 mono text-[10px] uppercase tracking-widest">
+              <span class="flex items-center gap-1.5"><i class="w-2 h-2 rounded-full bg-[#4ADE80] block"></i>Open</span>
+              <span class="flex items-center gap-1.5"><i class="w-2 h-2 rounded-full bg-[#FDBA74] block"></i>Pending</span>
+              <span class="flex items-center gap-1.5"><i class="w-2 h-2 rounded-full bg-[#201C19] block"></i>Reserved</span>
+              <span class="flex items-center gap-1.5"><i class="w-2 h-2 rounded-full bg-[#FF8A5B] block"></i>Staff</span>
+            </div>
+          </div>
+
+          <div id="scheduleList" class="divide-y divide-[#F5EDE4]"></div>
+
+          <div class="px-5 md:px-7 py-3 bg-[#FFFBF5] border-t border-[#F1E9DF] mono text-[10px] tracking-wide opacity-60 flex flex-wrap gap-x-4 gap-y-1">
+            <span>Morning 7AM–12PM = Walk-in queue unless admin unlocks booking</span>
+            <span>•</span>
+            <span>Afternoon 1PM–10PM = Hourly booking</span>
+            <span>•</span>
+            <span>Tue/Thu/Sat/Sun 5PM–10PM = Staff reserved</span>
+          </div>
+        </div>
+
+        <!-- Mobile Sticky Bottom CTA (< lg breakpoint only) -->
+        <div class="lg:hidden sticky bottom-4 z-20 mt-2">
+          <button type="button" id="mobJumpToReserveBtn" class="w-full h-[52px] rounded-full bg-[#201C19] text-[#D6FF5F] font-[800] text-[14px] tracking-[-0.01em] shadow-[0_10px_30px_rgba(32,28,25,0.35)] flex items-center justify-center gap-2 border border-white/10 active:scale-[0.98] transition">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 L3 14 h7 l-1 8 L19 10 h-7 z"/></svg>
+            <span>Jump to Reserve Court Form →</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Right: Reserve Form -->
+      <div id="colReserve" class="col-span-12 lg:col-span-5 hidden lg:flex flex-col gap-4">
+        <!-- Mobile Back to Schedule button (< lg only) -->
+        <div class="lg:hidden">
+          <button type="button" id="mobBackToScheduleBtn" class="inline-flex items-center gap-2 px-4 h-9 rounded-full bg-white border border-[#EAE0D5] font-[700] text-[12px] text-[#201C19] shadow-2xs">
+            <span>← Back to Today's Schedule</span>
+          </button>
+        </div>
+
+        <div class="rounded-[24px] md:rounded-[28px] bg-white border border-[#EAE0D5] shadow-[0_8px_30px_rgba(32,28,25,0.04)] overflow-hidden sticky top-[84px]">
+          <div class="px-6 md:px-7 pt-6 pb-4">
+            <div class="flex items-start justify-between">
+              <div>
+                <h3 class="text-[20px] font-[800] tracking-[-0.02em]">Reserve Court</h3>
+                <p class="mono text-[11px] opacity-60 mt-1">1-hour increments • Single court</p>
+              </div>
+              <div class="w-9 h-9 rounded-full bg-[#D6FF5F] grid place-items-center mono font-[800] text-[14px]">₱</div>
+            </div>
+          </div>
+
+          <!-- Calendar -->
+          <div class="px-6 md:px-7">
+            <div class="rounded-[18px] bg-[#FFFBF5] border border-[#F1E9DF] p-3.5">
+              <div class="flex items-center justify-between mb-3">
+                <button id="calPrev" class="w-8 h-8 rounded-full bg-white border border-[#EAE0D5] grid place-items-center hover:bg-[#201C19] hover:text-white transition">‹</button>
+                <div id="calTitle" class="font-[700] text-[14px] tracking-[-0.01em]"></div>
+                <button id="calNext" class="w-8 h-8 rounded-full bg-white border border-[#EAE0D5] grid place-items-center hover:bg-[#201C19] hover:text-white transition">›</button>
+              </div>
+              <div class="grid grid-cols-7 gap-1 mb-2 mono text-[10px] tracking-widest uppercase opacity-50 text-center">
+                <div>Mo</div><div>Tu</div><div>We</div><div>Th</div><div>Fr</div><div>Sa</div><div>Su</div>
+              </div>
+              <div id="calGrid" class="grid grid-cols-7 gap-1"></div>
+              <div class="mt-3 flex items-center gap-2 mono text-[10px]">
+                <span class="inline-flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-[#201C19]"></span>Selected</span>
+                <span class="inline-flex items-center gap-1"><span class="w-2 h-2 rounded-full border border-[#201C19]"></span>Today</span>
+                <span class="ml-auto opacity-60" id="calSelectedLabel"></span>
+              </div>
+            </div>
+
+            <!-- Selected-date slot availability preview (tap an open slot to prefill) -->
+            <div class="mt-3 rounded-[18px] bg-white border border-[#F1E9DF] p-3.5">
+              <div class="flex items-center justify-between mb-2.5">
+                <span class="mono text-[10px] uppercase tracking-widest font-[700] opacity-60">Slots for <span id="slotPreviewDate" class="text-[#201C19]"></span></span>
+                <span class="mono text-[9px] opacity-50">tap an OPEN slot to prefill</span>
+              </div>
+              <div id="dateSlotPreview" class="flex gap-1.5 overflow-x-auto no-scrollbar pb-1"></div>
+              <div class="mt-2 flex flex-wrap gap-x-3 gap-y-1 mono text-[9px] uppercase tracking-wider opacity-60">
+                <span class="flex items-center gap-1"><i class="w-2 h-2 rounded-full bg-[#4ADE80] block"></i>Open</span>
+                <span class="flex items-center gap-1"><i class="w-2 h-2 rounded-full bg-[#FDBA74] block"></i>Pending</span>
+                <span class="flex items-center gap-1"><i class="w-2 h-2 rounded-full bg-[#201C19] block"></i>Reserved</span>
+                <span class="flex items-center gap-1"><i class="w-2 h-2 rounded-full bg-[#9B8EFF] block"></i>Open&nbsp;Play</span>
+                <span class="flex items-center gap-1"><i class="w-2 h-2 rounded-full bg-[#FF8A5B] block"></i>Staff</span>
+                <span class="flex items-center gap-1"><i class="w-2 h-2 rounded-full bg-[#CFE8B5] block"></i>Queue</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Form -->
+          <form id="reserveForm" class="px-6 md:px-7 py-5 flex flex-col gap-4">
+            <div class="grid grid-cols-2 gap-3">
+              <label class="col-span-2 md:col-span-1 flex flex-col gap-1.5">
+                <span class="mono text-[11px] uppercase tracking-widest font-[600]">Full Name</span>
+                <input required id="fName" placeholder="Juan Dela Cruz" class="h-[44px] rounded-[12px] border border-[#EAE0D5] bg-[#FFFBF5] px-4 text-[14px] font-[500] outline-none focus:border-[#201C19] focus:bg-white transition"/>
+              </label>
+              <label class="col-span-2 md:col-span-1 flex flex-col gap-1.5">
+                <span class="mono text-[11px] uppercase tracking-widest font-[600]">Email</span>
+                <input required type="email" id="fEmail" placeholder="you@email.com" class="h-[44px] rounded-[12px] border border-[#EAE0D5] bg-[#FFFBF5] px-4 text-[14px] font-[500] outline-none focus:border-[#201C19] focus:bg-white transition"/>
+              </label>
+            </div>
+
+            <label class="flex flex-col gap-1.5">
+              <span class="mono text-[11px] uppercase tracking-widest font-[600]">Group / Notes (optional)</span>
+              <input id="fGroup" placeholder="e.g., 4 players, birthday game" class="h-[44px] rounded-[12px] border border-[#EAE0D5] bg-[#FFFBF5] px-4 text-[14px] font-[500] outline-none focus:border-[#201C19] focus:bg-white transition"/>
+            </label>
+
+            <div class="grid grid-cols-2 gap-3">
+              <label class="flex flex-col gap-1.5">
+                <span class="mono text-[11px] uppercase tracking-widest font-[600]">Start</span>
+                <select id="fStart" class="h-[44px] rounded-[12px] border border-[#EAE0D5] bg-[#FFFBF5] px-3 text-[14px] font-[600] outline-none focus:border-[#201C19]"></select>
+              </label>
+              <label class="flex flex-col gap-1.5">
+                <span class="mono text-[11px] uppercase tracking-widest font-[600]">End</span>
+                <select id="fEnd" class="h-[44px] rounded-[12px] border border-[#EAE0D5] bg-[#FFFBF5] px-3 text-[14px] font-[600] outline-none focus:border-[#201C19]"></select>
+              </label>
+            </div>
+
+            <div class="rounded-[14px] bg-[#201C19] text-white p-4 flex items-center justify-between">
+              <div>
+                <div class="mono text-[10px] uppercase tracking-widest opacity-60">Total • ₱300 / hour</div>
+                <div id="totalLine" class="text-[18px] font-[750] tracking-[-0.02em] mt-1">Select time</div>
+                <div id="totalHint" class="mono text-[11px] opacity-60 mt-1"></div>
+              </div>
+              <div class="text-right">
+                <div id="totalAmount" class="text-[28px] font-[800] tracking-[-0.03em] leading-none">₱0</div>
+                <div class="mono text-[10px] opacity-50 mt-1">externally paid • GCash QR</div>
+              </div>
+            </div>
+
+            <div id="formError" class="hidden rounded-[12px] bg-[#FFE9E0] border border-[#FFC9B6] px-4 py-3 mono text-[12px] leading-[1.4] text-[#7A2E1A]"></div>
+
+            <button type="submit" class="h-[50px] rounded-full bg-[#D6FF5F] hover:bg-[#CBF052] active:scale-[0.98] text-[#201C19] font-[800] text-[14px] tracking-[-0.01em] border border-[#201C19]/10 shadow-[0_8px_24px_rgba(214,255,95,0.5)] transition flex items-center justify-center gap-2">
+              <span>Confirm Reservation</span>
+              <span class="w-6 h-6 rounded-full bg-[#201C19] text-[#D6FF5F] grid place-items-center text-[12px]">→</span>
+            </button>
+
+            <div class="mono text-[10px] leading-[1.4] opacity-55 text-center px-2">By confirming, status will be <b>Pending</b> until admin verifies your external payment and tags as <b>Reserved</b>. Morning queue is walk-in by default.</div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- VIEW: BOOKINGS -->
+  <section id="view-bookings" class="view hidden">
+    <div class="rounded-[26px] bg-white border border-[#EAE0D5] overflow-hidden">
+      <div class="px-6 md:px-8 h-[72px] flex items-center justify-between border-b border-[#F1E9DF] gap-4">
+        <div class="flex items-center gap-4">
+          <h2 class="text-[20px] md:text-[22px] font-[800] tracking-[-0.02em]">Confirmed Bookings</h2>
+          <div class="hidden md:flex items-center gap-2">
+            <span id="bookingsCount" class="mono text-[11px] px-2.5 h-6 grid place-items-center rounded-full bg-[#F1E9DF]"></span>
+            <span class="mono text-[11px] opacity-60">Pending • Reserved • Open Play</span>
+          </div>
+        </div>
+        <div class="flex items-center gap-2">
+          <select id="filterStatus" class="h-9 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-4 mono text-[12px] font-[600]">
+            <option value="all">All status</option>
+            <option value="Pending">Pending</option>
+            <option value="Reserved">Reserved</option>
+            <option value="OpenPlay">Open Play</option>
+          </select>
+          <select id="filterDate" class="h-9 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-4 mono text-[12px] font-[600]">
+            <option value="all">All dates</option>
+            <option value="today">Today</option>
+            <option value="upcoming">Upcoming</option>
+          </select>
+        </div>
+      </div>
+
+      <div id="bookingsList" class="divide-y divide-[#F5EDE4]"></div>
+      <div id="bookingsEmpty" class="hidden p-12 text-center">
+        <div class="mono text-[12px] opacity-60">No bookings yet. Be first to reserve!</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- VIEW: QUEUE (QUEUEING & ROTATION TOOL) -->
+  <section id="view-queue" class="view hidden">
+    <!-- Queue Hero header -->
+    <div class="rounded-[24px] md:rounded-[28px] bg-white border border-[#EAE0D5] p-5 md:p-6 mb-5 shadow-xs relative overflow-hidden">
+      <div class="absolute -right-20 -top-20 w-[240px] h-[240px] rounded-full bg-[#D6FF5F]/15 blur-[2px]"></div>
+      <div class="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#201C19] text-[#D6FF5F] mono text-[10px] font-[800] uppercase tracking-wider">Interactive Utilities</div>
+          <h2 class="text-[26px] md:text-[32px] font-[850] tracking-[-0.03em] leading-none mt-2">Pickleball Queue & Scoreboard</h2>
+          <p class="mono text-[12px] opacity-65 mt-1.5 max-w-[56ch]">Generate on-court queuing boards, add players, track live scores, and automatically rotate matches. This is a standalone, local utility. Sessions auto-wipe daily at midnight.</p>
+        </div>
+        <div class="flex items-center gap-2 shrink-0">
+          <div class="px-4 py-2 rounded-2xl bg-[#FFFBF5] border border-[#F1E9DF] text-center">
+            <div id="activeQueueCountBadge" class="font-[800] text-[18px] text-[#201C19]">0</div>
+            <div class="mono text-[9px] uppercase opacity-60">Sessions Today</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-12 gap-5 lg:gap-6">
+      <!-- Left side: Session Creator & Session Selector -->
+      <div class="col-span-12 lg:col-span-5 flex flex-col gap-5">
+        <!-- New Session Form -->
+        <div class="rounded-[24px] bg-white border border-[#EAE0D5] p-5 shadow-xs">
+          <h3 class="text-[17px] font-[800] tracking-[-0.02em] mb-4 flex items-center gap-2">
+            <span class="w-5 h-5 rounded-full bg-[#201C19] text-white text-[11px] font-black grid place-items-center">+</span>
+            Create Queue Session
+          </h3>
+
+          <form id="createQueueForm" class="space-y-3.5">
+            <div>
+              <label class="block mono text-[10px] uppercase tracking-widest font-[700] mb-1">Session Name / Group</label>
+              <input required id="qName" placeholder="e.g., Morning Smashers, Friday Singles" class="w-full h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-4 text-[13px] font-[600] outline-none focus:border-[#201C19] focus:bg-white transition"/>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="block mono text-[10px] uppercase tracking-widest font-[700] mb-1">Game Mode</label>
+                <select id="qMode" class="w-full h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-3.5 text-[13px] font-[650] outline-none focus:border-[#201C19]">
+                  <option value="doubles">Doubles (4 Players)</option>
+                  <option value="singles">Singles (2 Players)</option>
+                </select>
+              </div>
+              <div>
+                <label class="block mono text-[10px] uppercase tracking-widest font-[700] mb-1">Rotation Rule</label>
+                <select id="qRule" class="w-full h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-3.5 text-[13px] font-[650] outline-none focus:border-[#201C19]">
+                  <option value="winner_stays">Winner Stays</option>
+                  <option value="fixed_order">Fixed Order (FIFO)</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="block mono text-[10px] uppercase tracking-widest font-[700] mb-1">Lock PIN (4 digits)</label>
+                <input required type="password" inputmode="numeric" maxlength="4" id="qPin" placeholder="e.g. 2580" class="w-full h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-4 text-[13px] text-center font-[700] tracking-widest outline-none focus:border-[#201C19]"/>
+              </div>
+              <div>
+                <label class="block mono text-[10px] uppercase tracking-widest font-[700] mb-1">Public Joining</label>
+                <select id="qAllowJoin" class="w-full h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-3.5 text-[13px] font-[650] outline-none focus:border-[#201C19]">
+                  <option value="true">Allowed</option>
+                  <option value="false">Restricted</option>
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <label class="block mono text-[10px] uppercase tracking-widest font-[700] mb-1">Initial Players (one per line)</label>
+              <textarea id="qInitialPlayers" rows="3" placeholder="Player 1&#10;Player 2&#10;Player 3&#10;Player 4" class="w-full rounded-[14px] border border-[#EAE0D5] bg-[#FFFBF5] p-3 text-[12px] font-[600] leading-tight outline-none focus:border-[#201C19] focus:bg-white transition resize-none"></textarea>
+              <span class="mono text-[9px] opacity-50 block mt-0.5">Separate player names by hitting Enter. Minimum 2 (singles) or 4 (doubles) to auto-start.</span>
+            </div>
+
+            <button type="submit" class="w-full h-11 rounded-full bg-[#D6FF5F] hover:bg-[#CBF052] text-[#201C19] font-[800] text-[13px] tracking-wide border border-[#201C19]/10 shadow-xs transition flex items-center justify-center gap-1.5 cursor-pointer">
+              <span>🚀 Generate Queue Board</span>
+            </button>
+          </form>
+        </div>
+
+        <!-- Sessions List -->
+        <div class="rounded-[24px] bg-white border border-[#EAE0D5] p-5 shadow-xs flex-1">
+          <div class="flex items-center justify-between mb-3.5">
+            <h3 class="text-[15px] font-[800] tracking-[-0.01em]">Active Sessions Today</h3>
+            <span id="activeSessionsCount" class="mono text-[10px] px-2 py-0.5 rounded-full bg-[#F1E9DF] font-[700]">0</span>
+          </div>
+          <div id="queueSessionsList" class="space-y-2.5 max-h-[300px] overflow-auto pr-1"></div>
+        </div>
+      </div>
+
+      <!-- Right side: Session Dashboard / Active Queue -->
+      <div class="col-span-12 lg:col-span-7">
+        <div id="noQueueSelected" class="rounded-[28px] border-2 border-dashed border-[#EAE0D5] bg-white p-12 text-center h-full flex flex-col items-center justify-center min-h-[420px]">
+          <div class="w-14 h-14 rounded-full bg-[#FFFBF5] border border-[#EAE0D5] grid place-items-center text-xl mb-4">🏓</div>
+          <h4 class="font-[800] text-[18px] tracking-[-0.02em] text-[#201C19]">No active queue session selected</h4>
+          <p class="mono text-[12px] opacity-60 max-w-[34ch] mt-1.5 mx-auto">Create a new queue session on the left or select an active session to launch the real-time scoring board.</p>
+        </div>
+
+        <div id="queueDashboard" class="hidden flex flex-col gap-5">
+          <!-- Active Match Scoring Card -->
+          <div class="rounded-[28px] bg-[#201C19] text-white p-5 md:p-6 shadow-sm relative overflow-hidden">
+            <div class="absolute -left-16 -bottom-16 w-[180px] h-[180px] rounded-full bg-white/[0.03] blur-[1px]"></div>
+            <div class="relative flex items-center justify-between gap-4 border-b border-white/10 pb-3">
+              <div>
+                <span id="dashboardSessionModeBadge" class="mono text-[10px] px-2.5 py-0.5 rounded-full bg-[#D6FF5F] text-[#201C19] font-[800] uppercase">DOUBLES MATCH</span>
+                <h4 id="dashboardSessionName" class="font-[800] text-[20px] tracking-[-0.02em] mt-1">Friday Night League</h4>
+              </div>
+              <div class="text-right">
+                <span id="dashboardMatchNum" class="mono text-[11px] opacity-65">Match #1</span>
+                <div id="dashboardSessionRule" class="mono text-[10px] opacity-50 uppercase mt-0.5">Winner Stays</div>
+              </div>
+            </div>
+
+            <!-- Court Board: Side A vs Side B -->
+            <div class="grid grid-cols-11 items-center gap-2 my-5">
+              <!-- Team A -->
+              <div class="col-span-5 bg-white/5 border border-white/10 rounded-[20px] p-4 text-center">
+                <span class="mono text-[10px] uppercase opacity-50 tracking-wider">Team A</span>
+                <div id="teamAPlayers" class="mt-2 text-[15px] font-[800] leading-snug tracking-[-0.01em] min-h-[44px] flex flex-col justify-center">
+                  <div>Player 1</div><div>Player 2</div>
+                </div>
+                <div class="mt-4 flex items-center justify-center gap-1.5">
+                  <span class="mono text-[10px] opacity-60">Score:</span>
+                  <input type="number" id="scoreA" min="0" max="99" placeholder="0" class="w-16 h-10 rounded-xl bg-white/10 border border-white/15 text-center text-[18px] font-black text-white focus:bg-white focus:text-[#201C19] outline-none transition"/>
+                </div>
+              </div>
+
+              <!-- VS Divider -->
+              <div class="col-span-1 text-center font-black text-[13px] opacity-40">VS</div>
+
+              <!-- Team B -->
+              <div class="col-span-5 bg-white/5 border border-white/10 rounded-[20px] p-4 text-center">
+                <span class="mono text-[10px] uppercase opacity-50 tracking-wider">Team B</span>
+                <div id="teamBPlayers" class="mt-2 text-[15px] font-[800] leading-snug tracking-[-0.01em] min-h-[44px] flex flex-col justify-center">
+                  <div>Player 3</div><div>Player 4</div>
+                </div>
+                <div class="mt-4 flex items-center justify-center gap-1.5">
+                  <span class="mono text-[10px] opacity-60">Score:</span>
+                  <input type="number" id="scoreB" min="0" max="99" placeholder="0" class="w-16 h-10 rounded-xl bg-white/10 border border-white/15 text-center text-[18px] font-black text-white focus:bg-white focus:text-[#201C19] outline-none transition"/>
+                </div>
+              </div>
+            </div>
+
+            <!-- Submit Button -->
+            <div class="relative flex flex-col sm:flex-row items-center justify-between gap-3 bg-white/5 rounded-2xl p-3 border border-white/5">
+              <span class="mono text-[11px] opacity-60 text-center sm:text-left">Enter both final scores and submit to advance the queue.</span>
+              <button type="button" id="submitScoreBtn" class="h-10 px-5 rounded-full bg-[#D6FF5F] hover:bg-[#CBF052] text-[#201C19] font-[800] text-[13px] transition cursor-pointer shrink-0">
+                Submit & Rotate Queue →
+              </button>
+            </div>
+          </div>
+
+          <!-- Queue Management: Next Up, Waiting, Join -->
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <!-- Next Up & Waiting Room -->
+            <div class="rounded-[24px] bg-white border border-[#EAE0D5] p-5 shadow-xs flex flex-col min-h-[280px]">
+              <div class="flex items-center justify-between border-b border-[#F1E9DF] pb-2.5 mb-3">
+                <h4 class="font-[800] text-[15px] tracking-[-0.01em]">Waiting Room</h4>
+                <span id="waitingCountBadge" class="mono text-[10px] px-2 py-0.5 rounded-full bg-[#F1E9DF]">0 players</span>
+              </div>
+
+              <!-- Waiting scrollbox -->
+              <div id="waitingRoomList" class="flex-1 space-y-2 max-h-[220px] overflow-auto pr-1 divide-y divide-[#F5EDE4]">
+                <!-- Dynamic waiting player entries -->
+              </div>
+            </div>
+
+            <!-- Join Queue Input Card -->
+            <div class="rounded-[24px] bg-white border border-[#EAE0D5] p-5 shadow-xs">
+              <div class="border-b border-[#F1E9DF] pb-2.5 mb-3">
+                <h4 class="font-[800] text-[15px] tracking-[-0.01em]">Add Player(s) to Queue</h4>
+                <span class="mono text-[10px] opacity-50">Join this active court rotation</span>
+              </div>
+
+              <form id="joinQueueForm" class="space-y-3.5">
+                <div>
+                  <label class="block mono text-[10px] uppercase tracking-widest font-[700] mb-1">Player 1 Name</label>
+                  <input required id="jPlayer1" placeholder="e.g. John Doe" class="w-full h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-4 text-[13px] font-[600] outline-none focus:border-[#201C19] focus:bg-white transition"/>
+                </div>
+
+                <div id="jPlayer2Wrapper">
+                  <label class="block mono text-[10px] uppercase tracking-widest font-[700] mb-1">Player 2 Name (Optional Partner)</label>
+                  <input id="jPlayer2" placeholder="e.g. Jane Doe (or leave blank to queue alone)" class="w-full h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-4 text-[13px] font-[600] outline-none focus:border-[#201C19] focus:bg-white transition"/>
+                  <span class="mono text-[9px] opacity-50 block mt-0.5">For doubles, queueing with a partner keeps you grouped together!</span>
+                </div>
+
+                <button type="submit" id="joinQueueBtn" class="w-full h-10 rounded-full bg-[#201C19] text-[#D6FF5F] font-[800] text-[12px] tracking-wide transition flex items-center justify-center gap-1 cursor-pointer">
+                  <span>➕ Add Player(s)</span>
+                </button>
+              </form>
+            </div>
+          </div>
+
+          <!-- History / Match Results Scoreboard -->
+          <div class="rounded-[24px] bg-white border border-[#EAE0D5] p-5 shadow-xs">
+            <div class="border-b border-[#F1E9DF] pb-2.5 mb-3.5">
+              <h4 class="font-[800] text-[15px] tracking-[-0.01em]">Scoreboard & Match History</h4>
+              <p class="mono text-[10px] opacity-55">Recent matches completed in this session</p>
+            </div>
+            <div id="queueMatchHistory" class="space-y-2 max-h-[180px] overflow-auto pr-1">
+              <!-- Completed matches with scores -->
+            </div>
+          </div>
+
+          <!-- Session Destruction / Security (Locks behind the session PIN) -->
+          <div class="rounded-[24px] bg-[#FFFBF5] border border-[#FFE0A3] p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div class="flex items-center gap-3">
+              <div class="w-9 h-9 rounded-full bg-[#FFF0D6] text-[#8A5A00] grid place-items-center"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div>
+              <div>
+                <h5 class="text-[14px] font-[800] text-[#201C19] tracking-[-0.01em]">Admin Pin Required</h5>
+                <p class="mono text-[11px] opacity-60 leading-snug">Lock PIN set by creator is required for destructive admin modifications.</p>
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <input type="password" inputmode="numeric" maxlength="4" id="qAdminActionPin" placeholder="PIN" class="w-16 h-9 rounded-xl border border-[#EAE0D5] bg-white text-center mono text-[12px] font-[800] tracking-widest outline-none focus:border-[#201C19]"/>
+              <button type="button" id="qResetSessionBtn" class="h-9 px-3 rounded-full bg-[#FFE9E0] text-[#8C2C10] border border-[#FFC9B6] mono text-[11px] font-[700] hover:bg-[#FFD7C7] transition cursor-pointer">
+                Reset Queue
+              </button>
+              <button type="button" id="qDeleteSessionBtn" class="h-9 px-3 rounded-full bg-[#201C19] text-white mono text-[11px] font-[700] hover:opacity-90 transition cursor-pointer">
+                Delete Session
+              </button>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- VIEW: PAYMENT -->
+  <section id="view-payment" class="view hidden">
+    <div class="grid grid-cols-12 gap-4 md:gap-6">
+      <!-- Left Column: Scannable QR & Channel Switcher Buttons -->
+      <div class="col-span-12 lg:col-span-6">
+        <div class="rounded-[28px] bg-[#201C19] text-white p-6 md:p-8 relative overflow-hidden shadow-[0_16px_40px_rgba(32,28,25,0.15)]">
+          <div class="absolute -right-16 -top-16 w-[260px] h-[260px] rounded-full bg-[#D6FF5F]/20 blur-[1px]"></div>
+          <div class="relative flex items-start justify-between gap-4">
+            <div>
+              <h2 class="text-[28px] md:text-[32px] font-[800] tracking-[-0.03em] leading-[0.95]">Pay externally.<br/>We verify manually.</h2>
+              <p class="mono text-[12px] opacity-70 leading-[1.5] mt-3 max-w-[34ch]">Scan using your preferred app below. Once paid, admin will tag your booking as <b class="text-[#D6FF5F]">Reserved</b>.</p>
+            </div>
+            <div class="w-10 h-10 rounded-full bg-[#D6FF5F] text-[#201C19] font-[800] text-[16px] grid place-items-center shrink-0">₱</div>
+          </div>
+
+          <!-- Active QR Card -->
+          <div class="relative mt-7 rounded-[24px] bg-white p-5 md:p-6 text-[#201C19] shadow-sm">
+            <div class="flex items-start justify-between">
+              <div>
+                <div id="payChannelBadge" class="mono text-[10px] tracking-widest uppercase font-[700] text-[#4ADE80] bg-[#201C19] px-3 py-1 rounded-full inline-block">GCash Payment</div>
+                <div id="payChannelTitle" class="font-[800] text-[18px] tracking-[-0.02em] mt-2">White Kitchen Pickleball</div>
+                <div id="payChannelAccount" class="mono text-[12px] opacity-65 font-[600] mt-0.5">0917-888-0123 • White Kitchen</div>
+              </div>
+              <div id="payChannelIcon" class="w-9 h-9 rounded-full border border-[#EAE0D5] grid place-items-center font-[800] text-[14px] text-white" style="background:#0055FE">G</div>
+            </div>
+
+            <!-- QR Code Display Box (renders admin uploaded image or high-res clean fallback) -->
+            <div class="mt-5 aspect-square max-w-[300px] mx-auto rounded-[20px] bg-[#FFFBF5] border border-[#EAE0D5] p-3.5 grid place-items-center overflow-hidden relative group">
+              <div id="payQrDisplay" class="w-full h-full grid place-items-center"></div>
+              <div class="absolute bottom-2 right-2 px-2 py-0.5 rounded-full bg-white/90 border border-[#EAE0D5] mono text-[9px] opacity-70">Scannable QR</div>
+            </div>
+
+            <!-- Rate details row -->
+            <div class="mt-5 grid grid-cols-2 gap-2.5">
+              <div class="rounded-[14px] bg-[#FFFBF5] border border-[#EAE0D5] px-3.5 py-2.5">
+                <div class="mono text-[9px] uppercase tracking-widest opacity-60">Reservation (1PM–10PM)</div>
+                <div class="font-[750] text-[15px]">₱300 / hour</div>
+              </div>
+              <div class="rounded-[14px] bg-[#D6FF5F] px-3.5 py-2.5 border border-[#201C19]/10">
+                <div class="mono text-[9px] uppercase tracking-widest opacity-70">Morning Queue (7AM–12PM)</div>
+                <div class="font-[750] text-[15px]">₱100 / head</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Channel Switcher Buttons Below -->
+          <div class="relative mt-6">
+            <div class="mono text-[10px] tracking-widest uppercase opacity-60 mb-2.5">Select Payment Method (Click to switch QR):</div>
+            <div class="grid grid-cols-3 gap-2">
+              <button type="button" data-pay-channel="gcash" class="pay-channel-btn active h-11 rounded-full bg-[#D6FF5F] text-[#201C19] font-[800] text-[13px] tracking-[-0.01em] border border-[#201C19]/10 shadow-sm transition flex items-center justify-center gap-1.5 cursor-pointer">
+                <span class="w-2.5 h-2.5 rounded-full bg-[#0055FE] block border border-white/40"></span>
+                <span>GCash</span>
+              </button>
+              <button type="button" data-pay-channel="maya" class="pay-channel-btn h-11 rounded-full bg-white/10 hover:bg-white/20 text-white font-[700] text-[13px] tracking-[-0.01em] border border-white/15 transition flex items-center justify-center gap-1.5 cursor-pointer">
+                <span class="w-2.5 h-2.5 rounded-full bg-[#00BE6A] block border border-white/40"></span>
+                <span>Maya</span>
+              </button>
+              <button type="button" data-pay-channel="bpi" class="pay-channel-btn h-11 rounded-full bg-white/10 hover:bg-white/20 text-white font-[700] text-[13px] tracking-[-0.01em] border border-white/15 transition flex items-center justify-center gap-1.5 cursor-pointer">
+                <span class="w-2.5 h-2.5 rounded-full bg-[#B11016] block border border-white/40"></span>
+                <span>BPI / Bank</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Column: How Payment Works & Supported Channels -->
+      <div class="col-span-12 lg:col-span-6 flex flex-col gap-4">
+        <div class="rounded-[28px] bg-white border border-[#EAE0D5] p-6 md:p-8 shadow-[0_8px_30px_rgba(32,28,25,0.04)]">
+          <h3 class="font-[800] text-[20px] md:text-[22px] tracking-[-0.02em]">How payment verification works</h3>
+          <ol class="mt-6 space-y-5">
+            <li class="flex gap-4">
+              <span class="w-8 h-8 rounded-full bg-[#201C19] text-white grid place-items-center mono text-[13px] font-[700] shrink-0">1</span>
+              <div>
+                <div class="font-[700] text-[15px]">Reserve first, pay second</div>
+                <div class="mono text-[12px] opacity-65 leading-[1.5] mt-1">Submit your reservation via the Book tab. Your booking is held with <b>Pending</b> status while you pay.</div>
+              </div>
+            </li>
+            <li class="flex gap-4">
+              <span class="w-8 h-8 rounded-full bg-[#201C19] text-white grid place-items-center mono text-[13px] font-[700] shrink-0">2</span>
+              <div>
+                <div class="font-[700] text-[15px]">Scan QR and complete transfer</div>
+                <div class="mono text-[12px] opacity-65 leading-[1.5] mt-1">Use GCash, Maya, or BPI / bank mobile app. Choose your preferred QR code using the buttons on the left. Ensure the account name matches when sending.</div>
+              </div>
+            </li>
+            <li class="flex gap-4">
+              <span class="w-8 h-8 rounded-full bg-[#D6FF5F] text-[#201C19] border border-[#201C19]/10 grid place-items-center mono text-[13px] font-[800] shrink-0">3</span>
+              <div>
+                <div class="font-[700] text-[15px]">Admin verifies and tags as Reserved</div>
+                <div class="mono text-[12px] opacity-65 leading-[1.5] mt-1">Our staff verifies external bank/e-wallet payments and tags your booking as <b>Reserved</b>. No automatic in-app payment processing.</div>
+              </div>
+            </li>
+          </ol>
+
+          <div class="mt-8 p-4 md:p-5 rounded-[16px] bg-[#FFFBF5] border border-[#F1E9DF] flex gap-3.5">
+            <div class="w-9 h-9 rounded-full bg-[#FFE9E0] text-[#8C2C10] grid place-items-center shrink-0"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg></div>
+            <div class="mono text-[11px] leading-[1.5] text-[#201C19]">
+              <b>Staff reserved block:</b> Tue, Thu, Sat, Sun 5:00PM–10:00PM is blocked for White Kitchen staff play. Morning hours (7AM–12PM) are walk-in queue (₱100/head, unlimited play) unless unlocked by admin.
+            </div>
+          </div>
+        </div>
+
+        <div class="rounded-[28px] bg-[#FFFBF5] border border-[#EAE0D5] p-6 md:p-7 flex flex-col md:flex-row items-center justify-between gap-4">
+          <div>
+            <div class="mono text-[11px] tracking-widest uppercase font-[700] opacity-60">Verified Channels</div>
+            <div class="mt-1 text-[16px] font-[800] tracking-[-0.01em]">GCash • Maya • BPI / InstaPay</div>
+            <p class="mono text-[11px] opacity-60 mt-1">Keep your reference screenshot ready for quick court-side verification.</p>
+          </div>
+          <div class="flex items-center gap-2 shrink-0">
+            <div class="px-3.5 py-2 rounded-full bg-white border border-[#EAE0D5] mono text-[11px] font-[700]">0% booking fee</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- VIEW: ADMIN -->
+  <section id="view-admin" class="view hidden">
+    <!-- Admin Lock -->
+    <div id="adminLock" class="max-w-[440px] mx-auto">
+      <div class="rounded-[26px] bg-white border border-[#EAE0D5] p-7 md:p-8 shadow-[0_10px_40px_rgba(32,28,25,0.06)]">
+        <div class="w-10 h-10 rounded-full bg-[#201C19] text-[#D6FF5F] grid place-items-center font-black text-[14px]">WK</div>
+        <h2 class="mt-4 text-[22px] font-[800] tracking-[-0.02em]">Admin Access</h2>
+        <p class="mono text-[12px] opacity-60 mt-2 leading-[1.5]">Enter PIN to manage bookings. Default PIN is <b>1234</b>. You can change it after unlocking (stored locally).</p>
+        <div class="mt-6 flex gap-2">
+          <input id="adminPinInput" type="password" inputmode="numeric" maxlength="8" placeholder="PIN" class="flex-1 h-[46px] rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-5 mono text-[14px] font-[700] tracking-widest outline-none focus:border-[#201C19]"/>
+          <button id="adminUnlockBtn" class="h-[46px] px-6 rounded-full bg-[#201C19] text-white font-[700] text-[14px]">Unlock</button>
+        </div>
+        <div id="adminLockError" class="hidden mt-3 mono text-[12px] text-[#8C2C10] bg-[#FFE9E0] border border-[#FFC9B6] rounded-full px-4 py-2"></div>
+        <div class="mt-4 mono text-[10px] opacity-50">Admin tools: Confirm & Tag • Morning toggle • Open Play blocker • QR override</div>
+      </div>
+    </div>
+
+    <!-- Admin Panel -->
+    <div id="adminPanel" class="hidden">
+      <div class="flex flex-wrap items-center justify-between gap-3 mb-5">
+        <div class="flex items-center gap-3">
+          <h2 class="text-[22px] font-[800] tracking-[-0.02em]">Admin Console</h2>
+          <span class="mono text-[11px] px-3 h-7 rounded-full bg-[#201C19] text-white grid place-items-center">WK STAFF</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <button id="exportBtn" class="h-9 px-4 rounded-full bg-white border border-[#EAE0D5] mono text-[11px] font-[600]">Export CSV</button>
+          <button id="resetBtn" class="h-9 px-4 rounded-full bg-[#FFE9E0] border border-[#FFC9B6] mono text-[11px] font-[600]">Wipe local data</button>
+          <button id="adminLockBtn" class="h-9 px-4 rounded-full bg-[#F1E9DF] border border-[#E9DDD0] mono text-[11px] font-[600]">Lock</button>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-12 gap-4 md:gap-5">
+        <!-- Left column: Bookings Manager + QR Code Upload Manager -->
+        <div class="col-span-12 lg:col-span-8 flex flex-col gap-4 md:gap-5">
+          <!-- Bookings manager -->
+          <div class="rounded-[24px] bg-white border border-[#EAE0D5] overflow-hidden">
+            <div class="px-6 h-[60px] flex items-center justify-between border-b border-[#F1E9DF]">
+              <div class="font-[750] text-[15px]">Confirm & Tag Bookings</div>
+              <div class="mono text-[11px] opacity-60"><span id="adminBookingsCount">0</span> bookings</div>
+            </div>
+            <div id="adminBookingsList" class="divide-y divide-[#F5EDE4] max-h-[560px] overflow-auto"></div>
+          </div>
+
+          <!-- Payment QR Code & Channels Manager (Admin only) -->
+          <div class="rounded-[24px] bg-white border border-[#EAE0D5] p-6 shadow-xs">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <div class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#201C19] text-[#D6FF5F] mono text-[10px] font-[800] uppercase tracking-widest">Admin Control</div>
+                <h3 class="mt-1.5 text-[18px] font-[800] tracking-[-0.02em]">Payment QR Code & Channels Manager</h3>
+                <p class="mono text-[11px] opacity-60 mt-0.5">Upload QR image files or set URLs for GCash, Maya, and BPI / Bank. Public guests can switch channels on the Payment tab.</p>
+              </div>
+            </div>
+
+            <!-- Channel Selector Tabs -->
+            <div class="mt-5 flex gap-2 p-1 rounded-full bg-[#F1E9DF] border border-[#E9DDD0] w-fit">
+              <button type="button" data-admin-qr-tab="gcash" class="admin-qr-tab active px-4 h-8 rounded-full text-[12px] font-[700] bg-[#201C19] text-white shadow-xs transition cursor-pointer flex items-center gap-1.5"><i class="w-2 h-2 rounded-full bg-[#0055FE] block"></i>GCash</button>
+              <button type="button" data-admin-qr-tab="maya" class="admin-qr-tab px-4 h-8 rounded-full text-[12px] font-[600] opacity-70 hover:opacity-100 transition cursor-pointer flex items-center gap-1.5"><i class="w-2 h-2 rounded-full bg-[#00BE6A] block"></i>Maya</button>
+              <button type="button" data-admin-qr-tab="bpi" class="admin-qr-tab px-4 h-8 rounded-full text-[12px] font-[600] opacity-70 hover:opacity-100 transition cursor-pointer flex items-center gap-1.5"><i class="w-2 h-2 rounded-full bg-[#B11016] block"></i>BPI / Bank</button>
+            </div>
+
+            <!-- Editor Box for Active Channel -->
+            <div class="mt-4 p-5 rounded-[20px] bg-[#FFFBF5] border border-[#EAE0D5] space-y-4">
+              <div class="flex items-center justify-between">
+                <span id="adminQrChannelTitle" class="font-[800] text-[16px] text-[#201C19]">Editing: GCash QR & Account</span>
+                <span id="adminQrStatusChip" class="mono text-[10px] px-2.5 py-1 rounded-full bg-[#EAE0D5] font-[600]">Default SVG</span>
+              </div>
+
+              <!-- Account Display Label -->
+              <div>
+                <label class="block mono text-[10px] uppercase tracking-widest opacity-60 font-[700] mb-1.5">Account Label / Number shown to guests</label>
+                <div class="flex gap-2">
+                  <input id="adminQrAccountInput" placeholder="e.g. 0917-888-0123 • White Kitchen" class="flex-1 h-10 rounded-full border border-[#EAE0D5] bg-white px-4 mono text-[12px] font-[600] outline-none focus:border-[#201C19]"/>
+                  <button type="button" id="adminQrAccountSaveBtn" class="h-10 px-4 rounded-full bg-[#201C19] text-white mono text-[11px] font-[700] hover:opacity-90 transition cursor-pointer">Save Label</button>
+                </div>
+              </div>
+
+              <!-- QR Upload / URL -->
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-3 border-t border-[#EAE0D5]">
+                <!-- Option 1: File Upload -->
+                <div>
+                  <label class="block mono text-[10px] uppercase tracking-widest opacity-60 font-[700] mb-1.5">Option 1: Upload QR Image File</label>
+                  <input type="file" id="adminQrFileInput" accept="image/*" class="hidden"/>
+                  <button type="button" id="adminQrFileBtn" class="w-full h-10 rounded-full bg-[#D6FF5F] hover:bg-[#CBF052] text-[#201C19] font-[800] text-[12px] border border-[#201C19]/10 transition flex items-center justify-center gap-2 cursor-pointer shadow-xs">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/></svg>
+                    <span>Upload Image from Device...</span>
+                  </button>
+                </div>
+
+                <!-- Option 2: Paste URL -->
+                <div>
+                  <label class="block mono text-[10px] uppercase tracking-widest opacity-60 font-[700] mb-1.5">Option 2: Or Paste Image URL</label>
+                  <div class="flex gap-2">
+                    <input id="adminQrUrlInput" type="url" placeholder="https://.../gcash-qr.png" class="flex-1 h-10 rounded-full border border-[#EAE0D5] bg-white px-4 mono text-[11px] outline-none focus:border-[#201C19]"/>
+                    <button type="button" id="adminQrUrlSaveBtn" class="h-10 px-3.5 rounded-full bg-[#201C19] text-white mono text-[11px] font-[700] hover:opacity-90 transition cursor-pointer">Save URL</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Reset / Remove Custom QR -->
+              <div class="flex items-center justify-between pt-3 border-t border-[#EAE0D5]">
+                <span class="mono text-[11px] opacity-60">Resetting restores the clean high-res SVG fallback.</span>
+                <button type="button" id="adminQrResetBtn" class="h-8 px-4 rounded-full bg-[#FFE9E0] text-[#8C2C10] border border-[#FFC9B6] mono text-[11px] font-[700] hover:bg-[#FFD7C7] transition cursor-pointer">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+                  Reset to Default SVG
+                </button>
+              </div>
+            </div>
+
+            <!-- 3-Channel Mini Status Overview -->
+            <div class="mt-4 grid grid-cols-3 gap-3">
+              <div id="adminThumb_gcash" class="p-3 rounded-[16px] border border-[#EAE0D5] bg-white text-center cursor-pointer hover:border-[#201C19] transition">
+                <div class="mono text-[10px] font-[700] uppercase text-[#201C19] flex items-center justify-center gap-1"><i class="w-2 h-2 rounded-full bg-[#0055FE] block"></i>GCash</div>
+                <div id="adminThumbStatus_gcash" class="mono text-[9px] opacity-60 mt-1">Default SVG</div>
+              </div>
+              <div id="adminThumb_maya" class="p-3 rounded-[16px] border border-[#EAE0D5] bg-white text-center cursor-pointer hover:border-[#201C19] transition">
+                <div class="mono text-[10px] font-[700] uppercase text-[#201C19] flex items-center justify-center gap-1"><i class="w-2 h-2 rounded-full bg-[#00BE6A] block"></i>Maya</div>
+                <div id="adminThumbStatus_maya" class="mono text-[9px] opacity-60 mt-1">Default SVG</div>
+              </div>
+              <div id="adminThumb_bpi" class="p-3 rounded-[16px] border border-[#EAE0D5] bg-white text-center cursor-pointer hover:border-[#201C19] transition">
+                <div class="mono text-[10px] font-[700] uppercase text-[#201C19] flex items-center justify-center gap-1"><i class="w-2 h-2 rounded-full bg-[#B11016] block"></i>BPI</div>
+                <div id="adminThumbStatus_bpi" class="mono text-[9px] opacity-60 mt-1">Default SVG</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Controls -->
+        <div class="col-span-12 lg:col-span-4 flex flex-col gap-4">
+          <!-- Morning toggle -->
+          <div class="rounded-[24px] bg-white border border-[#EAE0D5] p-5">
+            <div class="font-[750] text-[14px]">Morning Booking Toggle</div>
+            <div class="mono text-[11px] opacity-60 mt-1">Enable booking per morning hour (7AM–11AM). Default = Queue / walk-in only.</div>
+            <div id="morningToggles" class="mt-4 space-y-2.5"></div>
+            <div class="mt-4 p-3 rounded-[12px] bg-[#FFFBF5] border border-[#F1E9DF] mono text-[10px] leading-[1.4] opacity-70">When enabled, morning hour becomes bookable via form and appears as "Book Now" in Today's Schedule. When disabled, shows "Queue — Walk-in".</div>
+          </div>
+
+          <!-- Open Play -->
+          <div class="rounded-[24px] bg-[#201C19] text-white p-5">
+            <div class="font-[750] text-[14px]">Create Open Play Entry</div>
+            <div class="mono text-[11px] opacity-60 mt-1">Blocks reservations for that slot. Shows as "Reserved — Open Play".</div>
+            <form id="openPlayForm" class="mt-4 space-y-3">
+              <label class="flex flex-col gap-1.5">
+                <span class="mono text-[10px] uppercase tracking-widest opacity-60">Date</span>
+                <input type="date" id="opDate" required class="h-11 rounded-[12px] bg-white/10 border border-white/15 px-4 mono text-[13px] outline-none focus:bg-white focus:text-[#201C19]"/>
+              </label>
+              <div class="grid grid-cols-2 gap-2">
+                <label class="flex flex-col gap-1.5">
+                  <span class="mono text-[10px] uppercase tracking-widest opacity-60">Start</span>
+                  <select id="opStart" class="h-11 rounded-[12px] bg-white/10 border border-white/15 px-3 mono text-[13px] outline-none focus:bg-white focus:text-[#201C19]"></select>
+                </label>
+                <label class="flex flex-col gap-1.5">
+                  <span class="mono text-[10px] uppercase tracking-widest opacity-60">End</span>
+                  <select id="opEnd" class="h-11 rounded-[12px] bg-white/10 border border-white/15 px-3 mono text-[13px] outline-none focus:bg-white focus:text-[#201C19]"></select>
+                </label>
+              </div>
+              <div id="opError" class="hidden rounded-[10px] bg-[#FF8A5B]/20 border border-[#FF8A5B]/30 px-3 py-2 mono text-[11px]"></div>
+              <button class="w-full h-11 rounded-full bg-[#D6FF5F] text-[#201C19] font-[800] mono text-[12px] tracking-wide">Add Open Play Block</button>
+            </form>
+            <div id="openPlayList" class="mt-4 space-y-2 max-h-[200px] overflow-auto pr-1"></div>
+          </div>
+
+          <!-- PIN change -->
+          <div class="rounded-[24px] bg-white border border-[#EAE0D5] p-5">
+            <div class="font-[750] text-[14px]">Security</div>
+            <div class="mt-3 flex gap-2">
+              <input id="newPinInput" placeholder="New PIN" maxlength="8" class="flex-1 h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-4 mono text-[12px] font-[700] outline-none"/>
+              <button id="savePinBtn" class="h-10 px-5 rounded-full bg-[#201C19] text-white mono text-[11px] font-[700]">Save PIN</button>
+            </div>
+            <div class="mono text-[10px] opacity-50 mt-2">Stored in localStorage only. No backend.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- Admin PIN Modal -->
+<div id="adminLoginModal" class="fixed inset-0 z-50 hidden">
+  <div class="absolute inset-0 bg-[#201C19]/60 backdrop-blur-[6px]" id="adminModalBackdrop"></div>
+  <div class="relative min-h-[100dvh] grid place-items-center p-4">
+    <div class="w-full max-w-[420px] rounded-[28px] bg-white border border-[#EAE0D5] shadow-[0_20px_60px_rgba(32,28,25,0.25)] overflow-hidden p-6 md:p-8">
+      <div class="flex items-center justify-between">
+        <div class="w-10 h-10 rounded-full bg-[#201C19] text-[#D6FF5F] grid place-items-center font-black text-[14px]">WK</div>
+        <button id="closeAdminModalBtn" class="w-9 h-9 rounded-full bg-[#F1E9DF] grid place-items-center text-[14px] hover:bg-[#E5DDD4] transition">✕</button>
+      </div>
+      <h3 class="mt-4 text-[22px] font-[800] tracking-[-0.02em]">Staff & Admin Access</h3>
+      <p class="mono text-[12px] opacity-60 mt-1 leading-[1.5]">Enter your staff PIN to unlock Bookings list and Admin Console (default PIN: <b>1234</b>).</p>
+
+      <form id="adminModalForm" class="mt-6 space-y-3">
+        <input id="modalPinInput" type="password" inputmode="numeric" maxlength="8" placeholder="Enter PIN (e.g. 1234)" class="w-full h-12 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-5 mono text-[16px] font-[700] tracking-widest outline-none focus:border-[#201C19] text-center"/>
+        <div id="modalPinError" class="hidden mono text-[12px] text-[#8C2C10] bg-[#FFE9E0] border border-[#FFC9B6] rounded-full px-4 py-2.5 text-center font-[600]"></div>
+        <button type="submit" class="w-full h-12 rounded-full bg-[#201C19] text-white font-[800] text-[14px] tracking-wide hover:opacity-90 active:scale-[0.98] transition">Unlock All Tabs →</button>
+      </form>
+      <div class="mt-4 mono text-[10px] opacity-50 text-center">Public Portal: Only Book & Payment are visible to guests.</div>
+    </div>
+  </div>
+</div>
+
+<!-- Confirmation Modal -->
+<div id="confirmModal" class="fixed inset-0 z-50 hidden">
+  <div class="absolute inset-0 bg-[#201C19]/60 backdrop-blur-[6px]" id="confirmBackdrop"></div>
+  <div class="relative min-h-[100dvh] grid place-items-center p-4">
+    <div class="w-full max-w-[520px] rounded-[28px] bg-white border border-[#EAE0D5] shadow-[0_20px_60px_rgba(32,28,25,0.22)] overflow-hidden">
+      <div class="px-7 pt-7 pb-5 flex items-start justify-between gap-4">
+        <div>
+          <div class="inline-flex items-center gap-2 px-3 h-7 rounded-full bg-[#D6FF5F] border border-[#201C19]/10 mono text-[11px] font-[700]">Pending — Awaiting Verification</div>
+          <h3 class="mt-3 text-[22px] font-[800] tracking-[-0.02em] leading-[1.05]">Reservation submitted!</h3>
+          <p class="mono text-[12px] opacity-60 mt-2 leading-[1.5]">Pay externally via QR on Payment tab. Admin will tag as Reserved after verification.</p>
+        </div>
+        <button id="closeModalBtn" class="w-9 h-9 rounded-full bg-[#F1E9DF] grid place-items-center">✕</button>
+      </div>
+
+      <div class="px-7 pb-2">
+        <div class="rounded-[16px] bg-[#FFFBF5] border border-[#F1E9DF] p-4">
+          <div class="mono text-[10px] tracking-widest uppercase opacity-60">Email Confirmation Preview</div>
+          <div id="emailPreview" class="mt-3 mono text-[12px] leading-[1.6] whitespace-pre-wrap"></div>
+        </div>
+      </div>
+
+      <div class="p-4 px-7 pb-7 flex gap-2">
+        <button id="modalGoPayment" class="flex-1 h-12 rounded-full bg-[#201C19] text-white font-[700] text-[13px]">Go to Payment Info</button>
+        <button id="modalGoBookings" class="flex-1 h-12 rounded-full bg-[#F1E9DF] border border-[#E9DDD0] font-[700] text-[13px]">View Bookings</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast" class="fixed bottom-5 left-1/2 -translate-x-1/2 z-[60] hidden">
+  <div class="px-5 h-11 rounded-full bg-[#201C19] text-white shadow-[0_12px_30px_rgba(0,0,0,0.25)] mono text-[12px] font-[600] grid place-items-center gap-2 flex">
+    <span id="toastText">Saved</span>
+  </div>
+</div>
+
+<script>
+/* ---------- State & Storage ---------- */
+const LS = {
+  bookings: 'wk_bookings_v5',
+  morning: 'wk_morning_v5',
+  openPlay: 'wk_openPlay_v5',
+  qrUrl: 'wk_qrUrl_v5',
+  pin: 'wk_adminPin_v5',
+  adminUnlocked: 'wk_admin_unlocked_v5',
+  payMethods: 'wk_pay_methods_v5',
+  queues: 'wk_queues_v5'
+};
+
+const STAFF_DAYS = [0,2,4,6]; // Sun, Tue, Thu, Sat
+const HOURS = {
+  morning: [7,8,9,10,11], // start hours, end = start+1 => 7-8 ... 11-12
+  afternoon: [13,14,15,16,17,18,19,20,21] // 13-14 ... 21-22
+};
+const ALL_HOURS_START = [...HOURS.morning, ...HOURS.afternoon]; // 7..21 except 12
+
+function todayISO(){
+  const d=new Date(); d.setHours(0,0,0,0);
+  return d.toISOString().slice(0,10);
+}
+function fmtDateLabel(iso){
+  const d=new Date(iso+'T12:00:00');
+  return d.toLocaleDateString('en-US',{weekday:'short', month:'short', day:'numeric', year:'numeric'});
+}
+function fmtTime(h){
+  if(h===12) return '12:00 PM';
+  if(h<12) return `${h}:00 AM`;
+  if(h===24) return '12:00 AM';
+  const hh = h>12? h-12 : h;
+  const ap = h>=12? 'PM':'AM';
+  return `${hh}:00 ${ap}`;
+}
+function to12Range(s,e){ return `${fmtTime(s)} – ${fmtTime(e)}`; }
+
+function loadBookings(){ try{return JSON.parse(localStorage.getItem(LS.bookings)||'[]')}catch{return []} }
+function saveBookings(arr){ localStorage.setItem(LS.bookings, JSON.stringify(arr)); }
+function loadMorning(){ try{return JSON.parse(localStorage.getItem(LS.morning)||'{"7":false,"8":false,"9":false,"10":false,"11":false}')}catch{return {"7":false,"8":false,"9":false,"10":false,"11":false}} }
+function saveMorning(obj){ localStorage.setItem(LS.morning, JSON.stringify(obj)); }
+function loadOpenPlay(){ try{return JSON.parse(localStorage.getItem(LS.openPlay)||'[]')}catch{return []} }
+function saveOpenPlay(arr){ localStorage.setItem(LS.openPlay, JSON.stringify(arr)); }
+
+/* Seed sample data for the current day: Reserved, Pending, Open Play + upcoming */
+(function seed(){
+  const t = todayISO();
+  const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate()+1);
+  const tom = tomorrow.toISOString().slice(0,10);
+  if(!localStorage.getItem(LS.bookings)){
+    saveBookings([
+      {id:'b_seed_res', name:'Alex Rivera', email:'alex.rivera@example.com', date:t, start:13, end:14, status:'Reserved', group:'4 players', createdAt:Date.now()-7200000},
+      {id:'b_seed_pen', name:'Mika Tan', email:'mika.tan@example.com', date:t, start:14, end:15, status:'Pending', group:'2 players', createdAt:Date.now()-3600000},
+      {id:'op_seed_today', name:'Open Play', email:'', date:t, start:15, end:17, status:'OpenPlay', group:'Community open play', createdAt:Date.now()-3000000},
+      {id:'b_seed_tom', name:'JC Dela Cruz', email:'jc@example.com', date:tom, start:13, end:14, status:'Pending', group:'3 players', createdAt:Date.now()-1800000},
+    ]);
+  }
+  if(!localStorage.getItem(LS.openPlay)){
+    saveOpenPlay([{id:'op_seed_today', date:t, start:15, end:17}]);
+  }
+})();
+
+let selectedDate = todayISO();
+let calCursor = new Date(selectedDate+'T12:00:00');
+let bookings = loadBookings();
+let morningEnabled = loadMorning();
+let openPlays = loadOpenPlay();
+
+/* ---------- Header ---------- */
+document.getElementById('hdrDate').textContent = new Date().toLocaleDateString('en-US',{month:'short', day:'numeric'});
+document.getElementById('todayLabel').textContent = fmtDateLabel(todayISO());
+const staffNoteEl = document.getElementById('staffNote');
+function updateStaffNote(){
+  const day = new Date().getDay();
+  if(STAFF_DAYS.includes(day)){
+    staffNoteEl.textContent = `${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][day]} 5PM–10PM is staff-reserved. Public booking blocked during that window.`;
+  } else {
+    staffNoteEl.textContent = `Public hours all day today. Tomorrow staff block may apply (Tue/Thu/Sat/Sun 5PM–10PM).`;
+  }
+}
+updateStaffNote();
+
+/* ---------- Nav & Public Portal vs Admin Access ---------- */
+const views = {book:document.getElementById('view-book'), queue:document.getElementById('view-queue'), bookings:document.getElementById('view-bookings'), payment:document.getElementById('view-payment'), admin:document.getElementById('view-admin')};
+let adminUnlocked = sessionStorage.getItem(LS.adminUnlocked) === 'true';
+
+function updateAdminTabsVisibility(){
+  const badge = document.getElementById('hdrBookingsBadge');
+  if(badge) badge.textContent = bookings.length;
+
+  const adminTabs = document.querySelectorAll('.admin-only-tab');
+  const toggleBtn = document.getElementById('headerAdminToggle');
+  const toggleIcon = document.getElementById('headerAdminIcon');
+  const toggleText = document.getElementById('headerAdminText');
+
+  if(adminUnlocked){
+    adminTabs.forEach(t => t.classList.remove('hidden'));
+    if(toggleBtn){
+      toggleBtn.className = "flex items-center justify-center gap-1.5 px-3 md:px-3.5 h-8 rounded-full bg-[#D6FF5F] border border-[#201C19]/20 text-[#201C19] text-[11px] md:text-[12px] font-[800] transition shrink-0 cursor-pointer shadow-xs";
+    }
+    if(toggleIcon) toggleIcon.textContent = '✅';
+    if(toggleText) toggleText.textContent = 'Admin (Exit)';
+    // ensure admin screen is unlocked
+    const lock = document.getElementById('adminLock');
+    const panel = document.getElementById('adminPanel');
+    if(lock) lock.classList.add('hidden');
+    if(panel) panel.classList.remove('hidden');
+    renderAdminBookings();
+    renderMorningToggles();
+    renderOpenPlayList();
+  } else {
+    adminTabs.forEach(t => t.classList.add('hidden'));
+    if(toggleBtn){
+      toggleBtn.className = "flex items-center justify-center gap-1.5 px-3 md:px-3.5 h-8 rounded-full bg-white border border-[#EAE0D5] hover:border-[#201C19] text-[#201C19] text-[11px] md:text-[12px] font-[700] transition shrink-0 cursor-pointer shadow-xs";
+    }
+    if(toggleIcon) toggleIcon.textContent = '🔒';
+    if(toggleText) toggleText.textContent = 'Staff';
+
+    // If currently viewing admin or bookings tab, redirect to book tab
+    const activeBtn = document.querySelector('.nav-btn.active');
+    if(activeBtn && (activeBtn.dataset.nav === 'bookings' || activeBtn.dataset.nav === 'admin')){
+      const bookBtn = document.querySelector('.nav-btn[data-nav="book"]');
+      if(bookBtn) bookBtn.click();
+    }
+
+    const lock = document.getElementById('adminLock');
+    const panel = document.getElementById('adminPanel');
+    if(lock) lock.classList.remove('hidden');
+    if(panel) panel.classList.add('hidden');
+  }
+}
+
+document.querySelectorAll('.nav-btn').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    const id=btn.dataset.nav;
+    // Protect admin-only tabs if not unlocked
+    if((id==='bookings' || id==='admin') && !adminUnlocked){
+      document.getElementById('adminLoginModal').classList.remove('hidden');
+      setTimeout(()=> document.getElementById('modalPinInput').focus(), 50);
+      return;
+    }
+    Object.values(views).forEach(v=>v.classList.add('hidden'));
+    views[id].classList.remove('hidden');
+    document.querySelectorAll('.nav-btn').forEach(b=>{
+      b.classList.remove('active','bg-[#201C19]','text-white','shadow-sm'); b.classList.add('opacity-70');
+      if(b.dataset.nav===id){ b.classList.add('active','bg-[#201C19]','text-white','shadow-sm'); b.classList.remove('opacity-70'); }
+    });
+    if(id==='bookings') renderBookingsList();
+    if(id==='book') renderSchedule();
+    if(id==='queue') renderQueueModule();
+    if(id==='admin' && adminUnlocked){
+      renderAdminBookings();
+      renderMorningToggles();
+      renderOpenPlayList();
+    }
+    window.scrollTo({top: 0, behavior: 'smooth'});
+  });
+});
+
+/* Staff / Admin Lock Header Button */
+const headerAdminToggle = document.getElementById('headerAdminToggle');
+if(headerAdminToggle){
+  headerAdminToggle.addEventListener('click', ()=>{
+    if(adminUnlocked){
+      adminUnlocked = false;
+      sessionStorage.setItem(LS.adminUnlocked, 'false');
+      updateAdminTabsVisibility();
+      toast('Returned to Public Portal view');
+    } else {
+      document.getElementById('adminLoginModal').classList.remove('hidden');
+      setTimeout(()=> document.getElementById('modalPinInput').focus(), 50);
+    }
+  });
+}
+
+const adminModalForm = document.getElementById('adminModalForm');
+if(adminModalForm){
+  adminModalForm.addEventListener('submit', (e)=>{
+    e.preventDefault();
+    const input = document.getElementById('modalPinInput');
+    const err = document.getElementById('modalPinError');
+    const pin = input.value.trim();
+    if(pin === getPin()){
+      adminUnlocked = true;
+      sessionStorage.setItem(LS.adminUnlocked, 'true');
+      document.getElementById('adminLoginModal').classList.add('hidden');
+      input.value = '';
+      err.classList.add('hidden');
+      updateAdminTabsVisibility();
+      toast('Admin Access Unlocked • All Tabs Available');
+    } else {
+      err.textContent = 'Incorrect PIN. Default is 1234.';
+      err.classList.remove('hidden');
+    }
+  });
+}
+
+document.getElementById('closeAdminModalBtn').addEventListener('click', ()=>{
+  document.getElementById('adminLoginModal').classList.add('hidden');
+  document.getElementById('modalPinError').classList.add('hidden');
+});
+document.getElementById('adminModalBackdrop').addEventListener('click', ()=>{
+  document.getElementById('adminLoginModal').classList.add('hidden');
+  document.getElementById('modalPinError').classList.add('hidden');
+});
+document.getElementById('modalPinInput').addEventListener('keydown', e=>{
+  if(e.key==='Enter'){ e.preventDefault(); adminModalForm.dispatchEvent(new Event('submit')); }
+});
+
+/* ---------- Mobile Layout Switcher (< lg breakpoint) ---------- */
+function switchMobileTab(tab){
+  const schedBtn = document.getElementById('mobTabSchedule');
+  const resBtn = document.getElementById('mobTabReserve');
+  const colSched = document.getElementById('colSchedule');
+  const colRes = document.getElementById('colReserve');
+  if(!schedBtn || !resBtn || !colSched || !colRes) return;
+
+  if(tab === 'schedule'){
+    schedBtn.className = "flex-1 py-2 rounded-full text-[13px] font-[700] bg-[#201C19] text-white shadow-xs transition";
+    resBtn.className = "flex-1 py-2 rounded-full text-[13px] font-[650] text-[#201C19] opacity-70 hover:opacity-100 transition";
+    colSched.classList.remove('hidden');
+    colRes.classList.add('hidden');
+    colRes.classList.remove('flex');
+    window.scrollTo({top: 0, behavior: 'smooth'});
+  } else {
+    resBtn.className = "flex-1 py-2 rounded-full text-[13px] font-[700] bg-[#201C19] text-white shadow-xs transition";
+    schedBtn.className = "flex-1 py-2 rounded-full text-[13px] font-[650] text-[#201C19] opacity-70 hover:opacity-100 transition";
+    colSched.classList.add('hidden');
+    colRes.classList.remove('hidden');
+    colRes.classList.add('flex');
+    window.scrollTo({top: 0, behavior: 'smooth'});
+  }
+}
+
+document.getElementById('mobTabSchedule')?.addEventListener('click', ()=> switchMobileTab('schedule'));
+document.getElementById('mobTabReserve')?.addEventListener('click', ()=> switchMobileTab('reserve'));
+document.getElementById('mobJumpToReserveBtn')?.addEventListener('click', ()=> switchMobileTab('reserve'));
+document.getElementById('mobBackToScheduleBtn')?.addEventListener('click', ()=> switchMobileTab('schedule'));
+
+/* ---------- Helpers: overlaps ---------- */
+function isStaffBlocked(dateISO, hourStart, hourEnd){
+  const d = new Date(dateISO+'T12:00:00'); const dow = d.getDay();
+  if(!STAFF_DAYS.includes(dow)) return false;
+  // staff 17-22
+  return !(hourEnd<=17 || hourStart>=22);
+}
+function getBookingsForDate(dateISO){
+  return bookings.filter(b=>b.date===dateISO);
+}
+function getOpenPlayForDate(dateISO){
+  // merge stored openPlays + bookings with OpenPlay status (for backwards compat)
+  const fromBookings = bookings.filter(b=>b.status==='OpenPlay' && b.date===dateISO).map(b=>({id:b.id, date:b.date, start:b.start, end:b.end}));
+  const fromOps = openPlays.filter(o=>o.date===dateISO);
+  return [...fromBookings, ...fromOps];
+}
+function hasOverlap(dateISO, start, end, excludeId=null){
+  if(isStaffBlocked(dateISO,start,end)) return {type:'staff'};
+  const ops = getOpenPlayForDate(dateISO);
+  for(const op of ops){
+    if(excludeId && op.id===excludeId) continue;
+    if(start < op.end && end > op.start) return {type:'openplay', data:op};
+  }
+  const bks = getBookingsForDate(dateISO).filter(b=>b.status!=='OpenPlay' && b.id!==excludeId);
+  for(const b of bks){
+    if(start < b.end && end > b.start) return {type:'booking', data:b};
+  }
+  return null;
+}
+
+/* ---------- Schedule Rendering ---------- */
+function renderSchedule(){
+  const list = document.getElementById('scheduleList');
+  list.innerHTML='';
+  const dateISO = todayISO(); // Today's schedule always today per spec
+  const todaysBookings = getBookingsForDate(dateISO);
+  const todaysOps = getOpenPlayForDate(dateISO);
+
+  const allSlots = [
+    {label:'7:00 AM – 8:00 AM', s:7,e:8, type:'morning'},
+    {label:'8:00 AM – 9:00 AM', s:8,e:9, type:'morning'},
+    {label:'9:00 AM – 10:00 AM', s:9,e:10, type:'morning'},
+    {label:'10:00 AM – 11:00 AM', s:10,e:11, type:'morning'},
+    {label:'11:00 AM – 12:00 PM', s:11,e:12, type:'morning'},
+    {label:'1:00 PM – 2:00 PM', s:13,e:14, type:'afternoon'},
+    {label:'2:00 PM – 3:00 PM', s:14,e:15, type:'afternoon'},
+    {label:'3:00 PM – 4:00 PM', s:15,e:16, type:'afternoon'},
+    {label:'4:00 PM – 5:00 PM', s:16,e:17, type:'afternoon'},
+    {label:'5:00 PM – 6:00 PM', s:17,e:18, type:'afternoon'},
+    {label:'6:00 PM – 7:00 PM', s:18,e:19, type:'afternoon'},
+    {label:'7:00 PM – 8:00 PM', s:19,e:20, type:'afternoon'},
+    {label:'8:00 PM – 9:00 PM', s:20,e:21, type:'afternoon'},
+    {label:'9:00 PM – 10:00 PM', s:21,e:22, type:'afternoon'},
+  ];
+
+  allSlots.forEach(slot=>{
+    const staffBlocked = isStaffBlocked(dateISO, slot.s, slot.e);
+    const opMatch = todaysOps.find(op=> slot.s < op.end && slot.e > op.start);
+    const bookingMatch = todaysBookings.find(b=> b.status!=='OpenPlay' && slot.s < b.end && slot.e > b.start);
+
+    let statusChip='', actionHtml='', leftDot='';
+    if(staffBlocked){
+      statusChip=`<span class="inline-flex items-center gap-1.5 px-2.5 h-7 rounded-full bg-[#FFE0D1] border border-[#FFC9B6] mono text-[11px] font-[700]">STAFF RESERVED</span>`;
+      leftDot=`<span class="w-2 h-2 rounded-full bg-[#FF8A5B]"></span>`;
+      actionHtml=`<span class="mono text-[11px] opacity-50 px-3 h-8 grid place-items-center rounded-full bg-[#F1E9DF] border border-[#E9DDD0]">Not bookable</span>`;
+    } else if(opMatch){
+      statusChip=`<span class="inline-flex items-center gap-1.5 px-2.5 h-7 rounded-full bg-[#EDE8FF] border border-[#D8D0FF] mono text-[11px] font-[700]">RESERVED — OPEN PLAY</span>`;
+      leftDot=`<span class="w-2 h-2 rounded-full bg-[#9B8EFF]"></span>`;
+      actionHtml=`<span class="mono text-[11px] opacity-50 px-3 h-8 grid place-items-center rounded-full bg-[#F1E9DF] border border-[#E9DDD0]">Blocked</span>`;
+    } else if(bookingMatch){
+      const isPending = bookingMatch.status==='Pending';
+      statusChip = isPending
+        ? `<span class="inline-flex items-center gap-1.5 px-2.5 h-7 rounded-full bg-[#FFF0D6] border border-[#FFE0A3] mono text-[11px] font-[700]">PENDING — ${escapeHtml(bookingMatch.name)}</span>`
+        : `<span class="inline-flex items-center gap-1.5 px-2.5 h-7 rounded-full bg-[#201C19] text-white mono text-[11px] font-[700]">RESERVED — ${escapeHtml(bookingMatch.name)}</span>`;
+      leftDot = isPending ? `<span class="w-2 h-2 rounded-full bg-[#FDBA74]"></span>` : `<span class="w-2 h-2 rounded-full bg-[#201C19]"></span>`;
+      actionHtml=`<span class="mono text-[11px] px-3 h-8 grid place-items-center rounded-full bg-white border border-[#EAE0D5]">${isPending?'Pending':'Booked'} • ${bookingMatch.start===bookingMatch.end-1? `${fmtTime(bookingMatch.start)}–${fmtTime(bookingMatch.end)}` : `${bookingMatch.start}-${bookingMatch.end}h`}</span>`;
+    } else {
+      // open
+      if(slot.type==='morning' && !morningEnabled[slot.s]){
+        statusChip=`<span class="inline-flex items-center gap-1.5 px-2.5 h-7 rounded-full bg-[#E8F5D8] border border-[#CFE8B5] mono text-[11px] font-[700]">QUEUE — WALK-IN • ₱100/head</span>`;
+        leftDot=`<span class="w-2 h-2 rounded-full bg-[#4ADE80]"></span>`;
+        actionHtml=`<span class="mono text-[11px] opacity-60 px-3 h-8 grid place-items-center rounded-full bg-[#FFFBF5] border border-[#E9DDD0]">Unlimited play all day</span>`;
+      } else {
+        statusChip=`<span class="inline-flex items-center gap-1.5 px-2.5 h-7 rounded-full bg-[#D6FF5F] border border-[#201C19]/10 mono text-[11px] font-[800]">OPEN • ₱300/hr</span>`;
+        leftDot=`<span class="w-2 h-2 rounded-full bg-[#4ADE80]"></span>`;
+        actionHtml=`<button data-book="${slot.s}" class="book-now-btn h-8 px-4 rounded-full bg-[#201C19] text-white mono text-[11px] font-[700] hover:opacity-90 active:scale-[0.97] transition">Book Now →</button>`;
+      }
+    }
+
+    const row = document.createElement('div');
+    row.className = 'px-5 md:px-7 py-3.5 flex flex-col md:flex-row md:items-center gap-2.5 md:gap-4 group hover:bg-[#FFFBF5] transition';
+    row.innerHTML = `
+      <div class="flex items-center gap-3 md:w-[200px] shrink-0">
+        ${leftDot}
+        <div class="mono text-[13px] font-[650] tracking-[-0.01em]">${slot.label}</div>
+      </div>
+      <div class="flex-1 flex items-center">${statusChip}</div>
+      <div class="flex items-center justify-between md:justify-end gap-2 w-full md:w-auto">
+        ${slot.type==='morning'? `<span class="md:hidden mono text-[10px] uppercase tracking-widest opacity-50">${morningEnabled[slot.s]? 'Booking enabled' : 'Queue only'}</span>` : ''}
+        ${actionHtml}
+      </div>
+    `;
+    list.appendChild(row);
+  });
+
+  // bind book now
+  list.querySelectorAll('.book-now-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const start = parseInt(btn.dataset.book,10);
+      selectedDate = todayISO(); // ensure today
+      renderCalendar();
+      document.getElementById('fStart').value = String(start);
+      document.getElementById('fEnd').value = String(start+1);
+      recalcTotal();
+      if(window.innerWidth < 1024) switchMobileTab('reserve');
+      document.getElementById('fName').focus();
+      window.scrollTo({top:document.getElementById('reserveForm').getBoundingClientRect().top + window.scrollY - 90, behavior:'smooth'});
+    });
+  });
+
+  renderDateSlotPreview();
+}
+
+/* ---------- Selected-date slot availability preview (under calendar) ---------- */
+function renderDateSlotPreview(){
+  const wrap = document.getElementById('dateSlotPreview');
+  const label = document.getElementById('slotPreviewDate');
+  if(!wrap || !label || !selectedDate) return;
+  const ISO = selectedDate;
+  label.textContent = new Date(ISO+'T12:00:00').toLocaleDateString('en-US',{month:'short', day:'numeric'});
+  wrap.innerHTML='';
+  const bks = getBookingsForDate(ISO);
+  const ops = getOpenPlayForDate(ISO);
+
+  ALL_HOURS_START.forEach(h=>{
+    const e = h+1;
+    const staff = isStaffBlocked(ISO,h,e);
+    const op = !staff && ops.find(o=> h<o.end && e>o.start);
+    const bk = (!staff && !op) ? bks.find(b=> b.status!=='OpenPlay' && h<b.end && e>b.start) : null;
+    const isMorning = (h>=7 && h<=11);
+    const isQueue = isMorning && !morningEnabled[String(h)];
+
+    let cls='', txt='';
+    if(staff){ cls='bg-[#FFE0D1] border-[#FFC9B6] text-[#8C2C10]'; txt='STAFF'; }
+    else if(op){ cls='bg-[#EDE8FF] border-[#D8D0FF] text-[#3B2A9E]'; txt='OPEN PLAY'; }
+    else if(bk){
+      cls = bk.status==='Pending'
+        ? 'bg-[#FFF0D6] border-[#FFE0A3] text-[#8A5A00]'
+        : 'bg-[#201C19] border-[#201C19] text-white';
+      txt = bk.status.toUpperCase();
+    }
+    else if(isQueue){ cls='bg-[#E8F5D8] border-[#CFE8B5] text-[#3F7019]'; txt='QUEUE'; }
+
+    const clickable = (!staff && !op && !bk && !isQueue);
+    const pill = document.createElement(clickable ? 'button' : 'div');
+    if(clickable){
+      pill.type='button';
+      cls='bg-white border-[#4ADE80] text-[#201C19] hover:bg-[#D6FF5F] hover:border-[#201C19]/20 cursor-pointer';
+      txt='OPEN';
+    }
+    pill.className = `shrink-0 min-w-[68px] px-2 py-2 rounded-[12px] border flex flex-col items-center gap-0.5 transition ${cls}`;
+    pill.innerHTML = `<span class="mono text-[10px] font-[800] whitespace-nowrap">${fmtTime(h).replace(':00 ','')}</span><span class="mono text-[8px] tracking-widest opacity-80 whitespace-nowrap">${txt}</span>`;
+    if(clickable){
+      pill.addEventListener('click', ()=>{
+        const sEl = document.getElementById('fStart');
+        const eEl = document.getElementById('fEnd');
+        if([...sEl.options].some(o=>parseInt(o.value,10)===h)) sEl.value=String(h);
+        eEl.value = String(h+1);
+        recalcTotal(); validateForm();
+        toast(`Slot ${fmtTime(h)}–${fmtTime(h+1)} selected`);
+        sEl.classList.add('ring-2','ring-[#D6FF5F]'); setTimeout(()=>sEl.classList.remove('ring-2','ring-[#D6FF5F]'),600);
+      });
+    }
+    wrap.appendChild(pill);
+  });
+}
+function escapeHtml(s){ return (s||'').replace(/[&<>"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+
+/* ---------- Calendar ---------- */
+function renderCalendar(){
+  const title = document.getElementById('calTitle');
+  const grid = document.getElementById('calGrid');
+  const selectedLabel = document.getElementById('calSelectedLabel');
+  const y = calCursor.getFullYear(), m = calCursor.getMonth();
+  title.textContent = calCursor.toLocaleDateString('en-US',{month:'long', year:'numeric'});
+
+  const firstDay = new Date(y,m,1);
+  const startWeekday = (firstDay.getDay()+6)%7; // Mon=0
+  const daysInMonth = new Date(y,m+1,0).getDate();
+  grid.innerHTML='';
+  for(let i=0;i<startWeekday;i++){
+    const blank = document.createElement('div'); blank.className='h-9'; grid.appendChild(blank);
+  }
+  const today = todayISO();
+  for(let d=1; d<=daysInMonth; d++){
+    const iso = new Date(y,m,d,12).toISOString().slice(0,10);
+    const btn = document.createElement('button');
+    btn.type='button';
+    const isPast = iso < today;
+    const isToday = iso===today;
+    const isSelected = iso===selectedDate;
+    btn.className = `cal-day h-9 rounded-full mono text-[13px] font-[600] grid place-items-center border transition
+      ${isSelected? 'bg-[#201C19] text-white border-[#201C19] shadow-sm' : 'bg-white border-[#EAE0D5] hover:border-[#201C19]'}
+      ${isToday && !isSelected? 'ring-1 ring-[#201C19] ring-offset-1' : ''}`;
+    btn.textContent = d;
+    btn.disabled = isPast;
+    if(isPast) btn.classList.add('opacity-30');
+    btn.addEventListener('click', ()=>{
+      selectedDate = iso;
+      renderCalendar();
+      populateTimeOptions();
+      recalcTotal();
+      validateForm();
+      renderDateSlotPreview();
+    });
+    grid.appendChild(btn);
+  }
+  selectedLabel.textContent = selectedDate ? fmtDateLabel(selectedDate) : '';
+  populateTimeOptions();
+  renderDateSlotPreview();
+}
+document.getElementById('calPrev').addEventListener('click', ()=>{ calCursor.setMonth(calCursor.getMonth()-1); renderCalendar(); });
+document.getElementById('calNext').addEventListener('click', ()=>{ calCursor.setMonth(calCursor.getMonth()+1); renderCalendar(); });
+
+/* ---------- Form time options & total ---------- */
+function populateTimeOptions(){
+  const startSel = document.getElementById('fStart');
+  const endSel = document.getElementById('fEnd');
+  if(!startSel || !endSel) return;
+
+  const curStart = startSel.value !== '' ? parseInt(startSel.value, 10) : null;
+  const curEnd   = endSel.value   !== '' ? parseInt(endSel.value, 10)   : null;
+
+  // Possible start hours: 7AM–9PM, skipping 12PM. Morning hours only when admin unlocked them.
+  const possibleStarts = [];
+  for(let h=7; h<=21; h++){
+    if(h===12) continue;
+    if(h>=7 && h<=11 && !morningEnabled[String(h)]) continue;
+    possibleStarts.push(h);
+  }
+  if(possibleStarts.length===0) HOURS.afternoon.forEach(h=>possibleStarts.push(h));
+
+  startSel.innerHTML='';
+  possibleStarts.forEach(h=>{
+    const o=document.createElement('option');
+    o.value=String(h); o.textContent=fmtTime(h);
+    startSel.appendChild(o);
+  });
+
+  // End options: 8AM–10PM (incl. 12 noon & 1PM as valid end points — noon-cross booking is blocked in validation)
+  endSel.innerHTML='';
+  for(let h=8; h<=22; h++){
+    const o=document.createElement('option');
+    o.value=String(h); o.textContent=fmtTime(h);
+    endSel.appendChild(o);
+  }
+
+  // Restore previous selection when still valid
+  if(curStart!=null && [...startSel.options].some(o=>parseInt(o.value,10)===curStart)) startSel.value=String(curStart);
+  else startSel.value = String(possibleStarts.includes(13)?13:possibleStarts[0]);
+
+  const startVal = parseInt(startSel.value,10);
+  if(curEnd!=null && curEnd>startVal && [...endSel.options].some(o=>parseInt(o.value,10)===curEnd)) endSel.value=String(curEnd);
+  else endSel.value = String(Math.min(startVal+1,22));
+
+  // Populate Open Play selects once (full range: 7AM–10PM)
+  const opStart = document.getElementById('opStart');
+  const opEnd = document.getElementById('opEnd');
+  if(opStart && opEnd && opStart.options.length===0){
+    for(let h=7; h<=21; h++){
+      if(h===12) continue;
+      const o=document.createElement('option'); o.value=String(h); o.textContent=fmtTime(h);
+      opStart.appendChild(o);
+    }
+    for(let h=8; h<=22; h++){
+      if(h===12) continue;
+      const o=document.createElement('option'); o.value=String(h); o.textContent=fmtTime(h);
+      opEnd.appendChild(o);
+    }
+    opStart.value='15'; opEnd.value='18';
+  }
+}
+
+function recalcTotal(){
+  const s = parseInt(document.getElementById('fStart').value,10);
+  const e = parseInt(document.getElementById('fEnd').value,10);
+  const totalLine = document.getElementById('totalLine');
+  const totalAmount = document.getElementById('totalAmount');
+  const hint = document.getElementById('totalHint');
+  if(isNaN(s)||isNaN(e)|| e<=s){
+    totalLine.textContent='Invalid range';
+    totalAmount.textContent='₱0';
+    hint.textContent='End must be after start';
+    return {valid:false};
+  }
+  const hrs = e - s;
+  // handle lunch gap? If booking crosses 12-13 (e.g., 11 to 14) that would include a non-existing hour 12-13. Should disallow or count as 2 hours? Safer disallow crossing noon.
+  if(s<12 && e>12 && s<13 && e>13){
+    // crosses 12-13 break
+    // check if it includes 12-13: if s<=12 and e>=13
+    if(s<=12 && e>=13){
+      totalLine.textContent=`${to12Range(s,e)} • ${hrs-1}h billable + 1h break`;
+      totalAmount.textContent=`₱${(hrs-1)*300}`;
+      hint.textContent='Note: 12PM–1PM is break (not counted). We bill only open hours.';
+      return {valid:false, reason:'crosses noon break', hrs:hrs-1, amount:(hrs-1)*300};
+    }
+  }
+  totalLine.textContent=`${to12Range(s,e)} • ${hrs} hour${hrs>1?'s':''}`;
+  totalAmount.textContent=`₱${hrs*300}`;
+  hint.textContent = s<12 ? 'Morning queue unlocked by admin' : 'Afternoon reservation';
+  return {valid:true, hrs, amount:hrs*300};
+}
+
+function validateForm(){
+  const errorEl = document.getElementById('formError');
+  errorEl.classList.add('hidden'); errorEl.textContent='';
+  const s = parseInt(document.getElementById('fStart').value,10);
+  const e = parseInt(document.getElementById('fEnd').value,10);
+  const date = selectedDate;
+  if(!date) return false;
+  if(e<=s){ showFormError('End time must be after start.'); return false; }
+  // Check noon crossing
+  if(s<12 && e>13){ showFormError('Reservation cannot cross 12PM–1PM break. Split into morning and afternoon bookings.'); return false; }
+  if(s===12){ showFormError('12PM–1PM is break / not bookable.'); return false; }
+  // Check overlap
+  const overlap = hasOverlap(date,s,e);
+  if(overlap){
+    if(overlap.type==='staff') showFormError('That slot is Staff-reserved (Tue/Thu/Sat/Sun 5PM–10PM). Choose another time.');
+    else if(overlap.type==='openplay') showFormError(`Overlaps with Open Play block (${to12Range(overlap.data.start, overlap.data.end)}).`);
+    else showFormError(`Overlaps with existing booking: ${escapeHtml(overlap.data.name)} (${to12Range(overlap.data.start, overlap.data.end)}) — ${overlap.data.status}`);
+    return false;
+  }
+  return true;
+}
+function showFormError(msg){ const el=document.getElementById('formError'); el.textContent=msg; el.classList.remove('hidden'); }
+
+document.getElementById('fStart').addEventListener('change', ()=>{ 
+  // auto adjust end if less or equal
+  const s=parseInt(document.getElementById('fStart').value,10);
+  const e=parseInt(document.getElementById('fEnd').value,10);
+  if(e<=s) document.getElementById('fEnd').value = s+1;
+  recalcTotal(); validateForm();
+});
+document.getElementById('fEnd').addEventListener('change', ()=>{ recalcTotal(); validateForm(); });
+
+/* ---------- Reserve Submit ---------- */
+document.getElementById('reserveForm').addEventListener('submit', (ev)=>{
+  ev.preventDefault();
+  if(!validateForm()) return;
+  const calc = recalcTotal();
+  if(!calc.valid && calc.reason!=='crosses noon break'){ return; }
+  const name = document.getElementById('fName').value.trim();
+  const email = document.getElementById('fEmail').value.trim();
+  const group = document.getElementById('fGroup').value.trim();
+  const s = parseInt(document.getElementById('fStart').value,10);
+  const e = parseInt(document.getElementById('fEnd').value,10);
+  if(!name || !email) { showFormError('Name and email required.'); return; }
+
+  const newBooking = {
+    id: 'b_'+Date.now(),
+    name, email, group,
+    date: selectedDate,
+    start: s, end: e,
+    status: 'Pending',
+    createdAt: Date.now()
+  };
+  bookings.unshift(newBooking);
+  saveBookings(bookings);
+  renderSchedule();
+  renderBookingsList();
+  renderAdminBookings();
+
+  // show confirmation modal with email preview
+  const hrs = e - s - (s<12 && e>12 ? 1 : 0);
+  const amount = hrs*300;
+  const preview = `To: ${email}
+Subject: White Kitchen Pickleball — Reservation ${newBooking.status} for ${fmtDateLabel(selectedDate)}
+
+Hi ${name},
+
+Your reservation is received and is now PENDING verification:
+
+📅 Date: ${fmtDateLabel(selectedDate)}
+🕖 Time: ${to12Range(s,e)} (${hrs} hour${hrs>1?'s':''})
+💰 Total: ₱${amount} @ ₱300/hour
+👥 Group: ${group || '—'}
+Status: Pending — awaiting payment verification
+
+Next steps:
+1. Pay externally via QR on Payment Info page
+2. Keep your reference number
+3. Admin will verify and tag your booking as Reserved
+
+If you booked morning hours, note: morning is queue by default unless admin unlocked it. Your booking is in the system as requested.
+
+See you at White Kitchen Pickleball Court!
+— White Kitchen Team
+`;
+  document.getElementById('emailPreview').textContent = preview;
+  document.getElementById('confirmModal').classList.remove('hidden');
+});
+
+document.getElementById('closeModalBtn').addEventListener('click', ()=> document.getElementById('confirmModal').classList.add('hidden'));
+document.getElementById('confirmBackdrop').addEventListener('click', ()=> document.getElementById('confirmModal').classList.add('hidden'));
+document.getElementById('modalGoPayment').addEventListener('click', ()=>{
+  document.getElementById('confirmModal').classList.add('hidden');
+  document.querySelector('[data-nav="payment"]').click();
+});
+document.getElementById('modalGoBookings').addEventListener('click', ()=>{
+  document.getElementById('confirmModal').classList.add('hidden');
+  document.querySelector('[data-nav="bookings"]').click();
+});
+
+/* ---------- Bookings List View ---------- */
+function renderBookingsList(){
+  const list = document.getElementById('bookingsList');
+  const empty = document.getElementById('bookingsEmpty');
+  const count = document.getElementById('bookingsCount');
+  const fStatus = document.getElementById('filterStatus').value;
+  const fDate = document.getElementById('filterDate').value;
+  const today = todayISO();
+
+  let filtered = [...bookings];
+  if(fStatus!=='all'){
+    filtered = filtered.filter(b=>b.status===fStatus);
+  }
+  if(fDate==='today') filtered = filtered.filter(b=>b.date===today);
+  if(fDate==='upcoming') filtered = filtered.filter(b=>b.date>=today);
+
+  filtered.sort((a,b)=> a.date.localeCompare(b.date) || a.start-b.start);
+
+  count.textContent = `${filtered.length} / ${bookings.length}`;
+  list.innerHTML='';
+  if(filtered.length===0){ empty.classList.remove('hidden'); return; } else empty.classList.add('hidden');
+
+  filtered.forEach(b=>{
+    const isOpenPlay = b.status==='OpenPlay';
+    const chip = isOpenPlay ? `<span class="px-2.5 h-6 rounded-full bg-[#EDE8FF] border border-[#D8D0FF] mono text-[10px] font-[700] inline-flex items-center">OPEN PLAY</span>`
+               : b.status==='Pending' ? `<span class="px-2.5 h-6 rounded-full bg-[#FFF0D6] border border-[#FFE0A3] mono text-[10px] font-[700] inline-flex items-center">PENDING</span>`
+               : `<span class="px-2.5 h-6 rounded-full bg-[#201C19] text-white mono text-[10px] font-[700] inline-flex items-center">RESERVED</span>`;
+
+    const row = document.createElement('div');
+    row.className='px-6 md:px-8 py-4 flex flex-col md:flex-row md:items-center gap-3 hover:bg-[#FFFBF5] transition';
+    row.innerHTML=`
+      <div class="flex items-center gap-3 md:w-[260px]">
+        <div class="w-9 h-9 rounded-full bg-[#F1E9DF] grid place-items-center font-[800] text-[12px]">${b.name? b.name[0].toUpperCase() : 'OP'}</div>
+        <div>
+          <div class="font-[700] text-[14px] leading-[1.1] tracking-[-0.01em]">${escapeHtml(b.name || 'Open Play Community')}</div>
+          <div class="mono text-[11px] opacity-60">${b.email? escapeHtml(b.email) : '—'} • ${b.group? escapeHtml(b.group) : 'No group'}</div>
+        </div>
+      </div>
+      <div class="flex-1 flex flex-wrap items-center gap-2">
+        <span class="mono text-[12px] font-[600]">${fmtDateLabel(b.date)}</span>
+        <span class="mono text-[12px] opacity-60">•</span>
+        <span class="mono text-[12px] font-[600]">${to12Range(b.start,b.end)} <span class="opacity-60">(${(b.end-b.start)}h)</span></span>
+        ${chip}
+      </div>
+      <div class="flex items-center gap-2 md:ml-auto">
+        <span class="mono text-[11px] px-3 h-7 rounded-full bg-white border border-[#EAE0D5] grid place-items-center">₱${(b.end-b.start)*300}</span>
+      </div>
+    `;
+    list.appendChild(row);
+  });
+}
+document.getElementById('filterStatus').addEventListener('change', renderBookingsList);
+document.getElementById('filterDate').addEventListener('change', renderBookingsList);
+
+/* ---------- Payment QR & Multi-Channel Switcher (GCash, Maya, BPI) ---------- */
+const DEFAULT_PAY_METHODS = {
+  gcash: {
+    name: 'GCash',
+    badge: 'GCash Payment',
+    icon: 'G', color: '#0055FE',
+    account: '0917-888-0123 • White Kitchen',
+    qrData: '' // empty string = show clean high-res fallback SVG QR
+  },
+  maya: {
+    name: 'Maya',
+    badge: 'Maya e-Wallet',
+    icon: 'M', color: '#00BE6A',
+    account: '0917-888-0123 • White Kitchen',
+    qrData: ''
+  },
+  bpi: {
+    name: 'BPI / Bank',
+    badge: 'BPI InstaPay',
+    icon: 'B', color: '#B11016',
+    account: 'Account # 1234-5678-90 • White Kitchen',
+    qrData: ''
+  }
+};
+
+function loadPayMethods(){
+  try {
+    const saved = JSON.parse(localStorage.getItem(LS.payMethods) || 'null');
+    if(saved && typeof saved === 'object'){
+      return { ...DEFAULT_PAY_METHODS, ...saved };
+    }
+  } catch(e){}
+  // Migrate old single QR URL if it exists
+  const oldUrl = localStorage.getItem(LS.qrUrl);
+  const methods = JSON.parse(JSON.stringify(DEFAULT_PAY_METHODS));
+  if(oldUrl){
+    methods.gcash.qrData = oldUrl;
+  }
+  return methods;
+}
+
+function savePayMethods(methods){
+  localStorage.setItem(LS.payMethods, JSON.stringify(methods));
+}
+
+let payMethods = loadPayMethods();
+let activePublicPayChannel = 'gcash';
+let activeAdminQrTab = 'gcash';
+
+function generateFallbackSVG(channelKey){
+  const colors = {
+    gcash: { dark: '#0055FE', light: '#EBF2FF', name: 'GCash' },
+    maya:  { dark: '#00BE6A', light: '#E8FBF2', name: 'Maya' },
+    bpi:   { dark: '#B11016', light: '#FDF2F3', name: 'BPI' }
+  }[channelKey] || { dark: '#201C19', light: '#FFFBF5', name: 'WK' };
+
+  let squares = '';
+  for(let r=0; r<21; r++){
+    for(let c=0; c<21; c++){
+      const inTL = r<7 && c<7;
+      const inTR = r<7 && c>=14;
+      const inBL = r>=14 && c<7;
+      let isDark = false;
+      if(inTL || inTR || inBL){
+        const rr = inBL ? r-14 : r;
+        const cc = inTR ? c-14 : c;
+        const isOuter = (rr===0 || rr===6 || cc===0 || cc===6);
+        const isInner = (rr>=2 && rr<=4 && cc>=2 && cc<=4);
+        isDark = isOuter || isInner;
+      } else if(r>=8 && r<=12 && c>=8 && c<=12){
+        isDark = false;
+      } else {
+        isDark = ((r*7 + c*13 + channelKey.length*5) % 3) === 0 || ((r+c)%2===0 && (r*c)%5===0);
+      }
+      if(isDark){
+        squares += `<rect x="${c*10}" y="${r*10}" width="9.2" height="9.2" rx="1.5" fill="#201C19"/>`;
+      }
+    }
+  }
+
+  return `
+    <svg viewBox="0 0 210 210" class="w-full h-full max-w-[240px] aspect-square rounded-[14px]">
+      <rect width="210" height="210" fill="#FFFFFF" rx="16"/>
+      ${squares}
+      <g transform="translate(73, 73)">
+        <rect width="64" height="64" rx="14" fill="${colors.dark}" stroke="#FFFFFF" stroke-width="4"/>
+        <text x="32" y="38" text-anchor="middle" dominant-baseline="middle" fill="#FFFFFF" font-family="'JetBrains Mono', monospace" font-weight="800" font-size="14">${colors.name}</text>
+      </g>
+    </svg>
+  `;
+}
+
+function renderPublicPayTab(channelKey = activePublicPayChannel){
+  activePublicPayChannel = channelKey;
+  const method = payMethods[channelKey] || DEFAULT_PAY_METHODS.gcash;
+
+  const badgeEl = document.getElementById('payChannelBadge');
+  const titleEl = document.getElementById('payChannelTitle');
+  const accountEl = document.getElementById('payChannelAccount');
+  const iconEl = document.getElementById('payChannelIcon');
+  const displayEl = document.getElementById('payQrDisplay');
+
+  if(badgeEl) badgeEl.textContent = method.badge;
+  if(titleEl) titleEl.textContent = method.name + ' • White Kitchen';
+  if(accountEl) accountEl.textContent = method.account || 'White Kitchen Pickleball';
+  if(iconEl){ iconEl.textContent = method.icon || '₱'; iconEl.style.background = method.color || '#201C19'; }
+
+  if(displayEl){
+    if(method.qrData){
+      displayEl.innerHTML = `<img src="${method.qrData}" alt="${method.name} QR Code" class="w-full h-full max-w-[240px] aspect-square object-contain rounded-[14px] shadow-xs" onerror="this.onerror=null; this.parentNode.innerHTML=generateFallbackSVG('${channelKey}');" />`;
+    } else {
+      displayEl.innerHTML = generateFallbackSVG(channelKey);
+    }
+  }
+
+  // Update switcher buttons
+  document.querySelectorAll('.pay-channel-btn').forEach(btn=>{
+    const k = btn.dataset.payChannel;
+    if(k === channelKey){
+      btn.classList.add('active', 'bg-[#D6FF5F]', 'text-[#201C19]', 'font-[800]', 'border-[#201C19]/20', 'shadow-sm');
+      btn.classList.remove('bg-white/10', 'hover:bg-white/20', 'text-white');
+    } else {
+      btn.classList.remove('active', 'bg-[#D6FF5F]', 'text-[#201C19]', 'font-[800]', 'border-[#201C19]/20', 'shadow-sm');
+      btn.classList.add('bg-white/10', 'hover:bg-white/20', 'text-white');
+    }
+  });
+}
+
+function renderAdminQrManager(channelKey = activeAdminQrTab){
+  activeAdminQrTab = channelKey;
+  const method = payMethods[channelKey] || DEFAULT_PAY_METHODS[channelKey];
+
+  const titleEl = document.getElementById('adminQrChannelTitle');
+  const statusEl = document.getElementById('adminQrStatusChip');
+  const accountInput = document.getElementById('adminQrAccountInput');
+  const urlInput = document.getElementById('adminQrUrlInput');
+
+  if(titleEl) titleEl.textContent = `Editing: ${method.name} QR & Account`;
+  if(statusEl){
+    if(method.qrData){
+      statusEl.textContent = 'Custom QR Uploaded';
+      statusEl.className = 'mono text-[10px] px-2.5 py-1 rounded-full bg-[#D6FF5F] text-[#201C19] font-[700]';
+    } else {
+      statusEl.textContent = 'Default SVG';
+      statusEl.className = 'mono text-[10px] px-2.5 py-1 rounded-full bg-[#EAE0D5] text-[#201C19] font-[600]';
+    }
+  }
+  if(accountInput) accountInput.value = method.account || '';
+  if(urlInput) urlInput.value = method.qrData && method.qrData.startsWith('http') ? method.qrData : '';
+
+  // Update tabs active state
+  document.querySelectorAll('.admin-qr-tab').forEach(btn=>{
+    const k = btn.dataset.adminQrTab;
+    if(k === channelKey){
+      btn.classList.add('active', 'bg-[#201C19]', 'text-white', 'font-[700]', 'shadow-xs');
+      btn.classList.remove('opacity-70', 'hover:opacity-100');
+    } else {
+      btn.classList.remove('active', 'bg-[#201C19]', 'text-white', 'font-[700]', 'shadow-xs');
+      btn.classList.add('opacity-70', 'hover:opacity-100');
+    }
+  });
+
+  // Update thumbnail statuses
+  ['gcash', 'maya', 'bpi'].forEach(key=>{
+    const thumbEl = document.getElementById(`adminThumb_${key}`);
+    const statEl = document.getElementById(`adminThumbStatus_${key}`);
+    const m = payMethods[key] || DEFAULT_PAY_METHODS[key];
+    if(thumbEl){
+      if(key === channelKey){
+        thumbEl.classList.add('border-[#201C19]', 'ring-1', 'ring-[#201C19]');
+      } else {
+        thumbEl.classList.remove('border-[#201C19]', 'ring-1', 'ring-[#201C19]');
+      }
+    }
+    if(statEl){
+      statEl.textContent = m.qrData ? '✅ Custom QR' : '🔹 Default SVG';
+    }
+  });
+}
+
+// Public Payment tab switcher buttons
+document.querySelectorAll('.pay-channel-btn').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    const ch = btn.dataset.payChannel;
+    renderPublicPayTab(ch);
+  });
+});
+
+// Admin channel selector tabs
+document.querySelectorAll('.admin-qr-tab').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    const ch = btn.dataset.adminQrTab;
+    renderAdminQrManager(ch);
+  });
+});
+
+// Admin thumbnails click to switch
+['gcash', 'maya', 'bpi'].forEach(key=>{
+  document.getElementById(`adminThumb_${key}`)?.addEventListener('click', ()=> renderAdminQrManager(key));
+});
+
+// Admin save account label
+document.getElementById('adminQrAccountSaveBtn')?.addEventListener('click', ()=>{
+  const val = document.getElementById('adminQrAccountInput').value.trim();
+  payMethods[activeAdminQrTab].account = val;
+  savePayMethods(payMethods);
+  renderAdminQrManager();
+  renderPublicPayTab(activePublicPayChannel);
+  toast(`${payMethods[activeAdminQrTab].name} label saved`);
+});
+
+// Admin File upload button & input
+document.getElementById('adminQrFileBtn')?.addEventListener('click', ()=>{
+  document.getElementById('adminQrFileInput').click();
+});
+document.getElementById('adminQrFileInput')?.addEventListener('change', (e)=>{
+  const file = e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = function(evt){
+    const dataUrl = evt.target.result;
+    payMethods[activeAdminQrTab].qrData = dataUrl;
+    savePayMethods(payMethods);
+    renderAdminQrManager();
+    renderPublicPayTab(activePublicPayChannel);
+    toast(`${payMethods[activeAdminQrTab].name} QR image uploaded!`);
+  };
+  reader.readAsDataURL(file);
+});
+
+// Admin save URL button
+document.getElementById('adminQrUrlSaveBtn')?.addEventListener('click', ()=>{
+  const url = document.getElementById('adminQrUrlInput').value.trim();
+  payMethods[activeAdminQrTab].qrData = url;
+  savePayMethods(payMethods);
+  renderAdminQrManager();
+  renderPublicPayTab(activePublicPayChannel);
+  toast(`${payMethods[activeAdminQrTab].name} QR URL saved!`);
+});
+
+// Admin reset to default SVG
+document.getElementById('adminQrResetBtn')?.addEventListener('click', ()=>{
+  payMethods[activeAdminQrTab].qrData = '';
+  savePayMethods(payMethods);
+  renderAdminQrManager();
+  renderPublicPayTab(activePublicPayChannel);
+  toast(`Reset ${payMethods[activeAdminQrTab].name} to default SVG`);
+});
+
+// Initial renders
+renderPublicPayTab('gcash');
+renderAdminQrManager('gcash');
+
+/* ---------- Admin ---------- */
+function getPin(){ return localStorage.getItem(LS.pin) || '1234'; }
+
+document.getElementById('adminUnlockBtn').addEventListener('click', ()=>{
+  const input = document.getElementById('adminPinInput').value.trim();
+  const err = document.getElementById('adminLockError');
+  if(input===getPin()){
+    adminUnlocked=true;
+    sessionStorage.setItem(LS.adminUnlocked,'true');
+    updateAdminTabsVisibility();
+    err.classList.add('hidden');
+    document.getElementById('adminPinInput').value='';
+    toast('Admin Access Unlocked • All Tabs Available');
+  } else {
+    err.textContent='Wrong PIN. Default is 1234.';
+    err.classList.remove('hidden');
+  }
+});
+document.getElementById('adminLockBtn').addEventListener('click', ()=>{
+  adminUnlocked=false;
+  document.getElementById('adminLock').classList.remove('hidden');
+  document.getElementById('adminPanel').classList.add('hidden');
+});
+document.getElementById('adminPinInput').addEventListener('keydown', e=>{ if(e.key==='Enter') document.getElementById('adminUnlockBtn').click(); });
+
+function renderAdminBookings(){
+  const list = document.getElementById('adminBookingsList');
+  const count = document.getElementById('adminBookingsCount');
+  count.textContent=bookings.length;
+  list.innerHTML='';
+  if(bookings.length===0){
+    list.innerHTML=`<div class="p-10 text-center mono text-[12px] opacity-60">No bookings</div>`;
+    return;
+  }
+  const sorted = [...bookings].sort((a,b)=> b.createdAt - a.createdAt);
+  sorted.forEach(b=>{
+    const wrap = document.createElement('div');
+    wrap.className='px-5 py-4 flex flex-col md:flex-row md:items-center gap-3 hover:bg-[#FFFBF5] transition';
+    const statusSelect = b.status==='OpenPlay' ? `<span class="mono text-[11px] px-2.5 py-1 rounded-full bg-[#EDE8FF]">OpenPlay (edit via Open Play list)</span>`
+      : `<select data-status="${b.id}" class="h-8 rounded-full border border-[#EAE0D5] bg-white px-3 mono text-[11px] font-[700]">
+           <option value="Pending" ${b.status==='Pending'?'selected':''}>Pending</option>
+           <option value="Reserved" ${b.status==='Reserved'?'selected':''}>Reserved</option>
+         </select>`;
+    wrap.innerHTML=`
+      <div class="flex-1 min-w-0">
+        <div class="flex items-center gap-2 flex-wrap">
+          <span class="font-[700] text-[13px]">${escapeHtml(b.name||'Open Play')}</span>
+          <span class="mono text-[11px] opacity-60">${fmtDateLabel(b.date)} • ${to12Range(b.start,b.end)}</span>
+          ${b.status!=='OpenPlay'? `<span class="mono text-[10px] opacity-50">${b.email}</span>`:''}
+        </div>
+        <div class="mono text-[11px] opacity-60 mt-1 truncate">${b.group||''}</div>
+      </div>
+      <div class="flex items-center gap-2">
+        ${statusSelect}
+        <button data-del="${b.id}" class="w-8 h-8 rounded-full bg-white border border-[#EAE0D5] grid place-items-center hover:bg-[#FFE9E0]">✕</button>
+      </div>
+    `;
+    list.appendChild(wrap);
+  });
+
+  list.querySelectorAll('select[data-status]').forEach(sel=>{
+    sel.addEventListener('change', ()=>{
+      const id=sel.dataset.status;
+      const val=sel.value;
+      const idx=bookings.findIndex(x=>x.id===id);
+      if(idx>=0){ bookings[idx].status=val; saveBookings(bookings); renderSchedule(); renderBookingsList(); toast(`Marked as ${val}`); }
+    });
+  });
+  list.querySelectorAll('button[data-del]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const id=btn.dataset.del;
+      if(confirm('Delete this booking?')){
+        bookings = bookings.filter(x=>x.id!==id);
+        // also remove from openPlays if openPlay booking
+        openPlays = openPlays.filter(x=>x.id!==id);
+        saveBookings(bookings); saveOpenPlay(openPlays);
+        renderAdminBookings(); renderSchedule(); renderBookingsList(); renderOpenPlayList();
+        toast('Deleted');
+      }
+    });
+  });
+}
+
+function renderMorningToggles(){
+  const container = document.getElementById('morningToggles');
+  container.innerHTML='';
+  HOURS.morning.forEach(h=>{
+    const enabled = !!morningEnabled[h];
+    const div=document.createElement('div');
+    div.className='flex items-center justify-between p-3 rounded-[14px] border border-[#F1E9DF] bg-[#FFFBF5]';
+    div.innerHTML=`
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-full ${enabled?'bg-[#D6FF5F]':'bg-white'} border border-[#EAE0D5] grid place-items-center mono text-[11px] font-[800]">${h}</div>
+        <div>
+          <div class="mono text-[12px] font-[700]">${fmtTime(h)} – ${fmtTime(h+1)}</div>
+          <div class="mono text-[10px] opacity-60">${enabled?'Booking enabled':'Queue / walk-in only'}</div>
+        </div>
+      </div>
+      <label class="relative inline-flex items-center cursor-pointer">
+        <input type="checkbox" data-morning="${h}" class="sr-only peer" ${enabled?'checked':''}>
+        <div class="w-11 h-6 bg-[#E9DDD0] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#201C19]"></div>
+      </label>
+    `;
+    container.appendChild(div);
+  });
+  container.querySelectorAll('input[data-morning]').forEach(inp=>{
+    inp.addEventListener('change', ()=>{
+      const h=inp.dataset.morning;
+      morningEnabled[h]=inp.checked;
+      saveMorning(morningEnabled);
+      populateTimeOptions(); renderSchedule(); renderMorningToggles();
+      toast(inp.checked? `Morning ${h}:00 booking enabled` : `Morning ${h}:00 set to queue only`);
+    });
+  });
+}
+
+function renderOpenPlayList(){
+  const list = document.getElementById('openPlayList');
+  list.innerHTML='';
+  const allOps = [...openPlays, ...bookings.filter(b=>b.status==='OpenPlay').map(b=>({id:b.id, date:b.date, start:b.start, end:b.end, fromBooking:true}))];
+  if(allOps.length===0){ list.innerHTML=`<div class="mono text-[11px] opacity-50">No open play blocks yet</div>`; return; }
+  allOps.sort((a,b)=> a.date.localeCompare(b.date));
+  allOps.forEach(op=>{
+    const div=document.createElement('div');
+    div.className='flex items-center justify-between p-2.5 rounded-[12px] bg-white/10 border border-white/10';
+    div.innerHTML=`
+      <div class="mono text-[11px]"><b>${fmtDateLabel(op.date)}</b><br/>${to12Range(op.start,op.end)}</div>
+      <button data-opdel="${op.id}" class="w-7 h-7 rounded-full bg-white/20 grid place-items-center text-[12px]">✕</button>
+    `;
+    list.appendChild(div);
+  });
+  list.querySelectorAll('button[data-opdel]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const id=btn.dataset.opdel;
+      openPlays = openPlays.filter(x=>x.id!==id);
+      bookings = bookings.filter(x=>x.id!==id);
+      saveOpenPlay(openPlays); saveBookings(bookings);
+      renderOpenPlayList(); renderAdminBookings(); renderSchedule(); renderBookingsList();
+      toast('Open play removed');
+    });
+  });
+}
+
+document.getElementById('openPlayForm').addEventListener('submit', e=>{
+  e.preventDefault();
+  const date = document.getElementById('opDate').value;
+  const start = parseInt(document.getElementById('opStart').value,10);
+  const end = parseInt(document.getElementById('opEnd').value,10);
+  const err = document.getElementById('opError');
+  err.classList.add('hidden');
+  if(!date){ err.textContent='Select date'; err.classList.remove('hidden'); return; }
+  if(end<=start){ err.textContent='End must be after start'; err.classList.remove('hidden'); return; }
+  if(start===12){ err.textContent='12PM break not allowed'; err.classList.remove('hidden'); return; }
+  if(start<12 && end>13){ err.textContent='Cannot cross 12PM–1PM break'; err.classList.remove('hidden'); return; }
+  const overlap = hasOverlap(date,start,end);
+  if(overlap){
+    err.textContent=`Overlaps with ${overlap.type}: ${overlap.data? to12Range(overlap.data.start,overlap.data.end):''}`;
+    err.classList.remove('hidden'); return;
+  }
+  const entry = {id:'op_'+Date.now(), date, start, end};
+  openPlays.push(entry);
+  saveOpenPlay(openPlays);
+  // also add as booking with OpenPlay status for bookings list visibility
+  bookings.unshift({id:entry.id, name:'Open Play', email:'', group:'Open Play block', date, start, end, status:'OpenPlay', createdAt:Date.now()});
+  saveBookings(bookings);
+  renderOpenPlayList(); renderAdminBookings(); renderSchedule(); renderBookingsList();
+  toast('Open play block added');
+});
+
+document.getElementById('savePinBtn').addEventListener('click', ()=>{
+  const v=document.getElementById('newPinInput').value.trim();
+  if(v.length<3){ toast('PIN too short'); return; }
+  localStorage.setItem(LS.pin, v);
+  document.getElementById('newPinInput').value='';
+  toast('PIN updated');
+});
+
+document.getElementById('exportBtn').addEventListener('click', ()=>{
+  const rows = [['id','name','email','group','date','start','end','status','createdAt']].concat(bookings.map(b=>[b.id,b.name,b.email,b.group,b.date,b.start,b.end,b.status,new Date(b.createdAt).toISOString()]));
+  const csv = rows.map(r=> r.map(x=> `"${(x||'').toString().replace(/"/g,'""')}"`).join(',')).join('\n');
+  const blob = new Blob([csv], {type:'text/csv'});
+  const url = URL.createObjectURL(blob);
+  const a=document.createElement('a'); a.href=url; a.download=`wk-bookings-${todayISO()}.csv`; a.click();
+  URL.revokeObjectURL(url);
+});
+document.getElementById('resetBtn').addEventListener('click', ()=>{
+  if(confirm('Wipe all local bookings, open play blocks, morning toggles, QR overrides, and queues?')){
+    localStorage.removeItem(LS.bookings); localStorage.removeItem(LS.openPlay); localStorage.removeItem(LS.morning); localStorage.removeItem(LS.payMethods); localStorage.removeItem(LS.queues);
+    bookings=[]; openPlays=[]; morningEnabled={"7":false,"8":false,"9":false,"10":false,"11":false};
+    payMethods = JSON.parse(JSON.stringify(DEFAULT_PAY_METHODS));
+    selectedQueueSessionId = null;
+    saveBookings(bookings); saveOpenPlay(openPlays); saveMorning(morningEnabled); savePayMethods(payMethods);
+    seedQueueSessionIfEmpty();
+    renderSchedule(); renderBookingsList(); renderAdminBookings(); renderMorningToggles(); renderOpenPlayList(); renderPublicPayTab(); renderAdminQrManager(); renderQueueModule();
+    toast('Data wiped (reload to re-seed samples)');
+  }
+});
+
+/* ---------- Interactive Queueing & Rotation Module ---------- */
+let selectedQueueSessionId = null;
+
+function getMidnightTimestamp() {
+  const d = new Date();
+  d.setHours(23, 59, 59, 999);
+  return d.getTime();
+}
+
+function loadQueues() {
+  try {
+    const raw = localStorage.getItem(LS.queues) || '[]';
+    let arr = JSON.parse(raw);
+    const now = Date.now();
+    // Midnight cleanup filter: auto-delete expired queues
+    const valid = arr.filter(q => q.expiresAt > now);
+    if (valid.length !== arr.length) {
+      localStorage.setItem(LS.queues, JSON.stringify(valid));
+    }
+    return valid;
+  } catch (e) {
+    return [];
+  }
+}
+
+function saveQueues(arr) {
+  localStorage.setItem(LS.queues, JSON.stringify(arr));
+}
+
+// Initial seed helper if none exist for active demo
+function seedQueueSessionIfEmpty() {
+  const qList = loadQueues();
+  if (qList.length === 0) {
+    const t = todayISO();
+    const demoSession = {
+      id: 'q_demo_smashers',
+      name: 'WK Morning Smashers',
+      mode: 'doubles',
+      rule: 'winner_stays',
+      pin: '1234',
+      allowJoin: true,
+      waiting: [
+        { id: 'w_s1', names: ['Coach Kyle', 'Mimi Tan'] },
+        { id: 'w_s2', names: ['JC Dela Cruz'] },
+        { id: 'w_s3', names: ['Sarah G.'] }
+      ],
+      activeMatch: {
+        id: 'match_1',
+        teamA: ['Alex Rivera', 'Juan Dela Cruz'],
+        teamB: ['Mika Tan', 'Coach Bobby']
+      },
+      matches: [
+        { id: 'm_p1', teamA: ['Alex Rivera', 'Juan Dela Cruz'], teamB: ['Sio Be', 'Sandro M.'], scoreA: 11, scoreB: 8, winner: 'teamA', timestamp: Date.now() - 3600000 }
+      ],
+      createdAt: Date.now(),
+      expiresAt: getMidnightTimestamp()
+    };
+    qList.push(demoSession);
+    saveQueues(qList);
+  }
+}
+seedQueueSessionIfEmpty();
+
+function renderQueueModule() {
+  const sessions = loadQueues();
+  const countBadge = document.getElementById('activeQueueCountBadge');
+  const sessionCount = document.getElementById('activeSessionsCount');
+  const sessionsList = document.getElementById('queueSessionsList');
+
+  if (countBadge) countBadge.textContent = sessions.length;
+  if (sessionCount) sessionCount.textContent = sessions.length;
+
+  if (sessionsList) {
+    sessionsList.innerHTML = '';
+    if (sessions.length === 0) {
+      sessionsList.innerHTML = `
+        <div class="p-6 text-center border border-dashed border-[#EAE0D5] rounded-[18px]">
+          <p class="mono text-[11px] opacity-60">No active queue sessions today.</p>
+        </div>
+      `;
+    } else {
+      sessions.forEach(s => {
+        const isSelected = s.id === selectedQueueSessionId;
+        const div = document.createElement('div');
+        div.className = `p-3.5 rounded-[18px] border transition cursor-pointer flex items-center justify-between gap-2
+          ${isSelected ? 'bg-[#201C19] text-white border-[#201C19] shadow-sm' : 'bg-[#FFFBF5] border-[#EAE0D5] hover:border-[#201C19]'}`;
+        
+        const totalP = (s.activeMatch ? (s.mode === 'doubles' ? 4 : 2) : 0) + s.waiting.reduce((sum, w) => sum + w.names.length, 0);
+
+        div.innerHTML = `
+          <div class="min-w-0">
+            <div class="font-[800] text-[14px] leading-tight truncate">${escapeHtml(s.name)}</div>
+            <div class="flex items-center gap-1.5 mt-1.5 flex-wrap">
+              <span class="mono text-[9px] px-2 py-0.5 rounded-full ${isSelected ? 'bg-white/10 text-[#D6FF5F]' : 'bg-[#201C19]/5 text-[#201C19]'} font-[800] uppercase">${s.mode}</span>
+              <span class="mono text-[9px] px-2 py-0.5 rounded-full ${isSelected ? 'bg-white/10 text-white/75' : 'bg-[#F1E9DF] text-[#201C19]/70'}">${s.rule === 'winner_stays' ? 'Winner Stays' : 'Fixed Order'}</span>
+            </div>
+          </div>
+          <div class="text-right shrink-0">
+            <div class="font-[800] text-[13px]">${totalP} Active</div>
+            <div class="mono text-[9px] opacity-60">${s.matches.length} played</div>
+          </div>
+        `;
+
+        div.addEventListener('click', () => {
+          selectQueueSession(s.id);
+        });
+        sessionsList.appendChild(div);
+      });
+    }
+  }
+
+  // Render currently selected session dashboard
+  renderActiveQueueDashboard();
+}
+
+function selectQueueSession(id) {
+  selectedQueueSessionId = id;
+  renderQueueModule();
+}
+
+function renderActiveQueueDashboard() {
+  const dashboard = document.getElementById('queueDashboard');
+  const placeholder = document.getElementById('noQueueSelected');
+  if (!dashboard || !placeholder) return;
+
+  if (!selectedQueueSessionId) {
+    dashboard.classList.add('hidden');
+    placeholder.classList.remove('hidden');
+    return;
+  }
+
+  const sessions = loadQueues();
+  const session = sessions.find(s => s.id === selectedQueueSessionId);
+  if (!session) {
+    selectedQueueSessionId = null;
+    dashboard.classList.add('hidden');
+    placeholder.classList.remove('hidden');
+    return;
+  }
+
+  placeholder.classList.add('hidden');
+  dashboard.classList.remove('hidden');
+
+  // Render details
+  const nameEl = document.getElementById('dashboardSessionName');
+  const modeBadge = document.getElementById('dashboardSessionModeBadge');
+  const ruleEl = document.getElementById('dashboardSessionRule');
+  const matchNumEl = document.getElementById('dashboardMatchNum');
+
+  if (nameEl) nameEl.textContent = session.name;
+  if (modeBadge) {
+    modeBadge.textContent = session.mode === 'doubles' ? 'DOUBLES MATCH' : 'SINGLES MATCH';
+    modeBadge.className = `mono text-[10px] px-2.5 py-0.5 rounded-full font-[800] uppercase ${session.mode === 'doubles' ? 'bg-[#D6FF5F] text-[#201C19]' : 'bg-[#EDE8FF] text-[#3B2A9E]'}`;
+  }
+  if (ruleEl) ruleEl.textContent = session.rule === 'winner_stays' ? 'Winner Stays' : 'Fixed Order';
+  if (matchNumEl) matchNumEl.textContent = `Match #${session.matches.length + 1}`;
+
+  // Hide or Show Partner name field based on game mode
+  const jPlayer2Wrapper = document.getElementById('jPlayer2Wrapper');
+  if (jPlayer2Wrapper) {
+    if (session.mode === 'singles') {
+      jPlayer2Wrapper.classList.add('hidden');
+    } else {
+      jPlayer2Wrapper.classList.remove('hidden');
+    }
+  }
+
+  // Active Court players
+  const teamAPlayers = document.getElementById('teamAPlayers');
+  const teamBPlayers = document.getElementById('teamBPlayers');
+  const scoreAInput = document.getElementById('scoreA');
+  const scoreBInput = document.getElementById('scoreB');
+
+  if (teamAPlayers && teamBPlayers) {
+    if (session.activeMatch) {
+      teamAPlayers.innerHTML = session.activeMatch.teamA.map(p => `<div class="truncate py-0.5">${escapeHtml(p)}</div>`).join('');
+      teamBPlayers.innerHTML = session.activeMatch.teamB.map(p => `<div class="truncate py-0.5">${escapeHtml(p)}</div>`).join('');
+      if (scoreAInput) scoreAInput.disabled = false;
+      if (scoreBInput) scoreBInput.disabled = false;
+    } else {
+      teamAPlayers.innerHTML = `<div class="text-[#D6FF5F] font-[600] mono text-[12px] opacity-70">Awaiting players...</div>`;
+      teamBPlayers.innerHTML = `<div class="text-[#D6FF5F] font-[600] mono text-[12px] opacity-70">Awaiting players...</div>`;
+      if (scoreAInput) { scoreAInput.disabled = true; scoreAInput.value = ''; }
+      if (scoreBInput) { scoreBInput.disabled = true; scoreBInput.value = ''; }
+    }
+  }
+
+  // Waiting Room List
+  const waitingList = document.getElementById('waitingRoomList');
+  const waitingBadge = document.getElementById('waitingCountBadge');
+  if (waitingList) {
+    waitingList.innerHTML = '';
+    let flatCount = 0;
+    
+    if (session.waiting.length === 0) {
+      waitingList.innerHTML = `
+        <div class="p-6 text-center">
+          <p class="mono text-[11px] opacity-55">No players waiting. Anyone can add themselves on the right!</p>
+        </div>
+      `;
+    } else {
+      session.waiting.forEach((w, index) => {
+        flatCount += w.names.length;
+        const entry = document.createElement('div');
+        entry.className = 'py-2.5 flex items-center justify-between gap-3 text-[#201C19]';
+        
+        const sub = w.names.length > 1 ? `<span class="mono text-[9px] px-1.5 py-0.5 rounded-full bg-[#EDE8FF] text-[#3B2A9E] font-[700] ml-1.5 uppercase">Team Pair</span>` : '';
+
+        entry.innerHTML = `
+          <div class="min-w-0">
+            <div class="flex items-center gap-1">
+              <span class="mono text-[11px] font-[700] opacity-40">#${index + 1}</span>
+              <span class="font-[700] text-[13px] truncate">${escapeHtml(w.names.join(' & '))}</span>
+              ${sub}
+            </div>
+          </div>
+          <button type="button" data-remove-wait="${w.id}" class="w-7 h-7 rounded-full hover:bg-[#FFE9E0] hover:text-[#8C2C10] border border-transparent hover:border-[#FFC9B6] grid place-items-center text-[11px] transition shrink-0 cursor-pointer" title="Remove Player (PIN required)">
+            ✕
+          </button>
+        `;
+        waitingList.appendChild(entry);
+      });
+    }
+    if (waitingBadge) waitingBadge.textContent = `${flatCount} player${flatCount !== 1 ? 's' : ''} waiting`;
+
+    // Bind remove button
+    waitingList.querySelectorAll('button[data-remove-wait]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const waitId = btn.dataset.removeWait;
+        const pin = prompt('Enter Lock PIN for this session to remove player:');
+        if (pin === null) return;
+        if (pin === session.pin) {
+          session.waiting = session.waiting.filter(x => x.id !== waitId);
+          // Try to auto-start if match empty
+          checkAndFillActiveMatch(session);
+          saveQueues(sessions);
+          renderActiveQueueDashboard();
+          toast('Player removed from queue');
+        } else {
+          alert('Incorrect PIN!');
+        }
+      });
+    });
+  }
+
+  // History & score listing
+  const historyList = document.getElementById('queueMatchHistory');
+  if (historyList) {
+    historyList.innerHTML = '';
+    if (session.matches.length === 0) {
+      historyList.innerHTML = `
+        <div class="p-4 text-center mono text-[11px] opacity-55">No matches recorded yet.</div>
+      `;
+    } else {
+      const rev = [...session.matches].reverse();
+      rev.forEach(m => {
+        const div = document.createElement('div');
+        div.className = 'p-3 rounded-[16px] bg-[#FFFBF5] border border-[#F1E9DF] flex items-center justify-between gap-4 text-[#201C19]';
+        
+        const isWinnerA = m.winner === 'teamA';
+        const isWinnerB = m.winner === 'teamB';
+
+        div.innerHTML = `
+          <div class="min-w-0 flex-1">
+            <div class="flex items-center gap-2">
+              <span class="mono text-[10px] opacity-50 font-[700]">MATCH</span>
+              <span class="mono text-[10px] opacity-40">•</span>
+              <span class="mono text-[10px] opacity-50">${new Date(m.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+            </div>
+            <div class="grid grid-cols-2 gap-2 mt-1">
+              <div class="truncate ${isWinnerA ? 'font-[800]' : 'opacity-65'} text-[12px] flex items-center gap-1">
+                ${isWinnerA ? '🏆 ' : ''}${escapeHtml(m.teamA.join(' & '))}
+              </div>
+              <div class="truncate ${isWinnerB ? 'font-[800]' : 'opacity-65'} text-[12px] flex items-center gap-1">
+                ${isWinnerB ? '🏆 ' : ''}${escapeHtml(m.teamB.join(' & '))}
+              </div>
+            </div>
+          </div>
+          <div class="flex items-center gap-1.5 shrink-0">
+            <span class="mono text-[14px] font-black ${isWinnerA ? 'text-[#201C19]' : 'opacity-40'}">${m.scoreA}</span>
+            <span class="mono opacity-30 text-[11px] font-black">:</span>
+            <span class="mono text-[14px] font-black ${isWinnerB ? 'text-[#201C19]' : 'opacity-40'}">${m.scoreB}</span>
+          </div>
+        `;
+        historyList.appendChild(div);
+      });
+    }
+  }
+}
+
+// Automatically pulls players from waiting list if current active match is empty
+function checkAndFillActiveMatch(session) {
+  if (session.activeMatch) return; // already running
+
+  const countNeeded = session.mode === 'doubles' ? 4 : 2;
+  
+  // Count flat number of players available
+  let totalWaitingAvailable = session.waiting.reduce((sum, w) => sum + w.names.length, 0);
+  if (totalWaitingAvailable >= countNeeded) {
+    // We can form a match!
+    const sideA = [];
+    const teamSize = countNeeded / 2;
+
+    // Pull Team A players
+    while (sideA.length < teamSize && session.waiting.length > 0) {
+      const nextGroup = session.waiting[0];
+      if (sideA.length + nextGroup.names.length <= teamSize) {
+        sideA.push(...nextGroup.names);
+        session.waiting.shift();
+      } else {
+        // Can't fit entire group, take part of it (they split up, or we wait? Let's take individuals to prevent lock)
+        const countToTake = teamSize - sideA.length;
+        sideA.push(...nextGroup.names.slice(0, countToTake));
+        nextGroup.names = nextGroup.names.slice(countToTake);
+      }
+    }
+
+    const sideB = [];
+    // Pull Team B players
+    while (sideB.length < teamSize && session.waiting.length > 0) {
+      const nextGroup = session.waiting[0];
+      if (sideB.length + nextGroup.names.length <= teamSize) {
+        sideB.push(...nextGroup.names);
+        session.waiting.shift();
+      } else {
+        const countToTake = teamSize - sideB.length;
+        sideB.push(...nextGroup.names.slice(0, countToTake));
+        nextGroup.names = nextGroup.names.slice(countToTake);
+      }
+    }
+
+    session.activeMatch = {
+      id: 'match_' + Date.now(),
+      teamA: sideA,
+      teamB: sideB
+    };
+  }
+}
+
+// CREATE QUEUE
+document.getElementById('createQueueForm')?.addEventListener('submit', (e) => {
+  e.preventDefault();
+  const name = document.getElementById('qName').value.trim();
+  const mode = document.getElementById('qMode').value;
+  const rule = document.getElementById('qRule').value;
+  const pin = document.getElementById('qPin').value.trim();
+  const allowJoin = document.getElementById('qAllowJoin').value === 'true';
+  const initialText = document.getElementById('qInitialPlayers').value.trim();
+
+  if (pin.length < 4 || isNaN(pin)) {
+    alert('PIN must be exactly 4 digits.');
+    return;
+  }
+
+  // Parse initial names
+  const names = initialText.split('\n')
+    .map(x => x.trim())
+    .filter(x => x.length > 0);
+
+  const waiting = [];
+  // For initial batch, group them singly to build queue
+  names.forEach(n => {
+    waiting.push({
+      id: 'w_' + Math.random().toString(36).substr(2, 9),
+      names: [n]
+    });
+  });
+
+  const session = {
+    id: 'q_' + Date.now(),
+    name,
+    mode,
+    rule,
+    pin,
+    allowJoin,
+    waiting,
+    activeMatch: null,
+    matches: [],
+    createdAt: Date.now(),
+    expiresAt: getMidnightTimestamp()
+  };
+
+  // Try to populate initial match
+  checkAndFillActiveMatch(session);
+
+  const list = loadQueues();
+  list.unshift(session);
+  saveQueues(list);
+
+  selectedQueueSessionId = session.id;
+  renderQueueModule();
+
+  // Reset form inputs
+  document.getElementById('createQueueForm').reset();
+  toast('New rotation board generated!');
+});
+
+// JOIN QUEUE waiting room
+document.getElementById('joinQueueForm')?.addEventListener('submit', (e) => {
+  e.preventDefault();
+  if (!selectedQueueSessionId) return;
+
+  const sessions = loadQueues();
+  const session = sessions.find(s => s.id === selectedQueueSessionId);
+  if (!session) return;
+
+  if (!session.allowJoin) {
+    alert('This session creator has restricted public joining. Admin PIN action required.');
+    return;
+  }
+
+  const p1 = document.getElementById('jPlayer1').value.trim();
+  const p2 = document.getElementById('jPlayer2')?.value.trim();
+
+  if (!p1) return;
+  
+  const waitingObj = {
+    id: 'w_' + Date.now() + Math.random().toString(36).substr(2, 5),
+    names: (session.mode === 'doubles' && p2) ? [p1, p2] : [p1]
+  };
+
+  session.waiting.push(waitingObj);
+  checkAndFillActiveMatch(session);
+  saveQueues(sessions);
+  renderActiveQueueDashboard();
+
+  document.getElementById('joinQueueForm').reset();
+  toast(`${p1} added to waiting list!`);
+});
+
+// SUBMIT Live scoreboard score & Rotate Queue
+document.getElementById('submitScoreBtn')?.addEventListener('click', () => {
+  if (!selectedQueueSessionId) return;
+
+  const sessions = loadQueues();
+  const session = sessions.find(s => s.id === selectedQueueSessionId);
+  if (!session || !session.activeMatch) return;
+
+  const scoreAVal = document.getElementById('scoreA').value;
+  const scoreBVal = document.getElementById('scoreB').value;
+
+  if (scoreAVal === '' || scoreBVal === '') {
+    alert('Please enter final scores for both teams.');
+    return;
+  }
+
+  const scoreA = parseInt(scoreAVal, 10);
+  const scoreB = parseInt(scoreBVal, 10);
+
+  if (isNaN(scoreA) || isNaN(scoreB) || scoreA < 0 || scoreB < 0) {
+    alert('Please enter valid numeric scores.');
+    return;
+  }
+
+  if (scoreA === scoreB) {
+    alert('Pickleball matches cannot end in a draw. Please specify a winner.');
+    return;
+  }
+
+  const match = session.activeMatch;
+  const winner = scoreA > scoreB ? 'teamA' : 'teamB';
+  const winnerNames = winner === 'teamA' ? match.teamA : match.teamB;
+  const loserNames = winner === 'teamA' ? match.teamB : match.teamA;
+
+  // Add to completed match history
+  session.matches.push({
+    id: 'm_' + Date.now(),
+    teamA: match.teamA,
+    teamB: match.teamB,
+    scoreA,
+    scoreB,
+    winner,
+    timestamp: Date.now()
+  });
+
+  // Rotate based on rules
+  if (session.rule === 'winner_stays') {
+    // Winner stays as Team A on court. Loser goes to end of waiting list
+    session.waiting.push({
+      id: 'w_rot_' + Date.now(),
+      names: loserNames
+    });
+
+    // Bring in new challenger from waiting list to play as Team B
+    const teamSize = session.mode === 'doubles' ? 2 : 1;
+    const nextChallengers = [];
+
+    while (nextChallengers.length < teamSize && session.waiting.length > 0) {
+      const nextGroup = session.waiting[0];
+      if (nextChallengers.length + nextGroup.names.length <= teamSize) {
+        nextChallengers.push(...nextGroup.names);
+        session.waiting.shift();
+      } else {
+        const take = teamSize - nextChallengers.length;
+        nextChallengers.push(...nextGroup.names.slice(0, take));
+        nextGroup.names = nextGroup.names.slice(take);
+      }
+    }
+
+    if (nextChallengers.length === teamSize) {
+      session.activeMatch = {
+        id: 'match_' + Date.now(),
+        teamA: winnerNames, // stays on court as side A
+        teamB: nextChallengers // side B challenger
+      };
+    } else {
+      // Not enough waiting players to form a challenger Team B. Both winner and challenger must wait.
+      // Re-queue the winners
+      session.waiting.unshift({ id: 'w_win_' + Date.now(), names: winnerNames });
+      if (nextChallengers.length > 0) {
+        session.waiting.unshift({ id: 'w_chal_' + Date.now(), names: nextChallengers });
+      }
+      session.activeMatch = null;
+    }
+
+  } else {
+    // Fixed Order (FIFO): Both rotate out to the end of the waiting list
+    session.waiting.push({ id: 'w_rot_A_' + Date.now(), names: match.teamA });
+    session.waiting.push({ id: 'w_rot_B_' + Date.now(), names: match.teamB });
+    session.activeMatch = null;
+  }
+
+  // Try to fill match with next set of players
+  checkAndFillActiveMatch(session);
+
+  saveQueues(sessions);
+  renderActiveQueueDashboard();
+
+  // Reset inputs
+  document.getElementById('scoreA').value = '';
+  document.getElementById('scoreB').value = '';
+  toast(`Match completed! Winners: ${winnerNames.join(' & ')}`);
+});
+
+// Reset Session
+document.getElementById('qResetSessionBtn')?.addEventListener('click', () => {
+  if (!selectedQueueSessionId) return;
+  const sessions = loadQueues();
+  const session = sessions.find(s => s.id === selectedQueueSessionId);
+  if (!session) return;
+
+  const pin = document.getElementById('qAdminActionPin').value.trim();
+  if (pin === session.pin) {
+    if (confirm('Are you sure you want to reset this queue session? This will wipe the scoreboard and clear court rotation.')) {
+      session.waiting = [];
+      session.activeMatch = null;
+      session.matches = [];
+      saveQueues(sessions);
+      renderActiveQueueDashboard();
+      document.getElementById('qAdminActionPin').value = '';
+      toast('Queue rotation reset successfully!');
+    }
+  } else {
+    alert('Incorrect Lock PIN!');
+  }
+});
+
+// Delete Session
+document.getElementById('qDeleteSessionBtn')?.addEventListener('click', () => {
+  if (!selectedQueueSessionId) return;
+  const sessions = loadQueues();
+  const session = sessions.find(s => s.id === selectedQueueSessionId);
+  if (!session) return;
+
+  const pin = document.getElementById('qAdminActionPin').value.trim();
+  if (pin === session.pin) {
+    if (confirm('Permanently delete this entire queue session?')) {
+      const filtered = sessions.filter(s => s.id !== selectedQueueSessionId);
+      saveQueues(filtered);
+      selectedQueueSessionId = null;
+      renderQueueModule();
+      document.getElementById('qAdminActionPin').value = '';
+      toast('Session deleted.');
+    }
+  } else {
+    alert('Incorrect Lock PIN!');
+  }
+});
+
+/* ---------- Toast ---------- */
+let toastTimer;
+function toast(msg){
+  const t=document.getElementById('toast');
+  document.getElementById('toastText').textContent=msg;
+  t.classList.remove('hidden');
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>t.classList.add('hidden'), 2600);
+}
+
+/* ---------- Init ---------- */
+selectedDate = todayISO();
+calCursor = new Date(selectedDate+'T12:00:00');
+renderCalendar();          // renders month picker + prefills time dropdowns
+renderSchedule();          // renders today's hourly rows + slot preview strip
+renderBookingsList();
+populateTimeOptions();
+recalcTotal();
+renderDateSlotPreview();
+renderQueueModule();       // renders the queueing session lists and dashboards
+updateAdminTabsVisibility();   // Public Portal mode by default (Book + Payment only)
+</script>
+</body>
+</html>

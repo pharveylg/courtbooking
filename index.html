@@ -4,6 +4,8 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>White Kitchen — Pickleball Court Booking</title>
+<!-- Client white-label config (edit per deployment) -->
+<script src="client-config.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
 <!-- Firebase SDK -->
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
@@ -31,10 +33,10 @@
 <header class="sticky top-0 z-30 backdrop-blur-xl bg-[#FFFBF5]/90 border-b border-[#EAE0D5] shadow-xs">
   <div class="max-w-[1320px] mx-auto px-3.5 md:px-6 h-[64px] md:h-[68px] flex items-center justify-between gap-2 md:gap-4">
     <div class="flex items-center gap-2.5 md:gap-3 min-w-0">
-      <div class="w-8 h-8 md:w-9 md:h-9 rounded-full bg-[#201C19] text-[#D6FF5F] grid place-items-center font-black text-[12px] md:text-[13px] tracking-[-0.02em] shrink-0">WK</div>
+      <div id="brandLogo" class="w-8 h-8 md:w-9 md:h-9 rounded-full bg-[#201C19] text-[#D6FF5F] grid place-items-center font-black text-[12px] md:text-[13px] tracking-[-0.02em] shrink-0 overflow-hidden">WK</div>
       <div class="leading-[0.95] min-w-0">
-        <div class="font-[800] text-[15px] md:text-[16px] tracking-[-0.02em] truncate">WHITE KITCHEN</div>
-        <div class="mono text-[9px] md:text-[10px] tracking-[0.16em] uppercase opacity-60 -mt-[2px] truncate">Pickleball Court • Single Court</div>
+        <div id="brandName" class="font-[800] text-[15px] md:text-[16px] tracking-[-0.02em] truncate">WHITE KITCHEN</div>
+        <div id="brandSub" class="mono text-[9px] md:text-[10px] tracking-[0.16em] uppercase opacity-60 -mt-[2px] truncate">Pickleball Court • Single Court</div>
       </div>
       <div class="hidden lg:flex items-center gap-2 ml-5 pl-5 border-l border-[#EAE0D5]">
         <div class="w-2 h-2 rounded-full bg-[#4ADE80] animate-pulse"></div>
@@ -84,18 +86,18 @@
           <div class="absolute right-[-20px] bottom-[-30px] rotate-[-10deg] mono text-[96px] leading-none font-[800] tracking-[-0.08em] text-white/[0.06]">PICKLE</div>
           <div class="relative z-10 flex flex-wrap items-start justify-between gap-6">
             <div>
-              <div class="inline-flex items-center gap-2 px-3 h-7 rounded-full bg-white/10 border border-white/10 mono text-[11px] tracking-widest uppercase">Single Court • Davao</div>
-              <h1 class="mt-4 text-[32px] md:text-[44px] font-[800] leading-[0.92] tracking-[-0.04em] max-w-[14ch]">Reserve the court.<br/>Own the rally.</h1>
+              <div id="heroLocation" class="inline-flex items-center gap-2 px-3 h-7 rounded-full bg-white/10 border border-white/10 mono text-[11px] tracking-widest uppercase">Single Court • Davao</div>
+              <h1 id="heroTitle" class="mt-4 text-[32px] md:text-[44px] font-[800] leading-[0.92] tracking-[-0.04em] max-w-[16ch]">Reserve the court.<br/>Own the rally.</h1>
               <div class="mt-4 flex flex-wrap gap-2">
-                <div class="px-3 py-1.5 rounded-full bg-[#D6FF5F] text-[#201C19] mono text-[11px] font-[700]">₱300 / hour • 1PM–10PM</div>
-                <div class="px-3 py-1.5 rounded-full bg-white/10 border border-white/15 mono text-[11px]">₱100 / head • 7AM–12PM Queue</div>
+                <div id="chipHourly" class="px-3 py-1.5 rounded-full bg-[#D6FF5F] text-[#201C19] mono text-[11px] font-[700]">₱300 / hour • 1PM–10PM</div>
+                <div id="chipQueue" class="px-3 py-1.5 rounded-full bg-white/10 border border-white/15 mono text-[11px]">₱100 / head • 7AM–12PM Queue</div>
               </div>
             </div>
             <div class="bg-white/5 border border-white/10 rounded-[16px] p-3 w-full md:w-[240px]">
               <div class="mono text-[10px] tracking-widest uppercase opacity-60">Today's Blocked</div>
               <div id="staffNote" class="mt-2 text-[13px] leading-[1.35] font-[500]"></div>
               <div class="mt-3 flex gap-1.5">
-                <span class="inline-flex items-center px-2 h-6 rounded-full bg-[#FF8A5B] text-[#201C19] mono text-[10px] font-[700]">STAFF 5–10PM</span>
+                <span id="heroStaffChip" class="inline-flex items-center px-2 h-6 rounded-full bg-[#FF8A5B] text-[#201C19] mono text-[10px] font-[700]">STAFF 5–10PM</span>
                 <span class="inline-flex items-center px-2 h-6 rounded-full bg-white text-[#201C19] mono text-[10px] font-[700]">ONE COURT ONLY</span>
               </div>
             </div>
@@ -119,7 +121,7 @@
 
           <div id="scheduleList" class="divide-y divide-[#F5EDE4]"></div>
 
-          <div class="px-5 md:px-7 py-3 bg-[#FFFBF5] border-t border-[#F1E9DF] mono text-[10px] tracking-wide opacity-60 flex flex-wrap gap-x-4 gap-y-1">
+          <div id="scheduleFootNote" class="px-5 md:px-7 py-3 bg-[#FFFBF5] border-t border-[#F1E9DF] mono text-[10px] tracking-wide opacity-60 flex flex-wrap gap-x-4 gap-y-1">
             <span>Morning 7AM–12PM = Walk-in queue unless admin unlocks booking</span>
             <span>•</span>
             <span>Afternoon 1PM–10PM = Hourly booking</span>
@@ -225,7 +227,7 @@
 
             <div class="rounded-[14px] bg-[#201C19] text-white p-4 flex items-center justify-between">
               <div>
-                <div class="mono text-[10px] uppercase tracking-widest opacity-60">Total • ₱300 / hour</div>
+                <div id="totalRateLabel" class="mono text-[10px] uppercase tracking-widest opacity-60">Total • ₱300 / hour</div>
                 <div id="totalLine" class="text-[18px] font-[750] tracking-[-0.02em] mt-1">Select time</div>
                 <div id="totalHint" class="mono text-[11px] opacity-60 mt-1"></div>
               </div>
@@ -331,18 +333,10 @@
                 <select id="qRule" class="w-full h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-3.5 text-[13px] font-[650] outline-none focus:border-[#201C19]">
                   <option value="winner_stays">Winner Stays</option>
                   <option value="four_off_four_on">Four Off, Four On</option>
-                  <option value="fixed_rotation">Fixed Rotation</option>
+                  <option value="fixed_rotation">Fixed Rotation (fifo sequence)</option>
                   <option value="timed_rotation">Timed Rotation</option>
-                  <option value="partner_rotation">Partner Rotation</option>
+                  <option value="partner_rotation">Partner Rotation (Doubles only)</option>
                 </select>
-              </div>
-            </div>
-
-            <div id="qTimedMinutesWrap" class="hidden rounded-[14px] bg-[#FFFBF5] border border-[#EAE0D5] p-3">
-              <label class="block mono text-[10px] uppercase tracking-widest font-[700] mb-1">Timed Rotation Limit</label>
-              <div class="flex items-center gap-2">
-                <input id="qTimedMinutes" type="number" min="1" max="120" value="15" class="w-24 h-10 rounded-full border border-[#EAE0D5] bg-white px-3 mono text-[13px] font-[700] text-center outline-none focus:border-[#201C19]"/>
-                <span class="mono text-[11px] opacity-60">minutes per game. Score can still be saved after time expires.</span>
               </div>
             </div>
 
@@ -435,19 +429,34 @@
               </div>
             </div>
 
-            <!-- Submit Button -->
-            <div id="queueTimerBox" class="hidden relative mb-3 bg-white/5 rounded-2xl p-3 border border-white/5">
-              <div class="flex items-center justify-between gap-3">
+            <!-- Timed Rotation Widget (Visible only if timed_rotation is active) -->
+            <div id="qTimerWrapper" class="hidden my-4 p-4 rounded-[20px] bg-white/5 border border-white/10 flex flex-col sm:flex-row items-center justify-between gap-3 relative overflow-hidden">
+              <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-full bg-[#D6FF5F]/20 text-[#D6FF5F] grid place-items-center text-[18px]">⏱️</div>
                 <div>
-                  <div class="mono text-[10px] uppercase tracking-widest opacity-50">Timed Rotation</div>
-                  <div id="queueTimerLabel" class="font-[850] text-[20px] tracking-[-0.03em] text-[#D6FF5F] mt-0.5">15:00</div>
+                  <div class="mono text-[10px] uppercase tracking-wider opacity-60">Timed Rotation Limit</div>
+                  <div class="flex items-center gap-1.5 mt-0.5">
+                    <span id="qTimerDisplay" class="mono text-[22px] font-black tracking-wider text-[#D6FF5F]">10:00</span>
+                    <span id="qTimerFinishedLabel" class="hidden mono text-[10px] px-2 py-0.5 rounded-full bg-red-500/20 text-red-300 font-[800] uppercase animate-pulse">Time's Up!</span>
+                  </div>
                 </div>
-                <button type="button" id="queueTimerRestartBtn" class="h-9 px-4 rounded-full bg-white/10 hover:bg-white/20 border border-white/10 mono text-[11px] font-[700] transition cursor-pointer">Restart Timer</button>
+              </div>
+              <div class="flex items-center gap-2">
+                <button type="button" id="qTimerToggleBtn" class="h-9 px-4 rounded-full bg-white text-[#201C19] mono text-[11px] font-[800] hover:bg-[#D6FF5F] transition cursor-pointer">Start</button>
+                <button type="button" id="qTimerResetBtn" class="h-9 px-3 rounded-full bg-white/10 hover:bg-white/20 text-white mono text-[11px] font-[700] transition cursor-pointer">Reset</button>
+                <select id="qTimerLimitSelect" class="h-9 rounded-full bg-white/10 border border-white/15 text-white px-3 mono text-[11px] font-[700] outline-none">
+                  <option value="5" class="text-black">5 Min</option>
+                  <option value="10" selected class="text-black">10 Min</option>
+                  <option value="12" class="text-black">12 Min</option>
+                  <option value="15" class="text-black">15 Min</option>
+                  <option value="20" class="text-black">20 Min</option>
+                </select>
               </div>
             </div>
 
+            <!-- Submit Button -->
             <div class="relative flex flex-col sm:flex-row items-center justify-between gap-3 bg-white/5 rounded-2xl p-3 border border-white/5">
-              <span id="queueRuleHint" class="mono text-[11px] opacity-60 text-center sm:text-left">Enter both final scores and submit to advance the queue.</span>
+              <span class="mono text-[11px] opacity-60 text-center sm:text-left">Enter both final scores and submit to advance the queue.</span>
               <button type="button" id="submitScoreBtn" class="h-10 px-5 rounded-full bg-[#D6FF5F] hover:bg-[#CBF052] text-[#201C19] font-[800] text-[13px] transition cursor-pointer shrink-0">
                 Submit & Rotate Queue →
               </button>
@@ -566,12 +575,12 @@
             <!-- Rate details row -->
             <div class="mt-5 grid grid-cols-2 gap-2.5">
               <div class="rounded-[14px] bg-[#FFFBF5] border border-[#EAE0D5] px-3.5 py-2.5">
-                <div class="mono text-[9px] uppercase tracking-widest opacity-60">Reservation (1PM–10PM)</div>
-                <div class="font-[750] text-[15px]">₱300 / hour</div>
+                <div id="payRateHourlyLabel" class="mono text-[9px] uppercase tracking-widest opacity-60">Reservation (1PM–10PM)</div>
+                <div id="payRateHourly" class="font-[750] text-[15px]">₱300 / hour</div>
               </div>
               <div class="rounded-[14px] bg-[#D6FF5F] px-3.5 py-2.5 border border-[#201C19]/10">
-                <div class="mono text-[9px] uppercase tracking-widest opacity-70">Morning Queue (7AM–12PM)</div>
-                <div class="font-[750] text-[15px]">₱100 / head</div>
+                <div id="payRateQueueLabel" class="mono text-[9px] uppercase tracking-widest opacity-70">Morning Queue (7AM–12PM)</div>
+                <div id="payRateQueue" class="font-[750] text-[15px]">₱100 / head</div>
               </div>
             </div>
           </div>
@@ -628,7 +637,7 @@
           <div class="mt-8 p-4 md:p-5 rounded-[16px] bg-[#FFFBF5] border border-[#F1E9DF] flex gap-3.5">
             <div class="w-9 h-9 rounded-full bg-[#FFE9E0] text-[#8C2C10] grid place-items-center shrink-0"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg></div>
             <div class="mono text-[11px] leading-[1.5] text-[#201C19]">
-              <b>Staff reserved block:</b> Tue, Thu, Sat, Sun 5:00PM–10:00PM is blocked for White Kitchen staff play. Morning hours (7AM–12PM) are walk-in queue (₱100/head, unlimited play) unless unlocked by admin.
+              <span id="payStaffNote"><b>Staff reserved block:</b> Tue, Thu, Sat, Sun 5:00PM–10:00PM is blocked for White Kitchen staff play. Morning hours (7AM–12PM) are walk-in queue (₱100/head, unlimited play) unless unlocked by admin.</span>
             </div>
           </div>
         </div>
@@ -642,6 +651,21 @@
           <div class="flex items-center gap-2 shrink-0">
             <div class="px-3.5 py-2 rounded-full bg-white border border-[#EAE0D5] mono text-[11px] font-[700]">0% booking fee</div>
           </div>
+        </div>
+
+        <!-- Contact Card (config-driven) -->
+        <div id="contactCard" class="hidden rounded-[28px] bg-white border border-[#EAE0D5] p-6 md:p-7">
+          <div class="flex items-center gap-2.5">
+            <div class="w-9 h-9 rounded-full bg-[#201C19] text-[#D6FF5F] grid place-items-center">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+            </div>
+            <div>
+              <h3 class="font-[800] text-[16px] tracking-[-0.02em]">Reach the Court</h3>
+              <p class="mono text-[10px] opacity-55">Questions about your booking? Message us.</p>
+            </div>
+          </div>
+          <div id="contactList" class="mt-5 grid sm:grid-cols-2 gap-3"></div>
+          <div id="contactSocials" class="mt-4 flex gap-2"></div>
         </div>
       </div>
     </div>
@@ -836,11 +860,54 @@
   </section>
 </main>
 
+<!-- Site Footer (config-driven) -->
+<footer id="siteFooter" class="mt-10 md:mt-14 bg-[#201C19] text-[#FFFBF5] relative overflow-hidden">
+  <div class="absolute top-0 left-0 right-0 h-[3px] bg-[#D6FF5F]"></div>
+  <div class="absolute -right-24 -bottom-24 w-[320px] h-[320px] rounded-full bg-[#D6FF5F]/[0.06]"></div>
+  <div class="max-w-[1320px] mx-auto px-4 md:px-6 py-10 md:py-14 relative z-10">
+    <div class="grid md:grid-cols-12 gap-8 md:gap-6">
+      <!-- Identity -->
+      <div class="md:col-span-5">
+        <div class="flex items-center gap-3">
+          <div id="footLogo" class="w-11 h-11 rounded-full bg-[#D6FF5F] text-[#201C19] grid place-items-center font-black text-[16px] tracking-[-0.02em] overflow-hidden">WK</div>
+          <div>
+            <div id="footName" class="font-[800] text-[18px] tracking-[-0.02em] leading-none">WHITE KITCHEN</div>
+            <div id="footSub" class="mono text-[10px] tracking-[0.16em] uppercase opacity-55 mt-1">Pickleball Court • Single Court</div>
+          </div>
+        </div>
+        <p class="mono text-[11px] leading-[1.7] opacity-60 mt-5 max-w-[36ch]">Single-court pickleball reservations, walk-in queues, and live rotation boards. Book online, pay externally, play hard.</p>
+        <div id="footOpenBadge" class="mt-5 inline-flex items-center gap-2 px-3.5 h-8 rounded-full border border-white/15 mono text-[10px] uppercase tracking-widest font-[700]">
+          <span id="footOpenDot" class="w-2 h-2 rounded-full bg-[#4ADE80]"></span>
+          <span id="footOpenText">Checking hours...</span>
+        </div>
+      </div>
+
+      <!-- Hours -->
+      <div class="md:col-span-3">
+        <div class="mono text-[10px] tracking-[0.22em] uppercase opacity-50 mb-4">Court Hours</div>
+        <ul id="footHours" class="space-y-2.5 mono text-[12px]"></ul>
+      </div>
+
+      <!-- Contact -->
+      <div class="md:col-span-4">
+        <div class="mono text-[10px] tracking-[0.22em] uppercase opacity-50 mb-4">Contact</div>
+        <ul id="footContact" class="space-y-2.5 text-[13px]"></ul>
+        <div id="footSocials" class="mt-5 flex gap-2"></div>
+      </div>
+    </div>
+
+    <div class="mt-10 pt-6 border-t border-white/10 flex flex-col md:flex-row items-center justify-between gap-3">
+      <div class="mono text-[10px] opacity-45">© <span id="footYear"></span> <span id="footCopyName">White Kitchen Pickleball</span>. All rights reserved.</div>
+      <div class="mono text-[10px] opacity-45">Reservations held Pending until payment verified.</div>
+    </div>
+  </div>
+</footer>
+
 <!-- Admin PIN Modal -->
 <div id="adminLoginModal" class="fixed inset-0 z-50 hidden">
   <div class="absolute inset-0 bg-[#201C19]/60 backdrop-blur-[6px]" id="adminModalBackdrop"></div>
-  <div class="relative min-h-[100dvh] grid place-items-center p-4">
-    <div class="w-full max-w-[420px] rounded-[28px] bg-white border border-[#EAE0D5] shadow-[0_20px_60px_rgba(32,28,25,0.25)] overflow-hidden p-6 md:p-8">
+  <div class="absolute inset-0 overflow-y-auto overscroll-contain flex items-start justify-center p-4">
+    <div class="w-full max-w-[420px] rounded-[28px] bg-white border border-[#EAE0D5] shadow-[0_20px_60px_rgba(32,28,25,0.25)] overflow-hidden p-5 md:p-8 my-4">
       <div class="flex items-center justify-between">
         <div class="w-10 h-10 rounded-full bg-[#201C19] text-[#D6FF5F] grid place-items-center font-black text-[14px]">WK</div>
         <button id="closeAdminModalBtn" class="w-9 h-9 rounded-full bg-[#F1E9DF] grid place-items-center text-[14px] hover:bg-[#E5DDD4] transition">✕</button>
@@ -861,28 +928,33 @@
 <!-- Confirmation Modal -->
 <div id="confirmModal" class="fixed inset-0 z-50 hidden">
   <div class="absolute inset-0 bg-[#201C19]/60 backdrop-blur-[6px]" id="confirmBackdrop"></div>
-  <div class="relative min-h-[100dvh] grid place-items-center p-4">
-    <div class="w-full max-w-[520px] rounded-[28px] bg-white border border-[#EAE0D5] shadow-[0_20px_60px_rgba(32,28,25,0.22)] overflow-hidden">
-      <div class="px-7 pt-7 pb-5 flex items-start justify-between gap-4">
-        <div>
-          <div class="inline-flex items-center gap-2 px-3 h-7 rounded-full bg-[#D6FF5F] border border-[#201C19]/10 mono text-[11px] font-[700]">Pending — Awaiting Verification</div>
-          <h3 class="mt-3 text-[22px] font-[800] tracking-[-0.02em] leading-[1.05]">Reservation submitted!</h3>
-          <p class="mono text-[12px] opacity-60 mt-2 leading-[1.5]">Pay externally via QR on Payment tab. Admin will tag as Reserved after verification.</p>
+  <div class="absolute inset-0 overflow-y-auto overscroll-contain p-4">
+    <div class="w-full max-w-[520px] mx-auto rounded-[28px] bg-white border border-[#EAE0D5] shadow-[0_20px_60px_rgba(32,28,25,0.22)] overflow-hidden my-4">
+
+      <!-- Header + Action Buttons at TOP (always visible on mobile) -->
+      <div class="px-5 md:px-7 pt-5 md:pt-7 pb-4 flex items-start justify-between gap-3">
+        <div class="min-w-0">
+          <div class="inline-flex items-center gap-2 px-3 h-7 rounded-full bg-[#D6FF5F] border border-[#201C19]/10 mono text-[10px] md:text-[11px] font-[700]">Pending — Awaiting Verification</div>
+          <h3 class="mt-2 text-[20px] md:text-[22px] font-[800] tracking-[-0.02em] leading-[1.05]">Reservation submitted!</h3>
+          <p class="mono text-[11px] md:text-[12px] opacity-60 mt-1.5 leading-[1.4]">Pay externally via QR on Payment tab. Admin will tag as Reserved after verification.</p>
         </div>
-        <button id="closeModalBtn" class="w-9 h-9 rounded-full bg-[#F1E9DF] grid place-items-center">✕</button>
+        <button id="closeModalBtn" class="w-9 h-9 rounded-full bg-[#F1E9DF] grid place-items-center shrink-0 text-[14px] hover:bg-[#E5DDD4] transition cursor-pointer">✕</button>
       </div>
 
-      <div class="px-7 pb-2">
-        <div class="rounded-[16px] bg-[#FFFBF5] border border-[#F1E9DF] p-4">
+      <!-- Action Buttons — placed BEFORE email preview so they're always reachable -->
+      <div class="px-5 md:px-7 pb-4 flex gap-2">
+        <button id="modalGoPayment" class="flex-1 h-11 md:h-12 rounded-full bg-[#201C19] text-white font-[700] text-[12px] md:text-[13px] cursor-pointer active:scale-[0.98] transition">Go to Payment Info</button>
+        <button id="modalGoBookings" class="flex-1 h-11 md:h-12 rounded-full bg-[#F1E9DF] border border-[#E9DDD0] font-[700] text-[12px] md:text-[13px] cursor-pointer active:scale-[0.98] transition">View Bookings</button>
+      </div>
+
+      <!-- Email Preview — scrollable content below -->
+      <div class="px-5 md:px-7 pb-5 md:pb-7">
+        <div class="rounded-[16px] bg-[#FFFBF5] border border-[#F1E9DF] p-4 max-h-[50vh] overflow-y-auto">
           <div class="mono text-[10px] tracking-widest uppercase opacity-60">Email Confirmation Preview</div>
-          <div id="emailPreview" class="mt-3 mono text-[12px] leading-[1.6] whitespace-pre-wrap"></div>
+          <div id="emailPreview" class="mt-3 mono text-[11px] md:text-[12px] leading-[1.6] whitespace-pre-wrap break-words"></div>
         </div>
       </div>
 
-      <div class="p-4 px-7 pb-7 flex gap-2">
-        <button id="modalGoPayment" class="flex-1 h-12 rounded-full bg-[#201C19] text-white font-[700] text-[13px]">Go to Payment Info</button>
-        <button id="modalGoBookings" class="flex-1 h-12 rounded-full bg-[#F1E9DF] border border-[#E9DDD0] font-[700] text-[13px]">View Bookings</button>
-      </div>
     </div>
   </div>
 </div>
@@ -895,6 +967,193 @@
 </div>
 
 <script>
+/* ================================================================
+   CLIENT WHITE-LABEL LAYER
+   Reads client-config.js and applies branding, theme, hours,
+   rates, staff rules, and contact info across the entire app.
+   ================================================================ */
+const _cfgDefaults = {
+  business: { name:'WHITE KITCHEN', sub:'Pickleball Court • Single Court', tagline:'Reserve the court.\nOwn the rally.', location:'Single Court • Davao' },
+  contact: { address:'', phone:'', email:'', facebook:'', instagram:'' },
+  branding: { logoUrl:'', faviconUrl:'', monogram:'WK' },
+  theme: { primary:'#D6FF5F', primaryHover:'#CBF052', dark:'#201C19', bg:'#FFFBF5', border:'#EAE0D5', borderSoft:'#F1E9DF', staff:'#FF8A5B', openPlay:'#9B8EFF', queue:'#4ADE80', pending:'#FDBA74' },
+  currency: '₱',
+  rates: { hourly:300, queuePerHead:100 },
+  hours: { queueStart:7, queueEnd:12, bookingStart:13, close:22 },
+  staff: { days:[0,2,4,6], startHour:17, endHour:22, label:'STAFF' },
+  booking: { maxDaysAhead:60, maxHoursPerBooking:0 },
+};
+function _deepMerge(base, over){
+  const out = {...base};
+  for(const k in over){
+    if(over[k] && typeof over[k]==='object' && !Array.isArray(over[k]) && base[k]) out[k] = _deepMerge(base[k], over[k]);
+    else out[k] = over[k];
+  }
+  return out;
+}
+const CLIENT = _deepMerge(_cfgDefaults, window.CLIENT_CONFIG || {});
+
+/* ---------- Theme remap: override the Tailwind palette at runtime ---------- */
+(function applyTheme(){
+  const t = CLIENT.theme;
+  const esc = h => h.replace('#','\\#');
+  const rules = [];
+  const push = (cls, prop, val) => rules.push(`.${cls}{${prop}:${val} !important}`);
+  // Primary accent
+  push(`bg-\\[${esc(t.primary)}\\]`,'background-color',t.primary);
+  push(`text-\\[${esc(t.primary)}\\]`,'color',t.primary);
+  push(`border-\\[${esc(t.primary)}\\]`,'border-color',t.primary);
+  push(`hover\\:bg-\\[${esc(t.primaryHover)}\\]:hover`,'background-color',t.primaryHover);
+  push(`ring-\\[${esc(t.primary)}\\]`,'--tw-ring-color',t.primary);
+  // Dark
+  push(`bg-\\[${esc(t.dark)}\\]`,'background-color',t.dark);
+  push(`text-\\[${esc(t.dark)}\\]`,'color',t.dark);
+  push(`border-\\[${esc(t.dark)}\\]`,'border-color',t.dark);
+  // Page bg + borders
+  push(`bg-\\[${esc(t.bg)}\\]`,'background-color',t.bg);
+  push(`border-\\[${esc(t.border)}\\]`,'border-color',t.border);
+  push(`border-\\[${esc(t.borderSoft)}\\]`,'border-color',t.borderSoft);
+  push(`divide-\\[${esc(t.borderSoft)}\\] > :not([hidden]) ~ :not([hidden])`,'border-color',t.borderSoft);
+  // Status colors
+  push(`bg-\\[${esc(t.staff)}\\]`,'background-color',t.staff);
+  push(`bg-\\[${esc(t.openPlay)}\\]`,'background-color',t.openPlay);
+  push(`bg-\\[${esc(t.queue)}\\]`,'background-color',t.queue);
+  push(`bg-\\[${esc(t.pending)}\\]`,'background-color',t.pending);
+  const st = document.createElement('style');
+  st.id = 'client-theme';
+  st.textContent = rules.join('\n');
+  document.head.appendChild(st);
+})();
+
+/* ---------- Helpers ---------- */
+function fmtMoney(n){ return CLIENT.currency + Number(n).toLocaleString('en-PH'); }
+function _hh12(h){ return fmtTime(h); }
+const SCHED = {
+  queueStart: CLIENT.hours.queueStart,
+  queueEnd:   CLIENT.hours.queueEnd,
+  bookStart:  CLIENT.hours.bookingStart,
+  close:      CLIENT.hours.close,
+};
+const STAFF_DAYS = CLIENT.staff.days;
+
+/* ---------- Branding / contact application ---------- */
+function applyBranding(){
+  const b = CLIENT.business, br = CLIENT.branding, c = CLIENT.contact;
+  document.title = `${titleCase(b.name)} — Pickleball Court Booking`;
+  if(br.faviconUrl){
+    let l = document.querySelector('link[rel="icon"]');
+    if(!l){ l = document.createElement('link'); l.rel='icon'; document.head.appendChild(l); }
+    l.href = br.faviconUrl;
+  }
+  const setText = (id,v)=>{ const el=document.getElementById(id); if(el) el.textContent=v; };
+  setText('brandName', b.name);
+  setText('brandSub', b.sub);
+  setText('footName', b.name);
+  setText('footSub', b.sub);
+  setText('footCopyName', titleCase(b.name)+' Pickleball');
+  setText('heroLocation', b.location);
+  const ht = document.getElementById('heroTitle');
+  if(ht && b.tagline) ht.innerHTML = escapeHtml(b.tagline).replace(/\n/g,'<br/>');
+  // Logo / monogram
+  const logoHtml = br.logoUrl
+    ? `<img src="${br.logoUrl}" alt="${escapeHtml(b.name)}" class="w-full h-full object-cover"/>`
+    : (br.monogram || b.name.slice(0,2).toUpperCase());
+  const bl = document.getElementById('brandLogo'); if(bl) bl.innerHTML = logoHtml;
+  const fl = document.getElementById('footLogo');  if(fl) fl.innerHTML = br.logoUrl ? logoHtml : (br.monogram || b.name.slice(0,2).toUpperCase());
+  // Rates + hours labels
+  setText('chipHourly', `${fmtMoney(CLIENT.rates.hourly)} / hour • ${_hh12(SCHED.bookStart)}–${_hh12(SCHED.close)}`);
+  setText('chipQueue', `${fmtMoney(CLIENT.rates.queuePerHead)} / head • ${_hh12(SCHED.queueStart)}–${_hh12(SCHED.queueEnd)} Queue`);
+  setText('payRateHourly', `${fmtMoney(CLIENT.rates.hourly)} / hour`);
+  setText('payRateHourlyLabel', `Reservation (${_hh12(SCHED.bookStart)}–${_hh12(SCHED.close)})`);
+  setText('payRateQueue', `${fmtMoney(CLIENT.rates.queuePerHead)} / head`);
+  setText('payRateQueueLabel', `Morning Queue (${_hh12(SCHED.queueStart)}–${_hh12(SCHED.queueEnd)})`);
+  // Staff chip + schedule footnote
+  setText('heroStaffChip', `${CLIENT.staff.label} ${_hh12(CLIENT.staff.startHour).replace(':00 ','')}–${_hh12(CLIENT.staff.endHour).replace(':00 ','')}`);
+  const sfn = document.getElementById('scheduleFootNote');
+  if(sfn){
+    const dayNames = STAFF_DAYS.map(d=>['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d]).join('/');
+    sfn.innerHTML = `
+      <span>Morning ${_hh12(SCHED.queueStart)}–${_hh12(SCHED.queueEnd)} = Walk-in queue unless admin unlocks booking</span>
+      <span>•</span><span>Afternoon ${_hh12(SCHED.bookStart)}–${_hh12(SCHED.close)} = Hourly booking</span>
+      <span>•</span><span>${dayNames} ${_hh12(CLIENT.staff.startHour)}–${_hh12(CLIENT.staff.endHour)} = ${titleCase(CLIENT.staff.label)} reserved</span>`;
+  }
+  // Form total label + payment staff note
+  setText('totalRateLabel', `Total • ${fmtMoney(CLIENT.rates.hourly)} / hour`);
+  const psn = document.getElementById('payStaffNote');
+  if(psn){
+    const dn = STAFF_DAYS.map(d=>['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d]).join(', ');
+    psn.innerHTML = `<b>${titleCase(CLIENT.staff.label)} reserved block:</b> ${dn} ${_hh12(CLIENT.staff.startHour)}–${_hh12(CLIENT.staff.endHour)} is blocked for ${titleCase(b.name)} staff play. Morning hours (${_hh12(SCHED.queueStart)}–${_hh12(SCHED.queueEnd)}) are walk-in queue (${fmtMoney(CLIENT.rates.queuePerHead)}/head, unlimited play) unless unlocked by admin.`;
+  }
+  buildContactUI();
+  buildFooterHours();
+  updateOpenBadge();
+  setInterval(updateOpenBadge, 60000);
+}
+function titleCase(s){ return s.toLowerCase().replace(/\b\w/g, m=>m.toUpperCase()); }
+
+/* ---------- Contact card + footer contact/socials ---------- */
+function buildContactUI(){
+  const c = CLIENT.contact;
+  const icon = (p)=>`<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;
+  const rows = [];
+  if(c.address)  rows.push({i:'<path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/>', t:c.address, h:null});
+  if(c.phone)    rows.push({i:'<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>', t:c.phone, h:'tel:'+c.phone.replace(/\s/g,'')});
+  if(c.email)    rows.push({i:'<rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 6L2 7"/>', t:c.email, h:'mailto:'+c.email});
+  const list = document.getElementById('contactList');
+  const card = document.getElementById('contactCard');
+  if(list && rows.length){
+    list.innerHTML = rows.map(r=>`
+      <li class="flex items-start gap-2.5 text-[13px] leading-snug">
+        <span class="w-7 h-7 rounded-full bg-[#FFFBF5] border border-[#EAE0D5] text-[#201C19] grid place-items-center shrink-0 mt-0.5">${icon(r.i)}</span>
+        <span class="opacity-80 ${r.h?'':'mono text-[12px]'}">${r.h?`<a href="${r.h}" class="hover:underline font-[600]">${escapeHtml(r.t)}</a>`:escapeHtml(r.t)}</span>
+      </li>`).join('');
+    if(card) card.classList.remove('hidden');
+  }
+  // Socials
+  const soc = [];
+  if(c.facebook)  soc.push({u:c.facebook, i:'<path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/>', label:'Facebook'});
+  if(c.instagram) soc.push({u:c.instagram, i:'<rect x="2" y="2" width="20" height="20" rx="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/>', label:'Instagram'});
+  const socialHtml = soc.map(s=>`
+    <a href="${s.u}" target="_blank" rel="noopener" aria-label="${s.label}" class="w-9 h-9 rounded-full border border-white/15 bg-white/5 hover:bg-[#D6FF5F] hover:text-[#201C19] hover:border-[#D6FF5F] grid place-items-center transition">${icon(s.i)}</a>`).join('');
+  const fs = document.getElementById('footSocials'); if(fs) fs.innerHTML = socialHtml;
+  // Footer contact mirrors card rows
+  const fc = document.getElementById('footContact');
+  if(fc) fc.innerHTML = rows.length ? rows.map(r=>`
+    <li class="flex items-center gap-2.5 opacity-75">
+      <span class="text-[#D6FF5F]">${icon(r.i)}</span>
+      ${r.h?`<a href="${r.h}" class="hover:text-[#D6FF5F] transition">${escapeHtml(r.t)}</a>`:`<span>${escapeHtml(r.t)}</span>`}
+    </li>`).join('') : `<li class="mono text-[11px] opacity-50">Contact details available at the court.</li>`;
+  const fy = document.getElementById('footYear'); if(fy) fy.textContent = new Date().getFullYear();
+}
+
+/* ---------- Footer hours + live open/closed badge ---------- */
+function buildFooterHours(){
+  const el = document.getElementById('footHours');
+  if(!el) return;
+  const dayNames = STAFF_DAYS.map(d=>['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d]);
+  el.innerHTML = `
+    <li class="flex justify-between gap-3"><span class="opacity-60">Queue / Walk-in</span><span class="font-[700]">${_hh12(SCHED.queueStart)}–${_hh12(SCHED.queueEnd)}</span></li>
+    <li class="flex justify-between gap-3"><span class="opacity-60">Reservations</span><span class="font-[700]">${_hh12(SCHED.bookStart)}–${_hh12(SCHED.close)}</span></li>
+    <li class="flex justify-between gap-3 text-[#FF8A5B]"><span class="opacity-80">${CLIENT.staff.label} (${dayNames.join(' ')})</span><span class="font-[700]">${_hh12(CLIENT.staff.startHour)}–${_hh12(CLIENT.staff.endHour)}</span></li>`;
+}
+function updateOpenBadge(){
+  const dot = document.getElementById('footOpenDot');
+  const txt = document.getElementById('footOpenText');
+  if(!dot || !txt) return;
+  const now = new Date(), h = now.getHours() + now.getMinutes()/60;
+  const open = (h >= SCHED.queueStart && h < SCHED.queueEnd) || (h >= SCHED.bookStart && h < SCHED.close);
+  if(open){
+    dot.style.background = CLIENT.theme.queue;
+    dot.classList.add('animate-pulse');
+    txt.textContent = 'Court Open Now';
+  } else {
+    dot.style.background = '#F87171';
+    dot.classList.remove('animate-pulse');
+    const next = h < SCHED.queueStart ? SCHED.queueStart : SCHED.bookStart;
+    txt.textContent = `Closed • Opens ${_hh12(next)}`;
+  }
+}
+
 /* ================================================================
    FIREBASE INIT + FIRESTORE DATA LAYER
    All data syncs globally across all devices in real-time.
@@ -944,10 +1203,10 @@ function fbLoadCache(lsKey, fallback) {
 }
 
 /* ---------- Constants ---------- */
-const STAFF_DAYS = [0,2,4,6]; // Sun, Tue, Thu, Sat
+/* Hours derived from client config (booking slots always 1h) */
 const HOURS = {
-  morning: [7,8,9,10,11],
-  afternoon: [13,14,15,16,17,18,19,20,21]
+  morning:   Array.from({length: Math.max(0, SCHED.queueEnd - SCHED.queueStart)}, (_,i)=> SCHED.queueStart + i),
+  afternoon: Array.from({length: Math.max(0, SCHED.close - SCHED.bookStart)}, (_,i)=> SCHED.bookStart + i)
 };
 const ALL_HOURS_START = [...HOURS.morning, ...HOURS.afternoon];
 
@@ -1447,11 +1706,11 @@ function renderSchedule(){
     } else {
       // open
       if(slot.type==='morning' && !morningEnabled[slot.s]){
-        statusChip=`<span class="inline-flex items-center gap-1.5 px-2.5 h-7 rounded-full bg-[#E8F5D8] border border-[#CFE8B5] mono text-[11px] font-[700]">QUEUE — WALK-IN • ₱100/head</span>`;
+        statusChip=`<span class="inline-flex items-center gap-1.5 px-2.5 h-7 rounded-full bg-[#E8F5D8] border border-[#CFE8B5] mono text-[11px] font-[700]">QUEUE — WALK-IN • ${fmtMoney(CLIENT.rates.queuePerHead)}/head</span>`;
         leftDot=`<span class="w-2 h-2 rounded-full bg-[#4ADE80]"></span>`;
         actionHtml=`<span class="mono text-[11px] opacity-60 px-3 h-8 grid place-items-center rounded-full bg-[#FFFBF5] border border-[#E9DDD0]">Unlimited play all day</span>`;
       } else {
-        statusChip=`<span class="inline-flex items-center gap-1.5 px-2.5 h-7 rounded-full bg-[#D6FF5F] border border-[#201C19]/10 mono text-[11px] font-[800]">OPEN • ₱300/hr</span>`;
+        statusChip=`<span class="inline-flex items-center gap-1.5 px-2.5 h-7 rounded-full bg-[#D6FF5F] border border-[#201C19]/10 mono text-[11px] font-[800]">OPEN • ${fmtMoney(CLIENT.rates.hourly)}/hr</span>`;
         leftDot=`<span class="w-2 h-2 rounded-full bg-[#4ADE80]"></span>`;
         actionHtml=`<button data-book="${slot.s}" class="book-now-btn h-8 px-4 rounded-full bg-[#201C19] text-white mono text-[11px] font-[700] hover:opacity-90 active:scale-[0.97] transition">Book Now →</button>`;
       }
@@ -1566,7 +1825,8 @@ function renderCalendar(){
     const iso = new Date(y,m,d,12).toISOString().slice(0,10);
     const btn = document.createElement('button');
     btn.type='button';
-    const isPast = iso < today;
+    const _maxDate = new Date(); _maxDate.setDate(_maxDate.getDate() + (CLIENT.booking.maxDaysAhead || 60));
+    const isPast = iso < today || new Date(iso+'T12:00:00') > _maxDate;
     const isToday = iso===today;
     const isSelected = iso===selectedDate;
     btn.className = `cal-day h-9 rounded-full mono text-[13px] font-[600] grid place-items-center border transition
@@ -1651,34 +1911,34 @@ function populateTimeOptions(){
   }
 }
 
+function _gapLength(){ return Math.max(0, SCHED.bookStart - SCHED.queueEnd); }
+function _crossesGap(s,e){ return _gapLength()>0 && s < SCHED.bookStart && e > SCHED.queueEnd; }
+
 function recalcTotal(){
   const s = parseInt(document.getElementById('fStart').value,10);
   const e = parseInt(document.getElementById('fEnd').value,10);
   const totalLine = document.getElementById('totalLine');
   const totalAmount = document.getElementById('totalAmount');
   const hint = document.getElementById('totalHint');
+  const rate = CLIENT.rates.hourly;
   if(isNaN(s)||isNaN(e)|| e<=s){
     totalLine.textContent='Invalid range';
-    totalAmount.textContent='₱0';
+    totalAmount.textContent=fmtMoney(0);
     hint.textContent='End must be after start';
     return {valid:false};
   }
   const hrs = e - s;
-  // handle lunch gap? If booking crosses 12-13 (e.g., 11 to 14) that would include a non-existing hour 12-13. Should disallow or count as 2 hours? Safer disallow crossing noon.
-  if(s<12 && e>12 && s<13 && e>13){
-    // crosses 12-13 break
-    // check if it includes 12-13: if s<=12 and e>=13
-    if(s<=12 && e>=13){
-      totalLine.textContent=`${to12Range(s,e)} • ${hrs-1}h billable + 1h break`;
-      totalAmount.textContent=`₱${(hrs-1)*300}`;
-      hint.textContent='Note: 12PM–1PM is break (not counted). We bill only open hours.';
-      return {valid:false, reason:'crosses noon break', hrs:hrs-1, amount:(hrs-1)*300};
-    }
+  if(_crossesGap(s,e)){
+    const gap = _gapLength();
+    totalLine.textContent=`${to12Range(s,e)} • ${hrs-gap}h billable + ${gap}h break`;
+    totalAmount.textContent=fmtMoney((hrs-gap)*rate);
+    hint.textContent=`Note: ${_hh12(SCHED.queueEnd)}–${_hh12(SCHED.bookStart)} is break (not counted). We bill only open hours.`;
+    return {valid:false, reason:'crosses break', hrs:hrs-gap, amount:(hrs-gap)*rate};
   }
   totalLine.textContent=`${to12Range(s,e)} • ${hrs} hour${hrs>1?'s':''}`;
-  totalAmount.textContent=`₱${hrs*300}`;
-  hint.textContent = s<12 ? 'Morning queue unlocked by admin' : 'Afternoon reservation';
-  return {valid:true, hrs, amount:hrs*300};
+  totalAmount.textContent=fmtMoney(hrs*rate);
+  hint.textContent = s < SCHED.bookStart ? 'Morning queue unlocked by admin' : 'Afternoon reservation';
+  return {valid:true, hrs, amount:hrs*rate};
 }
 
 function validateForm(){
@@ -1689,13 +1949,16 @@ function validateForm(){
   const date = selectedDate;
   if(!date) return false;
   if(e<=s){ showFormError('End time must be after start.'); return false; }
-  // Check noon crossing
-  if(s<12 && e>13){ showFormError('Reservation cannot cross 12PM–1PM break. Split into morning and afternoon bookings.'); return false; }
-  if(s===12){ showFormError('12PM–1PM is break / not bookable.'); return false; }
+  if(CLIENT.booking.maxHoursPerBooking > 0 && (e-s) > CLIENT.booking.maxHoursPerBooking){
+    showFormError(`Maximum ${CLIENT.booking.maxHoursPerBooking} hour(s) per booking.`); return false;
+  }
+  // Check break crossing
+  if(_crossesGap(s,e)){ showFormError(`Reservation cannot cross the ${_hh12(SCHED.queueEnd)}–${_hh12(SCHED.bookStart)} break. Split into two bookings.`); return false; }
+  if(s >= SCHED.queueEnd && s < SCHED.bookStart){ showFormError(`${_hh12(SCHED.queueEnd)}–${_hh12(SCHED.bookStart)} is break / not bookable.`); return false; }
   // Check overlap
   const overlap = hasOverlap(date,s,e);
   if(overlap){
-    if(overlap.type==='staff') showFormError('That slot is Staff-reserved (Tue/Thu/Sat/Sun 5PM–10PM). Choose another time.');
+    if(overlap.type==='staff') showFormError(`That slot is ${titleCase(CLIENT.staff.label)}-reserved (${_hh12(CLIENT.staff.startHour)}–${_hh12(CLIENT.staff.endHour)}). Choose another time.`);
     else if(overlap.type==='openplay') showFormError(`Overlaps with Open Play block (${to12Range(overlap.data.start, overlap.data.end)}).`);
     else showFormError(`Overlaps with existing booking: ${escapeHtml(overlap.data.name)} (${to12Range(overlap.data.start, overlap.data.end)}) — ${overlap.data.status}`);
     return false;
@@ -1741,10 +2004,11 @@ document.getElementById('reserveForm').addEventListener('submit', (ev)=>{
   renderAdminBookings();
 
   // show confirmation modal with email preview
-  const hrs = e - s - (s<12 && e>12 ? 1 : 0);
-  const amount = hrs*300;
+  const hrs = e - s - (_crossesGap(s,e) ? _gapLength() : 0);
+  const amount = hrs * CLIENT.rates.hourly;
+  const bizName = titleCase(CLIENT.business.name);
   const preview = `To: ${email}
-Subject: White Kitchen Pickleball — Reservation ${newBooking.status} for ${fmtDateLabel(selectedDate)}
+Subject: ${bizName} Pickleball — Reservation ${newBooking.status} for ${fmtDateLabel(selectedDate)}
 
 Hi ${name},
 
@@ -1752,7 +2016,7 @@ Your reservation is received and is now PENDING verification:
 
 📅 Date: ${fmtDateLabel(selectedDate)}
 🕖 Time: ${to12Range(s,e)} (${hrs} hour${hrs>1?'s':''})
-💰 Total: ₱${amount} @ ₱300/hour
+💰 Total: ${fmtMoney(amount)} @ ${fmtMoney(CLIENT.rates.hourly)}/hour
 👥 Group: ${group || '—'}
 Status: Pending — awaiting payment verification
 
@@ -1763,8 +2027,8 @@ Next steps:
 
 If you booked morning hours, note: morning is queue by default unless admin unlocked it. Your booking is in the system as requested.
 
-See you at White Kitchen Pickleball Court!
-— White Kitchen Team
+See you at ${bizName} Pickleball Court!
+— ${bizName} Team
 `;
   document.getElementById('emailPreview').textContent = preview;
   document.getElementById('confirmModal').classList.remove('hidden');
@@ -1826,7 +2090,7 @@ function renderBookingsList(){
         ${chip}
       </div>
       <div class="flex items-center gap-2 md:ml-auto">
-        <span class="mono text-[11px] px-3 h-7 rounded-full bg-white border border-[#EAE0D5] grid place-items-center">₱${(b.end-b.start)*300}</span>
+        <span class="mono text-[11px] px-3 h-7 rounded-full bg-white border border-[#EAE0D5] grid place-items-center">${fmtMoney((b.end-b.start)*CLIENT.rates.hourly)}</span>
       </div>
     `;
     list.appendChild(row);
@@ -2302,8 +2566,8 @@ document.getElementById('openPlayForm').addEventListener('submit', e=>{
   err.classList.add('hidden');
   if(!date){ err.textContent='Select date'; err.classList.remove('hidden'); return; }
   if(end<=start){ err.textContent='End must be after start'; err.classList.remove('hidden'); return; }
-  if(start===12){ err.textContent='12PM break not allowed'; err.classList.remove('hidden'); return; }
-  if(start<12 && end>13){ err.textContent='Cannot cross 12PM–1PM break'; err.classList.remove('hidden'); return; }
+  if(start >= SCHED.queueEnd && start < SCHED.bookStart){ err.textContent=`${_hh12(SCHED.queueEnd)} break not allowed`; err.classList.remove('hidden'); return; }
+  if(_crossesGap(start,end)){ err.textContent=`Cannot cross ${_hh12(SCHED.queueEnd)}–${_hh12(SCHED.bookStart)} break`; err.classList.remove('hidden'); return; }
   const overlap = hasOverlap(date,start,end);
   if(overlap){
     err.textContent=`Overlaps with ${overlap.type}: ${overlap.data? to12Range(overlap.data.start,overlap.data.end):''}`;
@@ -2412,92 +2676,6 @@ function seedQueueSessionIfEmpty() {
 }
 seedQueueSessionIfEmpty();
 
-function queueRuleLabel(rule){
-  return ({
-    winner_stays: 'Winner Stays',
-    four_off_four_on: 'Four Off, Four On',
-    fixed_rotation: 'Fixed Rotation',
-    timed_rotation: 'Timed Rotation',
-    partner_rotation: 'Partner Rotation',
-    fixed_order: 'Fixed Rotation'
-  })[rule] || 'Fixed Rotation';
-}
-
-function queueRuleDescription(rule){
-  return ({
-    winner_stays: 'Winners remain on court; losers rejoin the queue.',
-    four_off_four_on: 'All players rotate off after each game.',
-    fixed_rotation: 'Players follow a predetermined order regardless of results.',
-    timed_rotation: 'Players rotate after a set time limit instead of relying only on game end.',
-    partner_rotation: 'Partners change each game according to the queue order.',
-    fixed_order: 'Players follow a predetermined order regardless of results.'
-  })[rule] || 'Players follow a predetermined order regardless of results.';
-}
-
-function getTeamSize(session){
-  return session.mode === 'doubles' ? 2 : 1;
-}
-
-function pushWaiting(session, names, paired=true){
-  if(!names || names.length===0) return;
-  if(paired){
-    session.waiting.push({ id: 'w_' + Date.now() + Math.random().toString(36).slice(2,7), names: [...names] });
-  } else {
-    names.forEach(n => session.waiting.push({ id: 'w_' + Date.now() + Math.random().toString(36).slice(2,7), names: [n] }));
-  }
-}
-
-function startTimedRotationIfNeeded(session){
-  if(session.rule !== 'timed_rotation' || !session.activeMatch) return;
-  if(!session.timeLimitMinutes) session.timeLimitMinutes = 15;
-  if(!session.timerEndAt || session.timerEndAt < Date.now()){
-    session.timerEndAt = Date.now() + (session.timeLimitMinutes * 60 * 1000);
-  }
-}
-
-function updateTimedRuleInputs(){
-  const rule = document.getElementById('qRule')?.value;
-  const wrap = document.getElementById('qTimedMinutesWrap');
-  if(wrap) wrap.classList.toggle('hidden', rule !== 'timed_rotation');
-}
-
-document.getElementById('qRule')?.addEventListener('change', updateTimedRuleInputs);
-updateTimedRuleInputs();
-
-let queueTimerInterval;
-function renderQueueTimer(session){
-  const box = document.getElementById('queueTimerBox');
-  const label = document.getElementById('queueTimerLabel');
-  if(!box || !label) return;
-  clearInterval(queueTimerInterval);
-  if(!session || session.rule !== 'timed_rotation' || !session.activeMatch){
-    box.classList.add('hidden');
-    return;
-  }
-  box.classList.remove('hidden');
-  const tick = () => {
-    const remaining = Math.max(0, (session.timerEndAt || Date.now()) - Date.now());
-    const mins = Math.floor(remaining / 60000);
-    const secs = Math.floor((remaining % 60000) / 1000);
-    label.textContent = `${String(mins).padStart(2,'0')}:${String(secs).padStart(2,'0')}`;
-    label.classList.toggle('text-[#FF8A5B]', remaining === 0);
-    label.classList.toggle('text-[#D6FF5F]', remaining > 0);
-  };
-  tick();
-  queueTimerInterval = setInterval(tick, 1000);
-}
-
-document.getElementById('queueTimerRestartBtn')?.addEventListener('click', () => {
-  if(!selectedQueueSessionId) return;
-  const sessions = loadQueues();
-  const session = sessions.find(s => s.id === selectedQueueSessionId);
-  if(!session || session.rule !== 'timed_rotation') return;
-  session.timerEndAt = Date.now() + ((session.timeLimitMinutes || 15) * 60 * 1000);
-  saveQueues(sessions);
-  renderActiveQueueDashboard();
-  toast('Timed rotation restarted');
-});
-
 function renderQueueModule() {
   const sessions = loadQueues();
   const countBadge = document.getElementById('activeQueueCountBadge');
@@ -2529,7 +2707,7 @@ function renderQueueModule() {
             <div class="font-[800] text-[14px] leading-tight truncate">${escapeHtml(s.name)}</div>
             <div class="flex items-center gap-1.5 mt-1.5 flex-wrap">
               <span class="mono text-[9px] px-2 py-0.5 rounded-full ${isSelected ? 'bg-white/10 text-[#D6FF5F]' : 'bg-[#201C19]/5 text-[#201C19]'} font-[800] uppercase">${s.mode}</span>
-              <span class="mono text-[9px] px-2 py-0.5 rounded-full ${isSelected ? 'bg-white/10 text-white/75' : 'bg-[#F1E9DF] text-[#201C19]/70'}">${queueRuleLabel(s.rule)}</span>
+              <span class="mono text-[9px] px-2 py-0.5 rounded-full ${isSelected ? 'bg-white/10 text-white/75' : 'bg-[#F1E9DF] text-[#201C19]/70'}">${s.rule === 'winner_stays' ? 'Winner Stays' : 'Fixed Order'}</span>
             </div>
           </div>
           <div class="text-right shrink-0">
@@ -2553,6 +2731,158 @@ function renderQueueModule() {
 function selectQueueSession(id) {
   selectedQueueSessionId = id;
   renderQueueModule();
+}
+
+/* ---------- Live Timer & Buzzer for Timed Rotations ---------- */
+let activeTimerInterval = null;
+let activeTimerSessionId = null;
+
+function playTimerBuzzer() {
+  try {
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContext) return;
+    const ctx = new AudioContext();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(180, ctx.currentTime); // deep sports buzzer
+    osc.frequency.exponentialRampToValueAtTime(100, ctx.currentTime + 1.2);
+    
+    gain.gain.setValueAtTime(0.3, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 1.2);
+    
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + 1.2);
+  } catch(e) {
+    console.warn('[WK] Audio buzzer failed:', e);
+  }
+}
+
+function stopActiveTimer() {
+  if (activeTimerInterval) {
+    clearInterval(activeTimerInterval);
+    activeTimerInterval = null;
+  }
+  activeTimerSessionId = null;
+}
+
+function initDashboardTimer(session) {
+  const display = document.getElementById('qTimerDisplay');
+  const toggleBtn = document.getElementById('qTimerToggleBtn');
+  const resetBtn = document.getElementById('qTimerResetBtn');
+  const limitSelect = document.getElementById('qTimerLimitSelect');
+  const finishedLabel = document.getElementById('qTimerFinishedLabel');
+
+  if (!display || !toggleBtn || !resetBtn || !limitSelect || !finishedLabel) return;
+
+  if (session.timerSecondsLeft === undefined) session.timerSecondsLeft = 600;
+  if (session.timerLimit === undefined) session.timerLimit = 10;
+  if (session.timerRunning === undefined) session.timerRunning = false;
+
+  limitSelect.value = String(session.timerLimit);
+
+  if (activeTimerSessionId !== session.id) {
+    stopActiveTimer();
+  }
+  activeTimerSessionId = session.id;
+
+  function updateDisplay() {
+    const mins = Math.floor(session.timerSecondsLeft / 60);
+    const secs = session.timerSecondsLeft % 60;
+    display.textContent = `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+    
+    if (session.timerSecondsLeft <= 0) {
+      finishedLabel.classList.remove('hidden');
+      display.classList.add('text-red-400');
+      display.classList.remove('text-[#D6FF5F]');
+      toggleBtn.textContent = 'Start';
+      session.timerRunning = false;
+      stopActiveTimer();
+    } else {
+      finishedLabel.classList.add('hidden');
+      display.classList.remove('text-red-400');
+      display.classList.add('text-[#D6FF5F]');
+    }
+  }
+
+  updateDisplay();
+
+  resetBtn.onclick = () => {
+    session.timerSecondsLeft = session.timerLimit * 60;
+    session.timerRunning = false;
+    stopActiveTimer();
+    updateDisplay();
+    const currentQueues = loadQueues();
+    saveQueues(currentQueues.map(q => q.id === session.id ? session : q));
+    toast('Timer reset');
+  };
+
+  toggleBtn.onclick = () => {
+    const currentQueues = loadQueues();
+    if (session.timerRunning) {
+      session.timerRunning = false;
+      stopActiveTimer();
+      toggleBtn.textContent = 'Start';
+      saveQueues(currentQueues.map(q => q.id === session.id ? session : q));
+    } else {
+      if (session.timerSecondsLeft <= 0) {
+        session.timerSecondsLeft = session.timerLimit * 60;
+      }
+      session.timerRunning = true;
+      toggleBtn.textContent = 'Pause';
+      saveQueues(currentQueues.map(q => q.id === session.id ? session : q));
+      
+      stopActiveTimer();
+      activeTimerSessionId = session.id;
+      activeTimerInterval = setInterval(() => {
+        if (session.timerSecondsLeft > 0) {
+          session.timerSecondsLeft--;
+          updateDisplay();
+          if (session.timerSecondsLeft <= 0) {
+            playTimerBuzzer();
+            toast("Time's Up! Enter score to rotate.");
+            const qList = loadQueues();
+            saveQueues(qList.map(q => q.id === session.id ? session : q));
+          }
+        }
+      }, 1000);
+    }
+  };
+
+  limitSelect.onchange = () => {
+    const mins = parseInt(limitSelect.value, 10);
+    session.timerLimit = mins;
+    session.timerSecondsLeft = mins * 60;
+    session.timerRunning = false;
+    stopActiveTimer();
+    toggleBtn.textContent = 'Start';
+    updateDisplay();
+    const currentQueues = loadQueues();
+    saveQueues(currentQueues.map(q => q.id === session.id ? session : q));
+  };
+
+  if (session.timerRunning) {
+    toggleBtn.textContent = 'Pause';
+    if (!activeTimerInterval) {
+      activeTimerInterval = setInterval(() => {
+        if (session.timerSecondsLeft > 0) {
+          session.timerSecondsLeft--;
+          updateDisplay();
+          if (session.timerSecondsLeft <= 0) {
+            playTimerBuzzer();
+            toast("Time's Up! Enter score to rotate.");
+            const qList = loadQueues();
+            saveQueues(qList.map(q => q.id === session.id ? session : q));
+          }
+        }
+      }, 1000);
+    }
+  } else {
+    toggleBtn.textContent = 'Start';
+  }
 }
 
 function renderActiveQueueDashboard() {
@@ -2583,17 +2913,35 @@ function renderActiveQueueDashboard() {
   const modeBadge = document.getElementById('dashboardSessionModeBadge');
   const ruleEl = document.getElementById('dashboardSessionRule');
   const matchNumEl = document.getElementById('dashboardMatchNum');
-  const ruleHintEl = document.getElementById('queueRuleHint');
 
   if (nameEl) nameEl.textContent = session.name;
   if (modeBadge) {
     modeBadge.textContent = session.mode === 'doubles' ? 'DOUBLES MATCH' : 'SINGLES MATCH';
     modeBadge.className = `mono text-[10px] px-2.5 py-0.5 rounded-full font-[800] uppercase ${session.mode === 'doubles' ? 'bg-[#D6FF5F] text-[#201C19]' : 'bg-[#EDE8FF] text-[#3B2A9E]'}`;
   }
-  if (ruleEl) ruleEl.textContent = queueRuleLabel(session.rule);
-  if (ruleHintEl) ruleHintEl.textContent = queueRuleDescription(session.rule);
+  if (ruleEl) {
+    const rulesLabels = {
+      winner_stays: 'Winner Stays',
+      four_off_four_on: 'Four Off, Four On',
+      fixed_rotation: 'Fixed Rotation',
+      timed_rotation: 'Timed Rotation',
+      partner_rotation: 'Partner Rotation'
+    };
+    ruleEl.textContent = rulesLabels[session.rule] || 'Winner Stays';
+  }
   if (matchNumEl) matchNumEl.textContent = `Match #${session.matches.length + 1}`;
-  renderQueueTimer(session);
+
+  // Timed Rotation Widget toggle
+  const timerWrapper = document.getElementById('qTimerWrapper');
+  if (timerWrapper) {
+    if (session.rule === 'timed_rotation') {
+      timerWrapper.classList.remove('hidden');
+      initDashboardTimer(session);
+    } else {
+      timerWrapper.classList.add('hidden');
+      stopActiveTimer();
+    }
+  }
 
   // Hide or Show Partner name field based on game mode
   const jPlayer2Wrapper = document.getElementById('jPlayer2Wrapper');
@@ -2732,10 +3080,68 @@ function renderActiveQueueDashboard() {
 function checkAndFillActiveMatch(session) {
   if (session.activeMatch) return; // already running
 
-  const countNeeded = session.mode === 'doubles' ? 4 : 2;
+  const isDoubles = session.mode === 'doubles';
+  const countNeeded = isDoubles ? 4 : 2;
   
-  // Count flat number of players available
+  // Flat helper to count waiting players
   let totalWaitingAvailable = session.waiting.reduce((sum, w) => sum + w.names.length, 0);
+
+  // PARTNER ROTATION logic (Doubles only)
+  if (session.rule === 'partner_rotation' && isDoubles) {
+    if (totalWaitingAvailable >= 4) {
+      // Pull exactly 4 players as individual names
+      const players = [];
+      while (players.length < 4 && session.waiting.length > 0) {
+        const nextGroup = session.waiting[0];
+        const take = Math.min(4 - players.length, nextGroup.names.length);
+        players.push(...nextGroup.names.slice(0, take));
+        if (take === nextGroup.names.length) {
+          session.waiting.shift();
+        } else {
+          nextGroup.names = nextGroup.names.slice(take);
+        }
+      }
+
+      session.partnerRotationState = {
+        players: players, // [P1, P2, P3, P4]
+        round: 1 // We have 3 rounds total
+      };
+
+      session.activeMatch = {
+        id: 'match_' + Date.now() + '_pr1',
+        teamA: [players[0], players[1]],
+        teamB: [players[2], players[3]]
+      };
+    }
+    return;
+  }
+
+  // FIXED ROTATION (strict individual FIFO sequence, breaks pairs to rotate everyone equally)
+  if (session.rule === 'fixed_rotation') {
+    if (totalWaitingAvailable >= countNeeded) {
+      const players = [];
+      while (players.length < countNeeded && session.waiting.length > 0) {
+        const nextGroup = session.waiting[0];
+        const take = Math.min(countNeeded - players.length, nextGroup.names.length);
+        players.push(...nextGroup.names.slice(0, take));
+        if (take === nextGroup.names.length) {
+          session.waiting.shift();
+        } else {
+          nextGroup.names = nextGroup.names.slice(take);
+        }
+      }
+
+      const half = countNeeded / 2;
+      session.activeMatch = {
+        id: 'match_' + Date.now(),
+        teamA: players.slice(0, half),
+        teamB: players.slice(half)
+      };
+    }
+    return;
+  }
+
+  // DEFAULT (Winner Stays, Four Off, Timed Rotation)
   if (totalWaitingAvailable >= countNeeded) {
     // We can form a match!
     const sideA = [];
@@ -2748,7 +3154,6 @@ function checkAndFillActiveMatch(session) {
         sideA.push(...nextGroup.names);
         session.waiting.shift();
       } else {
-        // Can't fit entire group, take part of it (they split up, or we wait? Let's take individuals to prevent lock)
         const countToTake = teamSize - sideA.length;
         sideA.push(...nextGroup.names.slice(0, countToTake));
         nextGroup.names = nextGroup.names.slice(countToTake);
@@ -2774,7 +3179,6 @@ function checkAndFillActiveMatch(session) {
       teamA: sideA,
       teamB: sideB
     };
-    startTimedRotationIfNeeded(session);
   }
 }
 
@@ -2784,7 +3188,6 @@ document.getElementById('createQueueForm')?.addEventListener('submit', (e) => {
   const name = document.getElementById('qName').value.trim();
   const mode = document.getElementById('qMode').value;
   const rule = document.getElementById('qRule').value;
-  const timeLimitMinutes = Math.max(1, parseInt(document.getElementById('qTimedMinutes')?.value || '15', 10));
   const pin = document.getElementById('qPin').value.trim();
   const allowJoin = document.getElementById('qAllowJoin').value === 'true';
   const initialText = document.getElementById('qInitialPlayers').value.trim();
@@ -2813,8 +3216,6 @@ document.getElementById('createQueueForm')?.addEventListener('submit', (e) => {
     name,
     mode,
     rule,
-    timeLimitMinutes,
-    timerEndAt: null,
     pin,
     allowJoin,
     waiting,
@@ -2917,12 +3318,13 @@ document.getElementById('submitScoreBtn')?.addEventListener('click', () => {
     timestamp: Date.now()
   });
 
-  const rule = session.rule === 'fixed_order' ? 'fixed_rotation' : session.rule;
-  const teamSize = getTeamSize(session);
+  // Rotate based on rules
+  if (session.rule === 'winner_stays') {
+    // Winner stays as Team A. Loser joins the end of waiting list
+    session.waiting.push({ id: 'w_ws_lose_' + Date.now(), names: loserNames });
 
-  if (rule === 'winner_stays') {
-    // Winners remain on court; losers rejoin queue.
-    pushWaiting(session, loserNames, true);
+    // Pull next challenger to play B
+    const teamSize = session.mode === 'doubles' ? 2 : 1;
     const nextChallengers = [];
     while (nextChallengers.length < teamSize && session.waiting.length > 0) {
       const nextGroup = session.waiting[0];
@@ -2935,35 +3337,80 @@ document.getElementById('submitScoreBtn')?.addEventListener('click', () => {
         nextGroup.names = nextGroup.names.slice(take);
       }
     }
+
     if (nextChallengers.length === teamSize) {
-      session.activeMatch = { id: 'match_' + Date.now(), teamA: winnerNames, teamB: nextChallengers };
-      session.timerEndAt = null;
-      startTimedRotationIfNeeded(session);
+      session.activeMatch = {
+        id: 'match_' + Date.now(),
+        teamA: winnerNames,
+        teamB: nextChallengers
+      };
     } else {
       session.waiting.unshift({ id: 'w_win_' + Date.now(), names: winnerNames });
       if (nextChallengers.length > 0) session.waiting.unshift({ id: 'w_chal_' + Date.now(), names: nextChallengers });
       session.activeMatch = null;
     }
 
-  } else if (rule === 'partner_rotation') {
-    // Break current pairs into individuals so partners can change in the next game.
-    pushWaiting(session, [...match.teamA, ...match.teamB], false);
+  } else if (session.rule === 'partner_rotation' && session.mode === 'doubles' && session.partnerRotationState) {
+    const prState = session.partnerRotationState;
+    const p = prState.players; // [P1, P2, P3, P4]
+    
+    if (prState.round === 1) {
+      // Advance to round 2: P1 & P3 vs P2 & P4
+      prState.round = 2;
+      session.activeMatch = {
+        id: 'match_' + Date.now() + '_pr2',
+        teamA: [p[0], p[2]],
+        teamB: [p[1], p[3]]
+      };
+      toast('Round 1 finished! Setting up Round 2 partners.');
+    } else if (prState.round === 2) {
+      // Advance to round 3: P1 & P4 vs P2 & P3
+      prState.round = 3;
+      session.activeMatch = {
+        id: 'match_' + Date.now() + '_pr3',
+        teamA: [p[0], p[3]],
+        teamB: [p[1], p[2]]
+      };
+      toast('Round 2 finished! Setting up Round 3 partners.');
+    } else {
+      // Round 3 finished. Both rotate off and join queue.
+      // Re-queue all 4 players as individual entries so they mix with the rest
+      p.forEach(name => {
+        session.waiting.push({ id: 'w_pr_end_' + Math.random().toString(36).slice(2,6), names: [name] });
+      });
+      delete session.partnerRotationState;
+      session.activeMatch = null;
+      toast('Partner rotation complete! Next 4 players stepping up.');
+    }
+
+  } else if (session.rule === 'fixed_rotation') {
+    // Fixed Rotation: Rotate everyone off to the back of waiting list as individual players
+    const allOnCourt = [...match.teamA, ...match.teamB];
+    allOnCourt.forEach(name => {
+      session.waiting.push({ id: 'w_fr_end_' + Math.random().toString(36).slice(2,6), names: [name] });
+    });
     session.activeMatch = null;
+
+  } else if (session.rule === 'timed_rotation') {
+    // Timed Rotation: Reset timer back to the limit upon scoring
+    session.timerSecondsLeft = session.timerLimit * 60;
+    session.timerRunning = false;
+    stopActiveTimer();
+    
+    // Rotate both teams off as pairs
+    session.waiting.push({ id: 'w_rot_A_' + Date.now(), names: match.teamA });
+    session.waiting.push({ id: 'w_rot_B_' + Date.now(), names: match.teamB });
+    session.activeMatch = null;
+    toast('Timer reset for the next match!');
 
   } else {
-    // Four Off/Four On, Fixed Rotation, and Timed Rotation: all active players rotate off.
-    // Four Off/Four On keeps sides grouped as teams; Fixed/Timed keep the same queue order.
-    if (rule === 'four_off_four_on') {
-      pushWaiting(session, match.teamA, true);
-      pushWaiting(session, match.teamB, true);
-    } else {
-      pushWaiting(session, [...match.teamA, ...match.teamB], false);
-    }
+    // Four Off, Four On (Default/FIFO): Both teams rotate out as pairs
+    session.waiting.push({ id: 'w_rot_A_' + Date.now(), names: match.teamA });
+    session.waiting.push({ id: 'w_rot_B_' + Date.now(), names: match.teamB });
     session.activeMatch = null;
-    session.timerEndAt = null;
   }
 
-  // Try to fill match with next set of players.
+  // Try to fill match with next set of players
   checkAndFillActiveMatch(session);
 
   saveQueues(sessions);

@@ -1,15 +1,5 @@
 {
-  "name": "white-kitchen-pickleball-booking",
-  "version": "1.0.0",
-  "description": "Court reservation app for White Kitchen Pickleball — single-file, no backend, localStorage-powered.",
-  "private": true,
   "scripts": {
-    "dev": "npx serve . -l 3000",
-    "start": "npx serve . -l 3000",
-    "deploy:vercel": "vercel --prod",
-    "deploy:firebase": "firebase deploy"
-  },
-  "keywords": ["pickleball", "booking", "reservation", "court"],
-  "author": "White Kitchen Pickleball",
-  "license": "MIT"
+    "patch": "node patch.js"
+  }
 }

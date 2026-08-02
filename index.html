@@ -3,13 +3,13 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>White Kitchen — Pickleball Court Booking</title>
-<!-- Client white-label config (edit per deployment) -->
+<title>Court Booking — Pickleball Reservations</title>
+<!-- Client white-label config (edit per deployment branch) -->
 <script src="client-config.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
-<!-- Firebase SDK -->
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<!-- Supabase SDK (config injected by backend-config.js; blank = local demo mode) -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="backend-config.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
@@ -33,10 +33,10 @@
 <header class="sticky top-0 z-30 backdrop-blur-xl bg-[#FFFBF5]/90 border-b border-[#EAE0D5] shadow-xs">
   <div class="max-w-[1320px] mx-auto px-3.5 md:px-6 h-[64px] md:h-[68px] flex items-center justify-between gap-2 md:gap-4">
     <div class="flex items-center gap-2.5 md:gap-3 min-w-0">
-      <div id="brandLogo" class="w-8 h-8 md:w-9 md:h-9 rounded-full bg-[#201C19] text-[#D6FF5F] grid place-items-center font-black text-[12px] md:text-[13px] tracking-[-0.02em] shrink-0 overflow-hidden">WK</div>
+      <div id="brandLogo" class="w-8 h-8 md:w-9 md:h-9 rounded-full bg-[#18181B] text-[#FAFAFA] grid place-items-center font-black text-[12px] md:text-[13px] tracking-[-0.02em] shrink-0 overflow-hidden">CB</div>
       <div class="leading-[0.95] min-w-0">
-        <div id="brandName" class="font-[800] text-[15px] md:text-[16px] tracking-[-0.02em] truncate">WHITE KITCHEN</div>
-        <div id="brandSub" class="mono text-[9px] md:text-[10px] tracking-[0.16em] uppercase opacity-60 -mt-[2px] truncate">Pickleball Court • Single Court</div>
+        <div id="brandName" class="font-[800] text-[15px] md:text-[16px] tracking-[-0.02em] truncate">COURT BOOKING</div>
+        <div id="brandSub" class="mono text-[9px] md:text-[10px] tracking-[0.16em] uppercase opacity-60 -mt-[2px] truncate">Pickleball • Single Court</div>
       </div>
       <div class="hidden lg:flex items-center gap-2 ml-5 pl-5 border-l border-[#EAE0D5]">
         <div class="w-2 h-2 rounded-full bg-[#4ADE80] animate-pulse"></div>
@@ -86,8 +86,8 @@
           <div class="absolute right-[-20px] bottom-[-30px] rotate-[-10deg] mono text-[96px] leading-none font-[800] tracking-[-0.08em] text-white/[0.06]">PICKLE</div>
           <div class="relative z-10 flex flex-wrap items-start justify-between gap-6">
             <div>
-              <div id="heroLocation" class="inline-flex items-center gap-2 px-3 h-7 rounded-full bg-white/10 border border-white/10 mono text-[11px] tracking-widest uppercase">Single Court • Davao</div>
-              <h1 id="heroTitle" class="mt-4 text-[32px] md:text-[44px] font-[800] leading-[0.92] tracking-[-0.04em] max-w-[16ch]">Reserve the court.<br/>Own the rally.</h1>
+              <div id="heroLocation" class="inline-flex items-center gap-2 px-3 h-7 rounded-full bg-white/10 border border-white/10 mono text-[11px] tracking-widest uppercase">Single Court</div>
+              <h1 id="heroTitle" class="mt-4 text-[32px] md:text-[44px] font-[800] leading-[0.92] tracking-[-0.04em] max-w-[16ch]">Book the court.<br/>Run the queue.</h1>
               <div class="mt-4 flex flex-wrap gap-2">
                 <div id="chipHourly" class="px-3 py-1.5 rounded-full bg-[#D6FF5F] text-[#201C19] mono text-[11px] font-[700]">₱300 / hour • 1PM–10PM</div>
                 <div id="chipQueue" class="px-3 py-1.5 rounded-full bg-white/10 border border-white/15 mono text-[11px]">₱100 / head • 7AM–12PM Queue</div>
@@ -336,6 +336,7 @@
                   <option value="fixed_rotation">Fixed Rotation (fifo sequence)</option>
                   <option value="timed_rotation">Timed Rotation</option>
                   <option value="partner_rotation">Partner Rotation (Doubles only)</option>
+                  <option value="fixed_pairs">Fixed Pairs League (partners never change)</option>
                 </select>
               </div>
             </div>
@@ -492,15 +493,44 @@
                 </div>
 
                 <div id="jPlayer2Wrapper">
-                  <label class="block mono text-[10px] uppercase tracking-widest font-[700] mb-1">Player 2 Name (Optional Partner)</label>
+                  <label id="jPlayer2Label" class="block mono text-[10px] uppercase tracking-widest font-[700] mb-1">Player 2 Name (Optional Partner)</label>
                   <input id="jPlayer2" placeholder="e.g. Jane Doe (or leave blank to queue alone)" class="w-full h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-4 text-[13px] font-[600] outline-none focus:border-[#201C19] focus:bg-white transition"/>
-                  <span class="mono text-[9px] opacity-50 block mt-0.5">For doubles, queueing with a partner keeps you grouped together!</span>
+                  <span id="jPlayer2Hint" class="mono text-[9px] opacity-50 block mt-0.5">For doubles, queueing with a partner keeps you grouped together!</span>
                 </div>
 
                 <button type="submit" id="joinQueueBtn" class="w-full h-10 rounded-full bg-[#201C19] text-[#D6FF5F] font-[800] text-[12px] tracking-wide transition flex items-center justify-center gap-1 cursor-pointer">
                   <span>➕ Add Player(s)</span>
                 </button>
               </form>
+            </div>
+          </div>
+
+          <!-- League Standings (Fixed Pairs only) -->
+          <div id="qStandingsCard" class="hidden rounded-[24px] bg-white border border-[#EAE0D5] p-5 shadow-xs overflow-hidden">
+            <div class="flex flex-wrap items-center justify-between gap-2 border-b border-[#F1E9DF] pb-2.5 mb-3">
+              <div>
+                <h4 class="font-[800] text-[15px] tracking-[-0.01em]">League Standings</h4>
+                <p class="mono text-[10px] opacity-55 mt-0.5">Rank: Win% → Point Diff → Head-to-Head → Points For</p>
+              </div>
+              <span class="mono text-[9px] px-2.5 py-1 rounded-full bg-[#201C19] text-white font-[700] uppercase tracking-wider">Fixed Pairs</span>
+            </div>
+            <div class="overflow-x-auto no-scrollbar">
+              <table class="w-full mono text-[11px] whitespace-nowrap">
+                <thead>
+                  <tr class="text-left text-[9px] uppercase tracking-wider opacity-50 border-b border-[#F1E9DF]">
+                    <th class="py-2 pr-2 font-[700]">#</th>
+                    <th class="py-2 pr-3 font-[700]">Team</th>
+                    <th class="py-2 px-2 text-center font-[700]" title="Games Played">GP</th>
+                    <th class="py-2 px-2 text-center font-[700]" title="Wins">W</th>
+                    <th class="py-2 px-2 text-center font-[700]" title="Losses">L</th>
+                    <th class="py-2 px-2 text-right font-[700]" title="Points For">PF</th>
+                    <th class="py-2 px-2 text-right font-[700]" title="Points Against">PA</th>
+                    <th class="py-2 px-2 text-right font-[700]" title="Point Differential">+/-</th>
+                    <th class="py-2 pl-3 font-[700]" title="Winning Percentage">Win%</th>
+                  </tr>
+                </thead>
+                <tbody id="qStandingsBody" class="divide-y divide-[#F5EDE4]"></tbody>
+              </table>
             </div>
           </div>
 
@@ -560,8 +590,8 @@
             <div class="flex items-start justify-between">
               <div>
                 <div id="payChannelBadge" class="mono text-[10px] tracking-widest uppercase font-[700] text-[#4ADE80] bg-[#201C19] px-3 py-1 rounded-full inline-block">GCash Payment</div>
-                <div id="payChannelTitle" class="font-[800] text-[18px] tracking-[-0.02em] mt-2">White Kitchen Pickleball</div>
-                <div id="payChannelAccount" class="mono text-[12px] opacity-65 font-[600] mt-0.5">0917-888-0123 • White Kitchen</div>
+                <div id="payChannelTitle" class="font-[800] text-[18px] tracking-[-0.02em] mt-2">Pickleball Court</div>
+                <div id="payChannelAccount" class="mono text-[12px] opacity-65 font-[600] mt-0.5">Scan to pay at the counter</div>
               </div>
               <div id="payChannelIcon" class="w-9 h-9 rounded-full border border-[#EAE0D5] grid place-items-center font-[800] text-[14px] text-white" style="background:#0055FE">G</div>
             </div>
@@ -637,7 +667,7 @@
           <div class="mt-8 p-4 md:p-5 rounded-[16px] bg-[#FFFBF5] border border-[#F1E9DF] flex gap-3.5">
             <div class="w-9 h-9 rounded-full bg-[#FFE9E0] text-[#8C2C10] grid place-items-center shrink-0"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg></div>
             <div class="mono text-[11px] leading-[1.5] text-[#201C19]">
-              <span id="payStaffNote"><b>Staff reserved block:</b> Tue, Thu, Sat, Sun 5:00PM–10:00PM is blocked for White Kitchen staff play. Morning hours (7AM–12PM) are walk-in queue (₱100/head, unlimited play) unless unlocked by admin.</span>
+              <span id="payStaffNote"><b>Staff reserved block:</b> Tue, Thu, Sat, Sun 5:00PM–10:00PM is blocked for staff play. Morning hours (7AM–12PM) are walk-in queue (₱100/head, unlimited play) unless unlocked by admin.</span>
             </div>
           </div>
         </div>
@@ -742,7 +772,7 @@
               <div>
                 <label class="block mono text-[10px] uppercase tracking-widest opacity-60 font-[700] mb-1.5">Account Label / Number shown to guests</label>
                 <div class="flex gap-2">
-                  <input id="adminQrAccountInput" placeholder="e.g. 0917-888-0123 • White Kitchen" class="flex-1 h-10 rounded-full border border-[#EAE0D5] bg-white px-4 mono text-[12px] font-[600] outline-none focus:border-[#201C19]"/>
+                  <input id="adminQrAccountInput" placeholder="e.g. 0917-000-0000 • Your Court" class="flex-1 h-10 rounded-full border border-[#EAE0D5] bg-white px-4 mono text-[12px] font-[600] outline-none focus:border-[#201C19]"/>
                   <button type="button" id="adminQrAccountSaveBtn" class="h-10 px-4 rounded-full bg-[#201C19] text-white mono text-[11px] font-[700] hover:opacity-90 transition cursor-pointer">Save Label</button>
                 </div>
               </div>
@@ -869,10 +899,10 @@
       <!-- Identity -->
       <div class="md:col-span-5">
         <div class="flex items-center gap-3">
-          <div id="footLogo" class="w-11 h-11 rounded-full bg-[#D6FF5F] text-[#201C19] grid place-items-center font-black text-[16px] tracking-[-0.02em] overflow-hidden">WK</div>
+          <div id="footLogo" class="w-11 h-11 rounded-full bg-[#FAFAFA] text-[#18181B] grid place-items-center font-black text-[16px] tracking-[-0.02em] overflow-hidden">CB</div>
           <div>
-            <div id="footName" class="font-[800] text-[18px] tracking-[-0.02em] leading-none">WHITE KITCHEN</div>
-            <div id="footSub" class="mono text-[10px] tracking-[0.16em] uppercase opacity-55 mt-1">Pickleball Court • Single Court</div>
+            <div id="footName" class="font-[800] text-[18px] tracking-[-0.02em] leading-none">COURT BOOKING</div>
+            <div id="footSub" class="mono text-[10px] tracking-[0.16em] uppercase opacity-55 mt-1">Pickleball • Single Court</div>
           </div>
         </div>
         <p class="mono text-[11px] leading-[1.7] opacity-60 mt-5 max-w-[36ch]">Single-court pickleball reservations, walk-in queues, and live rotation boards. Book online, pay externally, play hard.</p>
@@ -897,11 +927,19 @@
     </div>
 
     <div class="mt-10 pt-6 border-t border-white/10 flex flex-col md:flex-row items-center justify-between gap-3">
-      <div class="mono text-[10px] opacity-45">© <span id="footYear"></span> <span id="footCopyName">White Kitchen Pickleball</span>. All rights reserved.</div>
+      <div class="mono text-[10px] opacity-45">© <span id="footYear"></span> <span id="footCopyName">Pickleball Court Booking</span>. All rights reserved.</div>
       <div class="mono text-[10px] opacity-45">Reservations held Pending until payment verified.</div>
     </div>
   </div>
 </footer>
+
+<!-- Demo Mode Indicator (shown only when no Firebase config is present) -->
+<div id="demoModeBanner" class="hidden fixed bottom-4 right-4 z-40">
+  <div class="flex items-center gap-2 px-3.5 h-9 rounded-full bg-[#18181B] text-[#E4E4E7] border border-white/10 shadow-lg mono text-[10px] tracking-wide">
+    <span class="w-1.5 h-1.5 rounded-full bg-[#FBBF24] animate-pulse"></span>
+    <span>Demo mode — data saved on this device only</span>
+  </div>
+</div>
 
 <!-- Admin PIN Modal -->
 <div id="adminLoginModal" class="fixed inset-0 z-50 hidden">
@@ -944,6 +982,7 @@
       <!-- Action Buttons — placed BEFORE email preview so they're always reachable -->
       <div class="px-5 md:px-7 pb-4 flex gap-2">
         <button id="modalGoPayment" class="flex-1 h-11 md:h-12 rounded-full bg-[#201C19] text-white font-[700] text-[12px] md:text-[13px] cursor-pointer active:scale-[0.98] transition">Go to Payment Info</button>
+        <button id="modalGoUpload" class="flex-1 h-11 md:h-12 rounded-full bg-[#D6FF5F] border border-[#201C19]/10 font-[800] text-[12px] md:text-[13px] cursor-pointer active:scale-[0.98] transition">Upload Proof</button>
         <button id="modalGoBookings" class="flex-1 h-11 md:h-12 rounded-full bg-[#F1E9DF] border border-[#E9DDD0] font-[700] text-[12px] md:text-[13px] cursor-pointer active:scale-[0.98] transition">View Bookings</button>
       </div>
 
@@ -973,10 +1012,10 @@
    rates, staff rules, and contact info across the entire app.
    ================================================================ */
 const _cfgDefaults = {
-  business: { name:'WHITE KITCHEN', sub:'Pickleball Court • Single Court', tagline:'Reserve the court.\nOwn the rally.', location:'Single Court • Davao' },
+  business: { name:'COURT BOOKING', sub:'Pickleball • Single Court', tagline:'Book the court.\nRun the queue.', location:'Single Court' },
   contact: { address:'', phone:'', email:'', facebook:'', instagram:'' },
-  branding: { logoUrl:'', faviconUrl:'', monogram:'WK' },
-  theme: { primary:'#D6FF5F', primaryHover:'#CBF052', dark:'#201C19', bg:'#FFFBF5', border:'#EAE0D5', borderSoft:'#F1E9DF', staff:'#FF8A5B', openPlay:'#9B8EFF', queue:'#4ADE80', pending:'#FDBA74' },
+  branding: { logoUrl:'', faviconUrl:'', monogram:'CB' },
+  theme: { primary:'#D4D4D8', primaryHover:'#A1A1AA', dark:'#18181B', bg:'#FAFAFA', border:'#E4E4E7', borderSoft:'#F4F4F5', staff:'#FB923C', openPlay:'#8B5CF6', queue:'#34D399', pending:'#FBBF24' },
   currency: '₱',
   rates: { hourly:300, queuePerHead:100 },
   hours: { queueStart:7, queueEnd:12, bookingStart:13, close:22 },
@@ -1155,47 +1194,39 @@ function updateOpenBadge(){
 }
 
 /* ================================================================
-   FIREBASE INIT + FIRESTORE DATA LAYER
-   All data syncs globally across all devices in real-time.
-   localStorage is used ONLY as offline cache / fallback.
+   SUPABASE INIT + POSTGRES DATA LAYER
+   Config comes from backend-config.js (window.SUPABASE_CONFIG).
+   When the config is blank/placeholder the app runs in DEMO MODE:
+   fully functional, data persisted in this device's localStorage.
+   With a real config, data syncs across all devices in real-time.
    ================================================================ */
-const firebaseConfig = {
-  apiKey: "AIzaSyAkf7GJ3mrEUtykHLQ3wizwfGpl5OugE2I",
-  authDomain: "courtbooking-85175.firebaseapp.com",
-  projectId: "courtbooking-85175",
-  storageBucket: "courtbooking-85175.firebasestorage.app",
-  messagingSenderId: "291819153596",
-  appId: "1:291819153596:web:f31c27b24a5eaa718088b9"
-};
-firebase.initializeApp(firebaseConfig);
-const db = firebase.firestore();
+const SUPABASE_CFG = (window.SUPABASE_CONFIG && window.SUPABASE_CONFIG.url && !String(window.SUPABASE_CONFIG.url).startsWith('PASTE')) ? window.SUPABASE_CONFIG : null;
+const SB_ENABLED = !!SUPABASE_CFG;
+let supabaseClient = null;
+if (SB_ENABLED) {
+  supabaseClient = supabase.createClient(SUPABASE_CFG.url, SUPABASE_CFG.anonKey);
+}
+const HAS_STORAGE = SB_ENABLED;
 
 /* ---------- Local cache keys (offline fallback only) ---------- */
 const LS = {
-  bookings: 'wk_bookings_v6',
-  morning: 'wk_morning_v6',
-  openPlay: 'wk_openPlay_v6',
-  staffReserve: 'wk_staffReserve_v6',
-  pin: 'wk_adminPin_v6',
-  adminUnlocked: 'wk_admin_unlocked_v6',
-  payMethods: 'wk_pay_methods_v6',
-  queues: 'wk_queues_v6'
+  bookings: 'cb_bookings_v7',
+  morning: 'cb_morning_v7',
+  openPlay: 'cb_openPlay_v7',
+  staffReserve: 'cb_staffReserve_v7',
+  pin: 'cb_adminPin_v7',
+  adminUnlocked: 'cb_admin_unlocked_v7',
+  payMethods: 'cb_pay_methods_v7',
+  queues: 'cb_queues_v7'
 };
 
-/* ---------- Firestore document paths ---------- */
-const DOCS = {
-  bookings: db.collection('app').doc('bookings'),
-  openPlay: db.collection('app').doc('openPlay'),
-  morning:  db.collection('app').doc('morning'),
-  staffReserve: db.collection('app').doc('staffReserve'),
-  settings: db.collection('app').doc('settings'),    // pin + payMethods
-  queues:   db.collection('app').doc('queues')
-};
-
-/* ---------- Firestore helper: save + cache ---------- */
-async function fbSave(docRef, lsKey, data) {
+/* ---------- Supabase helper: save + cache (no-op cloud write in demo mode) ---------- */
+async function sbSave(key, lsKey, data) {
   localStorage.setItem(lsKey, JSON.stringify(data));
-  try { await docRef.set({ data: JSON.stringify(data) }, { merge: true }); } catch(e) { console.warn('Firestore write failed, cached locally:', e.message); }
+  if (!supabaseClient) return;
+  try { 
+    await supabaseClient.from('kv_store').upsert({ key: key, value: data }); 
+  } catch(e) { console.warn('Supabase write failed, cached locally:', e.message); }
 }
 
 function fbLoadCache(lsKey, fallback) {
@@ -1229,15 +1260,15 @@ function fmtTime(h){
 }
 function to12Range(s,e){ return `${fmtTime(s)} – ${fmtTime(e)}`; }
 
-/* ---------- Load / Save wrappers (Firestore + localStorage cache) ---------- */
+/* ---------- Load / Save wrappers (Supabase + localStorage cache) ---------- */
 function loadBookings(){ return fbLoadCache(LS.bookings, []); }
-function saveBookings(arr){ bookings = arr; fbSave(DOCS.bookings, LS.bookings, arr); }
+function saveBookings(arr){ bookings = arr; sbSave('bookings', LS.bookings, arr); }
 
 function loadMorning(){ return fbLoadCache(LS.morning, {"7":false,"8":false,"9":false,"10":false,"11":false}); }
-function saveMorning(obj){ morningEnabled = obj; fbSave(DOCS.morning, LS.morning, obj); }
+function saveMorning(obj){ morningEnabled = obj; sbSave('morning', LS.morning, obj); }
 
 function loadOpenPlay(){ return fbLoadCache(LS.openPlay, []); }
-function saveOpenPlay(arr){ openPlays = arr; fbSave(DOCS.openPlay, LS.openPlay, arr); }
+function saveOpenPlay(arr){ openPlays = arr; sbSave('openPlay', LS.openPlay, arr); }
 
 const STAFF_RESERVE_DEFAULTS = {"0":true,"2":true,"4":true,"6":true};
 
@@ -1260,7 +1291,7 @@ function loadStaffReserve(){
   if(raw.weekId !== getCurrentWeekId()){
     const reset = { weekId: getCurrentWeekId(), days: {...STAFF_RESERVE_DEFAULTS} };
     // Save the reset immediately
-    fbSave(DOCS.staffReserve, LS.staffReserve, reset);
+    sbSave('staffReserve', LS.staffReserve, reset);
     return reset;
   }
   return raw;
@@ -1270,7 +1301,7 @@ function saveStaffReserve(obj){
   // Always stamp with current weekId
   obj.weekId = getCurrentWeekId();
   staffReserveEnabled = obj;
-  fbSave(DOCS.staffReserve, LS.staffReserve, obj);
+  sbSave('staffReserve', LS.staffReserve, obj);
 }
 
 /* ---------- App state ---------- */
@@ -1282,104 +1313,385 @@ let openPlays = loadOpenPlay();
 let staffReserveEnabled = loadStaffReserve();
 let _firebaseReady = false;
 
-/* ---------- Firestore real-time listeners ---------- */
-function startRealtimeListeners() {
-  // Bookings
-  DOCS.bookings.onSnapshot(snap => {
-    if (snap.exists) {
-      try {
-        const d = JSON.parse(snap.data().data);
-        bookings = d;
-        localStorage.setItem(LS.bookings, JSON.stringify(d));
-        renderSchedule(); renderBookingsList();
-        if (typeof renderAdminBookings === 'function') renderAdminBookings();
-        if (typeof renderDateSlotPreview === 'function') renderDateSlotPreview();
-      } catch(e){}
-    }
-  });
+/* ================================================================
+   PAYMENT PROOFS MIDDLEWARE
+   Upload (compressed) → Firebase Storage  |  Metadata → proofsCol
+   1-week retention: TTL field on every doc, plus client-side sweep.
+   ================================================================ */
 
-  // Open Play
-  DOCS.openPlay.onSnapshot(snap => {
-    if (snap.exists) {
-      try {
-        openPlays = JSON.parse(snap.data().data);
-        localStorage.setItem(LS.openPlay, JSON.stringify(openPlays));
-        renderSchedule();
-        if (typeof renderOpenPlayList === 'function') renderOpenPlayList();
-        if (typeof renderDateSlotPreview === 'function') renderDateSlotPreview();
-      } catch(e){}
-    }
-  });
-
-  // Morning toggles
-  DOCS.morning.onSnapshot(snap => {
-    if (snap.exists) {
-      try {
-        morningEnabled = JSON.parse(snap.data().data);
-        localStorage.setItem(LS.morning, JSON.stringify(morningEnabled));
-        renderSchedule();
-        if (typeof populateTimeOptions === 'function') populateTimeOptions();
-        if (typeof renderMorningToggles === 'function') renderMorningToggles();
-      } catch(e){}
-    }
-  });
-
-  // Staff Reserve toggles (weekly-scoped)
-  DOCS.staffReserve.onSnapshot(snap => {
-    if (snap.exists) {
-      try {
-        const parsed = JSON.parse(snap.data().data);
-        // Weekly auto-reset check on live sync
-        if(!parsed.weekId || parsed.weekId !== getCurrentWeekId()){
-          staffReserveEnabled = { weekId: getCurrentWeekId(), days: {...STAFF_RESERVE_DEFAULTS} };
-          // Write the reset back
-          DOCS.staffReserve.set({ data: JSON.stringify(staffReserveEnabled) }).catch(()=>{});
-        } else {
-          staffReserveEnabled = parsed;
-        }
-        localStorage.setItem(LS.staffReserve, JSON.stringify(staffReserveEnabled));
-        renderSchedule();
-        if (typeof renderStaffReserveToggles === 'function') renderStaffReserveToggles();
-      } catch(e){}
-    }
-  });
-
-  // Settings (PIN + payMethods)
-  DOCS.settings.onSnapshot(snap => {
-    if (snap.exists) {
-      try {
-        const d = snap.data();
-        if (d.pin) localStorage.setItem(LS.pin, d.pin);
-        if (d.payMethods) {
-          const pm = JSON.parse(d.payMethods);
-          payMethods = pm;
-          localStorage.setItem(LS.payMethods, JSON.stringify(pm));
-          if (typeof renderPublicPayTab === 'function') renderPublicPayTab();
-          if (typeof renderAdminQrManager === 'function') renderAdminQrManager();
-        }
-      } catch(e){}
-    }
-  });
-
-  // Queues
-  DOCS.queues.onSnapshot(snap => {
-    if (snap.exists) {
-      try {
-        const d = JSON.parse(snap.data().data);
-        localStorage.setItem(LS.queues, JSON.stringify(d));
-        if (typeof renderQueueModule === 'function') renderQueueModule();
-      } catch(e){}
-    }
-  });
-
-  _firebaseReady = true;
+/* Client-side compression: images shrink to ~1200px JPEG (~80–200KB).
+   PDFs and other files pass through unchanged (3MB hard limit). */
+async function processProofFile(file, bookingId) {
+  const isImage = /^image\//.test(file.type);
+  if (!isImage) {
+    if (file.size > 3 * 1024 * 1024) throw new Error('File over 3MB limit. Please attach a smaller file.');
+    const dataUrl = await new Promise((res, rej) => { const r = new FileReader(); r.onload = e => res(e.target.result); r.onerror = rej; r.readAsDataURL(file); });
+    return { dataUrl, fileName: file.name || 'document', mime: file.type || 'application/octet-stream', wasImage: false };
+  }
+  const bitmap = await (createImageBitmap ? createImageBitmap(file) : new Promise((res, rej) => {
+    const img = new Image();
+    img.onload = () => res(img);
+    img.onerror = rej;
+    img.src = URL.createObjectURL(file);
+  }));
+  const maxSide = 1200;
+  let { width: w, height: h } = bitmap;
+  const scale = Math.min(1, maxSide / Math.max(w, h));
+  w = Math.round(w * scale);
+  h = Math.round(h * scale);
+  const canvas = document.createElement('canvas');
+  canvas.width = w; canvas.height = h;
+  canvas.getContext('2d').drawImage(bitmap, 0, 0, w, h);
+  const dataUrl = canvas.toDataURL('image/jpeg', 0.78);
+  const base = (file.name || 'proof').replace(/\.[^.]+$/, '');
+  return { dataUrl, fileName: `${base}.jpg`, mime: 'image/jpeg', wasImage: true };
 }
 
-/* ---------- Seed data (only if Firestore doc is empty) ---------- */
-async function seedIfEmpty() {
+/* Demo mode: proof stored entirely in localStorage (self-sweeps at 1 week). */
+function _localProofs() { try { return JSON.parse(localStorage.getItem('cb_proofs_v1') || '[]'); } catch { return []; } }
+function _sweepLocalProofs() {
+  const cutoff = Date.now() - 7 * 24 * 3600 * 1000;
+  const kept = _localProofs().filter(p => (p.expiresAt || 0) > cutoff);
+  localStorage.setItem('cb_proofs_v1', JSON.stringify(kept));
+  return kept;
+}
+function saveProofLocal(record) {
+  const arr = _sweepLocalProofs();
+  arr.unshift(record);
+  localStorage.setItem('cb_proofs_v1', JSON.stringify(arr));
+}
+
+/* Cloud upload: pushes file to Storage + writes TTL metadata doc. */
+async function uploadProofCloud(bookingId, nameOnBooking, proof) {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const now = Date.now();
+      const path = `${bookingId}/${now}_${proof.fileName}`;
+      
+      // Upload to Supabase Storage bucket 'proofs'
+      const { data: uploadData, error: uploadError } = await supabaseClient.storage
+        .from('proofs')
+        .upload(path, dataURLtoFile(proof.dataUrl, proof.fileName), { contentType: proof.mime });
+        
+      if (uploadError) throw uploadError;
+
+      const { data: urlData } = supabaseClient.storage.from('proofs').getPublicUrl(path);
+      const url = urlData.publicUrl;
+
+      // Write to 'proofs' table
+      const { error: dbError } = await supabaseClient.from('proofs').insert({
+        booking_id: bookingId,
+        name: nameOnBooking,
+        file_name: proof.fileName,
+        path: path,
+        url: url,
+        mime: proof.mime,
+        expires_at: new Date(now + 7 * 24 * 3600 * 1000).toISOString()
+      });
+      
+      if (dbError) throw dbError;
+      return { ok: true, url };
+    } catch (err) {
+      console.warn(`Proof upload attempt ${attempt + 1} failed:`, err.message);
+      if (attempt === 1) return { ok: false, error: err.message };
+      await new Promise(r => setTimeout(r, 1400));
+    }
+  }
+}
+
+// Helper to convert dataUrl to File for Supabase
+function dataURLtoFile(dataurl, filename) {
+  const arr = dataurl.split(',');
+  const mime = arr[0].match(/:(.*?);/)[1];
+  const bstr = atob(arr[1]);
+  let n = bstr.length;
+  const u8arr = new Uint8Array(n);
+  while(n--){
+      u8arr[n] = bstr.charCodeAt(n);
+  }
+  return new File([u8arr], filename, {type:mime});
+}
+
+/* Which booking does the user attach proof to? Resolve id, never undefined. */
+function resolveProofBooking() {
+  if (_currentProofBookingId) return _currentProofBookingId;
+  const pending = [...bookings].filter(b => b.status === 'Pending').sort((a, b) => b.createdAt - a.createdAt);
+  return (pending[0] || bookings[0]) ? (pending[0] || bookings[0]).id : null;
+}
+let _currentProofBookingId = null;
+
+/* File input (single shared element used by every entry point). */
+let _proofFileEl = null;
+function openProofPicker(bookingId) {
+  _currentProofBookingId = bookingId || null;
+  const target = resolveProofBooking();
+  if (!target) { toast('No booking yet — reserve a slot first, then upload proof.'); return; }
+  if (!_proofFileEl) {
+    _proofFileEl = document.createElement('input');
+    _proofFileEl.type = 'file';
+    _proofFileEl.accept = 'image/*,.pdf,document/*';
+    _proofFileEl.style.display = 'none';
+    document.body.appendChild(_proofFileEl);
+    _proofFileEl.addEventListener('change', handleProofSelected);
+  }
+  _proofFileEl.value = '';
+  _proofFileEl.click();
+}
+
+async function handleProofSelected() {
+  const file = _proofFileEl && _proofFileEl.files && _proofFileEl.files[0];
+  if (!file) return;
+  const bookingId = resolveProofBooking();
+  const booking = bookings.find(b => b.id === bookingId);
+  toast('Processing payment proof...');
   try {
-    const bSnap = await DOCS.bookings.get();
-    if (!bSnap.exists) {
+    const proof = await processProofFile(file, bookingId);
+    if (HAS_STORAGE) {
+      const res = await uploadProofCloud(bookingId, booking ? booking.name : 'Unknown', proof);
+      if (res.ok) {
+        toast('Proof uploaded — admins can now review it.');
+      } else {
+        toast('Offline: proof saved locally, will sync when connection returns.');
+        saveProofLocal({ id: 'pl_' + Date.now(), bookingId, name: booking ? booking.name : 'Unknown', fileName: proof.fileName, url: proof.dataUrl, mime: proof.mime, uploadedAt: Date.now(), expiresAt: Date.now() + 7 * 24 * 3600 * 1000, offline: true });
+      }
+    } else {
+      saveProofLocal({ id: 'pl_' + Date.now(), bookingId, name: booking ? booking.name : 'Unknown', fileName: proof.fileName, url: proof.dataUrl, mime: proof.mime, uploadedAt: Date.now(), expiresAt: Date.now() + 7 * 24 * 3600 * 1000, offline: true });
+      toast('Proof saved locally (demo mode — persists 1 week on this device).');
+    }
+    if (adminUnlocked) renderPaymentProofsQueue();
+  } catch (e) {
+    toast(e.message || 'Could not process that file.');
+  }
+  _proofFileEl.value = '';
+}
+
+/* Sweep proofs past their 1-week retention. */
+async function sweepExpiredProofs() {
+  if (!HAS_STORAGE) return;
+  try {
+    const { data: expired } = await supabaseClient.from('proofs').select('id, path').lt('expires_at', new Date().toISOString());
+    if (expired && expired.length > 0) {
+      const ids = expired.map(p => p.id);
+      const paths = expired.map(p => p.path);
+      await supabaseClient.from('proofs').delete().in('id', ids);
+      await supabaseClient.storage.from('proofs').remove(paths);
+      console.log(`Housekeeping: removed ${expired.length} expired proof(s).`);
+    }
+  } catch (e) { }
+}
+
+/* Supabase live feed of proofs for the Admin review queue. */
+function watchProofs() {
+  if (!HAS_STORAGE) return;
+  supabaseClient.channel('proofs-channel')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'proofs' }, () => {
+      if (adminUnlocked) renderPaymentProofsQueue();
+    })
+    .subscribe();
+}
+
+/* ================================================================
+   PAYMENT PROOF UPLOAD UI (public — Payment tab + confirmation modal)
+   ================================================================ */
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-upload-proof]');
+  if (btn) openProofPicker(btn.getAttribute('data-upload-proof') || null);
+});
+
+/* ================================================================
+   PROOFS TAB STRIP (public, inside the Payment view)
+   ================================================================ */
+function renderProofStrip() {
+  const strip = document.getElementById('proofStripList');
+  const state = document.getElementById('proofStripState');
+  if (!strip || !state) return;
+  const local = _sweepLocalProofs();
+  strip.innerHTML = '';
+  state.textContent = `${local.length} proof${local.length === 1 ? '' : 's'} stored on this device (auto-deletes after 7 days)`;
+  if (!local.length) {
+    strip.innerHTML = `<div class="rounded-[16px] border-2 border-dashed border-[#EAE0D5] p-8 text-center">
+      <div class="mono text-[11px] opacity-55">No payment proofs yet. Upload one after paying — it helps admin verify faster.</div>
+    </div>`;
+    return;
+  }
+  for (const p of local) {
+    const d = new Date(p.expiresAt);
+    const booking = bookings.find(b => b.id === p.bookingId);
+    const isImg = p.mime && p.mime.indexOf('image') === 0;
+    strip.appendChild(Object.assign(document.createElement('div'), { innerHTML: `
+      <div class="rounded-[16px] bg-[#FFFBF5] border border-[#F1E9DF] px-4 py-3.5 flex items-center justify-between gap-3">
+        <div class="flex items-center gap-3 min-w-0">
+          <div class="w-11 h-11 rounded-[12px] bg-[#201C19] grid place-items-center text-white shrink-0 overflow-hidden">
+            ${isImg ? `<img src="${p.url}" class="w-full h-full object-cover"/>` : '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>'}
+          </div>
+          <div class="min-w-0">
+            <div class="mono text-[11px] font-[700] truncate">${escapeHtml(p.fileName)}</div>
+            <div class="mono text-[10px] opacity-60 truncate">For: ${escapeHtml(booking ? booking.name : p.name)} · ${booking ? to12Range(booking.start, booking.end) : '—'}</div>
+            <div class="mono text-[9px] opacity-45">Expires ${d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</div>
+          </div>
+        </div>
+        <a href="${p.url}" target="_blank" rel="noopener" class="w-8 h-8 rounded-full bg-white border border-[#EAE0D5] grid place-items-center hover:border-[#201C19] shrink-0 cursor-pointer">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+        </a>
+      </div>` }));
+  }
+}
+
+/* ================================================================
+   ADMIN PAYMENT PROOFS QUEUE
+   ================================================================ */
+let _proofReviewList = [];
+function renderPaymentProofsQueue() {
+  const list = document.getElementById('adminProofsList');
+  const count = document.getElementById('adminProofsCount');
+  if (!list || !count) return;
+  _sweepLocalProofs();
+  const pending = bookings.filter(b => b.status === 'Pending');
+  count.textContent = String(pending.length);
+  _proofReviewList = pending;
+  list.innerHTML = '';
+  if (!pending.length) {
+    list.innerHTML = `<div class="py-10 px-6 text-center mono text-[12px] opacity-55">All clear — no bookings awaiting verification.</div>`;
+    return;
+  }
+  for (const b of pending) {
+    const local = _sweepLocalProofs().filter(p => p.bookingId === b.id);
+    const row = document.createElement('div');
+    row.className = 'px-5 py-4 hover:bg-[#FFFBF5] transition';
+    row.innerHTML = `
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <div class="min-w-0">
+          <div class="flex items-center gap-2 flex-wrap">
+            <span class="font-[750] text-[14px] truncate">${escapeHtml(b.name)}</span>
+            <span class="mono text-[10px] px-2 py-0.5 rounded-full bg-[#F1E9DF] font-[700]">${b.date === todayISO() ? 'Today' : b.date}</span>
+            <span class="mono text-[11px] opacity-60">${to12Range(b.start, b.end)}</span>
+          </div>
+          <div class="mono text-[11px] opacity-50 mt-0.5 truncate">${escapeHtml(b.email || '')}${b.group ? ' · ' + escapeHtml(b.group) : ''}</div>
+        </div>
+        <div class="flex items-center gap-2 shrink-0">
+          <span class="mono text-[11px] font-[700] opacity-75">${fmtMoney((b.end - b.start) * CLIENT.rates.hourly)}</span>
+          <select data-verify="${b.id}" class="h-9 rounded-full border border-[#EAE0D5] bg-white pl-3 pr-2 mono text-[11px] font-[800] cursor-pointer">
+            <option value="Pending" selected>Pending</option>
+            <option value="Reserved">Reserved ✓</option>
+          </select>
+        </div>
+      </div>
+      <div class="mt-3 flex flex-wrap items-center gap-2">
+        <button type="button" data-upload-proof="${b.id}" class="h-8 px-3.5 rounded-full border border-[#EAE0D5] bg-white mono text-[10px] font-[700] hover:border-[#201C19] cursor-pointer transition">Upload for user</button>
+        <div data-proof-slot="${b.id}" class="flex flex-wrap gap-2 flex-1 min-w-[160px]">
+          ${local.length ? local.map(p => `
+            <a href="${p.url}" target="_blank" rel="noopener" class="group relative block w-12 h-12 rounded-[12px] bg-[#201C19] overflow-hidden border border-[#EAE0D5] hover:border-[#201C19] transition cursor-pointer" title="${escapeHtml(p.fileName)}">
+              ${(p.mime || '').indexOf('image') === 0 ? `<img src="${p.url}" class="w-full h-full object-cover"/>` : '<div class="w-full h-full grid place-items-center text-white"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></div>'}
+            </a>`).join('')
+        : `<span class="mono text-[10px] opacity-55 py-1">no proof uploaded yet</span>`}
+        </div>
+      </div>`;
+    list.appendChild(row);
+  }
+  list.querySelectorAll('select[data-verify]').forEach(sel => {
+    sel.addEventListener('change', () => {
+      const idx = bookings.findIndex(x => x.id === sel.getAttribute('data-verify'));
+      if (idx >= 0) {
+        bookings[idx].status = sel.value;
+        saveBookings(bookings);
+        renderSchedule(); renderBookingsList(); renderAdminBookings(); renderPaymentProofsQueue();
+        toast(sel.value === 'Reserved' ? `${bookings[idx].name} marked as Reserved — slot confirmed.` : 'Status set to Pending.');
+      }
+    });
+  });
+}
+
+/* ================================================================
+   FIREBASE STORAGE HOUSEKEEPING + WATCHER (on first admin unlock)
+   ================================================================ */
+let _proofWatcherArmed = false;
+function armProofWatcher() {
+  if (_proofWatcherArmed || !HAS_STORAGE) return;
+  _proofWatcherArmed = true;
+  sweepExpiredProofs();
+  watchProofs();
+}
+
+/* ---------- Supabase real-time listeners (skipped in demo mode) ---------- */
+function startRealtimeListeners() {
+  if (!supabaseClient) return;
+
+  supabaseClient.channel('custom-all-channel')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'kv_store' }, payload => {
+      const { key, value } = payload.new;
+      try {
+        if (key === 'bookings') {
+          bookings = value;
+          localStorage.setItem(LS.bookings, JSON.stringify(value));
+          renderSchedule(); renderBookingsList();
+          if (typeof renderAdminBookings === 'function') renderAdminBookings();
+          if (typeof renderDateSlotPreview === 'function') renderDateSlotPreview();
+        } else if (key === 'openPlay') {
+          openPlays = value;
+          localStorage.setItem(LS.openPlay, JSON.stringify(value));
+          renderSchedule();
+          if (typeof renderOpenPlayList === 'function') renderOpenPlayList();
+          if (typeof renderDateSlotPreview === 'function') renderDateSlotPreview();
+        } else if (key === 'morning') {
+          morningEnabled = value;
+          localStorage.setItem(LS.morning, JSON.stringify(value));
+          renderSchedule();
+          if (typeof populateTimeOptions === 'function') populateTimeOptions();
+          if (typeof renderMorningToggles === 'function') renderMorningToggles();
+        } else if (key === 'staffReserve') {
+          let parsed = value;
+          if(!parsed.weekId || parsed.weekId !== getCurrentWeekId()){
+            staffReserveEnabled = { weekId: getCurrentWeekId(), days: {...STAFF_RESERVE_DEFAULTS} };
+            supabaseClient.from('kv_store').upsert({ key: 'staffReserve', value: staffReserveEnabled }).catch(()=>{});
+          } else {
+            staffReserveEnabled = parsed;
+          }
+          localStorage.setItem(LS.staffReserve, JSON.stringify(staffReserveEnabled));
+          renderSchedule();
+          if (typeof renderStaffReserveToggles === 'function') renderStaffReserveToggles();
+        } else if (key === 'pin') {
+          localStorage.setItem(LS.pin, value);
+        } else if (key === 'payMethods') {
+          payMethods = value;
+          localStorage.setItem(LS.payMethods, JSON.stringify(value));
+          if (typeof renderPublicPayTab === 'function') renderPublicPayTab();
+          if (typeof renderAdminQrManager === 'function') renderAdminQrManager();
+        } else if (key === 'queues') {
+          localStorage.setItem(LS.queues, JSON.stringify(value));
+          if (typeof renderQueueModule === 'function') renderQueueModule();
+        }
+      } catch(e){}
+    })
+    .subscribe();
+}
+
+/* ---------- Seed sample data locally (demo mode) ---------- */
+function seedLocalIfEmpty() {
+  if (!localStorage.getItem(LS.bookings)) {
+    const t = todayISO();
+    const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate()+1);
+    const tom = tomorrow.toISOString().slice(0,10);
+    const seedData = [
+      {id:'b_seed_res', name:'Alex Rivera', email:'alex.rivera@example.com', date:t, start:13, end:14, status:'Reserved', group:'4 players', createdAt:Date.now()-7200000},
+      {id:'b_seed_pen', name:'Mika Tan', email:'mika.tan@example.com', date:t, start:14, end:15, status:'Pending', group:'2 players', createdAt:Date.now()-3600000},
+      {id:'op_seed_today', name:'Open Play', email:'', date:t, start:15, end:17, status:'OpenPlay', group:'Community open play', createdAt:Date.now()-3000000},
+      {id:'b_seed_tom', name:'JC Dela Cruz', email:'jc@example.com', date:tom, start:13, end:14, status:'Pending', group:'3 players', createdAt:Date.now()-1800000},
+    ];
+    bookings = seedData;
+    localStorage.setItem(LS.bookings, JSON.stringify(bookings));
+  }
+  if (!localStorage.getItem(LS.openPlay)) {
+    openPlays = [{id:'op_seed_today', date:todayISO(), start:15, end:17}];
+    localStorage.setItem(LS.openPlay, JSON.stringify(openPlays));
+  }
+}
+
+/* ---------- Seed data (only if cloud is empty) ---------- */
+async function seedIfEmpty() {
+  if (!supabaseClient) { seedLocalIfEmpty(); return; }
+  try {
+    const { data: bData } = await supabaseClient.from('kv_store').select('value').eq('key', 'bookings').single();
+    if (!bData) {
       const t = todayISO();
       const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate()+1);
       const tom = tomorrow.toISOString().slice(0,10);
@@ -1389,60 +1701,59 @@ async function seedIfEmpty() {
         {id:'op_seed_today', name:'Open Play', email:'', date:t, start:15, end:17, status:'OpenPlay', group:'Community open play', createdAt:Date.now()-3000000},
         {id:'b_seed_tom', name:'JC Dela Cruz', email:'jc@example.com', date:tom, start:13, end:14, status:'Pending', group:'3 players', createdAt:Date.now()-1800000},
       ];
-      await DOCS.bookings.set({ data: JSON.stringify(seedData) });
+      await supabaseClient.from('kv_store').upsert({ key: 'bookings', value: seedData });
       bookings = seedData;
     } else {
-      bookings = JSON.parse(bSnap.data().data);
+      bookings = bData.value;
     }
     localStorage.setItem(LS.bookings, JSON.stringify(bookings));
 
-    const oSnap = await DOCS.openPlay.get();
-    if (!oSnap.exists) {
+    const { data: oData } = await supabaseClient.from('kv_store').select('value').eq('key', 'openPlay').single();
+    if (!oData) {
       const t = todayISO();
       const seedOp = [{id:'op_seed_today', date:t, start:15, end:17}];
-      await DOCS.openPlay.set({ data: JSON.stringify(seedOp) });
+      await supabaseClient.from('kv_store').upsert({ key: 'openPlay', value: seedOp });
       openPlays = seedOp;
     } else {
-      openPlays = JSON.parse(oSnap.data().data);
+      openPlays = oData.value;
     }
     localStorage.setItem(LS.openPlay, JSON.stringify(openPlays));
 
-    const mSnap = await DOCS.morning.get();
-    if (!mSnap.exists) {
+    const { data: mData } = await supabaseClient.from('kv_store').select('value').eq('key', 'morning').single();
+    if (!mData) {
       const def = {"7":false,"8":false,"9":false,"10":false,"11":false};
-      await DOCS.morning.set({ data: JSON.stringify(def) });
+      await supabaseClient.from('kv_store').upsert({ key: 'morning', value: def });
       morningEnabled = def;
     } else {
-      morningEnabled = JSON.parse(mSnap.data().data);
+      morningEnabled = mData.value;
     }
     localStorage.setItem(LS.morning, JSON.stringify(morningEnabled));
 
-    const srSnap = await DOCS.staffReserve.get();
-    if (!srSnap.exists) {
+    const { data: srData } = await supabaseClient.from('kv_store').select('value').eq('key', 'staffReserve').single();
+    if (!srData) {
       const def = { weekId: getCurrentWeekId(), days: {...STAFF_RESERVE_DEFAULTS} };
-      await DOCS.staffReserve.set({ data: JSON.stringify(def) });
+      await supabaseClient.from('kv_store').upsert({ key: 'staffReserve', value: def });
       staffReserveEnabled = def;
     } else {
-      const parsed = JSON.parse(srSnap.data().data);
-      // Weekly auto-reset check
+      const parsed = srData.value;
       if(!parsed.weekId || parsed.weekId !== getCurrentWeekId()){
         staffReserveEnabled = { weekId: getCurrentWeekId(), days: {...STAFF_RESERVE_DEFAULTS} };
-        await DOCS.staffReserve.set({ data: JSON.stringify(staffReserveEnabled) });
+        await supabaseClient.from('kv_store').upsert({ key: 'staffReserve', value: staffReserveEnabled });
       } else {
         staffReserveEnabled = parsed;
       }
     }
     localStorage.setItem(LS.staffReserve, JSON.stringify(staffReserveEnabled));
 
-    const sSnap = await DOCS.settings.get();
-    if (!sSnap.exists) {
-      await DOCS.settings.set({ pin: '1234', payMethods: '{}' });
-    }
+    const { data: pinData } = await supabaseClient.from('kv_store').select('value').eq('key', 'pin').single();
+    if (!pinData) await supabaseClient.from('kv_store').upsert({ key: 'pin', value: '1234' });
+
+    const { data: pmData } = await supabaseClient.from('kv_store').select('value').eq('key', 'payMethods').single();
+    if (!pmData) await supabaseClient.from('kv_store').upsert({ key: 'payMethods', value: {} });
 
   } catch(e) {
-    console.warn('Firestore seed/fetch failed, using local cache:', e.message);
+    console.warn('Supabase seed/fetch failed, using local cache:', e.message);
   }
-  // Re-render with fresh data
   renderSchedule(); renderBookingsList();
   if (typeof populateTimeOptions === 'function') populateTimeOptions();
   if (typeof renderDateSlotPreview === 'function') renderDateSlotPreview();
@@ -2100,26 +2411,27 @@ document.getElementById('filterStatus').addEventListener('change', renderBooking
 document.getElementById('filterDate').addEventListener('change', renderBookingsList);
 
 /* ---------- Payment QR & Multi-Channel Switcher (GCash, Maya, BPI) ---------- */
+const _bizLabel = titleCase(CLIENT.business.name);
 const DEFAULT_PAY_METHODS = {
   gcash: {
     name: 'GCash',
     badge: 'GCash Payment',
     icon: 'G', color: '#0055FE',
-    account: '0917-888-0123 • White Kitchen',
+    account: `Scan to pay • ${_bizLabel}`,
     qrData: '' // empty string = show clean high-res fallback SVG QR
   },
   maya: {
     name: 'Maya',
     badge: 'Maya e-Wallet',
     icon: 'M', color: '#00BE6A',
-    account: '0917-888-0123 • White Kitchen',
+    account: `Scan to pay • ${_bizLabel}`,
     qrData: ''
   },
   bpi: {
     name: 'BPI / Bank',
     badge: 'BPI InstaPay',
     icon: 'B', color: '#B11016',
-    account: 'Account # 1234-5678-90 • White Kitchen',
+    account: `Bank transfer • ${_bizLabel}`,
     qrData: ''
   }
 };
@@ -2142,7 +2454,7 @@ function loadPayMethods(){
 
 function savePayMethods(methods){
   localStorage.setItem(LS.payMethods, JSON.stringify(methods));
-  DOCS.settings.update({ payMethods: JSON.stringify(methods) }).catch(()=>{});
+  if (db && DOCS.settings) DOCS.settings.update({ payMethods: JSON.stringify(methods) }).catch(()=>{});
 }
 
 let payMethods = loadPayMethods();
@@ -2203,8 +2515,8 @@ function renderPublicPayTab(channelKey = activePublicPayChannel){
   const displayEl = document.getElementById('payQrDisplay');
 
   if(badgeEl) badgeEl.textContent = method.badge;
-  if(titleEl) titleEl.textContent = method.name + ' • White Kitchen';
-  if(accountEl) accountEl.textContent = method.account || 'White Kitchen Pickleball';
+  if(titleEl) titleEl.textContent = method.name + ' • ' + _bizLabel;
+  if(accountEl) accountEl.textContent = method.account || (_bizLabel + ' Pickleball');
   if(iconEl){ iconEl.textContent = method.icon || '₱'; iconEl.style.background = method.color || '#201C19'; }
 
   if(displayEl){
@@ -2355,7 +2667,7 @@ renderAdminQrManager('gcash');
 
 /* ---------- Admin ---------- */
 function getPin(){ return localStorage.getItem(LS.pin) || '1234'; }
-function savePin(pin){ localStorage.setItem(LS.pin, pin); DOCS.settings.update({ pin: pin }).catch(()=>{}); }
+function savePin(pin){ localStorage.setItem(LS.pin, pin); if (db && DOCS.settings) DOCS.settings.update({ pin: pin }).catch(()=>{}); }
 
 document.getElementById('adminUnlockBtn').addEventListener('click', ()=>{
   const input = document.getElementById('adminPinInput').value.trim();
@@ -2385,6 +2697,7 @@ function renderAdminBookings(){
   count.textContent=bookings.length;
   list.innerHTML='';
   if (typeof renderStaffReserveToggles === 'function') renderStaffReserveToggles();
+  if (typeof renderPaymentProofsQueue === 'function') renderPaymentProofsQueue();
   if(bookings.length===0){
     list.innerHTML=`<div class="p-10 text-center mono text-[12px] opacity-60">No bookings</div>`;
     return;
@@ -2649,7 +2962,7 @@ function seedQueueSessionIfEmpty() {
     const t = todayISO();
     const demoSession = {
       id: 'q_demo_smashers',
-      name: 'WK Morning Smashers',
+      name: 'Morning Smashers',
       mode: 'doubles',
       rule: 'winner_stays',
       pin: '1234',
@@ -2671,6 +2984,44 @@ function seedQueueSessionIfEmpty() {
       expiresAt: getMidnightTimestamp()
     };
     qList.push(demoSession);
+
+    // Demo Fixed Pairs League with a live ladder
+    const fpTeams = {
+      T1: { id: 'T1', names: ['Alex R.', 'Juan D.'],   gp: 0, w: 0, l: 0, pf: 0, pa: 0, h2h: {} },
+      T2: { id: 'T2', names: ['Mika T.', 'Bobby C.'],  gp: 0, w: 0, l: 0, pf: 0, pa: 0, h2h: {} },
+      T3: { id: 'T3', names: ['Sio B.', 'Sandro M.'],  gp: 0, w: 0, l: 0, pf: 0, pa: 0, h2h: {} },
+      T4: { id: 'T4', names: ['Coach Kyle', 'Mimi T.'],gp: 0, w: 0, l: 0, pf: 0, pa: 0, h2h: {} }
+    };
+    const fp = {
+      id: 'q_demo_league',
+      name: 'Doubles League Night',
+      mode: 'doubles',
+      rule: 'fixed_pairs',
+      pin: '1234',
+      allowJoin: true,
+      waiting: [],
+      teams: fpTeams,
+      activeMatch: null,
+      matches: [],
+      createdAt: Date.now(),
+      expiresAt: getMidnightTimestamp()
+    };
+    const fpPlay = (aId, bId, sA, sB, minsAgo) => {
+      fp.activeMatch = { teamA: fpTeams[aId].names, teamB: fpTeams[bId].names, teamAId: aId, teamBId: bId };
+      applyMatchResult(fp, aId, bId, sA, sB);
+      fp.matches.push({
+        id: 'fp_m_' + minsAgo, teamA: fpTeams[aId].names, teamB: fpTeams[bId].names,
+        scoreA: sA, scoreB: sB, winner: sA > sB ? 'teamA' : 'teamB', timestamp: Date.now() - minsAgo * 60000
+      });
+    };
+    fpPlay('T1', 'T2', 11, 7, 52);
+    fpPlay('T3', 'T4', 11, 9, 34);
+    fpPlay('T1', 'T3', 9, 11, 16);
+    // Both teams from last match rotate back; next pair steps on
+    fp.waiting.push({ id: 'T1', names: fpTeams.T1.names }, { id: 'T3', names: fpTeams.T3.names });
+    fp.activeMatch = { teamA: fpTeams.T2.names, teamB: fpTeams.T4.names, teamAId: 'T2', teamBId: 'T4' };
+    qList.push(fp);
+
     saveQueues(qList);
   }
 }
@@ -2925,7 +3276,8 @@ function renderActiveQueueDashboard() {
       four_off_four_on: 'Four Off, Four On',
       fixed_rotation: 'Fixed Rotation',
       timed_rotation: 'Timed Rotation',
-      partner_rotation: 'Partner Rotation'
+      partner_rotation: 'Partner Rotation',
+      fixed_pairs: 'Fixed Pairs League'
     };
     ruleEl.textContent = rulesLabels[session.rule] || 'Winner Stays';
   }
@@ -2943,13 +3295,24 @@ function renderActiveQueueDashboard() {
     }
   }
 
-  // Hide or Show Partner name field based on game mode
+  // Hide / Show / Require Partner name field based on game mode + rule
   const jPlayer2Wrapper = document.getElementById('jPlayer2Wrapper');
   if (jPlayer2Wrapper) {
-    if (session.mode === 'singles') {
+    const p2Label = document.getElementById('jPlayer2Label');
+    const p2Input = document.getElementById('jPlayer2');
+    const p2Hint = document.getElementById('jPlayer2Hint');
+    if (session.rule === 'fixed_pairs') {
+      jPlayer2Wrapper.classList.remove('hidden');
+      if (p2Label) p2Label.innerHTML = 'Partner Name <span class="text-[#B91C1C]">*</span> Required';
+      if (p2Input) p2Input.placeholder = 'e.g. Jane Doe';
+      if (p2Hint) p2Hint.textContent = 'Fixed Pairs League: your team stays together for the whole session and builds a record.';
+    } else if (session.mode === 'singles') {
       jPlayer2Wrapper.classList.add('hidden');
     } else {
       jPlayer2Wrapper.classList.remove('hidden');
+      if (p2Label) p2Label.textContent = 'Player 2 Name (Optional Partner)';
+      if (p2Input) p2Input.placeholder = 'e.g. Jane Doe (or leave blank to queue alone)';
+      if (p2Hint) p2Hint.textContent = 'For doubles, queueing with a partner keeps you grouped together!';
     }
   }
 
@@ -2961,8 +3324,13 @@ function renderActiveQueueDashboard() {
 
   if (teamAPlayers && teamBPlayers) {
     if (session.activeMatch) {
-      teamAPlayers.innerHTML = session.activeMatch.teamA.map(p => `<div class="truncate py-0.5">${escapeHtml(p)}</div>`).join('');
-      teamBPlayers.innerHTML = session.activeMatch.teamB.map(p => `<div class="truncate py-0.5">${escapeHtml(p)}</div>`).join('');
+      const recordChip = (tid) => {
+        if (session.rule !== 'fixed_pairs' || !tid || !session.teams || !session.teams[tid]) return '';
+        const t = session.teams[tid];
+        return `<span class="mt-1 inline-block mono text-[9px] px-1.5 py-0.5 rounded-full bg-white/10 border border-white/10 opacity-80">${t.w}W–${t.l}L</span>`;
+      };
+      teamAPlayers.innerHTML = session.activeMatch.teamA.map(p => `<div class="truncate py-0.5">${escapeHtml(p)}</div>`).join('') + recordChip(session.activeMatch.teamAId);
+      teamBPlayers.innerHTML = session.activeMatch.teamB.map(p => `<div class="truncate py-0.5">${escapeHtml(p)}</div>`).join('') + recordChip(session.activeMatch.teamBId);
       if (scoreAInput) scoreAInput.disabled = false;
       if (scoreBInput) scoreBInput.disabled = false;
     } else {
@@ -3009,7 +3377,13 @@ function renderActiveQueueDashboard() {
         waitingList.appendChild(entry);
       });
     }
-    if (waitingBadge) waitingBadge.textContent = `${flatCount} player${flatCount !== 1 ? 's' : ''} waiting`;
+    if (waitingBadge) {
+      if (session.rule === 'fixed_pairs') {
+        waitingBadge.textContent = `${session.waiting.length} team${session.waiting.length !== 1 ? 's' : ''} waiting`;
+      } else {
+        waitingBadge.textContent = `${flatCount} player${flatCount !== 1 ? 's' : ''} waiting`;
+      }
+    }
 
     // Bind remove button
     waitingList.querySelectorAll('button[data-remove-wait]').forEach(btn => {
@@ -3074,11 +3448,111 @@ function renderActiveQueueDashboard() {
       });
     }
   }
+
+  // League Standings (Fixed Pairs only)
+  const standingsCard = document.getElementById('qStandingsCard');
+  const standingsBody = document.getElementById('qStandingsBody');
+  if (standingsCard && standingsBody) {
+    if (session.rule === 'fixed_pairs') {
+      standingsCard.classList.remove('hidden');
+      const rows = computeStandings(session);
+      standingsBody.innerHTML = '';
+      if (rows.length === 0) {
+        standingsBody.innerHTML = `<tr><td colspan="9" class="py-6 text-center mono text-[11px] opacity-55">No teams yet — add pairs to build the ladder.</td></tr>`;
+      } else {
+        rows.forEach((t, i) => {
+          const diff = t.pf - t.pa;
+          const diffStr = diff > 0 ? `+${diff}` : `${diff}`;
+          const diffCls = diff > 0 ? 'text-[#15803D]' : diff < 0 ? 'text-[#B91C1C]' : 'opacity-50';
+          const winPct = t.gp ? Math.round((t.w / t.gp) * 100) : 0;
+          const isLeader = i === 0 && t.gp > 0;
+          const tr = document.createElement('tr');
+          tr.className = `transition hover:bg-[#FFFBF5] ${isLeader ? 'bg-[#D6FF5F]/15' : ''}`;
+          tr.innerHTML = `
+            <td class="py-2.5 pr-2">
+              <span class="inline-grid place-items-center w-6 h-6 rounded-full text-[10px] font-[800] ${isLeader ? 'bg-[#201C19] text-[#D6FF5F]' : 'bg-[#F1E9DF] text-[#201C19]/70'}">${i + 1}</span>
+            </td>
+            <td class="py-2.5 pr-3">
+              <div class="font-[800] text-[12px] tracking-[-0.01em] max-w-[180px] truncate" style="font-family:'Bricolage Grotesque',sans-serif">${escapeHtml(teamLabel(t.names))}</div>
+              <div class="mt-1 h-1 w-24 rounded-full bg-[#F1E9DF] overflow-hidden"><div class="h-full rounded-full bg-[#201C19] transition-all duration-500" style="width:${winPct}%"></div></div>
+            </td>
+            <td class="py-2.5 px-2 text-center font-[600]">${t.gp}</td>
+            <td class="py-2.5 px-2 text-center font-[800] text-[#15803D]">${t.w}</td>
+            <td class="py-2.5 px-2 text-center font-[800] text-[#B91C1C]">${t.l}</td>
+            <td class="py-2.5 px-2 text-right font-[600]">${t.pf}</td>
+            <td class="py-2.5 px-2 text-right font-[600] opacity-70">${t.pa}</td>
+            <td class="py-2.5 px-2 text-right font-[800] ${diffCls}">${diffStr}</td>
+            <td class="py-2.5 pl-3 font-[800]">${winPct}<span class="opacity-40 text-[9px]">%</span></td>
+          `;
+          standingsBody.appendChild(tr);
+        });
+      }
+    } else {
+      standingsCard.classList.add('hidden');
+    }
+  }
 }
+
+/* ---------- Fixed Pairs League: stats engine ---------- */
+function ensureTeam(session, id, names) {
+  if (!session.teams) session.teams = {};
+  if (!session.teams[id]) {
+    session.teams[id] = { id, names, gp: 0, w: 0, l: 0, pf: 0, pa: 0, h2h: {} };
+  }
+  return session.teams[id];
+}
+
+function applyMatchResult(session, aId, bId, scoreA, scoreB) {
+  const a = ensureTeam(session, aId, (session.activeMatch && session.activeMatch.teamA) || []);
+  const b = ensureTeam(session, bId, (session.activeMatch && session.activeMatch.teamB) || []);
+  a.gp++; b.gp++;
+  a.pf += scoreA; a.pa += scoreB;
+  b.pf += scoreB; b.pa += scoreA;
+  if (scoreA > scoreB) { a.w++; b.l++; } else { b.w++; a.l++; }
+  // head-to-head ledger
+  a.h2h[bId] = a.h2h[bId] || { w: 0, l: 0 };
+  b.h2h[aId] = b.h2h[aId] || { w: 0, l: 0 };
+  if (scoreA > scoreB) { a.h2h[bId].w++; b.h2h[aId].l++; }
+  else { b.h2h[aId].w++; a.h2h[bId].l++; }
+}
+
+function computeStandings(session) {
+  const teams = Object.values(session.teams || {});
+  const winPct = t => t.gp ? t.w / t.gp : 0;
+  const pd = t => t.pf - t.pa;
+  teams.sort((a, b) => {
+    const wa = winPct(a), wb = winPct(b);
+    if (wb !== wa) return wb - wa;                 // 1. winning percentage
+    const da = pd(a), db = pd(b);
+    if (db !== da) return db - da;                 // 2. point differential
+    const ab = a.h2h && a.h2h[b.id];
+    if (ab && ab.w !== ab.l) return ab.l - ab.w;   // 3. head-to-head
+    return b.pf - a.pf;                            // 4. total points scored
+  });
+  return teams;
+}
+
+function teamLabel(names) { return (names || []).join(' & '); }
 
 // Automatically pulls players from waiting list if current active match is empty
 function checkAndFillActiveMatch(session) {
   if (session.activeMatch) return; // already running
+
+  // FIXED PAIRS LEAGUE: teams are the rotation unit; partners never change
+  if (session.rule === 'fixed_pairs') {
+    if (session.waiting.length >= 2) {
+      const tA = session.waiting.shift();
+      const tB = session.waiting.shift();
+      ensureTeam(session, tA.id, tA.names);
+      ensureTeam(session, tB.id, tB.names);
+      session.activeMatch = {
+        id: 'match_' + Date.now(),
+        teamA: tA.names, teamB: tB.names,
+        teamAId: tA.id, teamBId: tB.id
+      };
+    }
+    return;
+  }
 
   const isDoubles = session.mode === 'doubles';
   const countNeeded = isDoubles ? 4 : 2;
@@ -3182,6 +3656,19 @@ function checkAndFillActiveMatch(session) {
   }
 }
 
+// CREATE QUEUE — adapt form hints when Fixed Pairs League is chosen
+document.getElementById('qRule')?.addEventListener('change', () => {
+  const rule = document.getElementById('qRule').value;
+  const modeSel = document.getElementById('qMode');
+  const ta = document.getElementById('qInitialPlayers');
+  if (rule === 'fixed_pairs') {
+    if (modeSel) modeSel.value = 'doubles';
+    if (ta) ta.placeholder = 'One team per line, partners joined with &\nJuan & Pedro\nMika & Alex';
+  } else if (ta) {
+    ta.placeholder = 'Player 1\nPlayer 2\nPlayer 3\nPlayer 4';
+  }
+});
+
 // CREATE QUEUE
 document.getElementById('createQueueForm')?.addEventListener('submit', (e) => {
   e.preventDefault();
@@ -3197,19 +3684,29 @@ document.getElementById('createQueueForm')?.addEventListener('submit', (e) => {
     return;
   }
 
-  // Parse initial names
-  const names = initialText.split('\n')
-    .map(x => x.trim())
-    .filter(x => x.length > 0);
-
   const waiting = [];
-  // For initial batch, group them singly to build queue
-  names.forEach(n => {
-    waiting.push({
-      id: 'w_' + Math.random().toString(36).substr(2, 9),
-      names: [n]
+  const teams = {};
+
+  if (rule === 'fixed_pairs') {
+    if (mode !== 'doubles') { alert('Fixed Pairs League requires Doubles mode.'); return; }
+    // Each line = one fixed team: "Name & Partner"
+    const lines = initialText.split('\n').map(x => x.trim()).filter(Boolean);
+    for (const line of lines) {
+      const parts = line.split(/\s*(?:&|\band\b|,|\+)\s*/i).map(s => s.trim()).filter(Boolean);
+      if (parts.length !== 2) {
+        alert(`Each line must be exactly one pair, e.g. "Juan & Pedro". Problem line: "${line}"`);
+        return;
+      }
+      const id = 'T' + Math.random().toString(36).substr(2, 8);
+      waiting.push({ id, names: parts });
+      teams[id] = { id, names: parts, gp: 0, w: 0, l: 0, pf: 0, pa: 0, h2h: {} };
+    }
+  } else {
+    // Default: one player per line
+    initialText.split('\n').map(x => x.trim()).filter(Boolean).forEach(n => {
+      waiting.push({ id: 'w_' + Math.random().toString(36).substr(2, 9), names: [n] });
     });
-  });
+  }
 
   const session = {
     id: 'q_' + Date.now(),
@@ -3219,6 +3716,7 @@ document.getElementById('createQueueForm')?.addEventListener('submit', (e) => {
     pin,
     allowJoin,
     waiting,
+    teams,
     activeMatch: null,
     matches: [],
     createdAt: Date.now(),
@@ -3258,13 +3756,23 @@ document.getElementById('joinQueueForm')?.addEventListener('submit', (e) => {
   const p2 = document.getElementById('jPlayer2')?.value.trim();
 
   if (!p1) return;
-  
+
+  if (session.rule === 'fixed_pairs' && !p2) {
+    alert('Fixed Pairs League: please enter your partner name too.');
+    return;
+  }
+
+  const teamId = 'T' + Date.now().toString(36) + Math.random().toString(36).substr(2, 4);
   const waitingObj = {
-    id: 'w_' + Date.now() + Math.random().toString(36).substr(2, 5),
+    id: teamId,
     names: (session.mode === 'doubles' && p2) ? [p1, p2] : [p1]
   };
 
   session.waiting.push(waitingObj);
+  if (session.rule === 'fixed_pairs') {
+    if (!session.teams) session.teams = {};
+    session.teams[teamId] = { id: teamId, names: waitingObj.names, gp: 0, w: 0, l: 0, pf: 0, pa: 0, h2h: {} };
+  }
   checkAndFillActiveMatch(session);
   saveQueues(sessions);
   renderActiveQueueDashboard();
@@ -3391,6 +3899,19 @@ document.getElementById('submitScoreBtn')?.addEventListener('click', () => {
     });
     session.activeMatch = null;
 
+  } else if (session.rule === 'fixed_pairs') {
+    // Record league stats, then both teams rotate to the back of the queue
+    if (match.teamAId && match.teamBId) {
+      applyMatchResult(session, match.teamAId, match.teamBId, scoreA, scoreB);
+    }
+    const tA = { id: match.teamAId || ('T' + Date.now().toString(36)), names: match.teamA };
+    const tB = { id: match.teamBId || ('T' + (Date.now() + 1).toString(36)), names: match.teamB };
+    ensureTeam(session, tA.id, tA.names);
+    ensureTeam(session, tB.id, tB.names);
+    session.waiting.push(tA);
+    session.waiting.push(tB);
+    session.activeMatch = null;
+
   } else if (session.rule === 'timed_rotation') {
     // Timed Rotation: Reset timer back to the limit upon scoring
     session.timerSecondsLeft = session.timerLimit * 60;
@@ -3478,6 +3999,11 @@ function toast(msg){
 }
 
 /* ---------- Init ---------- */
+applyBranding();           // white-label: brand, theme labels, contact, footer
+if (!FB_ENABLED) {
+  const b = document.getElementById('demoModeBanner');
+  if (b) b.classList.remove('hidden');
+}
 selectedDate = todayISO();
 calCursor = new Date(selectedDate+'T12:00:00');
 renderCalendar();          // renders month picker + prefills time dropdowns
@@ -3487,6 +4013,8 @@ populateTimeOptions();
 recalcTotal();
 renderDateSlotPreview();
 renderQueueModule();       // renders the queueing session lists and dashboards
+renderProofStrip();        // proofs strip on Payment tab (local fallback proofs)
+_sweepLocalProofs();       // purge expired local proofs on boot (7-day retention)
 updateAdminTabsVisibility();   // Public Portal mode by default (Book + Payment only)
 
 // Render admin toggles when admin panel is shown
@@ -3496,8 +4024,16 @@ updateAdminTabsVisibility = function() {
   if(adminUnlocked) {
     if (typeof renderMorningToggles === 'function') renderMorningToggles();
     if (typeof renderStaffReserveToggles === 'function') renderStaffReserveToggles();
+    armProofWatcher();                    // start Firebase Storage housekeeping on first unlock
+    renderPaymentProofsQueue();           // populate the Admin payment review queue
   }
 };
+
+// Confirmation modal → upload proof for the just-created booking
+document.getElementById('modalGoUpload')?.addEventListener('click', () => {
+  document.getElementById('confirmModal').classList.add('hidden');
+  openProofPicker(null); // resolves to the most recent Pending booking
+});
 </script>
 </body>
 </html>

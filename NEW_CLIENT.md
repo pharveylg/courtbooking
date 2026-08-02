@@ -11,13 +11,32 @@ Estimated time per client: **30–60 minutes**.
 ```
 GitHub repo (one codebase, one branch per client)
         │
-        ├── branch: main               → Vercel A  → Firebase A   (White Kitchen)
-        ├── branch: client/ace-pickle  → Vercel B  → Firebase B   (Ace Pickle)
-        └── branch: client/smash       → Vercel C  → Firebase C   (Smash Courts)
+        ├── branch: main                   → neutral grey DEMO (no client data)
+        ├── branch: client/white-kitchen   → Vercel WK  → Firebase courtbooking-85175
+        ├── branch: client/ace-pickle      → Vercel B   → Firebase B
+        └── branch: client/smash           → Vercel C   → Firebase C
 ```
 
-Each client gets its own Firebase project (own database), its own Vercel
-deployment, and its own config. Clients can never see each other's data.
+- **`main` is the plain template** — grey color scheme, generic branding,
+  no Firebase keys (runs in local demo mode). Never put client details here.
+- **Each client lives on its own branch** with its own Firebase project,
+  its own Vercel deployment, and its own config. Clients can never see
+  each other's data.
+
+### Bootstrapping the White Kitchen branch (one-time, already live)
+
+```bash
+git checkout main
+git checkout -b client/white-kitchen
+cp examples/client-config.white-kitchen.js client-config.js
+cp examples/firebase-config.white-kitchen.js firebase-config.js
+git add client-config.js firebase-config.js
+git commit -m "White Kitchen client deployment"
+git push -u origin client/white-kitchen
+```
+
+Then create a Vercel project from the `client/white-kitchen` branch and
+point the existing Firebase project at it.
 
 ---
 

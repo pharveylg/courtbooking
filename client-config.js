@@ -60,11 +60,11 @@ window.CLIENT_CONFIG = {
     queuePerHead: 100,
   },
 
-  /* Default schedule: 7AM–12PM queue, 1PM–10PM reservations */
+  /* Default schedule: all operating hours (7AM–10PM) are bookable */
   hours: {
     queueStart:   7,
-    queueEnd:     12,
-    bookingStart: 13,
+    queueEnd:     7,      // No queue-only window by default; all hours 7AM–10PM are bookable
+    bookingStart: 7,
     close:        22,
   },
 

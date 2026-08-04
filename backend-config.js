@@ -11,6 +11,6 @@
 // ============================================================
 
 window.SUPABASE_CONFIG = {
-  url: "https://whlqhmjlreujpgonvjcf.supabase.co/rest/v1/",
-  anonKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndobHFobWpscmV1anBnb252amNmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU2NTQ2MzEsImV4cCI6MjEwMTIzMDYzMX0.hJzYmMmJx-u_lDCyyJRdr5nJJ9a7KUnKM4RdWHFo80A"
+  url: "PASTE_SUPABASE_URL",
+  anonKey: "PASTE_SUPABASE_ANON_KEY"
 };

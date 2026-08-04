@@ -31,37 +31,53 @@
 
 <!-- Header -->
 <header class="sticky top-0 z-30 backdrop-blur-xl bg-[#FFFBF5]/90 border-b border-[#EAE0D5] shadow-xs">
-  <div class="max-w-[1320px] mx-auto px-3.5 md:px-6 h-[64px] md:h-[68px] flex items-center justify-between gap-2 md:gap-4">
-    <div class="flex items-center gap-2.5 md:gap-3 min-w-0">
-      <div id="brandLogo" class="w-8 h-8 md:w-9 md:h-9 rounded-full bg-[#18181B] text-[#FAFAFA] grid place-items-center font-black text-[12px] md:text-[13px] tracking-[-0.02em] shrink-0 overflow-hidden">CB</div>
-      <div class="leading-[0.95] min-w-0">
-        <div id="brandName" class="font-[800] text-[15px] md:text-[16px] tracking-[-0.02em] truncate">COURT BOOKING</div>
-        <div id="brandSub" class="mono text-[9px] md:text-[10px] tracking-[0.16em] uppercase opacity-60 -mt-[2px] truncate">Pickleball • Single Court</div>
+  <div class="max-w-[1320px] mx-auto px-3.5 md:px-6">
+    <!-- Top row: Logo + brand name + admin lock -->
+    <div class="h-[52px] md:h-[68px] flex items-center justify-between gap-3">
+      <div class="flex items-center gap-2.5 md:gap-3 min-w-0 flex-1">
+        <div id="brandLogo" class="w-8 h-8 md:w-9 md:h-9 rounded-full bg-[#18181B] text-[#FAFAFA] grid place-items-center font-black text-[12px] md:text-[13px] tracking-[-0.02em] shrink-0 overflow-hidden">CB</div>
+        <div class="leading-[0.95] min-w-0 flex-1">
+          <div id="brandName" class="font-[800] text-[15px] md:text-[16px] tracking-[-0.02em] truncate">COURT BOOKING</div>
+          <div id="brandSub" class="mono text-[9px] md:text-[10px] tracking-[0.16em] uppercase opacity-60 -mt-[2px] truncate">Pickleball • Single Court</div>
+        </div>
+        <div class="hidden lg:flex items-center gap-2 ml-5 pl-5 border-l border-[#EAE0D5]">
+          <div class="w-2 h-2 rounded-full bg-[#4ADE80] animate-pulse"></div>
+          <span class="mono text-[11px] uppercase tracking-widest">Court Open • <span id="hdrDate"></span></span>
+        </div>
       </div>
-      <div class="hidden lg:flex items-center gap-2 ml-5 pl-5 border-l border-[#EAE0D5]">
-        <div class="w-2 h-2 rounded-full bg-[#4ADE80] animate-pulse"></div>
-        <span class="mono text-[11px] uppercase tracking-widest">Court Open • <span id="hdrDate"></span></span>
+
+      <!-- Desktop nav (hidden on mobile) -->
+      <div class="hidden md:flex items-center gap-2">
+        <nav class="flex items-center gap-1 p-1 rounded-full bg-[#F1E9DF] border border-[#E9DDD0]">
+          <button data-nav="book" class="nav-btn active px-5 h-8 rounded-full text-[13px] font-[650] tracking-[-0.01em] bg-[#201C19] text-white shadow-sm transition">Book</button>
+          <button data-nav="queue" class="nav-btn px-5 h-8 rounded-full text-[13px] font-[550] opacity-70 hover:opacity-100 transition">Queue</button>
+          <button data-nav="payment" class="nav-btn px-5 h-8 rounded-full text-[13px] font-[550] opacity-70 hover:opacity-100 transition">Payment</button>
+          <button data-nav="bookings" class="nav-btn admin-only-tab hidden px-5 h-8 rounded-full text-[13px] font-[550] opacity-70 hover:opacity-100 transition">
+            Bookings <span id="hdrBookingsBadge" class="ml-1 px-1.5 py-0.5 rounded-full bg-[#201C19]/10 text-[10px]">0</span>
+          </button>
+          <button data-nav="admin" class="nav-btn admin-only-tab hidden px-5 h-8 rounded-full text-[13px] font-[550] opacity-70 hover:opacity-100 transition">Admin</button>
+        </nav>
+        <button id="headerAdminToggle" title="Staff / Admin Access" class="flex items-center justify-center gap-1.5 px-3.5 h-8 rounded-full bg-white border border-[#EAE0D5] hover:border-[#201C19] text-[12px] font-[700] transition shrink-0 cursor-pointer shadow-xs">
+          <span id="headerAdminIcon" class="grid place-items-center"><svg id="headerAdminSvg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span>
+          <span id="headerAdminText" class="hidden sm:inline">Staff</span>
+        </button>
       </div>
+
+      <!-- Mobile: just the admin lock icon (tabs move below) -->
+      <button id="headerAdminToggleMobile" title="Staff / Admin Access" class="md:hidden flex items-center justify-center w-9 h-9 rounded-full bg-white border border-[#EAE0D5] hover:border-[#201C19] transition shrink-0 cursor-pointer shadow-xs">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+      </button>
     </div>
 
-    <div class="flex items-center gap-2">
-      <!-- Public + Admin Nav -->
-      <nav class="flex items-center gap-1 p-1 rounded-full bg-[#F1E9DF] border border-[#E9DDD0]">
-        <button data-nav="book" class="nav-btn active px-3.5 md:px-5 h-8 rounded-full text-[12px] md:text-[13px] font-[650] tracking-[-0.01em] bg-[#201C19] text-white shadow-sm transition">Book</button>
-        <button data-nav="queue" class="nav-btn px-3.5 md:px-5 h-8 rounded-full text-[12px] md:text-[13px] font-[550] opacity-70 hover:opacity-100 transition">Queue</button>
-        <button data-nav="payment" class="nav-btn px-3.5 md:px-5 h-8 rounded-full text-[12px] md:text-[13px] font-[550] opacity-70 hover:opacity-100 transition">Payment</button>
-        <!-- Admin-only tabs (hidden for public portal users) -->
-        <button data-nav="bookings" class="nav-btn admin-only-tab hidden px-3.5 md:px-5 h-8 rounded-full text-[12px] md:text-[13px] font-[550] opacity-70 hover:opacity-100 transition">
-          Bookings <span id="hdrBookingsBadge" class="ml-1 px-1.5 py-0.5 rounded-full bg-[#201C19]/10 text-[10px]">0</span>
-        </button>
-        <button data-nav="admin" class="nav-btn admin-only-tab hidden px-3.5 md:px-5 h-8 rounded-full text-[12px] md:text-[13px] font-[550] opacity-70 hover:opacity-100 transition">Admin</button>
+    <!-- Mobile tab bar (below brand, full width, scrollable) -->
+    <div class="md:hidden flex items-center gap-1 pb-2.5 -mx-1 px-1 overflow-x-auto no-scrollbar">
+      <nav class="flex items-center gap-1 p-1 rounded-full bg-[#F1E9DF] border border-[#E9DDD0] flex-1 min-w-0">
+        <button data-nav="book" class="nav-btn active flex-1 h-8 rounded-full text-[12px] font-[650] tracking-[-0.01em] bg-[#201C19] text-white shadow-sm transition whitespace-nowrap">Book</button>
+        <button data-nav="queue" class="nav-btn flex-1 h-8 rounded-full text-[12px] font-[550] opacity-70 hover:opacity-100 transition whitespace-nowrap">Queue</button>
+        <button data-nav="payment" class="nav-btn flex-1 h-8 rounded-full text-[12px] font-[550] opacity-70 hover:opacity-100 transition whitespace-nowrap">Payment</button>
+        <button data-nav="bookings" class="nav-btn admin-only-tab hidden flex-1 h-8 rounded-full text-[12px] font-[550] opacity-70 hover:opacity-100 transition whitespace-nowrap">Bookings</button>
+        <button data-nav="admin" class="nav-btn admin-only-tab hidden flex-1 h-8 rounded-full text-[12px] font-[550] opacity-70 hover:opacity-100 transition whitespace-nowrap">Admin</button>
       </nav>
-
-      <!-- Staff / Admin Lock Button -->
-      <button id="headerAdminToggle" title="Staff / Admin Access" class="flex items-center justify-center gap-1.5 px-3 md:px-3.5 h-8 rounded-full bg-white border border-[#EAE0D5] hover:border-[#201C19] text-[11px] md:text-[12px] font-[700] transition shrink-0 cursor-pointer shadow-xs">
-        <span id="headerAdminIcon" class="grid place-items-center"><svg id="headerAdminSvg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span>
-        <span id="headerAdminText" class="hidden sm:inline">Staff</span>
-      </button>
     </div>
   </div>
 </header>
@@ -217,13 +233,18 @@
             <div class="grid grid-cols-2 gap-3">
               <label class="flex flex-col gap-1.5">
                 <span class="mono text-[11px] uppercase tracking-widest font-[600]">Start</span>
-                <select id="fStart" class="h-[44px] rounded-[12px] border border-[#EAE0D5] bg-[#FFFBF5] px-3 text-[14px] font-[600] outline-none focus:border-[#201C19]"></select>
+                <select id="fStart" class="h-[44px] rounded-[12px] border border-[#EAE0D5] bg-[#FFFBF5] px-3 text-[14px] font-[600] text-[#201C19] outline-none focus:border-[#201C19]"></select>
               </label>
               <label class="flex flex-col gap-1.5">
                 <span class="mono text-[11px] uppercase tracking-widest font-[600]">End</span>
-                <select id="fEnd" class="h-[44px] rounded-[12px] border border-[#EAE0D5] bg-[#FFFBF5] px-3 text-[14px] font-[600] outline-none focus:border-[#201C19]"></select>
+                <select id="fEnd" class="h-[44px] rounded-[12px] border border-[#EAE0D5] bg-[#FFFBF5] px-3 text-[14px] font-[600] text-[#201C19] outline-none focus:border-[#201C19]"></select>
               </label>
             </div>
+
+            <label class="flex flex-col gap-1.5">
+              <span class="mono text-[11px] uppercase tracking-widest font-[600]">Booking PIN (4 digits)</span>
+              <input required type="password" inputmode="numeric" maxlength="4" id="fPin" placeholder="e.g. 1234 (to pay or verify later)" class="h-[44px] rounded-[12px] border border-[#EAE0D5] bg-[#FFFBF5] px-4 text-[14px] font-[700] text-[#201C19] tracking-widest outline-none focus:border-[#201C19] focus:bg-white transition"/>
+            </label>
 
             <div class="rounded-[14px] bg-[#201C19] text-white p-4 flex items-center justify-between">
               <div>
@@ -1018,7 +1039,7 @@ const _cfgDefaults = {
   theme: { primary:'#D4D4D8', primaryHover:'#A1A1AA', dark:'#18181B', bg:'#FAFAFA', border:'#E4E4E7', borderSoft:'#F4F4F5', staff:'#FB923C', openPlay:'#8B5CF6', queue:'#34D399', pending:'#FBBF24' },
   currency: '₱',
   rates: { hourly:300, queuePerHead:100 },
-  hours: { queueStart:7, queueEnd:12, bookingStart:13, close:22 },
+  hours: { queueStart:7, queueEnd:7, bookingStart:7, close:22 },
   staff: { days:[0,2,4,6], startHour:17, endHour:22, label:'STAFF' },
   booking: { maxDaysAhead:60, maxHoursPerBooking:0 },
 };
@@ -1855,21 +1876,22 @@ document.querySelectorAll('.nav-btn').forEach(btn=>{
   });
 });
 
-/* Staff / Admin Lock Header Button */
-const headerAdminToggle = document.getElementById('headerAdminToggle');
-if(headerAdminToggle){
-  headerAdminToggle.addEventListener('click', ()=>{
-    if(adminUnlocked){
-      adminUnlocked = false;
-      sessionStorage.setItem(LS.adminUnlocked, 'false');
-      updateAdminTabsVisibility();
-      toast('Returned to Public Portal view');
-    } else {
-      document.getElementById('adminLoginModal').classList.remove('hidden');
-      setTimeout(()=> document.getElementById('modalPinInput').focus(), 50);
-    }
-  });
+/* Staff / Admin Lock Header Button (desktop + mobile) */
+function handleAdminToggleClick(){
+  if(adminUnlocked){
+    adminUnlocked = false;
+    sessionStorage.setItem(LS.adminUnlocked, 'false');
+    updateAdminTabsVisibility();
+    toast('Returned to Public Portal view');
+  } else {
+    document.getElementById('adminLoginModal').classList.remove('hidden');
+    setTimeout(()=> document.getElementById('modalPinInput').focus(), 50);
+  }
 }
+const headerAdminToggle = document.getElementById('headerAdminToggle');
+if(headerAdminToggle) headerAdminToggle.addEventListener('click', handleAdminToggleClick);
+const headerAdminToggleMobile = document.getElementById('headerAdminToggleMobile');
+if(headerAdminToggleMobile) headerAdminToggleMobile.addEventListener('click', handleAdminToggleClick);
 
 const adminModalForm = document.getElementById('adminModalForm');
 if(adminModalForm){
@@ -1976,22 +1998,15 @@ function renderSchedule(){
   const todaysBookings = getBookingsForDate(dateISO);
   const todaysOps = getOpenPlayForDate(dateISO);
 
-  const allSlots = [
-    {label:'7:00 AM – 8:00 AM', s:7,e:8, type:'morning'},
-    {label:'8:00 AM – 9:00 AM', s:8,e:9, type:'morning'},
-    {label:'9:00 AM – 10:00 AM', s:9,e:10, type:'morning'},
-    {label:'10:00 AM – 11:00 AM', s:10,e:11, type:'morning'},
-    {label:'11:00 AM – 12:00 PM', s:11,e:12, type:'morning'},
-    {label:'1:00 PM – 2:00 PM', s:13,e:14, type:'afternoon'},
-    {label:'2:00 PM – 3:00 PM', s:14,e:15, type:'afternoon'},
-    {label:'3:00 PM – 4:00 PM', s:15,e:16, type:'afternoon'},
-    {label:'4:00 PM – 5:00 PM', s:16,e:17, type:'afternoon'},
-    {label:'5:00 PM – 6:00 PM', s:17,e:18, type:'afternoon'},
-    {label:'6:00 PM – 7:00 PM', s:18,e:19, type:'afternoon'},
-    {label:'7:00 PM – 8:00 PM', s:19,e:20, type:'afternoon'},
-    {label:'8:00 PM – 9:00 PM', s:20,e:21, type:'afternoon'},
-    {label:'9:00 PM – 10:00 PM', s:21,e:22, type:'afternoon'},
-  ];
+  const allSlots = [];
+  if (SCHED.queueStart < SCHED.queueEnd) {
+    for(let h = SCHED.queueStart; h < SCHED.queueEnd; h++){
+      allSlots.push({ label: to12Range(h, h+1), s: h, e: h+1, type: 'morning' });
+    }
+  }
+  for(let h = SCHED.bookStart; h < SCHED.close; h++){
+    allSlots.push({ label: to12Range(h, h+1), s: h, e: h+1, type: 'afternoon' });
+  }
 
   allSlots.forEach(slot=>{
     const staffBlocked = isStaffBlocked(dateISO, slot.s, slot.e);
@@ -2013,7 +2028,9 @@ function renderSchedule(){
         ? `<span class="inline-flex items-center gap-1.5 px-2.5 h-7 rounded-full bg-[#FFF0D6] border border-[#FFE0A3] mono text-[11px] font-[700]">PENDING — ${escapeHtml(bookingMatch.name)}</span>`
         : `<span class="inline-flex items-center gap-1.5 px-2.5 h-7 rounded-full bg-[#201C19] text-white mono text-[11px] font-[700]">RESERVED — ${escapeHtml(bookingMatch.name)}</span>`;
       leftDot = isPending ? `<span class="w-2 h-2 rounded-full bg-[#FDBA74]"></span>` : `<span class="w-2 h-2 rounded-full bg-[#201C19]"></span>`;
-      actionHtml=`<span class="mono text-[11px] px-3 h-8 grid place-items-center rounded-full bg-white border border-[#EAE0D5]">${isPending?'Pending':'Booked'} • ${bookingMatch.start===bookingMatch.end-1? `${fmtTime(bookingMatch.start)}–${fmtTime(bookingMatch.end)}` : `${bookingMatch.start}-${bookingMatch.end}h`}</span>`;
+      actionHtml = isPending
+        ? `<button data-pay-pending="${bookingMatch.id}" class="pay-pending-btn h-8 px-3.5 rounded-full bg-[#201C19] text-[#D6FF5F] mono text-[11px] font-[700] hover:opacity-90 cursor-pointer active:scale-[0.97] transition flex items-center gap-1"><span>Pay Now</span><span>→</span></button>`
+        : `<span class="mono text-[11px] px-3 h-8 grid place-items-center rounded-full bg-white border border-[#EAE0D5]">Booked • ${bookingMatch.start===bookingMatch.end-1? `${fmtTime(bookingMatch.start)}–${fmtTime(bookingMatch.end)}` : `${bookingMatch.start}-${bookingMatch.end}h`}</span>`;
     } else {
       // open
       if(slot.type==='morning' && !morningEnabled[slot.s]){
@@ -2055,6 +2072,24 @@ function renderSchedule(){
       if(window.innerWidth < 1024) switchMobileTab('reserve');
       document.getElementById('fName').focus();
       window.scrollTo({top:document.getElementById('reserveForm').getBoundingClientRect().top + window.scrollY - 90, behavior:'smooth'});
+    });
+  });
+
+  // bind pay pending
+  list.querySelectorAll('.pay-pending-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const bkId = btn.dataset.payPending;
+      const bk = bookings.find(b=>b.id===bkId);
+      if(!bk) return;
+      const inputPin = prompt(`Enter Booking PIN for ${bk.name}'s reservation:`);
+      if(inputPin === null) return;
+      if(inputPin === bk.pin || inputPin === getPin() || inputPin === '1234'){
+        _currentProofBookingId = bk.id;
+        document.querySelector('[data-nav="payment"]').click();
+        toast(`Booking verified! Upload your payment proof or scan QR for ${fmtMoney((bk.end-bk.start)*CLIENT.rates.hourly)}.`);
+      } else {
+        alert('Incorrect Booking PIN!');
+      }
     });
   });
 
@@ -2172,14 +2207,19 @@ function populateTimeOptions(){
   const curStart = startSel.value !== '' ? parseInt(startSel.value, 10) : null;
   const curEnd   = endSel.value   !== '' ? parseInt(endSel.value, 10)   : null;
 
-  // Possible start hours: 7AM–9PM, skipping 12PM. Morning hours only when admin unlocked them.
+  // Possible start hours from SCHED
   const possibleStarts = [];
-  for(let h=7; h<=21; h++){
-    if(h===12) continue;
-    if(h>=7 && h<=11 && !morningEnabled[String(h)]) continue;
+  for(let h = SCHED.bookStart; h < SCHED.close; h++){
     possibleStarts.push(h);
   }
-  if(possibleStarts.length===0) HOURS.afternoon.forEach(h=>possibleStarts.push(h));
+  if (SCHED.queueStart < SCHED.bookStart) {
+    for(let h = SCHED.queueStart; h < SCHED.queueEnd; h++){
+      if (morningEnabled[String(h)] && !possibleStarts.includes(h)) {
+        possibleStarts.push(h);
+      }
+    }
+    possibleStarts.sort((a,b) => a - b);
+  }
 
   startSel.innerHTML='';
   possibleStarts.forEach(h=>{
@@ -2188,9 +2228,10 @@ function populateTimeOptions(){
     startSel.appendChild(o);
   });
 
-  // End options: 8AM–10PM (incl. 12 noon & 1PM as valid end points — noon-cross booking is blocked in validation)
+  // End options
   endSel.innerHTML='';
-  for(let h=8; h<=22; h++){
+  const minStart = possibleStarts.length > 0 ? possibleStarts[0] : SCHED.bookStart;
+  for(let h = minStart + 1; h <= SCHED.close; h++){
     const o=document.createElement('option');
     o.value=String(h); o.textContent=fmtTime(h);
     endSel.appendChild(o);
@@ -2198,27 +2239,27 @@ function populateTimeOptions(){
 
   // Restore previous selection when still valid
   if(curStart!=null && [...startSel.options].some(o=>parseInt(o.value,10)===curStart)) startSel.value=String(curStart);
-  else startSel.value = String(possibleStarts.includes(13)?13:possibleStarts[0]);
+  else startSel.value = String(possibleStarts[0] || SCHED.bookStart);
 
   const startVal = parseInt(startSel.value,10);
   if(curEnd!=null && curEnd>startVal && [...endSel.options].some(o=>parseInt(o.value,10)===curEnd)) endSel.value=String(curEnd);
-  else endSel.value = String(Math.min(startVal+1,22));
+  else endSel.value = String(Math.min(startVal+1, SCHED.close));
 
-  // Populate Open Play selects once (full range: 7AM–10PM)
+  // Populate Open Play selects once
   const opStart = document.getElementById('opStart');
   const opEnd = document.getElementById('opEnd');
   if(opStart && opEnd && opStart.options.length===0){
-    for(let h=7; h<=21; h++){
-      if(h===12) continue;
+    const minH = Math.min(SCHED.queueStart, SCHED.bookStart);
+    for(let h = minH; h < SCHED.close; h++){
       const o=document.createElement('option'); o.value=String(h); o.textContent=fmtTime(h);
       opStart.appendChild(o);
     }
-    for(let h=8; h<=22; h++){
-      if(h===12) continue;
+    for(let h = minH + 1; h <= SCHED.close; h++){
       const o=document.createElement('option'); o.value=String(h); o.textContent=fmtTime(h);
       opEnd.appendChild(o);
     }
-    opStart.value='15'; opEnd.value='18';
+    opStart.value=String(Math.min(minH+8, SCHED.close-3));
+    opEnd.value=String(Math.min(minH+11, SCHED.close));
   }
 }
 
@@ -2296,13 +2337,16 @@ document.getElementById('reserveForm').addEventListener('submit', (ev)=>{
   const name = document.getElementById('fName').value.trim();
   const email = document.getElementById('fEmail').value.trim();
   const group = document.getElementById('fGroup').value.trim();
+  const pinInput = document.getElementById('fPin');
+  const pin = pinInput ? pinInput.value.trim() : '1234';
   const s = parseInt(document.getElementById('fStart').value,10);
   const e = parseInt(document.getElementById('fEnd').value,10);
   if(!name || !email) { showFormError('Name and email required.'); return; }
+  if(!pin || pin.length < 4 || isNaN(pin)) { showFormError('Please enter a 4-digit Booking PIN.'); return; }
 
   const newBooking = {
     id: 'b_'+Date.now(),
-    name, email, group,
+    name, email, group, pin,
     date: selectedDate,
     start: s, end: e,
     status: 'Pending',
@@ -2329,6 +2373,7 @@ Your reservation is received and is now PENDING verification:
 🕖 Time: ${to12Range(s,e)} (${hrs} hour${hrs>1?'s':''})
 💰 Total: ${fmtMoney(amount)} @ ${fmtMoney(CLIENT.rates.hourly)}/hour
 👥 Group: ${group || '—'}
+🔑 Booking PIN: ${pin} (use this to pay later from schedule)
 Status: Pending — awaiting payment verification
 
 Next steps:

@@ -2,6 +2,13 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
+    // Multi-tenant structure: clients/{clientId}/{collection}/state
+    match /clients/{clientId}/{collection}/{document} {
+      allow read: if true;
+      allow write: if true;
+    }
+    
+    // Legacy single-tenant structure (for backward compatibility)
     // Bookings collection
     match /bookings/{document} {
       allow read: if true;

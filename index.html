@@ -1285,25 +1285,86 @@ if (FB_ENABLED) {
 }
 const HAS_STORAGE = FB_ENABLED;
 
-/* ---------- Local cache keys (offline fallback only) ---------- */
+/* ================================================================
+   MULTI-TENANCY: CLIENT IDENTIFICATION
+   Parse subdomain to identify current client (e.g., client1.courtbooking.app)
+   All data is scoped to: clients/{clientId}/...
+   ================================================================ */
+function getClientIdFromSubdomain() {
+  const host = window.location.hostname;
+  const parts = host.split('.');
+  // Check if we have a subdomain (e.g., client1.courtbooking.app)
+  if (parts.length >= 3 && parts[0] !== 'www' && parts[0] !== 'app') {
+    return parts[0];
+  }
+  return null;
+}
+
+let currentClientId = getClientIdFromSubdomain();
+let currentClientConfig = null;
+
+console.log('[CourtBooking] Client ID:', currentClientId || '(none - demo mode)');
+
+/* ---------- Load client config from Firestore ---------- */
+async function loadClientConfig() {
+  if (!currentClientId || !db) {
+    // No client ID or no Firebase - use default config from client-config.js
+    return window.CLIENT_CONFIG || {};
+  }
+  
+  try {
+    const configSnap = await db.doc(`clients/${currentClientId}/config/state`).get();
+    if (configSnap.exists) {
+      currentClientConfig = configSnap.data().data;
+      localStorage.setItem(LS.clientConfig, JSON.stringify(currentClientConfig));
+      console.log('[CourtBooking] Loaded client config for:', currentClientId);
+      return currentClientConfig;
+    } else {
+      console.warn('[CourtBooking] No config found for client:', currentClientId);
+      // Try to load from localStorage cache
+      const cached = localStorage.getItem(LS.clientConfig);
+      if (cached) {
+        currentClientConfig = JSON.parse(cached);
+        return currentClientConfig;
+      }
+      return window.CLIENT_CONFIG || {};
+    }
+  } catch(e) {
+    console.warn('[CourtBooking] Failed to load client config:', e.message);
+    // Fallback to cache or default
+    const cached = localStorage.getItem(LS.clientConfig);
+    if (cached) {
+      currentClientConfig = JSON.parse(cached);
+      return currentClientConfig;
+    }
+    return window.CLIENT_CONFIG || {};
+  }
+}
+
+/* ---------- Local cache keys (client-scoped for multi-tenancy) ---------- */
+function lsKey(baseKey) {
+  return currentClientId ? `${baseKey}_${currentClientId}` : baseKey;
+}
+
 const LS = {
-  bookings: 'cb_bookings_v7',
-  morning: 'cb_morning_v7',
-  openPlay: 'cb_openPlay_v7',
-  staffReserve: 'cb_staffReserve_v7',
-  pin: 'cb_adminPin_v7',
-  adminUnlocked: 'cb_admin_unlocked_v7',
-  payMethods: 'cb_pay_methods_v7',
-  queues: 'cb_queues_v7',
-  courts: 'cb_courts_v7'
+  get bookings() { return lsKey('cb_bookings_v7'); },
+  get morning() { return lsKey('cb_morning_v7'); },
+  get openPlay() { return lsKey('cb_openPlay_v7'); },
+  get staffReserve() { return lsKey('cb_staffReserve_v7'); },
+  get pin() { return lsKey('cb_adminPin_v7'); },
+  get adminUnlocked() { return lsKey('cb_admin_unlocked_v7'); },
+  get payMethods() { return lsKey('cb_pay_methods_v7'); },
+  get queues() { return lsKey('cb_queues_v7'); },
+  get courts() { return lsKey('cb_courts_v7'); },
+  get clientConfig() { return lsKey('cb_client_config_v7'); }
 };
 
-/* ---------- Firestore helper: save + cache (no-op cloud write in demo mode) ---------- */
+/* ---------- Firestore helper: save + cache (client-scoped for multi-tenancy) ---------- */
 async function fbSave(collectionId, lsKey, data) {
   localStorage.setItem(lsKey, JSON.stringify(data));
   if (!db) return;
   try {
-    await db.collection(collectionId).doc('state').set({ data: data, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+    await db.doc(fbDocPath(collectionId)).set({ data: data, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
   } catch(e) { console.warn('Firestore write failed, cached locally:', e.message); }
 }
 
@@ -1461,7 +1522,10 @@ async function uploadProofCloud(bookingId, nameOnBooking, proof) {
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       const now = Date.now();
-      const path = `proofs/${bookingId}/${now}_${proof.fileName}`;
+      // Multi-tenancy: scope storage path to clients/{clientId}/proofs/
+      const path = currentClientId
+        ? `clients/${currentClientId}/proofs/${bookingId}/${now}_${proof.fileName}`
+        : `proofs/${bookingId}/${now}_${proof.fileName}`;
       
       // Upload to Firebase Storage
       const storageRef = fbStorage.ref(path);
@@ -1469,8 +1533,11 @@ async function uploadProofCloud(bookingId, nameOnBooking, proof) {
       await storageRef.put(file, { contentType: proof.mime });
       const url = await storageRef.getDownloadURL();
 
-      // Write metadata to Firestore proofs collection
-      await db.collection('proofs').add({
+      // Write metadata to Firestore proofs collection (client-scoped)
+      const proofsPath = currentClientId
+        ? `clients/${currentClientId}/proofs`
+        : 'proofs';
+      await db.collection(proofsPath).add({
         bookingId: bookingId,
         name: nameOnBooking,
         fileName: proof.fileName,
@@ -1561,7 +1628,8 @@ async function sweepExpiredProofs() {
   if (!db) return;
   try {
     const cutoff = Date.now();
-    const snap = await db.collection('proofs').where('expiresAt', '<', cutoff).get();
+    const proofsPath = currentClientId ? `clients/${currentClientId}/proofs` : 'proofs';
+    const snap = await db.collection(proofsPath).where('expiresAt', '<', cutoff).get();
     if (!snap.empty) {
       const batch = db.batch();
       snap.forEach(doc => {
@@ -1580,7 +1648,8 @@ async function sweepExpiredProofs() {
 /* Firestore live feed of proofs for the Admin review queue. */
 function watchProofs() {
   if (!db) return;
-  db.collection('proofs').onSnapshot(() => {
+  const proofsPath = currentClientId ? `clients/${currentClientId}/proofs` : 'proofs';
+  db.collection(proofsPath).onSnapshot(() => {
     if (adminUnlocked) renderPaymentProofsQueue();
   });
 }
@@ -1708,10 +1777,17 @@ function armProofWatcher() {
 }
 
 /* ---------- Firestore real-time listeners (skipped in demo mode) ---------- */
+/* ---------- Firestore helper: scoped document path for multi-tenancy ---------- */
+function fbDocPath(collectionId) {
+  return currentClientId
+    ? `clients/${currentClientId}/${collectionId}/state`
+    : `${collectionId}/state`;
+}
+
 function startRealtimeListeners() {
   if (!db) return;
 
-  db.collection('bookings').doc('state').onSnapshot(snap => {
+  db.doc(fbDocPath('bookings')).onSnapshot(snap => {
     if (!snap.exists) return;
     const data = snap.data().data;
     if (data) {
@@ -1723,7 +1799,7 @@ function startRealtimeListeners() {
     }
   }, e => console.warn('bookings listener:', e.message));
 
-  db.collection('openPlay').doc('state').onSnapshot(snap => {
+  db.doc(fbDocPath('openPlay')).onSnapshot(snap => {
     if (!snap.exists) return;
     const data = snap.data().data;
     if (data) {
@@ -1735,7 +1811,7 @@ function startRealtimeListeners() {
     }
   }, e => console.warn('openPlay listener:', e.message));
 
-  db.collection('morning').doc('state').onSnapshot(snap => {
+  db.doc(fbDocPath('morning')).onSnapshot(snap => {
     if (!snap.exists) return;
     const data = snap.data().data;
     if (data) {
@@ -1747,7 +1823,7 @@ function startRealtimeListeners() {
     }
   }, e => console.warn('morning listener:', e.message));
 
-  db.collection('staffReserve').doc('state').onSnapshot(snap => {
+  db.doc(fbDocPath('staffReserve')).onSnapshot(snap => {
     if (!snap.exists) return;
     let parsed = snap.data().data;
     if(parsed && (!parsed.weekId || parsed.weekId !== getCurrentWeekId())){
@@ -1761,7 +1837,7 @@ function startRealtimeListeners() {
     if (typeof renderStaffReserveToggles === 'function') renderStaffReserveToggles();
   }, e => console.warn('staffReserve listener:', e.message));
 
-  db.collection('settings').doc('state').onSnapshot(snap => {
+  db.doc(fbDocPath('settings')).onSnapshot(snap => {
     if (!snap.exists) return;
     const d = snap.data().data || {};
     if (d.pin) localStorage.setItem(LS.pin, d.pin);
@@ -1773,7 +1849,7 @@ function startRealtimeListeners() {
     }
   }, e => console.warn('settings listener:', e.message));
 
-  db.collection('queues').doc('state').onSnapshot(snap => {
+  db.doc(fbDocPath('queues')).onSnapshot(snap => {
     if (!snap.exists) return;
     const data = snap.data().data;
     if (data) {
@@ -1782,7 +1858,7 @@ function startRealtimeListeners() {
     }
   }, e => console.warn('queues listener:', e.message));
 
-  db.collection('courts').doc('state').onSnapshot(snap => {
+  db.doc(fbDocPath('courts')).onSnapshot(snap => {
     if (!snap.exists) return;
     const data = snap.data().data;
     if (data) {
@@ -1831,10 +1907,10 @@ async function seedIfEmpty() {
   if (!db) { seedLocalIfEmpty(); return; }
   try {
     // --- Courts ---
-    const courtSnap = await db.collection('courts').doc('state').get();
+    const courtSnap = await db.doc(fbDocPath('courts')).get();
     if (!courtSnap.exists) {
       const defaultCourts = [{ id: 'court1', name: 'Court 1', startHour: 13, active: true }];
-      await db.collection('courts').doc('state').set({ data: defaultCourts, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+      await db.doc(fbDocPath('courts')).set({ data: defaultCourts, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
       COURTS = defaultCourts;
     } else {
       COURTS = courtSnap.data().data || [{ id: 'court1', name: 'Court 1', startHour: 13, active: true }];
@@ -1842,7 +1918,7 @@ async function seedIfEmpty() {
     localStorage.setItem(LS.courts, JSON.stringify(COURTS));
 
     // --- Bookings ---
-    const bSnap = await db.collection('bookings').doc('state').get();
+    const bSnap = await db.doc(fbDocPath('bookings')).get();
     if (!bSnap.exists) {
       const t = todayISO();
       const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate()+1);
@@ -1853,7 +1929,7 @@ async function seedIfEmpty() {
         {id:'op_seed_today', name:'Open Play', email:'', court:'court1', date:t, start:15, end:17, status:'OpenPlay', group:'Community open play', createdAt:Date.now()-3000000},
         {id:'b_seed_tom', name:'JC Dela Cruz', email:'jc@example.com', court:'court1', date:tom, start:13, end:14, status:'Pending', group:'3 players', createdAt:Date.now()-1800000},
       ];
-      await db.collection('bookings').doc('state').set({ data: seedData, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+      await db.doc(fbDocPath('bookings')).set({ data: seedData, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
       bookings = seedData;
     } else {
       bookings = bSnap.data().data;
@@ -1861,10 +1937,10 @@ async function seedIfEmpty() {
     localStorage.setItem(LS.bookings, JSON.stringify(bookings));
 
     // --- Open Play ---
-    const oSnap = await db.collection('openPlay').doc('state').get();
+    const oSnap = await db.doc(fbDocPath('openPlay')).get();
     if (!oSnap.exists) {
       const seedOp = [{id:'op_seed_today', date:todayISO(), start:15, end:17, court:'court1'}];
-      await db.collection('openPlay').doc('state').set({ data: seedOp, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+      await db.doc(fbDocPath('openPlay')).set({ data: seedOp, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
       openPlays = seedOp;
     } else {
       openPlays = oSnap.data().data;
@@ -1872,10 +1948,10 @@ async function seedIfEmpty() {
     localStorage.setItem(LS.openPlay, JSON.stringify(openPlays));
 
     // --- Morning ---
-    const mSnap = await db.collection('morning').doc('state').get();
+    const mSnap = await db.doc(fbDocPath('morning')).get();
     if (!mSnap.exists) {
       const def = {"7":false,"8":false,"9":false,"10":false,"11":false};
-      await db.collection('morning').doc('state').set({ data: def, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+      await db.doc(fbDocPath('morning')).set({ data: def, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
       morningEnabled = def;
     } else {
       morningEnabled = mSnap.data().data;
@@ -1883,10 +1959,10 @@ async function seedIfEmpty() {
     localStorage.setItem(LS.morning, JSON.stringify(morningEnabled));
 
     // --- Staff Reserve ---
-    const srSnap = await db.collection('staffReserve').doc('state').get();
+    const srSnap = await db.doc(fbDocPath('staffReserve')).get();
     if (!srSnap.exists) {
       const def = { weekId: getCurrentWeekId(), days: {...STAFF_RESERVE_DEFAULTS} };
-      await db.collection('staffReserve').doc('state').set({ data: def, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+      await db.doc(fbDocPath('staffReserve')).set({ data: def, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
       staffReserveEnabled = def;
     } else {
       const parsed = srSnap.data().data;
@@ -1900,15 +1976,15 @@ async function seedIfEmpty() {
     localStorage.setItem(LS.staffReserve, JSON.stringify(staffReserveEnabled));
 
     // --- Settings (PIN + payMethods) ---
-    const sSnap = await db.collection('settings').doc('state').get();
+    const sSnap = await db.doc(fbDocPath('settings')).get();
     if (!sSnap.exists) {
-      await db.collection('settings').doc('state').set({ data: { pin: '1234', payMethods: {} }, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+      await db.doc(fbDocPath('settings')).set({ data: { pin: '1234', payMethods: {} }, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
     }
 
     // --- Queues ---
-    const qSnap = await db.collection('queues').doc('state').get();
+    const qSnap = await db.doc(fbDocPath('queues')).get();
     if (!qSnap.exists) {
-      await db.collection('queues').doc('state').set({ data: [], updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+      await db.doc(fbDocPath('queues')).set({ data: [], updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
     }
 
   } catch(e) {
@@ -4549,27 +4625,38 @@ function toast(msg){
 }
 
 /* ---------- Init ---------- */
-applyBranding();           // white-label: brand, theme labels, contact, footer
-if (!FB_ENABLED) {
-  const b = document.getElementById('demoModeBanner');
-  if (b) b.classList.remove('hidden');
+async function initializeApp() {
+  // Load client config from Firestore (multi-tenancy)
+  const clientConfig = await loadClientConfig();
+  
+  // Merge client config with defaults and apply branding
+  window.CLIENT_CONFIG = clientConfig;
+  applyBranding();           // white-label: brand, theme labels, contact, footer
+  
+  if (!FB_ENABLED) {
+    const b = document.getElementById('demoModeBanner');
+    if (b) b.classList.remove('hidden');
+  }
+  
+  COURTS = loadCourts();    // load courts from localStorage (will be overwritten by Firestore if available)
+  selectedDate = todayISO();
+  calCursor = new Date(selectedDate+'T12:00:00');
+  renderCalendar();          // renders month picker + prefills time dropdowns
+  renderSchedule();          // renders today's hourly rows + slot preview strip
+  renderBookingsList();
+  populateTimeOptions();
+  recalcTotal();
+  renderDateSlotPreview();
+  renderCourtTabs();         // renders court tab bar (hidden if only 1 court)
+  renderQueueCourtTabs();    // renders queue court tabs
+  populateCourtSelectors(); // populates court dropdowns in forms
+  renderQueueModule();       // renders the queueing session lists and dashboards
+  renderProofStrip();        // proofs strip on Payment tab (local fallback proofs)
+  _sweepLocalProofs();       // purge expired local proofs on boot (7-day retention)
+  updateAdminTabsVisibility();   // Public Portal mode by default (Book + Payment only)
 }
-COURTS = loadCourts();    // load courts from localStorage (will be overwritten by Firestore if available)
-selectedDate = todayISO();
-calCursor = new Date(selectedDate+'T12:00:00');
-renderCalendar();          // renders month picker + prefills time dropdowns
-renderSchedule();          // renders today's hourly rows + slot preview strip
-renderBookingsList();
-populateTimeOptions();
-recalcTotal();
-renderDateSlotPreview();
-renderCourtTabs();         // renders court tab bar (hidden if only 1 court)
-renderQueueCourtTabs();    // renders queue court tabs
-populateCourtSelectors(); // populates court dropdowns in forms
-renderQueueModule();       // renders the queueing session lists and dashboards
-renderProofStrip();        // proofs strip on Payment tab (local fallback proofs)
-_sweepLocalProofs();       // purge expired local proofs on boot (7-day retention)
-updateAdminTabsVisibility();   // Public Portal mode by default (Book + Payment only)
+
+initializeApp();
 
 // Re-render schedule on window resize to switch between multi-column (desktop) and tabs (mobile)
 let _resizeTimer;

@@ -1,6 +1,13 @@
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
+    // Multi-tenant structure: clients/{clientId}/proofs/{allPaths}
+    match /clients/{clientId}/proofs/{allPaths=**} {
+      allow read: if true;
+      allow write: if true;
+    }
+    
+    // Legacy single-tenant structure (for backward compatibility)
     match /proofs/{allPaths=**} {
       allow read: if true;
       allow write: if true;

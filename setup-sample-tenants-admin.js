@@ -25,7 +25,7 @@ admin.initializeApp({
 const db = admin.firestore();
 
 // SHA-256 hash of "1234" with salt "dula-hq-salt-2024"
-const DEFAULT_PIN_HASH = "5e884898da28047151d0e56f8dc6292773603d0d6aabbdd62a11ef721d1542d8";
+const DEFAULT_PIN_HASH = "e4870ad7eb252a74b90f4c2c80aaec31844a74bb156e1806aaa0db7c21a31286";
 
 // Sample tenants configuration
 const sampleTenants = [
@@ -275,7 +275,7 @@ async function setupSampleTenants() {
     console.log(`   Theme: ${tenant.config.theme.primaryColor}`);
     console.log(`   Courts: ${tenant.courts.length}`);
     console.log(`   Sample Bookings: ${tenant.bookings.length}`);
-    console.log(`   URL: https://dula-hq.vercel.app/?client=${tenant.id}`);
+    console.log(`   URL: https://picklecourtbooking.vercel.app/?client=${tenant.id}`);
   });
 
   console.log('\n\n🔐 Admin PIN for all tenants: 1234');

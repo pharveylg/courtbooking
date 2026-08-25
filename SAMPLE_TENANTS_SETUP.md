@@ -117,7 +117,7 @@ If you prefer not to use service account keys, you can create tenants manually.
    - Document ID: `state`
    - Add field: `data` (type: map)
      ```
-     pin: "5e884898da28047151d0e56f8dc6292773603d0d6aabbdd62a11ef721d1542d8"
+     pin: "e4870ad7eb252a74b90f4c2c80aaec31844a74bb156e1806aaa0db7c21a31286"
      payMethods: {}
      ```
 
@@ -145,10 +145,10 @@ Use the configurations from `setup-sample-tenants-admin.js` as reference.
 
 Open these URLs in your browser:
 
-- **Demo**: https://dula-hq.vercel.app/?client=demo
-- **Ace Pickleball**: https://dula-hq.vercel.app/?client=acepickle
-- **Smash Club**: https://dula-hq.vercel.app/?client=smash-club
-- **Rally Point**: https://dula-hq.vercel.app/?client=rally-point
+- **Demo**: https://picklecourtbooking.vercel.app/?client=demo
+- **Ace Pickleball**: https://picklecourtbooking.vercel.app/?client=acepickle
+- **Smash Club**: https://picklecourtbooking.vercel.app/?client=smash-club
+- **Rally Point**: https://picklecourtbooking.vercel.app/?client=rally-point
 
 ### 2. Verify Branding
 
@@ -176,7 +176,7 @@ Each tenant should show:
 
 ### 5. Test Invalid Tenant
 
-Visit: https://dula-hq.vercel.app/?client=invalid-tenant-123
+Visit: https://picklecourtbooking.vercel.app/?client=invalid-tenant-123
 
 Expected behavior:
 - ❌ Should show error or fallback to default

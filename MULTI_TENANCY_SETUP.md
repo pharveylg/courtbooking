@@ -1,8 +1,8 @@
-# Dula HQ Multi-Tenancy Setup Guide
+# Pickleball Court Booking Multi-Tenancy Setup Guide
 
 ## Overview
 
-Dula HQ is a multi-tenant pickleball court booking system deployed at `https://dula-hq.vercel.app/`. Each tenant (pickleball club/court owner) gets their own isolated data, branding, and booking system while sharing the same application infrastructure.
+Pickleball Court Booking is a multi-tenant pickleball court booking system deployed at `https://picklecourtbooking.vercel.app/`. Each tenant (pickleball club/court owner) gets their own isolated data, branding, and booking system while sharing the same application infrastructure.
 
 **First-Year Scale:**
 - <10 clients
@@ -18,14 +18,14 @@ The application supports multiple tenant resolution strategies:
 
 ### Current (Development/Testing)
 ```
-https://dula-hq.vercel.app/?client=demo
-https://dula-hq.vercel.app/?client=acepickle
+https://picklecourtbooking.vercel.app/?client=demo
+https://picklecourtbooking.vercel.app/?client=acepickle
 ```
 
 ### Path-Based (Production Ready)
 ```
-https://dula-hq.vercel.app/demo
-https://dula-hq.vercel.app/acepickle
+https://picklecourtbooking.vercel.app/demo
+https://picklecourtbooking.vercel.app/acepickle
 ```
 
 ### Future (Custom Domain)
@@ -114,7 +114,7 @@ Operational settings including **hashed** admin PIN:
 ```javascript
 {
   data: {
-    pin: "5e884898da28047151d0e56f8dc6292773603d0d6aabbdd62a11ef721d1542d8", // SHA-256 hash
+    pin: "e4870ad7eb252a74b90f4c2c80aaec31844a74bb156e1806aaa0db7c21a31286", // SHA-256 hash
     payMethods: {
       gcash: { enabled: true, qrCode: "..." },
       maya: { enabled: false }
@@ -247,7 +247,7 @@ Create `clients/{clientId}/settings/state`:
 ```javascript
 {
   data: {
-    pin: "5e884898da28047151d0e56f8dc6292773603d0d6aabbdd62a11ef721d1542d8", // Hash of "1234"
+    pin: "e4870ad7eb252a74b90f4c2c80aaec31844a74bb156e1806aaa0db7c21a31286", // Hash of "1234"
     payMethods: {}
   }
 }
@@ -264,9 +264,9 @@ Create empty state documents for:
 
 ### Step 5: Access the Tenant
 
-Visit: `https://dula-hq.vercel.app/?client={clientId}`
+Visit: `https://picklecourtbooking.vercel.app/?client={clientId}`
 
-Or with path-based routing: `https://dula-hq.vercel.app/{clientId}`
+Or with path-based routing: `https://picklecourtbooking.vercel.app/{clientId}`
 
 ---
 
@@ -347,13 +347,13 @@ All tenants share:
 
 1. **Valid Tenant Access:**
    ```
-   GET https://dula-hq.vercel.app/?client=demo
+   GET https://picklecourtbooking.vercel.app/?client=demo
    Expected: Loads demo tenant config and data
    ```
 
 2. **Invalid Tenant:**
    ```
-   GET https://dula-hq.vercel.app/?client=invalid-tenant
+   GET https://picklecourtbooking.vercel.app/?client=invalid-tenant
    Expected: Shows error or falls back to default config
    ```
 
@@ -472,7 +472,7 @@ For issues or questions:
 
 **Next Steps:**
 1. Run `setup-first-client.js` to create your first tenant
-2. Test at `https://dula-hq.vercel.app/?client={clientId}`
+2. Test at `https://picklecourtbooking.vercel.app/?client={clientId}`
 3. Customize branding and courts for each tenant
 4. Deploy Firestore security rules
 5. Monitor usage in Firebase Console

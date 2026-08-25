@@ -1,5 +1,9 @@
 {
   "scripts": {
     "patch": "node patch.js"
+  },
+  "dependencies": {
+    "firebase": "^12.18.0",
+    "firebase-admin": "^13.10.0"
   }
 }

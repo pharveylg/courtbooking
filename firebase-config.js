@@ -11,7 +11,7 @@
 // queues, QR codes and settings across all devices live.
 // ============================================================
 
-const firebaseConfig = {
+window.FIREBASE_CONFIG = {
   apiKey: "AIzaSyAkf7GJ3mrEUtykHLQ3wizwfGpl5OugE2I",
   authDomain: "courtbooking-85175.firebaseapp.com",
   projectId: "courtbooking-85175",

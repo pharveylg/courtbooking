@@ -27,6 +27,14 @@
 }
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+.court-column { background: white; }
+.court-column .divide-y > div { padding: 0.75rem 1rem; }
+@media (min-width: 1024px) {
+  #scheduleList[style*="grid"] { align-items: start; }
+  .court-column .divide-y > div { padding: 0.5rem 0.75rem; }
+  .court-column .divide-y > div .flex.items-center.gap-3 { gap: 0.5rem; }
+  .court-column .mono { font-size: 10px; }
+}
 </style>
 </head>
 <body class="bg-[#FFFBF5] text-[#201C19] antialiased selection:bg-[#D6FF5F]">
@@ -356,6 +364,11 @@
             <div>
               <label class="block mono text-[10px] uppercase tracking-widest font-[700] mb-1">Session Name / Group</label>
               <input required id="qName" placeholder="e.g., Morning Smashers, Friday Singles" class="w-full h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-4 text-[13px] font-[600] outline-none focus:border-[#201C19] focus:bg-white transition"/>
+            </div>
+
+            <div id="qCourtWrapper" class="hidden">
+              <label class="block mono text-[10px] uppercase tracking-widest font-[700] mb-1">Court</label>
+              <select id="qCourt" class="w-full h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-3.5 text-[13px] font-[650] outline-none focus:border-[#201C19]"></select>
             </div>
 
             <div class="grid grid-cols-2 gap-3">
@@ -2223,6 +2236,26 @@ function populateCourtSelectors(){
       opCourtLabel.style.display = 'none';
     }
   }
+  // Queue session court selector
+  const qCourt = document.getElementById('qCourt');
+  const qCourtWrapper = document.getElementById('qCourtWrapper');
+  if(qCourt && qCourtWrapper){
+    if(activeCourts.length > 1){
+      qCourtWrapper.classList.remove('hidden');
+      qCourt.innerHTML = '';
+      activeCourts.forEach(c => {
+        const o = document.createElement('option');
+        o.value = c.id; o.textContent = c.name;
+        qCourt.appendChild(o);
+      });
+      // Pre-select from active queue court tab if set
+      if(activeQueueCourtTab && activeQueueCourtTab !== 'all' && activeCourts.find(c => c.id === activeQueueCourtTab)){
+        qCourt.value = activeQueueCourtTab;
+      }
+    } else {
+      qCourtWrapper.classList.add('hidden');
+    }
+  }
 }
 
 /* ---------- Admin Court Management ---------- */
@@ -2337,14 +2370,55 @@ function renderSchedule(){
   const list = document.getElementById('scheduleList');
   list.innerHTML='';
   const dateISO = todayISO(); // Today's schedule always today per spec
+  
+  // Determine if we should show multi-column layout (desktop with multiple courts)
+  const isDesktop = window.innerWidth >= 1024;
+  const activeCourts = getActiveCourts();
+  const showMultiColumn = isDesktop && activeCourts.length > 1 && (activeCourtTab === 'all' || !activeCourtTab);
+  
+  if(showMultiColumn){
+    // Multi-column layout: show each court in its own column
+    list.style.display = 'grid';
+    list.style.gridTemplateColumns = `repeat(${activeCourts.length}, minmax(0, 1fr))`;
+    list.style.gap = '1rem';
+    
+    activeCourts.forEach(court => {
+      const courtColumn = document.createElement('div');
+      courtColumn.className = 'court-column border border-[#EAE0D5] rounded-[12px] overflow-hidden';
+      courtColumn.innerHTML = `<div class="bg-[#F1E9DF] px-4 py-2.5 border-b border-[#EAE0D5]"><div class="font-[700] text-[13px] text-[#201C19]">${escapeHtml(court.name)}</div></div>`;
+      
+      const courtSchedule = document.createElement('div');
+      courtSchedule.className = 'divide-y divide-[#F5EDE4]';
+      renderScheduleSlots(courtSchedule, dateISO, court.id);
+      
+      courtColumn.appendChild(courtSchedule);
+      list.appendChild(courtColumn);
+    });
+  } else {
+    // Single column layout (mobile or single court or specific court selected)
+    list.style.display = 'block';
+    list.style.gridTemplateColumns = '';
+    list.style.gap = '';
+    
+    let courtFilter = null;
+    if(activeCourtTab && activeCourtTab !== 'all'){
+      courtFilter = activeCourtTab;
+    }
+    
+    renderScheduleSlots(list, dateISO, courtFilter);
+  }
+  
+  renderDateSlotPreview();
+}
+
+function renderScheduleSlots(container, dateISO, courtFilter){
   let todaysBookings = getBookingsForDate(dateISO);
   let todaysOps = getOpenPlayForDate(dateISO);
 
-  // Court-aware filtering: if a specific court is selected, filter to that court
-  // Bookings without a court field are shown on all courts (court-agnostic legacy)
-  if(activeCourtTab && activeCourtTab !== 'all'){
-    todaysBookings = todaysBookings.filter(b => !b.court || b.court === activeCourtTab);
-    todaysOps = todaysOps.filter(op => !op.court || op.court === activeCourtTab);
+  // Court-aware filtering
+  if(courtFilter){
+    todaysBookings = todaysBookings.filter(b => !b.court || b.court === courtFilter);
+    todaysOps = todaysOps.filter(op => !op.court || op.court === courtFilter);
   }
 
   const allSlots = [];
@@ -2406,11 +2480,11 @@ function renderSchedule(){
         ${actionHtml}
       </div>
     `;
-    list.appendChild(row);
+    container.appendChild(row);
   });
 
   // bind book now
-  list.querySelectorAll('.book-now-btn').forEach(btn=>{
+  container.querySelectorAll('.book-now-btn').forEach(btn=>{
     btn.addEventListener('click', ()=>{
       const start = parseInt(btn.dataset.book,10);
       selectedDate = todayISO(); // ensure today
@@ -2425,7 +2499,7 @@ function renderSchedule(){
   });
 
   // bind pay pending
-  list.querySelectorAll('.pay-pending-btn').forEach(btn=>{
+  container.querySelectorAll('.pay-pending-btn').forEach(btn=>{
     btn.addEventListener('click', ()=>{
       const bkId = btn.dataset.payPending;
       const bk = bookings.find(b=>b.id===bkId);
@@ -2442,7 +2516,7 @@ function renderSchedule(){
     });
   });
 
-  list.querySelectorAll('.cancel-booking-btn').forEach(btn=>{
+  container.querySelectorAll('.cancel-booking-btn').forEach(btn=>{
     btn.addEventListener('click', ()=>{
       const bkId = btn.dataset.cancelBooking;
       const bk = bookings.find(b=>b.id===bkId);
@@ -2463,8 +2537,6 @@ function renderSchedule(){
       }
     });
   });
-
-  renderDateSlotPreview();
 }
 
 /* ---------- Selected-date slot availability preview (under calendar) ---------- */
@@ -2584,12 +2656,22 @@ function populateTimeOptions(){
   const curStart = startSel.value !== '' ? parseInt(startSel.value, 10) : null;
   const curEnd   = endSel.value   !== '' ? parseInt(endSel.value, 10)   : null;
 
-  // Possible start hours from SCHED
+  // Determine effective start hour: use selected court's startHour if available
+  const courtSel = document.getElementById('fCourt');
+  let effectiveStartHour = SCHED.bookStart;
+  if(courtSel && courtSel.value && COURTS.length > 0){
+    const court = COURTS.find(c => c.id === courtSel.value);
+    if(court && court.startHour !== undefined){
+      effectiveStartHour = court.startHour;
+    }
+  }
+
+  // Possible start hours from effective start hour
   const possibleStarts = [];
-  for(let h = SCHED.bookStart; h < SCHED.close; h++){
+  for(let h = effectiveStartHour; h < SCHED.close; h++){
     possibleStarts.push(h);
   }
-  if (SCHED.queueStart < SCHED.bookStart) {
+  if (SCHED.queueStart < effectiveStartHour) {
     for(let h = SCHED.queueStart; h < SCHED.queueEnd; h++){
       if (morningEnabled[String(h)] && !possibleStarts.includes(h)) {
         possibleStarts.push(h);
@@ -2607,7 +2689,7 @@ function populateTimeOptions(){
 
   // End options
   endSel.innerHTML='';
-  const minStart = possibleStarts.length > 0 ? possibleStarts[0] : SCHED.bookStart;
+  const minStart = possibleStarts.length > 0 ? possibleStarts[0] : effectiveStartHour;
   for(let h = minStart + 1; h <= SCHED.close; h++){
     const o=document.createElement('option');
     o.value=String(h); o.textContent=fmtTime(h);
@@ -2706,7 +2788,7 @@ document.getElementById('fStart').addEventListener('change', ()=>{
   recalcTotal(); validateForm();
 });
 document.getElementById('fEnd').addEventListener('change', ()=>{ recalcTotal(); validateForm(); });
-document.getElementById('fCourt')?.addEventListener('change', ()=>{ validateForm(); });
+document.getElementById('fCourt')?.addEventListener('change', ()=>{ populateTimeOptions(); validateForm(); });
 
 /* ---------- Reserve Submit ---------- */
 document.getElementById('reserveForm').addEventListener('submit', (ev)=>{
@@ -3286,14 +3368,15 @@ function renderStaffReserveToggles(){
 function renderOpenPlayList(){
   const list = document.getElementById('openPlayList');
   list.innerHTML='';
-  const allOps = [...openPlays, ...bookings.filter(b=>b.status==='OpenPlay').map(b=>({id:b.id, date:b.date, start:b.start, end:b.end, fromBooking:true}))];
+  const allOps = [...openPlays, ...bookings.filter(b=>b.status==='OpenPlay').map(b=>({id:b.id, date:b.date, start:b.start, end:b.end, court:b.court, fromBooking:true}))];
   if(allOps.length===0){ list.innerHTML=`<div class="mono text-[11px] opacity-50">No open play blocks yet</div>`; return; }
   allOps.sort((a,b)=> a.date.localeCompare(b.date));
   allOps.forEach(op=>{
+    const courtName = op.court ? getCourtName(op.court) : '';
     const div=document.createElement('div');
     div.className='flex items-center justify-between p-2.5 rounded-[12px] bg-white/10 border border-white/10';
     div.innerHTML=`
-      <div class="mono text-[11px]"><b>${fmtDateLabel(op.date)}</b><br/>${to12Range(op.start,op.end)}</div>
+      <div class="mono text-[11px]"><b>${fmtDateLabel(op.date)}</b><br/>${to12Range(op.start,op.end)}${courtName ? ` <span class="opacity-60">• ${escapeHtml(courtName)}</span>` : ''}</div>
       <button data-opdel="${op.id}" class="w-7 h-7 rounded-full bg-white/20 grid place-items-center text-[12px]">✕</button>
     `;
     list.appendChild(div);
@@ -3483,12 +3566,19 @@ function seedQueueSessionIfEmpty() {
 seedQueueSessionIfEmpty();
 
 function renderQueueModule() {
-  const sessions = loadQueues();
+  let sessions = loadQueues();
+  
+  // Court-aware filtering: if a specific court is selected, filter to that court
+  if(activeQueueCourtTab && activeQueueCourtTab !== 'all'){
+    sessions = sessions.filter(s => !s.court || s.court === activeQueueCourtTab);
+  }
+  
+  const allSessions = loadQueues();
   const countBadge = document.getElementById('activeQueueCountBadge');
   const sessionCount = document.getElementById('activeSessionsCount');
   const sessionsList = document.getElementById('queueSessionsList');
 
-  if (countBadge) countBadge.textContent = sessions.length;
+  if (countBadge) countBadge.textContent = allSessions.length;
   if (sessionCount) sessionCount.textContent = sessions.length;
 
   if (sessionsList) {
@@ -3508,12 +3598,14 @@ function renderQueueModule() {
         
         const totalP = (s.activeMatch ? (s.mode === 'doubles' ? 4 : 2) : 0) + s.waiting.reduce((sum, w) => sum + w.names.length, 0);
 
+        const courtName = s.court ? getCourtName(s.court) : '';
         div.innerHTML = `
           <div class="min-w-0">
             <div class="font-[800] text-[14px] leading-tight truncate">${escapeHtml(s.name)}</div>
             <div class="flex items-center gap-1.5 mt-1.5 flex-wrap">
               <span class="mono text-[9px] px-2 py-0.5 rounded-full ${isSelected ? 'bg-white/10 text-[#D6FF5F]' : 'bg-[#201C19]/5 text-[#201C19]'} font-[800] uppercase">${s.mode}</span>
-              <span class="mono text-[9px] px-2 py-0.5 rounded-full ${isSelected ? 'bg-white/10 text-white/75' : 'bg-[#F1E9DF] text-[#201C19]/70'}">${s.rule === 'winner_stays' ? 'Winner Stays' : 'Fixed Order'}</span>
+              <span class="mono text-[9px] px-2 py-0.5 rounded-full ${isSelected ? 'bg-white/10 text-white/75' : 'bg-[#F1E9DF] text-[#201C19]/70'}">${s.rule === 'winner_stays' ? 'Winner Stays' : s.rule === 'fixed_pairs' ? 'Fixed Pairs' : s.rule === 'partner_rotation' ? 'Partner Rot.' : s.rule === 'timed_rotation' ? 'Timed Rot.' : s.rule === 'fixed_rotation' ? 'Fixed Rot.' : 'Four On/Off'}</span>
+              ${courtName ? `<span class="mono text-[9px] px-2 py-0.5 rounded-full ${isSelected ? 'bg-white/10 text-white/75' : 'bg-[#EAE0D5] text-[#201C19]/70'}">${escapeHtml(courtName)}</span>` : ''}
             </div>
           </div>
           <div class="text-right shrink-0">
@@ -4170,6 +4262,9 @@ document.getElementById('createQueueForm')?.addEventListener('submit', (e) => {
     rule,
     pin,
     allowJoin,
+    court: (document.getElementById('qCourt') && !document.getElementById('qCourtWrapper').classList.contains('hidden'))
+      ? document.getElementById('qCourt').value
+      : (COURTS[0] ? COURTS[0].id : 'court1'),
     waiting,
     teams,
     activeMatch: null,
@@ -4475,6 +4570,13 @@ renderQueueModule();       // renders the queueing session lists and dashboards
 renderProofStrip();        // proofs strip on Payment tab (local fallback proofs)
 _sweepLocalProofs();       // purge expired local proofs on boot (7-day retention)
 updateAdminTabsVisibility();   // Public Portal mode by default (Book + Payment only)
+
+// Re-render schedule on window resize to switch between multi-column (desktop) and tabs (mobile)
+let _resizeTimer;
+window.addEventListener('resize', () => {
+  clearTimeout(_resizeTimer);
+  _resizeTimer = setTimeout(() => renderSchedule(), 200);
+});
 
 // Render admin toggles when admin panel is shown
 const _origUpdateAdmin = updateAdminTabsVisibility;

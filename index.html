@@ -1040,7 +1040,7 @@
       <div class="px-5 md:px-7 pb-4 flex gap-2">
         <button id="modalGoPayment" class="flex-1 h-11 md:h-12 rounded-full bg-[#201C19] text-white font-[700] text-[12px] md:text-[13px] cursor-pointer active:scale-[0.98] transition">Go to Payment Info</button>
         <button id="modalGoUpload" class="flex-1 h-11 md:h-12 rounded-full bg-[#D6FF5F] border border-[#201C19]/10 font-[800] text-[12px] md:text-[13px] cursor-pointer active:scale-[0.98] transition">Upload Proof</button>
-        <button id="modalGoBookings" class="flex-1 h-11 md:h-12 rounded-full bg-[#F1E9DF] border border-[#E9DDD0] font-[700] text-[12px] md:text-[13px] cursor-pointer active:scale-[0.98] transition">View Bookings</button>
+        <button id="modalGoBookings" class="admin-only-tab hidden flex-1 h-11 md:h-12 rounded-full bg-[#F1E9DF] border border-[#E9DDD0] font-[700] text-[12px] md:text-[13px] cursor-pointer active:scale-[0.98] transition">View Bookings</button>
       </div>
 
       <!-- Email Preview — scrollable content below -->
@@ -1705,7 +1705,7 @@ function startRealtimeListeners() {
       bookings = data;
       localStorage.setItem(LS.bookings, JSON.stringify(data));
       renderSchedule(); renderBookingsList();
-      if (typeof renderAdminBookings === 'function') renderAdminBookings();
+      if (adminUnlocked && typeof renderAdminBookings === 'function') renderAdminBookings();
       if (typeof renderDateSlotPreview === 'function') renderDateSlotPreview();
     }
   }, e => console.warn('bookings listener:', e.message));
@@ -2717,7 +2717,7 @@ document.getElementById('reserveForm').addEventListener('submit', (ev)=>{
   saveBookings(bookings);
   renderSchedule();
   renderBookingsList();
-  renderAdminBookings();
+  if(adminUnlocked) renderAdminBookings();
 
   // show confirmation modal with email preview
   const hrs = e - s - (_crossesGap(s,e) ? _gapLength() : 0);

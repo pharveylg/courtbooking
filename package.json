@@ -3,7 +3,11 @@
     "patch": "node patch.js"
   },
   "dependencies": {
+<<<<<<< Updated upstream
     "firebase": "^12.18.0",
     "firebase-admin": "^13.10.0"
+=======
+    "firebase-admin": "^14.3.0"
+>>>>>>> Stashed changes
   }
 }

@@ -7,9 +7,11 @@
 <!-- Client white-label config (edit per deployment branch) -->
 <script src="client-config.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
-<!-- Supabase SDK (config injected by backend-config.js; blank = local demo mode) -->
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="backend-config.js"></script>
+<!-- Firebase SDK (config injected by firebase-config.js; placeholder = local demo mode) -->
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-storage-compat.js"></script>
+<script src="firebase-config.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
@@ -135,6 +137,11 @@
             </div>
           </div>
 
+          <!-- Court Tabs (shown when multiple courts exist) -->
+          <div id="courtTabBar" class="hidden px-5 md:px-7 py-2.5 border-b border-[#F1E9DF] bg-[#FFFBF5]">
+            <div id="courtTabList" class="flex items-center gap-1.5 overflow-x-auto no-scrollbar"></div>
+          </div>
+
           <div id="scheduleList" class="divide-y divide-[#F5EDE4]"></div>
 
           <div id="scheduleFootNote" class="px-5 md:px-7 py-3 bg-[#FFFBF5] border-t border-[#F1E9DF] mono text-[10px] tracking-wide opacity-60 flex flex-wrap gap-x-4 gap-y-1">
@@ -230,6 +237,11 @@
               <input id="fGroup" placeholder="e.g., 4 players, birthday game" class="h-[44px] rounded-[12px] border border-[#EAE0D5] bg-[#FFFBF5] px-4 text-[14px] font-[500] outline-none focus:border-[#201C19] focus:bg-white transition"/>
             </label>
 
+            <label id="fCourtLabel" class="hidden flex flex-col gap-1.5">
+              <span class="mono text-[11px] uppercase tracking-widest font-[600]">Court</span>
+              <select id="fCourt" class="h-[44px] rounded-[12px] border border-[#EAE0D5] bg-[#FFFBF5] px-3 text-[14px] font-[600] text-[#201C19] outline-none focus:border-[#201C19]"></select>
+            </label>
+
             <div class="grid grid-cols-2 gap-3">
               <label class="flex flex-col gap-1.5">
                 <span class="mono text-[11px] uppercase tracking-widest font-[600]">Start</span>
@@ -323,6 +335,11 @@
           </div>
         </div>
       </div>
+    </div>
+
+    <!-- Court Filter Tabs for Queue (shown when multiple courts) -->
+    <div id="queueCourtTabBar" class="hidden mb-5">
+      <div id="queueCourtTabList" class="flex items-center gap-1.5 p-1.5 rounded-full bg-[#F1E9DF] border border-[#E9DDD0] overflow-x-auto no-scrollbar w-fit"></div>
     </div>
 
     <div class="grid grid-cols-12 gap-5 lg:gap-6">
@@ -765,6 +782,21 @@
             <div id="adminBookingsList" class="divide-y divide-[#F5EDE4] max-h-[560px] overflow-auto"></div>
           </div>
 
+          <!-- Court Management (Admin) -->
+          <div class="rounded-[24px] bg-white border border-[#EAE0D5] p-6 shadow-xs">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <div class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#201C19] text-[#D6FF5F] mono text-[10px] font-[800] uppercase tracking-widest">Admin Control</div>
+                <h3 class="mt-1.5 text-[18px] font-[800] tracking-[-0.02em]">Court Management</h3>
+                <p class="mono text-[11px] opacity-60 mt-0.5">Add, rename, and configure courts. Each court has independent bookings and schedules.</p>
+              </div>
+              <button type="button" id="addCourtBtn" class="h-9 px-4 rounded-full bg-[#D6FF5F] hover:bg-[#CBF052] text-[#201C19] font-[800] text-[12px] border border-[#201C19]/10 transition flex items-center gap-1.5 cursor-pointer shadow-xs">
+                <span>+</span><span>Add Court</span>
+              </button>
+            </div>
+            <div id="adminCourtList" class="mt-4 space-y-2.5"></div>
+          </div>
+
           <!-- Payment QR Code & Channels Manager (Admin only) -->
           <div class="rounded-[24px] bg-white border border-[#EAE0D5] p-6 shadow-xs">
             <div class="flex flex-wrap items-center justify-between gap-3">
@@ -879,6 +911,10 @@
               <label class="flex flex-col gap-1.5">
                 <span class="mono text-[10px] uppercase tracking-widest opacity-60">Date</span>
                 <input type="date" id="opDate" required class="h-11 rounded-[12px] bg-white/10 border border-white/15 px-4 mono text-[13px] outline-none focus:bg-white focus:text-[#201C19]"/>
+              </label>
+              <label id="opCourtLabel" class="hidden flex flex-col gap-1.5">
+                <span class="mono text-[10px] uppercase tracking-widest opacity-60">Court</span>
+                <select id="opCourt" class="h-11 rounded-[12px] bg-white/10 border border-white/15 px-3 mono text-[13px] outline-none focus:bg-white focus:text-[#201C19]"></select>
               </label>
               <div class="grid grid-cols-2 gap-2">
                 <label class="flex flex-col gap-1.5">
@@ -1215,19 +1251,26 @@ function updateOpenBadge(){
 }
 
 /* ================================================================
-   SUPABASE INIT + POSTGRES DATA LAYER
-   Config comes from backend-config.js (window.SUPABASE_CONFIG).
+   FIREBASE INIT + FIRESTORE DATA LAYER
+   Config comes from firebase-config.js (window.FIREBASE_CONFIG).
    When the config is blank/placeholder the app runs in DEMO MODE:
    fully functional, data persisted in this device's localStorage.
    With a real config, data syncs across all devices in real-time.
    ================================================================ */
-const SUPABASE_CFG = (window.SUPABASE_CONFIG && window.SUPABASE_CONFIG.url && !String(window.SUPABASE_CONFIG.url).startsWith('PASTE')) ? window.SUPABASE_CONFIG : null;
-const SB_ENABLED = !!SUPABASE_CFG;
-let supabaseClient = null;
-if (SB_ENABLED) {
-  supabaseClient = supabase.createClient(SUPABASE_CFG.url, SUPABASE_CFG.anonKey);
+const FIREBASE_CFG = (window.FIREBASE_CONFIG && window.FIREBASE_CONFIG.apiKey && !String(window.FIREBASE_CONFIG.apiKey).startsWith('PASTE')) ? window.FIREBASE_CONFIG : null;
+const FB_ENABLED = !!(FIREBASE_CFG && FIREBASE_CFG.projectId);
+let fbApp = null, db = null, fbStorage = null;
+if (FB_ENABLED) {
+  try {
+    fbApp = firebase.initializeApp(FIREBASE_CFG);
+    db = firebase.firestore();
+    fbStorage = firebase.storage();
+    console.log('[CourtBooking] Firebase connected:', FIREBASE_CFG.projectId);
+  } catch(e) {
+    console.warn('[CourtBooking] Firebase init failed:', e.message);
+  }
 }
-const HAS_STORAGE = SB_ENABLED;
+const HAS_STORAGE = FB_ENABLED;
 
 /* ---------- Local cache keys (offline fallback only) ---------- */
 const LS = {
@@ -1238,16 +1281,17 @@ const LS = {
   pin: 'cb_adminPin_v7',
   adminUnlocked: 'cb_admin_unlocked_v7',
   payMethods: 'cb_pay_methods_v7',
-  queues: 'cb_queues_v7'
+  queues: 'cb_queues_v7',
+  courts: 'cb_courts_v7'
 };
 
-/* ---------- Supabase helper: save + cache (no-op cloud write in demo mode) ---------- */
-async function sbSave(key, lsKey, data) {
+/* ---------- Firestore helper: save + cache (no-op cloud write in demo mode) ---------- */
+async function fbSave(collectionId, lsKey, data) {
   localStorage.setItem(lsKey, JSON.stringify(data));
-  if (!supabaseClient) return;
-  try { 
-    await supabaseClient.from('kv_store').upsert({ key: key, value: data }); 
-  } catch(e) { console.warn('Supabase write failed, cached locally:', e.message); }
+  if (!db) return;
+  try {
+    await db.collection(collectionId).doc('state').set({ data: data, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+  } catch(e) { console.warn('Firestore write failed, cached locally:', e.message); }
 }
 
 function fbLoadCache(lsKey, fallback) {
@@ -1283,13 +1327,13 @@ function to12Range(s,e){ return `${fmtTime(s)} – ${fmtTime(e)}`; }
 
 /* ---------- Load / Save wrappers (Supabase + localStorage cache) ---------- */
 function loadBookings(){ return fbLoadCache(LS.bookings, []); }
-function saveBookings(arr){ bookings = arr; sbSave('bookings', LS.bookings, arr); }
+function saveBookings(arr){ bookings = arr; fbSave('bookings', LS.bookings, arr); }
 
 function loadMorning(){ return fbLoadCache(LS.morning, {"7":false,"8":false,"9":false,"10":false,"11":false}); }
-function saveMorning(obj){ morningEnabled = obj; sbSave('morning', LS.morning, obj); }
+function saveMorning(obj){ morningEnabled = obj; fbSave('morning', LS.morning, obj); }
 
 function loadOpenPlay(){ return fbLoadCache(LS.openPlay, []); }
-function saveOpenPlay(arr){ openPlays = arr; sbSave('openPlay', LS.openPlay, arr); }
+function saveOpenPlay(arr){ openPlays = arr; fbSave('openPlay', LS.openPlay, arr); }
 
 const STAFF_RESERVE_DEFAULTS = {"0":true,"2":true,"4":true,"6":true};
 
@@ -1312,7 +1356,7 @@ function loadStaffReserve(){
   if(raw.weekId !== getCurrentWeekId()){
     const reset = { weekId: getCurrentWeekId(), days: {...STAFF_RESERVE_DEFAULTS} };
     // Save the reset immediately
-    sbSave('staffReserve', LS.staffReserve, reset);
+    fbSave('staffReserve', LS.staffReserve, reset);
     return reset;
   }
   return raw;
@@ -1322,7 +1366,7 @@ function saveStaffReserve(obj){
   // Always stamp with current weekId
   obj.weekId = getCurrentWeekId();
   staffReserveEnabled = obj;
-  sbSave('staffReserve', LS.staffReserve, obj);
+  fbSave('staffReserve', LS.staffReserve, obj);
 }
 
 /* ---------- App state ---------- */
@@ -1333,6 +1377,23 @@ let morningEnabled = loadMorning();
 let openPlays = loadOpenPlay();
 let staffReserveEnabled = loadStaffReserve();
 let _firebaseReady = false;
+
+/* ---------- Courts state ---------- */
+let COURTS = [];
+let activeCourtTab = 'court1'; // currently selected court tab for schedule view
+let activeQueueCourtTab = 'all'; // currently selected court tab for queue view
+
+function loadCourts(){
+  try { const v = JSON.parse(localStorage.getItem(LS.courts)); return v != null ? v : [{ id: 'court1', name: 'Court 1', startHour: 13, active: true }]; }
+  catch { return [{ id: 'court1', name: 'Court 1', startHour: 13, active: true }]; }
+}
+function saveCourts(arr){
+  COURTS = arr;
+  fbSave('courts', LS.courts, arr);
+}
+function getActiveCourts(){ return COURTS.filter(c => c.active !== false); }
+function getCourtById(id){ return COURTS.find(c => c.id === id); }
+function getCourtName(id){ const c = getCourtById(id); return c ? c.name : ''; }
 
 /* ================================================================
    PAYMENT PROOFS MIDDLEWARE
@@ -1382,35 +1443,31 @@ function saveProofLocal(record) {
   localStorage.setItem('cb_proofs_v1', JSON.stringify(arr));
 }
 
-/* Cloud upload: pushes file to Storage + writes TTL metadata doc. */
+/* Cloud upload: pushes file to Firebase Storage + writes TTL metadata doc. */
 async function uploadProofCloud(bookingId, nameOnBooking, proof) {
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       const now = Date.now();
-      const path = `${bookingId}/${now}_${proof.fileName}`;
+      const path = `proofs/${bookingId}/${now}_${proof.fileName}`;
       
-      // Upload to Supabase Storage bucket 'proofs'
-      const { data: uploadData, error: uploadError } = await supabaseClient.storage
-        .from('proofs')
-        .upload(path, dataURLtoFile(proof.dataUrl, proof.fileName), { contentType: proof.mime });
-        
-      if (uploadError) throw uploadError;
+      // Upload to Firebase Storage
+      const storageRef = fbStorage.ref(path);
+      const file = dataURLtoFile(proof.dataUrl, proof.fileName);
+      await storageRef.put(file, { contentType: proof.mime });
+      const url = await storageRef.getDownloadURL();
 
-      const { data: urlData } = supabaseClient.storage.from('proofs').getPublicUrl(path);
-      const url = urlData.publicUrl;
-
-      // Write to 'proofs' table
-      const { error: dbError } = await supabaseClient.from('proofs').insert({
-        booking_id: bookingId,
+      // Write metadata to Firestore proofs collection
+      await db.collection('proofs').add({
+        bookingId: bookingId,
         name: nameOnBooking,
-        file_name: proof.fileName,
+        fileName: proof.fileName,
         path: path,
         url: url,
         mime: proof.mime,
-        expires_at: new Date(now + 7 * 24 * 3600 * 1000).toISOString()
+        expiresAt: now + 7 * 24 * 3600 * 1000,
+        uploadedAt: now
       });
       
-      if (dbError) throw dbError;
       return { ok: true, url };
     } catch (err) {
       console.warn(`Proof upload attempt ${attempt + 1} failed:`, err.message);
@@ -1488,27 +1545,31 @@ async function handleProofSelected() {
 
 /* Sweep proofs past their 1-week retention. */
 async function sweepExpiredProofs() {
-  if (!HAS_STORAGE) return;
+  if (!db) return;
   try {
-    const { data: expired } = await supabaseClient.from('proofs').select('id, path').lt('expires_at', new Date().toISOString());
-    if (expired && expired.length > 0) {
-      const ids = expired.map(p => p.id);
-      const paths = expired.map(p => p.path);
-      await supabaseClient.from('proofs').delete().in('id', ids);
-      await supabaseClient.storage.from('proofs').remove(paths);
-      console.log(`Housekeeping: removed ${expired.length} expired proof(s).`);
+    const cutoff = Date.now();
+    const snap = await db.collection('proofs').where('expiresAt', '<', cutoff).get();
+    if (!snap.empty) {
+      const batch = db.batch();
+      snap.forEach(doc => {
+        const d = doc.data();
+        batch.delete(doc.ref);
+        if (d.path && fbStorage) {
+          fbStorage.ref(d.path).delete().catch(() => {});
+        }
+      });
+      await batch.commit();
+      console.log(`Housekeeping: removed ${snap.size} expired proof(s).`);
     }
   } catch (e) { }
 }
 
-/* Supabase live feed of proofs for the Admin review queue. */
+/* Firestore live feed of proofs for the Admin review queue. */
 function watchProofs() {
-  if (!HAS_STORAGE) return;
-  supabaseClient.channel('proofs-channel')
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'proofs' }, () => {
-      if (adminUnlocked) renderPaymentProofsQueue();
-    })
-    .subscribe();
+  if (!db) return;
+  db.collection('proofs').onSnapshot(() => {
+    if (adminUnlocked) renderPaymentProofsQueue();
+  });
 }
 
 /* ================================================================
@@ -1633,151 +1694,218 @@ function armProofWatcher() {
   watchProofs();
 }
 
-/* ---------- Supabase real-time listeners (skipped in demo mode) ---------- */
+/* ---------- Firestore real-time listeners (skipped in demo mode) ---------- */
 function startRealtimeListeners() {
-  if (!supabaseClient) return;
+  if (!db) return;
 
-  supabaseClient.channel('custom-all-channel')
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'kv_store' }, payload => {
-      const { key, value } = payload.new;
-      try {
-        if (key === 'bookings') {
-          bookings = value;
-          localStorage.setItem(LS.bookings, JSON.stringify(value));
-          renderSchedule(); renderBookingsList();
-          if (typeof renderAdminBookings === 'function') renderAdminBookings();
-          if (typeof renderDateSlotPreview === 'function') renderDateSlotPreview();
-        } else if (key === 'openPlay') {
-          openPlays = value;
-          localStorage.setItem(LS.openPlay, JSON.stringify(value));
-          renderSchedule();
-          if (typeof renderOpenPlayList === 'function') renderOpenPlayList();
-          if (typeof renderDateSlotPreview === 'function') renderDateSlotPreview();
-        } else if (key === 'morning') {
-          morningEnabled = value;
-          localStorage.setItem(LS.morning, JSON.stringify(value));
-          renderSchedule();
-          if (typeof populateTimeOptions === 'function') populateTimeOptions();
-          if (typeof renderMorningToggles === 'function') renderMorningToggles();
-        } else if (key === 'staffReserve') {
-          let parsed = value;
-          if(!parsed.weekId || parsed.weekId !== getCurrentWeekId()){
-            staffReserveEnabled = { weekId: getCurrentWeekId(), days: {...STAFF_RESERVE_DEFAULTS} };
-            supabaseClient.from('kv_store').upsert({ key: 'staffReserve', value: staffReserveEnabled }).catch(()=>{});
-          } else {
-            staffReserveEnabled = parsed;
-          }
-          localStorage.setItem(LS.staffReserve, JSON.stringify(staffReserveEnabled));
-          renderSchedule();
-          if (typeof renderStaffReserveToggles === 'function') renderStaffReserveToggles();
-        } else if (key === 'pin') {
-          localStorage.setItem(LS.pin, value);
-        } else if (key === 'payMethods') {
-          payMethods = value;
-          localStorage.setItem(LS.payMethods, JSON.stringify(value));
-          if (typeof renderPublicPayTab === 'function') renderPublicPayTab();
-          if (typeof renderAdminQrManager === 'function') renderAdminQrManager();
-        } else if (key === 'queues') {
-          localStorage.setItem(LS.queues, JSON.stringify(value));
-          if (typeof renderQueueModule === 'function') renderQueueModule();
-        }
-      } catch(e){}
-    })
-    .subscribe();
+  db.collection('bookings').doc('state').onSnapshot(snap => {
+    if (!snap.exists) return;
+    const data = snap.data().data;
+    if (data) {
+      bookings = data;
+      localStorage.setItem(LS.bookings, JSON.stringify(data));
+      renderSchedule(); renderBookingsList();
+      if (typeof renderAdminBookings === 'function') renderAdminBookings();
+      if (typeof renderDateSlotPreview === 'function') renderDateSlotPreview();
+    }
+  }, e => console.warn('bookings listener:', e.message));
+
+  db.collection('openPlay').doc('state').onSnapshot(snap => {
+    if (!snap.exists) return;
+    const data = snap.data().data;
+    if (data) {
+      openPlays = data;
+      localStorage.setItem(LS.openPlay, JSON.stringify(data));
+      renderSchedule();
+      if (typeof renderOpenPlayList === 'function') renderOpenPlayList();
+      if (typeof renderDateSlotPreview === 'function') renderDateSlotPreview();
+    }
+  }, e => console.warn('openPlay listener:', e.message));
+
+  db.collection('morning').doc('state').onSnapshot(snap => {
+    if (!snap.exists) return;
+    const data = snap.data().data;
+    if (data) {
+      morningEnabled = data;
+      localStorage.setItem(LS.morning, JSON.stringify(data));
+      renderSchedule();
+      if (typeof populateTimeOptions === 'function') populateTimeOptions();
+      if (typeof renderMorningToggles === 'function') renderMorningToggles();
+    }
+  }, e => console.warn('morning listener:', e.message));
+
+  db.collection('staffReserve').doc('state').onSnapshot(snap => {
+    if (!snap.exists) return;
+    let parsed = snap.data().data;
+    if(parsed && (!parsed.weekId || parsed.weekId !== getCurrentWeekId())){
+      staffReserveEnabled = { weekId: getCurrentWeekId(), days: {...STAFF_RESERVE_DEFAULTS} };
+      fbSave('staffReserve', LS.staffReserve, staffReserveEnabled);
+    } else if (parsed) {
+      staffReserveEnabled = parsed;
+    }
+    localStorage.setItem(LS.staffReserve, JSON.stringify(staffReserveEnabled));
+    renderSchedule();
+    if (typeof renderStaffReserveToggles === 'function') renderStaffReserveToggles();
+  }, e => console.warn('staffReserve listener:', e.message));
+
+  db.collection('settings').doc('state').onSnapshot(snap => {
+    if (!snap.exists) return;
+    const d = snap.data().data || {};
+    if (d.pin) localStorage.setItem(LS.pin, d.pin);
+    if (d.payMethods) {
+      payMethods = { ...DEFAULT_PAY_METHODS, ...d.payMethods };
+      localStorage.setItem(LS.payMethods, JSON.stringify(payMethods));
+      if (typeof renderPublicPayTab === 'function') renderPublicPayTab();
+      if (typeof renderAdminQrManager === 'function') renderAdminQrManager();
+    }
+  }, e => console.warn('settings listener:', e.message));
+
+  db.collection('queues').doc('state').onSnapshot(snap => {
+    if (!snap.exists) return;
+    const data = snap.data().data;
+    if (data) {
+      localStorage.setItem(LS.queues, JSON.stringify(data));
+      if (typeof renderQueueModule === 'function') renderQueueModule();
+    }
+  }, e => console.warn('queues listener:', e.message));
+
+  db.collection('courts').doc('state').onSnapshot(snap => {
+    if (!snap.exists) return;
+    const data = snap.data().data;
+    if (data) {
+      COURTS = data;
+      localStorage.setItem(LS.courts, JSON.stringify(data));
+      renderCourtTabs();
+      renderAdminCourts();
+      renderSchedule();
+      if (typeof renderDateSlotPreview === 'function') renderDateSlotPreview();
+      populateCourtSelectors();
+    }
+  }, e => console.warn('courts listener:', e.message));
 }
 
 /* ---------- Seed sample data locally (demo mode) ---------- */
 function seedLocalIfEmpty() {
+  // --- Courts ---
+  if (!localStorage.getItem(LS.courts)) {
+    COURTS = [{ id: 'court1', name: 'Court 1', startHour: 13, active: true }];
+    localStorage.setItem(LS.courts, JSON.stringify(COURTS));
+  } else {
+    COURTS = JSON.parse(localStorage.getItem(LS.courts));
+  }
+
   if (!localStorage.getItem(LS.bookings)) {
     const t = todayISO();
     const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate()+1);
     const tom = tomorrow.toISOString().slice(0,10);
     const seedData = [
-      {id:'b_seed_res', name:'Alex Rivera', email:'alex.rivera@example.com', date:t, start:13, end:14, status:'Reserved', group:'4 players', createdAt:Date.now()-7200000},
-      {id:'b_seed_pen', name:'Mika Tan', email:'mika.tan@example.com', date:t, start:14, end:15, status:'Pending', group:'2 players', createdAt:Date.now()-3600000},
-      {id:'op_seed_today', name:'Open Play', email:'', date:t, start:15, end:17, status:'OpenPlay', group:'Community open play', createdAt:Date.now()-3000000},
-      {id:'b_seed_tom', name:'JC Dela Cruz', email:'jc@example.com', date:tom, start:13, end:14, status:'Pending', group:'3 players', createdAt:Date.now()-1800000},
+      {id:'b_seed_res', name:'Alex Rivera', email:'alex.rivera@example.com', court:'court1', date:t, start:13, end:14, status:'Reserved', group:'4 players', createdAt:Date.now()-7200000},
+      {id:'b_seed_pen', name:'Mika Tan', email:'mika.tan@example.com', court:'court1', date:t, start:14, end:15, status:'Pending', group:'2 players', createdAt:Date.now()-3600000},
+      {id:'op_seed_today', name:'Open Play', email:'', court:'court1', date:t, start:15, end:17, status:'OpenPlay', group:'Community open play', createdAt:Date.now()-3000000},
+      {id:'b_seed_tom', name:'JC Dela Cruz', email:'jc@example.com', court:'court1', date:tom, start:13, end:14, status:'Pending', group:'3 players', createdAt:Date.now()-1800000},
     ];
     bookings = seedData;
     localStorage.setItem(LS.bookings, JSON.stringify(bookings));
   }
   if (!localStorage.getItem(LS.openPlay)) {
-    openPlays = [{id:'op_seed_today', date:todayISO(), start:15, end:17}];
+    openPlays = [{id:'op_seed_today', date:todayISO(), start:15, end:17, court:'court1'}];
     localStorage.setItem(LS.openPlay, JSON.stringify(openPlays));
   }
 }
 
 /* ---------- Seed data (only if cloud is empty) ---------- */
 async function seedIfEmpty() {
-  if (!supabaseClient) { seedLocalIfEmpty(); return; }
+  if (!db) { seedLocalIfEmpty(); return; }
   try {
-    const { data: bData } = await supabaseClient.from('kv_store').select('value').eq('key', 'bookings').single();
-    if (!bData) {
+    // --- Courts ---
+    const courtSnap = await db.collection('courts').doc('state').get();
+    if (!courtSnap.exists) {
+      const defaultCourts = [{ id: 'court1', name: 'Court 1', startHour: 13, active: true }];
+      await db.collection('courts').doc('state').set({ data: defaultCourts, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+      COURTS = defaultCourts;
+    } else {
+      COURTS = courtSnap.data().data || [{ id: 'court1', name: 'Court 1', startHour: 13, active: true }];
+    }
+    localStorage.setItem(LS.courts, JSON.stringify(COURTS));
+
+    // --- Bookings ---
+    const bSnap = await db.collection('bookings').doc('state').get();
+    if (!bSnap.exists) {
       const t = todayISO();
       const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate()+1);
       const tom = tomorrow.toISOString().slice(0,10);
       const seedData = [
-        {id:'b_seed_res', name:'Alex Rivera', email:'alex.rivera@example.com', date:t, start:13, end:14, status:'Reserved', group:'4 players', createdAt:Date.now()-7200000},
-        {id:'b_seed_pen', name:'Mika Tan', email:'mika.tan@example.com', date:t, start:14, end:15, status:'Pending', group:'2 players', createdAt:Date.now()-3600000},
-        {id:'op_seed_today', name:'Open Play', email:'', date:t, start:15, end:17, status:'OpenPlay', group:'Community open play', createdAt:Date.now()-3000000},
-        {id:'b_seed_tom', name:'JC Dela Cruz', email:'jc@example.com', date:tom, start:13, end:14, status:'Pending', group:'3 players', createdAt:Date.now()-1800000},
+        {id:'b_seed_res', name:'Alex Rivera', email:'alex.rivera@example.com', court:'court1', date:t, start:13, end:14, status:'Reserved', group:'4 players', createdAt:Date.now()-7200000},
+        {id:'b_seed_pen', name:'Mika Tan', email:'mika.tan@example.com', court:'court1', date:t, start:14, end:15, status:'Pending', group:'2 players', createdAt:Date.now()-3600000},
+        {id:'op_seed_today', name:'Open Play', email:'', court:'court1', date:t, start:15, end:17, status:'OpenPlay', group:'Community open play', createdAt:Date.now()-3000000},
+        {id:'b_seed_tom', name:'JC Dela Cruz', email:'jc@example.com', court:'court1', date:tom, start:13, end:14, status:'Pending', group:'3 players', createdAt:Date.now()-1800000},
       ];
-      await supabaseClient.from('kv_store').upsert({ key: 'bookings', value: seedData });
+      await db.collection('bookings').doc('state').set({ data: seedData, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
       bookings = seedData;
     } else {
-      bookings = bData.value;
+      bookings = bSnap.data().data;
     }
     localStorage.setItem(LS.bookings, JSON.stringify(bookings));
 
-    const { data: oData } = await supabaseClient.from('kv_store').select('value').eq('key', 'openPlay').single();
-    if (!oData) {
-      const t = todayISO();
-      const seedOp = [{id:'op_seed_today', date:t, start:15, end:17}];
-      await supabaseClient.from('kv_store').upsert({ key: 'openPlay', value: seedOp });
+    // --- Open Play ---
+    const oSnap = await db.collection('openPlay').doc('state').get();
+    if (!oSnap.exists) {
+      const seedOp = [{id:'op_seed_today', date:todayISO(), start:15, end:17, court:'court1'}];
+      await db.collection('openPlay').doc('state').set({ data: seedOp, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
       openPlays = seedOp;
     } else {
-      openPlays = oData.value;
+      openPlays = oSnap.data().data;
     }
     localStorage.setItem(LS.openPlay, JSON.stringify(openPlays));
 
-    const { data: mData } = await supabaseClient.from('kv_store').select('value').eq('key', 'morning').single();
-    if (!mData) {
+    // --- Morning ---
+    const mSnap = await db.collection('morning').doc('state').get();
+    if (!mSnap.exists) {
       const def = {"7":false,"8":false,"9":false,"10":false,"11":false};
-      await supabaseClient.from('kv_store').upsert({ key: 'morning', value: def });
+      await db.collection('morning').doc('state').set({ data: def, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
       morningEnabled = def;
     } else {
-      morningEnabled = mData.value;
+      morningEnabled = mSnap.data().data;
     }
     localStorage.setItem(LS.morning, JSON.stringify(morningEnabled));
 
-    const { data: srData } = await supabaseClient.from('kv_store').select('value').eq('key', 'staffReserve').single();
-    if (!srData) {
+    // --- Staff Reserve ---
+    const srSnap = await db.collection('staffReserve').doc('state').get();
+    if (!srSnap.exists) {
       const def = { weekId: getCurrentWeekId(), days: {...STAFF_RESERVE_DEFAULTS} };
-      await supabaseClient.from('kv_store').upsert({ key: 'staffReserve', value: def });
+      await db.collection('staffReserve').doc('state').set({ data: def, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
       staffReserveEnabled = def;
     } else {
-      const parsed = srData.value;
+      const parsed = srSnap.data().data;
       if(!parsed.weekId || parsed.weekId !== getCurrentWeekId()){
         staffReserveEnabled = { weekId: getCurrentWeekId(), days: {...STAFF_RESERVE_DEFAULTS} };
-        await supabaseClient.from('kv_store').upsert({ key: 'staffReserve', value: staffReserveEnabled });
+        await fbSave('staffReserve', LS.staffReserve, staffReserveEnabled);
       } else {
         staffReserveEnabled = parsed;
       }
     }
     localStorage.setItem(LS.staffReserve, JSON.stringify(staffReserveEnabled));
 
-    const { data: pinData } = await supabaseClient.from('kv_store').select('value').eq('key', 'pin').single();
-    if (!pinData) await supabaseClient.from('kv_store').upsert({ key: 'pin', value: '1234' });
+    // --- Settings (PIN + payMethods) ---
+    const sSnap = await db.collection('settings').doc('state').get();
+    if (!sSnap.exists) {
+      await db.collection('settings').doc('state').set({ data: { pin: '1234', payMethods: {} }, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+    }
 
-    const { data: pmData } = await supabaseClient.from('kv_store').select('value').eq('key', 'payMethods').single();
-    if (!pmData) await supabaseClient.from('kv_store').upsert({ key: 'payMethods', value: {} });
+    // --- Queues ---
+    const qSnap = await db.collection('queues').doc('state').get();
+    if (!qSnap.exists) {
+      await db.collection('queues').doc('state').set({ data: [], updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+    }
 
   } catch(e) {
-    console.warn('Supabase seed/fetch failed, using local cache:', e.message);
+    console.warn('Firestore seed/fetch failed, using local cache:', e.message);
   }
   renderSchedule(); renderBookingsList();
   if (typeof populateTimeOptions === 'function') populateTimeOptions();
   if (typeof renderDateSlotPreview === 'function') renderDateSlotPreview();
+  if (typeof populateCourtSelectors === 'function') populateCourtSelectors();
+  if (typeof renderCourtTabs === 'function') renderCourtTabs();
 }
 
 // Kick off Firebase
@@ -1871,6 +1999,8 @@ document.querySelectorAll('.nav-btn').forEach(btn=>{
       renderAdminBookings();
       renderMorningToggles();
       renderOpenPlayList();
+      renderAdminCourts();
+      populateCourtSelectors();
     }
     window.scrollTo({top: 0, behavior: 'smooth'});
   });
@@ -1976,18 +2106,230 @@ function getOpenPlayForDate(dateISO){
   const fromOps = openPlays.filter(o=>o.date===dateISO);
   return [...fromBookings, ...fromOps];
 }
-function hasOverlap(dateISO, start, end, excludeId=null){
+function hasOverlap(dateISO, start, end, excludeId=null, courtId=null){
   if(isStaffBlocked(dateISO,start,end)) return {type:'staff'};
   const ops = getOpenPlayForDate(dateISO);
   for(const op of ops){
     if(excludeId && op.id===excludeId) continue;
+    // Court-aware: skip if court specified and doesn't match (court-agnostic bookings match all courts)
+    if(courtId && op.court && op.court !== courtId) continue;
     if(start < op.end && end > op.start) return {type:'openplay', data:op};
   }
   const bks = getBookingsForDate(dateISO).filter(b=>b.status!=='OpenPlay' && b.id!==excludeId);
   for(const b of bks){
+    // Court-aware: skip if court specified and booking has a court that doesn't match
+    if(courtId && b.court && b.court !== courtId) continue;
     if(start < b.end && end > b.start) return {type:'booking', data:b};
   }
   return null;
+}
+
+/* ---------- Court Tab Rendering ---------- */
+function renderCourtTabs(){
+  const tabBar = document.getElementById('courtTabBar');
+  const tabList = document.getElementById('courtTabList');
+  if(!tabBar || !tabList) return;
+  const activeCourts = getActiveCourts();
+  if(activeCourts.length <= 1){
+    tabBar.classList.add('hidden');
+    activeCourtTab = activeCourts.length ? activeCourts[0].id : 'court1';
+    return;
+  }
+  tabBar.classList.remove('hidden');
+  tabList.innerHTML = '';
+  // "All Courts" tab
+  const allBtn = document.createElement('button');
+  allBtn.type = 'button';
+  allBtn.className = `shrink-0 px-4 h-8 rounded-full mono text-[11px] font-[700] transition cursor-pointer ${activeCourtTab === 'all' ? 'bg-[#201C19] text-white shadow-xs' : 'bg-white border border-[#EAE0D5] text-[#201C19] hover:border-[#201C19]'}`;
+  allBtn.textContent = 'All Courts';
+  allBtn.addEventListener('click', () => { activeCourtTab = 'all'; renderCourtTabs(); renderSchedule(); });
+  tabList.appendChild(allBtn);
+  activeCourts.forEach(c => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = `shrink-0 px-4 h-8 rounded-full mono text-[11px] font-[700] transition cursor-pointer ${activeCourtTab === c.id ? 'bg-[#201C19] text-white shadow-xs' : 'bg-white border border-[#EAE0D5] text-[#201C19] hover:border-[#201C19]'}`;
+    btn.textContent = c.name;
+    btn.addEventListener('click', () => { activeCourtTab = c.id; renderCourtTabs(); renderSchedule(); });
+    tabList.appendChild(btn);
+  });
+}
+
+function renderQueueCourtTabs(){
+  const tabBar = document.getElementById('queueCourtTabBar');
+  const tabList = document.getElementById('queueCourtTabList');
+  if(!tabBar || !tabList) return;
+  const activeCourts = getActiveCourts();
+  if(activeCourts.length <= 1){
+    tabBar.classList.add('hidden');
+    return;
+  }
+  tabBar.classList.remove('hidden');
+  tabList.innerHTML = '';
+  const allBtn = document.createElement('button');
+  allBtn.type = 'button';
+  allBtn.className = `shrink-0 px-4 h-8 rounded-full mono text-[11px] font-[700] transition cursor-pointer ${activeQueueCourtTab === 'all' ? 'bg-[#201C19] text-white shadow-xs' : 'text-[#201C19] opacity-70 hover:opacity-100'}`;
+  allBtn.textContent = 'All';
+  allBtn.addEventListener('click', () => { activeQueueCourtTab = 'all'; renderQueueCourtTabs(); renderQueueModule(); });
+  tabList.appendChild(allBtn);
+  activeCourts.forEach(c => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = `shrink-0 px-4 h-8 rounded-full mono text-[11px] font-[700] transition cursor-pointer ${activeQueueCourtTab === c.id ? 'bg-[#201C19] text-white shadow-xs' : 'text-[#201C19] opacity-70 hover:opacity-100'}`;
+    btn.textContent = c.name;
+    btn.addEventListener('click', () => { activeQueueCourtTab = c.id; renderQueueCourtTabs(); renderQueueModule(); });
+    tabList.appendChild(btn);
+  });
+}
+
+function populateCourtSelectors(){
+  const activeCourts = getActiveCourts();
+  // Reserve form court selector
+  const fCourt = document.getElementById('fCourt');
+  const fCourtLabel = document.getElementById('fCourtLabel');
+  if(fCourt && fCourtLabel){
+    if(activeCourts.length > 1){
+      fCourtLabel.classList.remove('hidden');
+      fCourtLabel.style.display = 'flex';
+      fCourt.innerHTML = '';
+      activeCourts.forEach(c => {
+        const o = document.createElement('option');
+        o.value = c.id; o.textContent = c.name;
+        fCourt.appendChild(o);
+      });
+      // If active tab is a specific court, pre-select it
+      if(activeCourtTab && activeCourtTab !== 'all' && activeCourts.find(c => c.id === activeCourtTab)){
+        fCourt.value = activeCourtTab;
+      }
+    } else {
+      fCourtLabel.classList.add('hidden');
+      fCourtLabel.style.display = 'none';
+    }
+  }
+  // Open Play court selector
+  const opCourt = document.getElementById('opCourt');
+  const opCourtLabel = document.getElementById('opCourtLabel');
+  if(opCourt && opCourtLabel){
+    if(activeCourts.length > 1){
+      opCourtLabel.classList.remove('hidden');
+      opCourtLabel.style.display = 'flex';
+      opCourt.innerHTML = '';
+      activeCourts.forEach(c => {
+        const o = document.createElement('option');
+        o.value = c.id; o.textContent = c.name;
+        opCourt.appendChild(o);
+      });
+    } else {
+      opCourtLabel.classList.add('hidden');
+      opCourtLabel.style.display = 'none';
+    }
+  }
+}
+
+/* ---------- Admin Court Management ---------- */
+function renderAdminCourts(){
+  const list = document.getElementById('adminCourtList');
+  if(!list) return;
+  list.innerHTML = '';
+  if(COURTS.length === 0){
+    list.innerHTML = `<div class="p-6 text-center border border-dashed border-[#EAE0D5] rounded-[18px]"><p class="mono text-[11px] opacity-60">No courts configured. Click "Add Court" to create one.</p></div>`;
+    return;
+  }
+  COURTS.forEach(c => {
+    const isActive = c.active !== false;
+    const div = document.createElement('div');
+    div.className = `p-3.5 rounded-[18px] border flex flex-col md:flex-row md:items-center gap-3 transition ${isActive ? 'border-[#EAE0D5] bg-[#FFFBF5]' : 'border-[#FFE0A3] bg-[#FFF8F0]'}`;
+    div.innerHTML = `
+      <div class="flex items-center gap-3 flex-1 min-w-0">
+        <div class="w-9 h-9 rounded-full ${isActive ? 'bg-[#201C19] text-white' : 'bg-[#FFE0A3] text-[#8A5A00]'} grid place-items-center mono text-[11px] font-[800] shrink-0">
+          ${c.name ? c.name.replace(/\s/g,'').slice(0,2).toUpperCase() : 'CT'}
+        </div>
+        <div class="min-w-0 flex-1">
+          <div class="font-[750] text-[14px] leading-tight truncate">${escapeHtml(c.name)}</div>
+          <div class="flex items-center gap-2 mt-1 flex-wrap">
+            <span class="mono text-[9px] px-2 py-0.5 rounded-full ${isActive ? 'bg-[#E8F5D8] text-[#3F7019]' : 'bg-[#FFE0A3] text-[#8A5A00]'} font-[700] uppercase">${isActive ? 'Active' : 'Maintenance'}</span>
+            <span class="mono text-[9px] px-2 py-0.5 rounded-full bg-[#F1E9DF] text-[#201C19]/70 font-[600]">Start: ${fmtTime(c.startHour || 13)}</span>
+            <span class="mono text-[9px] opacity-50">ID: ${c.id}</span>
+          </div>
+        </div>
+      </div>
+      <div class="flex items-center gap-2 shrink-0">
+        <label class="relative inline-flex items-center cursor-pointer">
+          <input type="checkbox" data-court-toggle="${c.id}" class="sr-only peer" ${isActive ? 'checked' : ''}>
+          <div class="w-10 h-5 bg-[#E9DDD0] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#201C19]"></div>
+        </label>
+        <button type="button" data-court-rename="${c.id}" class="w-8 h-8 rounded-full bg-white border border-[#EAE0D5] grid place-items-center hover:border-[#201C19] transition cursor-pointer" title="Rename">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        </button>
+        <select data-court-hour="${c.id}" class="h-8 rounded-full border border-[#EAE0D5] bg-white px-2 mono text-[10px] font-[700] cursor-pointer outline-none" title="Start Hour">
+          ${Array.from({length:18}, (_,i) => 5+i).map(h => `<option value="${h}" ${h === (c.startHour||13) ? 'selected' : ''}>${fmtTime(h)}</option>`).join('')}
+        </select>
+        ${COURTS.length > 1 ? `<button type="button" data-court-del="${c.id}" class="w-8 h-8 rounded-full bg-white border border-[#EAE0D5] grid place-items-center hover:bg-[#FFE9E0] hover:border-[#FFC9B6] transition cursor-pointer" title="Delete Court">✕</button>` : ''}
+      </div>
+    `;
+    list.appendChild(div);
+  });
+
+  // Bind toggle
+  list.querySelectorAll('input[data-court-toggle]').forEach(inp => {
+    inp.addEventListener('change', () => {
+      const id = inp.dataset.courtToggle;
+      const idx = COURTS.findIndex(c => c.id === id);
+      if(idx >= 0){
+        COURTS[idx].active = inp.checked;
+        saveCourts(COURTS);
+        renderAdminCourts(); renderCourtTabs(); populateCourtSelectors(); renderSchedule();
+        toast(`${COURTS[idx].name} ${inp.checked ? 'activated' : 'set to maintenance'}`);
+      }
+    });
+  });
+
+  // Bind rename
+  list.querySelectorAll('button[data-court-rename]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.dataset.courtRename;
+      const court = getCourtById(id);
+      if(!court) return;
+      const newName = prompt('Enter new court name:', court.name);
+      if(newName && newName.trim()){
+        const idx = COURTS.findIndex(c => c.id === id);
+        COURTS[idx].name = newName.trim();
+        saveCourts(COURTS);
+        renderAdminCourts(); renderCourtTabs(); populateCourtSelectors();
+        toast(`Court renamed to "${newName.trim()}"`);
+      }
+    });
+  });
+
+  // Bind start hour
+  list.querySelectorAll('select[data-court-hour]').forEach(sel => {
+    sel.addEventListener('change', () => {
+      const id = sel.dataset.courtHour;
+      const idx = COURTS.findIndex(c => c.id === id);
+      if(idx >= 0){
+        COURTS[idx].startHour = parseInt(sel.value, 10);
+        saveCourts(COURTS);
+        renderAdminCourts();
+        toast(`${COURTS[idx].name} start hour set to ${fmtTime(parseInt(sel.value,10))}`);
+      }
+    });
+  });
+
+  // Bind delete
+  list.querySelectorAll('button[data-court-del]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.dataset.courtDel;
+      const court = getCourtById(id);
+      if(!court) return;
+      if(COURTS.length <= 1){ toast('Cannot delete the last court'); return; }
+      if(confirm(`Delete "${court.name}"? Bookings on this court will become court-agnostic (shown on all courts).`)){
+        COURTS = COURTS.filter(c => c.id !== id);
+        saveCourts(COURTS);
+        if(activeCourtTab === id) activeCourtTab = COURTS[0] ? COURTS[0].id : 'all';
+        renderAdminCourts(); renderCourtTabs(); populateCourtSelectors(); renderSchedule();
+        toast(`"${court.name}" deleted`);
+      }
+    });
+  });
 }
 
 /* ---------- Schedule Rendering ---------- */
@@ -1995,8 +2337,15 @@ function renderSchedule(){
   const list = document.getElementById('scheduleList');
   list.innerHTML='';
   const dateISO = todayISO(); // Today's schedule always today per spec
-  const todaysBookings = getBookingsForDate(dateISO);
-  const todaysOps = getOpenPlayForDate(dateISO);
+  let todaysBookings = getBookingsForDate(dateISO);
+  let todaysOps = getOpenPlayForDate(dateISO);
+
+  // Court-aware filtering: if a specific court is selected, filter to that court
+  // Bookings without a court field are shown on all courts (court-agnostic legacy)
+  if(activeCourtTab && activeCourtTab !== 'all'){
+    todaysBookings = todaysBookings.filter(b => !b.court || b.court === activeCourtTab);
+    todaysOps = todaysOps.filter(op => !op.court || op.court === activeCourtTab);
+  }
 
   const allSlots = [];
   if (SCHED.queueStart < SCHED.queueEnd) {
@@ -2104,8 +2453,14 @@ function renderDateSlotPreview(){
   const ISO = selectedDate;
   label.textContent = new Date(ISO+'T12:00:00').toLocaleDateString('en-US',{month:'short', day:'numeric'});
   wrap.innerHTML='';
-  const bks = getBookingsForDate(ISO);
-  const ops = getOpenPlayForDate(ISO);
+  let bks = getBookingsForDate(ISO);
+  let ops = getOpenPlayForDate(ISO);
+
+  // Court-aware filtering
+  if(activeCourtTab && activeCourtTab !== 'all'){
+    bks = bks.filter(b => !b.court || b.court === activeCourtTab);
+    ops = ops.filter(op => !op.court || op.court === activeCourtTab);
+  }
 
   ALL_HOURS_START.forEach(h=>{
     const e = h+1;
@@ -2307,8 +2662,10 @@ function validateForm(){
   // Check break crossing
   if(_crossesGap(s,e)){ showFormError(`Reservation cannot cross the ${_hh12(SCHED.queueEnd)}–${_hh12(SCHED.bookStart)} break. Split into two bookings.`); return false; }
   if(s >= SCHED.queueEnd && s < SCHED.bookStart){ showFormError(`${_hh12(SCHED.queueEnd)}–${_hh12(SCHED.bookStart)} is break / not bookable.`); return false; }
-  // Check overlap
-  const overlap = hasOverlap(date,s,e);
+  // Check overlap (court-aware)
+  const courtId = (document.getElementById('fCourt') && document.getElementById('fCourtLabel') && !document.getElementById('fCourtLabel').classList.contains('hidden'))
+    ? document.getElementById('fCourt').value : null;
+  const overlap = hasOverlap(date,s,e,null,courtId);
   if(overlap){
     if(overlap.type==='staff') showFormError(`That slot is ${titleCase(CLIENT.staff.label)}-reserved (${_hh12(CLIENT.staff.startHour)}–${_hh12(CLIENT.staff.endHour)}). Choose another time.`);
     else if(overlap.type==='openplay') showFormError(`Overlaps with Open Play block (${to12Range(overlap.data.start, overlap.data.end)}).`);
@@ -2327,6 +2684,7 @@ document.getElementById('fStart').addEventListener('change', ()=>{
   recalcTotal(); validateForm();
 });
 document.getElementById('fEnd').addEventListener('change', ()=>{ recalcTotal(); validateForm(); });
+document.getElementById('fCourt')?.addEventListener('change', ()=>{ validateForm(); });
 
 /* ---------- Reserve Submit ---------- */
 document.getElementById('reserveForm').addEventListener('submit', (ev)=>{
@@ -2347,6 +2705,9 @@ document.getElementById('reserveForm').addEventListener('submit', (ev)=>{
   const newBooking = {
     id: 'b_'+Date.now(),
     name, email, group, pin,
+    court: (document.getElementById('fCourt') && document.getElementById('fCourtLabel') && !document.getElementById('fCourtLabel').classList.contains('hidden'))
+      ? document.getElementById('fCourt').value
+      : (COURTS[0] ? COURTS[0].id : 'court1'),
     date: selectedDate,
     start: s, end: e,
     status: 'Pending',
@@ -2373,6 +2734,7 @@ Your reservation is received and is now PENDING verification:
 🕖 Time: ${to12Range(s,e)} (${hrs} hour${hrs>1?'s':''})
 💰 Total: ${fmtMoney(amount)} @ ${fmtMoney(CLIENT.rates.hourly)}/hour
 👥 Group: ${group || '—'}
+🏟️ Court: ${getCourtName(newBooking.court) || '—'}
 🔑 Booking PIN: ${pin} (use this to pay later from schedule)
 Status: Pending — awaiting payment verification
 
@@ -2431,6 +2793,7 @@ function renderBookingsList(){
 
     const row = document.createElement('div');
     row.className='px-6 md:px-8 py-4 flex flex-col md:flex-row md:items-center gap-3 hover:bg-[#FFFBF5] transition';
+    const courtChip = b.court ? `<span class="mono text-[9px] px-1.5 py-0.5 rounded-full bg-[#F1E9DF] text-[#201C19]/70 font-[600]">${escapeHtml(getCourtName(b.court))}</span>` : '';
     row.innerHTML=`
       <div class="flex items-center gap-3 md:w-[260px]">
         <div class="w-9 h-9 rounded-full bg-[#F1E9DF] grid place-items-center font-[800] text-[12px]">${b.name? b.name[0].toUpperCase() : 'OP'}</div>
@@ -2444,6 +2807,7 @@ function renderBookingsList(){
         <span class="mono text-[12px] opacity-60">•</span>
         <span class="mono text-[12px] font-[600]">${to12Range(b.start,b.end)} <span class="opacity-60">(${(b.end-b.start)}h)</span></span>
         ${chip}
+        ${courtChip}
       </div>
       <div class="flex items-center gap-2 md:ml-auto">
         <span class="mono text-[11px] px-3 h-7 rounded-full bg-white border border-[#EAE0D5] grid place-items-center">${fmtMoney((b.end-b.start)*CLIENT.rates.hourly)}</span>
@@ -2499,7 +2863,9 @@ function loadPayMethods(){
 
 function savePayMethods(methods){
   localStorage.setItem(LS.payMethods, JSON.stringify(methods));
-  if (db && DOCS.settings) DOCS.settings.update({ payMethods: JSON.stringify(methods) }).catch(()=>{});
+  if (db) {
+    db.collection('settings').doc('state').set({ data: { pin: getPin(), payMethods: methods }, updatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true }).catch(()=>{});
+  }
 }
 
 let payMethods = loadPayMethods();
@@ -2712,7 +3078,12 @@ renderAdminQrManager('gcash');
 
 /* ---------- Admin ---------- */
 function getPin(){ return localStorage.getItem(LS.pin) || '1234'; }
-function savePin(pin){ localStorage.setItem(LS.pin, pin); if (db && DOCS.settings) DOCS.settings.update({ pin: pin }).catch(()=>{}); }
+function savePin(pin){
+  localStorage.setItem(LS.pin, pin);
+  if (db) {
+    db.collection('settings').doc('state').set({ data: { pin: pin, payMethods: payMethods }, updatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true }).catch(()=>{});
+  }
+}
 
 document.getElementById('adminUnlockBtn').addEventListener('click', ()=>{
   const input = document.getElementById('adminPinInput').value.trim();
@@ -2756,12 +3127,14 @@ function renderAdminBookings(){
            <option value="Pending" ${b.status==='Pending'?'selected':''}>Pending</option>
            <option value="Reserved" ${b.status==='Reserved'?'selected':''}>Reserved</option>
          </select>`;
+    const courtLabel = b.court ? `<span class="mono text-[9px] px-1.5 py-0.5 rounded-full bg-[#F1E9DF] text-[#201C19]/70 font-[600]">${escapeHtml(getCourtName(b.court))}</span>` : '';
     wrap.innerHTML=`
       <div class="flex-1 min-w-0">
         <div class="flex items-center gap-2 flex-wrap">
           <span class="font-[700] text-[13px]">${escapeHtml(b.name||'Open Play')}</span>
           <span class="mono text-[11px] opacity-60">${fmtDateLabel(b.date)} • ${to12Range(b.start,b.end)}</span>
-          ${b.status!=='OpenPlay'? `<span class="mono text-[10px] opacity-50">${b.email}</span>`:''}
+          ${courtLabel}
+          ${b.status!=='OpenPlay'? `<span class="mono text-[10px] opacity-50">${b.email}</span>`:''} 
         </div>
         <div class="mono text-[11px] opacity-60 mt-1 truncate">${b.group||''}</div>
       </div>
@@ -2926,19 +3299,32 @@ document.getElementById('openPlayForm').addEventListener('submit', e=>{
   if(end<=start){ err.textContent='End must be after start'; err.classList.remove('hidden'); return; }
   if(start >= SCHED.queueEnd && start < SCHED.bookStart){ err.textContent=`${_hh12(SCHED.queueEnd)} break not allowed`; err.classList.remove('hidden'); return; }
   if(_crossesGap(start,end)){ err.textContent=`Cannot cross ${_hh12(SCHED.queueEnd)}–${_hh12(SCHED.bookStart)} break`; err.classList.remove('hidden'); return; }
-  const overlap = hasOverlap(date,start,end);
+  const opCourtId = (document.getElementById('opCourt') && document.getElementById('opCourtLabel') && !document.getElementById('opCourtLabel').classList.contains('hidden'))
+    ? document.getElementById('opCourt').value : (COURTS[0] ? COURTS[0].id : 'court1');
+  const overlap = hasOverlap(date,start,end,null,opCourtId);
   if(overlap){
     err.textContent=`Overlaps with ${overlap.type}: ${overlap.data? to12Range(overlap.data.start,overlap.data.end):''}`;
     err.classList.remove('hidden'); return;
   }
-  const entry = {id:'op_'+Date.now(), date, start, end};
+  const entry = {id:'op_'+Date.now(), date, start, end, court: opCourtId};
   openPlays.push(entry);
   saveOpenPlay(openPlays);
   // also add as booking with OpenPlay status for bookings list visibility
-  bookings.unshift({id:entry.id, name:'Open Play', email:'', group:'Open Play block', date, start, end, status:'OpenPlay', createdAt:Date.now()});
+  bookings.unshift({id:entry.id, name:'Open Play', email:'', group:'Open Play block', court: opCourtId, date, start, end, status:'OpenPlay', createdAt:Date.now()});
   saveBookings(bookings);
   renderOpenPlayList(); renderAdminBookings(); renderSchedule(); renderBookingsList();
   toast('Open play block added');
+});
+
+document.getElementById('addCourtBtn').addEventListener('click', ()=>{
+  const nextNum = COURTS.length + 1;
+  const name = prompt('Enter court name:', `Court ${nextNum}`);
+  if(!name || !name.trim()) return;
+  const id = 'court' + Date.now().toString(36);
+  COURTS.push({ id, name: name.trim(), startHour: SCHED.bookStart, active: true });
+  saveCourts(COURTS);
+  renderAdminCourts(); renderCourtTabs(); populateCourtSelectors(); renderSchedule();
+  toast(`"${name.trim()}" added`);
 });
 
 document.getElementById('savePinBtn').addEventListener('click', ()=>{
@@ -2950,7 +3336,7 @@ document.getElementById('savePinBtn').addEventListener('click', ()=>{
 });
 
 document.getElementById('exportBtn').addEventListener('click', ()=>{
-  const rows = [['id','name','email','group','date','start','end','status','createdAt']].concat(bookings.map(b=>[b.id,b.name,b.email,b.group,b.date,b.start,b.end,b.status,new Date(b.createdAt).toISOString()]));
+  const rows = [['id','name','email','group','court','date','start','end','status','createdAt']].concat(bookings.map(b=>[b.id,b.name,b.email,b.group,getCourtName(b.court)||'',b.date,b.start,b.end,b.status,new Date(b.createdAt).toISOString()]));
   const csv = rows.map(r=> r.map(x=> `"${(x||'').toString().replace(/"/g,'""')}"`).join(',')).join('\n');
   const blob = new Blob([csv], {type:'text/csv'});
   const url = URL.createObjectURL(blob);
@@ -2958,14 +3344,16 @@ document.getElementById('exportBtn').addEventListener('click', ()=>{
   URL.revokeObjectURL(url);
 });
 document.getElementById('resetBtn').addEventListener('click', ()=>{
-  if(confirm('Wipe ALL data globally (bookings, open play, morning toggles, staff reserve, QR codes, queues)? This affects all devices.')){
+  if(confirm('Wipe ALL data globally (bookings, open play, morning toggles, staff reserve, QR codes, queues, courts)? This affects all devices.')){
     bookings=[]; openPlays=[]; morningEnabled={"7":false,"8":false,"9":false,"10":false,"11":false};
     staffReserveEnabled={ weekId: getCurrentWeekId(), days: {...STAFF_RESERVE_DEFAULTS} };
     payMethods = JSON.parse(JSON.stringify(DEFAULT_PAY_METHODS));
+    COURTS = [{ id: 'court1', name: 'Court 1', startHour: 13, active: true }];
+    activeCourtTab = 'court1';
     selectedQueueSessionId = null;
-    saveBookings(bookings); saveOpenPlay(openPlays); saveMorning(morningEnabled); saveStaffReserve(staffReserveEnabled); savePayMethods(payMethods); saveQueues([]);
+    saveBookings(bookings); saveOpenPlay(openPlays); saveMorning(morningEnabled); saveStaffReserve(staffReserveEnabled); savePayMethods(payMethods); saveQueues([]); saveCourts(COURTS);
     localStorage.removeItem(LS.queues);
-    renderSchedule(); renderBookingsList(); renderAdminBookings(); renderMorningToggles(); renderStaffReserveToggles(); renderOpenPlayList(); renderPublicPayTab(); renderAdminQrManager(); renderQueueModule();
+    renderSchedule(); renderBookingsList(); renderAdminBookings(); renderMorningToggles(); renderStaffReserveToggles(); renderOpenPlayList(); renderPublicPayTab(); renderAdminQrManager(); renderQueueModule(); renderAdminCourts(); renderCourtTabs(); populateCourtSelectors();
     toast('All data wiped globally across all devices');
   }
 });
@@ -2997,7 +3385,7 @@ function loadQueues() {
 
 function saveQueues(arr) {
   localStorage.setItem(LS.queues, JSON.stringify(arr));
-  DOCS.queues.set({ data: JSON.stringify(arr) }).catch(()=>{});
+  fbSave('queues', LS.queues, arr);
 }
 
 // Initial seed helper if none exist for active demo
@@ -4049,6 +4437,7 @@ if (!FB_ENABLED) {
   const b = document.getElementById('demoModeBanner');
   if (b) b.classList.remove('hidden');
 }
+COURTS = loadCourts();    // load courts from localStorage (will be overwritten by Firestore if available)
 selectedDate = todayISO();
 calCursor = new Date(selectedDate+'T12:00:00');
 renderCalendar();          // renders month picker + prefills time dropdowns
@@ -4057,6 +4446,9 @@ renderBookingsList();
 populateTimeOptions();
 recalcTotal();
 renderDateSlotPreview();
+renderCourtTabs();         // renders court tab bar (hidden if only 1 court)
+renderQueueCourtTabs();    // renders queue court tabs
+populateCourtSelectors(); // populates court dropdowns in forms
 renderQueueModule();       // renders the queueing session lists and dashboards
 renderProofStrip();        // proofs strip on Payment tab (local fallback proofs)
 _sweepLocalProofs();       // purge expired local proofs on boot (7-day retention)
@@ -4069,8 +4461,10 @@ updateAdminTabsVisibility = function() {
   if(adminUnlocked) {
     if (typeof renderMorningToggles === 'function') renderMorningToggles();
     if (typeof renderStaffReserveToggles === 'function') renderStaffReserveToggles();
+    if (typeof renderAdminCourts === 'function') renderAdminCourts();
     armProofWatcher();                    // start Firebase Storage housekeeping on first unlock
     renderPaymentProofsQueue();           // populate the Admin payment review queue
+    populateCourtSelectors();             // refresh court dropdowns
   }
 };
 

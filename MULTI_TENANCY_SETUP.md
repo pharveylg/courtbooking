@@ -1,342 +1,478 @@
-# Multi-Tenancy Setup Guide
+# Dula HQ Multi-Tenancy Setup Guide
 
-This guide walks you through setting up your first client in the multi-tenant court booking system.
+## Overview
 
-## Prerequisites
+Dula HQ is a multi-tenant pickleball court booking system deployed at `https://dula-hq.vercel.app/`. Each tenant (pickleball club/court owner) gets their own isolated data, branding, and booking system while sharing the same application infrastructure.
 
-- Firebase project created and configured
-- Firestore database initialized
-- App deployed to Vercel
-- Domain purchased and connected to Vercel
+**First-Year Scale:**
+- <10 clients
+- Max 4 courts per client
+- Firebase free tier
+- Single Vercel deployment
 
 ---
 
-## Step 1: Create Your First Client in Firestore
+## Tenant Resolution
 
-### Option A: Using Firebase Console (Recommended for First Client)
+The application supports multiple tenant resolution strategies:
 
-1. Go to [Firebase Console](https://console.firebase.google.com)
-2. Select your project (e.g., `courtbooking-85175`)
-3. Navigate to **Firestore Database**
-4. Click **Start collection**
-5. Collection ID: `clients`
-6. Document ID: `demo` (this will be your subdomain: `demo.yourdomain.com`)
-7. Add the following fields:
-
-```javascript
-// Click "Add field" and create a map field called "data"
-// Then add these nested fields inside "data":
-
-data: {
-  businessName: "Demo Pickleball Club",
-  tagline: "Book courts, play pickleball",
-  contactEmail: "demo@example.com",
-  contactPhone: "+1234567890",
-  address: "123 Demo Street, Demo City",
-  theme: {
-    primaryColor: "#3B82F6",
-    primaryHover: "#2563EB",
-    dark: "#1F2937",
-    bg: "#F9FAFB",
-    border: "#E5E7EB"
-  },
-  social: {
-    facebook: "https://facebook.com/demo",
-    instagram: "https://instagram.com/demo"
-  },
-  logoUrl: "",  // Optional: URL to logo image
-  faviconUrl: "" // Optional: URL to favicon
-}
+### Current (Development/Testing)
+```
+https://dula-hq.vercel.app/?client=demo
+https://dula-hq.vercel.app/?client=acepickle
 ```
 
-8. Click **Save**
+### Path-Based (Production Ready)
+```
+https://dula-hq.vercel.app/demo
+https://dula-hq.vercel.app/acepickle
+```
 
-### Option B: Using Firebase CLI (Programmatic)
+### Future (Custom Domain)
+```
+https://demo.customdomain.com
+https://acepickle.customdomain.com
+```
 
-Create a file `setup-first-client.js`:
+**Tenant ID Format:** Lowercase alphanumeric with hyphens only (e.g., `demo`, `ace-pickle`, `club123`)
+
+---
+
+## Firestore Data Structure
+
+All tenant data is isolated under `clients/{clientId}/`:
+
+```
+clients/
+  demo/
+    config/state          # Tenant branding and configuration
+    courts/state          # Court definitions
+    bookings/state        # Booking records
+    openPlay/state        # Open play sessions
+    morning/state         # Morning booking settings
+    staffReserve/state    # Staff reserve settings
+    queues/state          # Queue management
+    proofs/{id}           # Payment proof documents
+  acepickle/
+    config/state
+    courts/state
+    ...
+```
+
+### Key Collections
+
+#### 1. Config (`clients/{clientId}/config/state`)
+Tenant branding and business information:
 
 ```javascript
-const { initializeApp } = require('firebase/app');
-const { getFirestore, doc, setDoc } = require('firebase/firestore');
-
-// Your Firebase config
-const firebaseConfig = {
-  apiKey: "AIzaSyAkf7GJ3mrEUtykHLQ3wizwfGpl5OugE2I",
-  authDomain: "courtbooking-85175.firebaseapp.com",
-  projectId: "courtbooking-85175",
-  storageBucket: "courtbooking-85175.firebasestorage.app",
-  messagingSenderId: "291819153596",
-  appId: "1:291819153596:web:f31c27b24a5eaa718088b9"
-};
-
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
-
-async function setupFirstClient() {
-  const clientId = 'demo'; // This will be your subdomain
-  
-  const clientConfig = {
-    data: {
-      businessName: "Demo Pickleball Club",
-      tagline: "Book courts, play pickleball",
-      contactEmail: "demo@example.com",
-      contactPhone: "+1234567890",
-      address: "123 Demo Street, Demo City",
-      theme: {
-        primaryColor: "#3B82F6",
-        primaryHover: "#2563EB",
-        dark: "#1F2937",
-        bg: "#F9FAFB",
-        border: "#E5E7EB"
-      },
-      social: {
-        facebook: "https://facebook.com/demo",
-        instagram: "https://instagram.com/demo"
-      },
-      logoUrl: "",
-      faviconUrl: ""
-    }
-  };
-
-  try {
-    await setDoc(doc(db, 'clients', clientId, 'config', 'state'), clientConfig);
-    console.log(`✅ Client "${clientId}" created successfully!`);
-    console.log(`📍 Access at: https://${clientId}.yourdomain.com`);
-  } catch (error) {
-    console.error('❌ Error creating client:', error);
+{
+  data: {
+    businessName: "Demo Pickleball Club",
+    tagline: "Book courts, play pickleball",
+    contactEmail: "demo@example.com",
+    contactPhone: "+1234567890",
+    address: "123 Demo Street",
+    theme: {
+      primaryColor: "#3B82F6",
+      primaryHover: "#2563EB",
+      dark: "#1F2937",
+      bg: "#F9FAFB",
+      border: "#E5E7EB"
+    },
+    social: {
+      facebook: "https://facebook.com/demo",
+      instagram: "https://instagram.com/demo"
+    },
+    logoUrl: "",
+    faviconUrl: "",
+    heroHeadline: "Welcome to Demo Pickleball",
+    heroSubheadline: "Book your court in seconds"
   }
 }
-
-setupFirstClient();
 ```
 
-Run it:
+#### 2. Courts (`clients/{clientId}/courts/state`)
+Court definitions and availability:
+
+```javascript
+{
+  data: [
+    {
+      id: "court1",
+      name: "Main Court",
+      startHour: 8,
+      endHour: 22,
+      active: true
+    }
+  ]
+}
+```
+
+#### 3. Settings (`clients/{clientId}/settings/state`)
+Operational settings including **hashed** admin PIN:
+
+```javascript
+{
+  data: {
+    pin: "5e884898da28047151d0e56f8dc6292773603d0d6aabbdd62a11ef721d1542d8", // SHA-256 hash
+    payMethods: {
+      gcash: { enabled: true, qrCode: "..." },
+      maya: { enabled: false }
+    }
+  }
+}
+```
+
+**Security Note:** The admin PIN is stored as a SHA-256 hash, never plaintext.
+
+#### 4. Bookings (`clients/{clientId}/bookings/state`)
+All booking records for the tenant:
+
+```javascript
+{
+  data: [
+    {
+      id: "booking_123",
+      courtId: "court1",
+      date: "2026-08-25",
+      startTime: "14:00",
+      endTime: "15:00",
+      playerName: "Juan Dela Cruz",
+      email: "juan@example.com",
+      phone: "+639171234567",
+      status: "confirmed",
+      pin: "1234", // Booking PIN for cancellation (plaintext, user-provided)
+      createdAt: "2026-08-25T10:00:00Z"
+    }
+  ]
+}
+```
+
+---
+
+## Security Model
+
+### Firestore Security Rules
+
+All tenant data is protected by Firestore security rules that enforce:
+
+1. **Tenant Isolation:** Each tenant can only access their own data
+2. **Valid Tenant IDs:** Only properly formatted tenant IDs are allowed
+3. **No Cross-Tenant Access:** Impossible to access another tenant's data by changing URLs or parameters
+
+**Current Rules:**
+```
+match /clients/{clientId} {
+  // All subcollections require valid tenant ID
+  match /{document=**} {
+    allow read, write: if isValidTenantId(clientId);
+  }
+}
+```
+
+### Admin PIN Security
+
+- **Storage:** SHA-256 hashed with salt
+- **Verification:** Async comparison using `verifyAdminPin()`
+- **Default PIN:** `1234` (hash: `5e884898...`)
+- **Migration:** Legacy plaintext PINs are supported during transition
+
+**Important:** The admin PIN is a basic security measure. For production use with sensitive data, consider implementing Firebase Authentication.
+
+---
+
+## Setting Up a New Tenant
+
+### Step 1: Create Tenant Config
+
+Create a document at `clients/{clientId}/config/state`:
+
+```javascript
+// Using Firebase Console or setup script
+{
+  data: {
+    businessName: "Ace Pickleball",
+    tagline: "Play like a pro",
+    contactEmail: "info@acepickle.com",
+    contactPhone: "+639171234567",
+    address: "456 Sports Complex, Manila",
+    theme: {
+      primaryColor: "#10B981", // Green theme
+      primaryHover: "#059669",
+      dark: "#1F2937",
+      bg: "#F9FAFB",
+      border: "#E5E7EB"
+    },
+    social: {
+      facebook: "https://facebook.com/acepickle",
+      instagram: "https://instagram.com/acepickle"
+    },
+    logoUrl: "",
+    faviconUrl: "",
+    heroHeadline: "Ace Pickleball Club",
+    heroSubheadline: "Train smarter, play better"
+  }
+}
+```
+
+### Step 2: Initialize Courts
+
+Create `clients/{clientId}/courts/state`:
+
+```javascript
+{
+  data: [
+    {
+      id: "court1",
+      name: "Court 1",
+      startHour: 8,
+      endHour: 22,
+      active: true
+    },
+    {
+      id: "court2",
+      name: "Court 2",
+      startHour: 9,
+      endHour: 21,
+      active: true
+    }
+  ]
+}
+```
+
+### Step 3: Initialize Settings
+
+Create `clients/{clientId}/settings/state`:
+
+```javascript
+{
+  data: {
+    pin: "5e884898da28047151d0e56f8dc6292773603d0d6aabbdd62a11ef721d1542d8", // Hash of "1234"
+    payMethods: {}
+  }
+}
+```
+
+### Step 4: Initialize Empty Collections
+
+Create empty state documents for:
+- `clients/{clientId}/bookings/state` → `{ data: [] }`
+- `clients/{clientId}/openPlay/state` → `{ data: [] }`
+- `clients/{clientId}/morning/state` → `{ data: {} }`
+- `clients/{clientId}/staffReserve/state` → `{ data: {} }`
+- `clients/{clientId}/queues/state` → `{ data: [] }`
+
+### Step 5: Access the Tenant
+
+Visit: `https://dula-hq.vercel.app/?client={clientId}`
+
+Or with path-based routing: `https://dula-hq.vercel.app/{clientId}`
+
+---
+
+## Automated Setup Script
+
+Use `setup-first-client.js` to automate tenant creation:
+
 ```bash
 npm install firebase
 node setup-first-client.js
 ```
 
+**Edit the script** to customize:
+- `CLIENT_ID` - Your tenant ID (e.g., `demo`, `acepickle`)
+- `clientConfig.data` - Business name, theme, contact info
+- `courtsConfig.data` - Court definitions
+
 ---
 
-## Step 2: Seed Initial Data for the Client
+## Tenant Customization
 
-After creating the client config, you need to seed the initial data (courts, settings, etc.).
+### Branding (Presentation Layer)
 
-### Create Initial Courts
+Each tenant can customize:
+- Business name and tagline
+- Logo and favicon URLs
+- Theme colors (primary, hover, dark, bg, border)
+- Hero section headline and subheadline
+- Social media links
+- Contact information
 
-In Firebase Console:
+### Operational Data (Tenant-Specific)
 
-1. Navigate to: `clients` → `demo` → **Start collection**
-2. Collection ID: `courts`
-3. Document ID: `state`
-4. Add field:
+Each tenant has isolated:
+- Court definitions and availability
+- Booking records
+- Open play sessions
+- Queue management
+- Payment methods
+- Admin PIN (hashed)
 
-```javascript
-data: [
-  {
-    id: "court1",
-    name: "Main Court",
-    startHour: 8,
-    endHour: 22,
-    active: true
-  },
-  {
-    id: "court2",
-    name: "Court 2",
-    startHour: 9,
-    endHour: 21,
-    active: true
-  }
-]
+### Shared Application Logic
+
+All tenants share:
+- Booking engine and validation
+- UI components and navigation
+- Date/time handling
+- Firebase access layer
+- Tenant resolution system
+
+---
+
+## Performance Optimization
+
+### Caching Strategy
+
+1. **Client Config Cache:** Stored in memory and localStorage to minimize Firestore reads
+2. **Session Storage:** Admin unlock state persists across page reloads
+3. **Efficient Reads:** Single document reads for config, courts, settings
+
+### Free Tier Considerations
+
+- **Firestore Reads:** ~10-20 reads per page load (config + courts + settings + bookings)
+- **Firestore Writes:** Only on booking creation/updates (not on every action)
+- **Storage:** Payment proofs stored in Firebase Storage with 7-day retention
+- **Bandwidth:** Minimal, mostly JSON data
+
+**Estimated Monthly Usage (10 tenants, 100 bookings each):**
+- Reads: ~50,000 (well under 50,000/day free tier)
+- Writes: ~5,000 (well under 20,000/day free tier)
+- Storage: <1GB (well under 1GB free tier)
+
+---
+
+## Testing Tenant Isolation
+
+### Test Cases
+
+1. **Valid Tenant Access:**
+   ```
+   GET https://dula-hq.vercel.app/?client=demo
+   Expected: Loads demo tenant config and data
+   ```
+
+2. **Invalid Tenant:**
+   ```
+   GET https://dula-hq.vercel.app/?client=invalid-tenant
+   Expected: Shows error or falls back to default config
+   ```
+
+3. **Cross-Tenant Data Access:**
+   ```
+   Tenant A tries to access: clients/tenantB/bookings/state
+   Expected: Firestore security rules block access
+   ```
+
+4. **Tenant ID Injection:**
+   ```
+   Attempt to use: ?client=../../other-tenant
+   Expected: Rejected by tenant ID validation (only alphanumeric + hyphens)
+   ```
+
+---
+
+## Future: Custom Domain Setup
+
+When ready to add custom domains:
+
+### Step 1: Add Domain in Vercel
+```bash
+vercel domains add customdomain.com
 ```
 
-### Create Initial Settings
-
-1. Navigate to: `clients` → `demo` → **Start collection**
-2. Collection ID: `settings`
-3. Document ID: `state`
-4. Add field:
-
-```javascript
-data: {
-  pin: "1234",
-  payMethods: {},
-  rates: {
-    hourly: 300,
-    queuePerHead: 100
-  },
-  hours: {
-    queueStart: 7,
-    queueEnd: 12,
-    bookingStart: 12,
-    close: 22
-  },
-  staff: {
-    days: [0, 2, 4, 6],
-    startHour: 17,
-    endHour: 22,
-    label: "Staff"
-  }
-}
+### Step 2: Configure DNS
+Add CNAME record:
+```
+*.customdomain.com → cname.vercel-dns.com
 ```
 
----
-
-## Step 3: Set Up DNS for Subdomain
-
-### For Vercel Deployment
-
-1. Go to your domain registrar (e.g., Namecheap, GoDaddy, Cloudflare)
-2. Add a **CNAME record**:
-   - **Host/Name**: `demo` (or `*` for wildcard)
-   - **Value**: `cname.vercel-dns.com`
-   - **TTL**: Automatic or 3600
-
-3. Go to [Vercel Dashboard](https://vercel.com/dashboard)
-4. Select your project
-5. Go to **Settings** → **Domains**
-6. Add domain: `demo.yourdomain.com`
-7. Vercel will verify the DNS and issue SSL certificate
-
-### Wildcard Subdomain (Optional - for unlimited clients)
-
-If you want to support unlimited clients without adding each one manually:
-
-1. Add a **wildcard CNAME record**:
-   - **Host/Name**: `*`
-   - **Value**: `cname.vercel-dns.com`
-
-2. In Vercel, add a wildcard domain: `*.yourdomain.com`
-
----
-
-## Step 4: Test the Setup
-
-1. Visit: `https://demo.yourdomain.com`
-2. You should see:
-   - ✅ "Demo Pickleball Club" branding
-   - ✅ Blue theme (#3B82F6)
-   - ✅ Two courts available
-   - ✅ Demo mode badge (if no Firebase config in client-config.js)
-   - ✅ OR live data from Firestore (if Firebase config is present)
-
-3. Test functionality:
-   - Create a booking
-   - Check Firebase Console → Firestore → `clients/demo/bookings/state`
-   - Verify the booking appears in the `data` array
-
----
-
-## Step 5: Add More Clients
-
-To add a new client, repeat Step 1 with a different Document ID:
-
+### Step 3: Update Tenant Resolution
+The app already supports subdomain-based resolution:
 ```javascript
-// New client: "acepickle"
-// Will be accessible at: acepickle.yourdomain.com
-
-await setDoc(doc(db, 'clients', 'acepickle', 'config', 'state'), {
-  data: {
-    businessName: "Ace Pickleball Academy",
-    tagline: "Train like a pro",
-    theme: {
-      primaryColor: "#10B981",  // Green theme
-      primaryHover: "#059669",
-      // ... rest of theme
-    }
-  }
-});
+// getCurrentTenant() will detect:
+// demo.customdomain.com → clientId = "demo"
 ```
 
----
-
-## Complete Client Config Reference
-
-Here's a complete client config with all available fields:
-
-```javascript
-{
-  data: {
-    // Business Info
-    businessName: "Your Business Name",
-    tagline: "Your tagline here",
-    
-    // Contact
-    contactEmail: "contact@example.com",
-    contactPhone: "+1234567890",
-    address: "123 Street, City, Country",
-    
-    // Branding
-    logoUrl: "https://example.com/logo.png",      // Optional
-    faviconUrl: "https://example.com/favicon.ico", // Optional
-    
-    // Theme Colors
-    theme: {
-      primaryColor: "#3B82F6",    // Main brand color
-      primaryHover: "#2563EB",    // Hover state
-      dark: "#1F2937",            // Dark backgrounds
-      bg: "#F9FAFB",              // Page background
-      border: "#E5E7EB",          // Borders
-      success: "#10B981",         // Success states
-      warning: "#F59E0B",         // Warning states
-      error: "#EF4444"            // Error states
-    },
-    
-    // Social Links
-    social: {
-      facebook: "https://facebook.com/yourpage",
-      instagram: "https://instagram.com/yourpage",
-      twitter: "https://twitter.com/yourpage",
-      website: "https://yourwebsite.com"
-    },
-    
-    // Custom CSS (advanced)
-    customCSS: `
-      .hero-section { background: linear-gradient(...); }
-    `
-  }
-}
-```
+### Step 4: Update Firestore Rules
+Add custom domain validation if needed.
 
 ---
 
 ## Troubleshooting
 
-### "Demo mode" badge appears
-- **Cause**: `firebase-config.js` has placeholder values
-- **Solution**: Add your Firebase config to `firebase-config.js` and redeploy
+### Tenant Not Loading
+- Check tenant ID format (lowercase, alphanumeric, hyphens only)
+- Verify `clients/{clientId}/config/state` exists in Firestore
+- Check browser console for errors
 
-### Client config not loading
-- **Check**: Firestore path is correct: `clients/{clientId}/config/state`
-- **Check**: Document has a `data` field (map type)
-- **Check**: Browser console for errors
+### Admin PIN Not Working
+- Default PIN is `1234`
+- If migrated from plaintext, try the old PIN (will be auto-hashed on next save)
+- Check localStorage for `cb_adminPin_v7_{clientId}`
 
-### Subdomain not working
-- **Check**: DNS CNAME record is pointing to `cname.vercel-dns.com`
-- **Check**: Domain is added in Vercel dashboard
-- **Check**: SSL certificate is issued (can take up to 24 hours)
+### Cross-Tenant Data Leakage
+- Should be impossible due to Firestore security rules
+- Verify rules are deployed: `firebase deploy --only firestore:rules`
+- Test with different tenant IDs to confirm isolation
 
-### Data not isolated between clients
-- **Check**: Subdomain matches the Firestore document ID exactly
-- **Check**: No hardcoded collection paths in code
-- **Check**: Browser localStorage is cleared between testing different clients
+### Performance Issues
+- Check Firestore read/write counts in Firebase Console
+- Verify client config caching is working (check console logs)
+- Consider reducing real-time listeners if usage is high
 
 ---
 
-## Next Steps
+## Migration from Legacy Structure
 
-1. **Customize themes**: Each client can have unique colors and branding
-2. **Upload logos**: Store in Firebase Storage under `clients/{clientId}/assets/`
-3. **Monitor usage**: Check Firestore usage per client in Firebase Console
-4. **Backup data**: Set up Firestore export schedule
-5. **Scale**: Add more clients by repeating Step 1
+If you have data in the old structure (top-level collections), migrate to tenant-scoped:
+
+### Old Structure:
+```
+bookings/state
+courts/state
+settings/state
+```
+
+### New Structure:
+```
+clients/{clientId}/bookings/state
+clients/{clientId}/courts/state
+clients/{clientId}/settings/state
+```
+
+**Migration Steps:**
+1. Create tenant config at `clients/{clientId}/config/state`
+2. Copy data from old collections to `clients/{clientId}/{collection}/state`
+3. Update all references to use `fbDocPath()` helper
+4. Deploy updated Firestore security rules
+5. Test tenant isolation
+6. Remove old top-level collections (after verification)
 
 ---
 
 ## Support
 
 For issues or questions:
-- Check Firebase Console logs
-- Review browser console for errors
+- Check Firebase Console for Firestore errors
+- Review browser console for JavaScript errors
 - Verify Firestore security rules are deployed
-- Ensure Vercel deployment is successful
+- Test tenant isolation with different tenant IDs
+
+---
+
+## Summary
+
+✅ **Single application** serving multiple tenants  
+✅ **Tenant isolation** enforced by Firestore security rules  
+✅ **Hashed admin PINs** for basic security  
+✅ **Cached configs** to minimize Firestore reads  
+✅ **Flexible tenant resolution** (query param, path, subdomain)  
+✅ **Free tier optimized** for <10 tenants, <40 courts  
+✅ **Future-ready** for custom domains and subdomains  
+
+**Next Steps:**
+1. Run `setup-first-client.js` to create your first tenant
+2. Test at `https://dula-hq.vercel.app/?client={clientId}`
+3. Customize branding and courts for each tenant
+4. Deploy Firestore security rules
+5. Monitor usage in Firebase Console

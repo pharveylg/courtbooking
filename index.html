@@ -1264,6 +1264,26 @@ function updateOpenBadge(){
 }
 
 /* ================================================================
+   SECURITY: PIN HASHING
+   Simple hash function for admin PINs to avoid plaintext storage.
+   NOTE: This is a basic improvement over plaintext. For production,
+   consider Firebase Authentication with proper password hashing.
+   ================================================================ */
+async function hashPin(pin) {
+  // Simple hash using SubtleCrypto (SHA-256)
+  const encoder = new TextEncoder();
+  const data = encoder.encode(pin + 'dula-hq-salt-2024');
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+async function verifyPin(inputPin, storedHash) {
+  const inputHash = await hashPin(inputPin);
+  return inputHash === storedHash;
+}
+
+/* ================================================================
    FIREBASE INIT + FIRESTORE DATA LAYER
    Config comes from firebase-config.js (window.FIREBASE_CONFIG).
    When the config is blank/placeholder the app runs in DEMO MODE:
@@ -1286,30 +1306,74 @@ if (FB_ENABLED) {
 const HAS_STORAGE = FB_ENABLED;
 
 /* ================================================================
-   MULTI-TENANCY: CLIENT IDENTIFICATION
-   Parse subdomain to identify current client (e.g., client1.courtbooking.app)
+   MULTI-TENANCY: TENANT RESOLUTION
+   Modular tenant resolution supporting multiple strategies:
+   1. Query parameter: ?client=demo
+   2. Path-based: /demo
+   3. Subdomain (future): demo.customdomain.com
+   
    All data is scoped to: clients/{clientId}/...
    ================================================================ */
-function getClientIdFromSubdomain() {
+function getCurrentTenant() {
+  // Strategy 1: Query parameter (for development/testing)
+  const urlParams = new URLSearchParams(window.location.search);
+  const queryClient = urlParams.get('client');
+  if (queryClient && /^[a-z0-9-]+$/.test(queryClient)) {
+    return queryClient;
+  }
+  
+  // Strategy 2: Path-based (e.g., dula-hq.vercel.app/demo)
+  const pathParts = window.location.pathname.split('/').filter(p => p);
+  if (pathParts.length > 0 && /^[a-z0-9-]+$/.test(pathParts[0])) {
+    return pathParts[0];
+  }
+  
+  // Strategy 3: Subdomain (future: demo.customdomain.com)
   const host = window.location.hostname;
   const parts = host.split('.');
-  // Check if we have a subdomain (e.g., client1.courtbooking.app)
-  if (parts.length >= 3 && parts[0] !== 'www' && parts[0] !== 'app') {
+  // Check if we have a subdomain (e.g., demo.customdomain.com)
+  // Exclude common subdomains like www, app, and vercel subdomains
+  if (parts.length >= 3 && 
+      parts[0] !== 'www' && 
+      parts[0] !== 'app' && 
+      !host.includes('vercel.app')) {
     return parts[0];
   }
+  
   return null;
 }
 
-let currentClientId = getClientIdFromSubdomain();
+let currentClientId = getCurrentTenant();
 let currentClientConfig = null;
+let clientConfigCache = new Map(); // Cache for client configs
 
-console.log('[CourtBooking] Client ID:', currentClientId || '(none - demo mode)');
+console.log('[CourtBooking] Tenant ID:', currentClientId || '(none - demo mode)');
 
-/* ---------- Load client config from Firestore ---------- */
+/* ---------- Load client config from Firestore (with caching) ---------- */
 async function loadClientConfig() {
   if (!currentClientId || !db) {
     // No client ID or no Firebase - use default config from client-config.js
     return window.CLIENT_CONFIG || {};
+  }
+  
+  // Check cache first
+  if (clientConfigCache.has(currentClientId)) {
+    console.log('[CourtBooking] Using cached config for:', currentClientId);
+    currentClientConfig = clientConfigCache.get(currentClientId);
+    return currentClientConfig;
+  }
+  
+  // Check localStorage cache
+  const cached = localStorage.getItem(LS.clientConfig);
+  if (cached) {
+    try {
+      currentClientConfig = JSON.parse(cached);
+      clientConfigCache.set(currentClientId, currentClientConfig);
+      console.log('[CourtBooking] Using localStorage cache for:', currentClientId);
+      return currentClientConfig;
+    } catch(e) {
+      console.warn('[CourtBooking] Invalid localStorage cache, fetching fresh');
+    }
   }
   
   try {
@@ -1317,26 +1381,15 @@ async function loadClientConfig() {
     if (configSnap.exists) {
       currentClientConfig = configSnap.data().data;
       localStorage.setItem(LS.clientConfig, JSON.stringify(currentClientConfig));
-      console.log('[CourtBooking] Loaded client config for:', currentClientId);
+      clientConfigCache.set(currentClientId, currentClientConfig);
+      console.log('[CourtBooking] Loaded and cached client config for:', currentClientId);
       return currentClientConfig;
     } else {
       console.warn('[CourtBooking] No config found for client:', currentClientId);
-      // Try to load from localStorage cache
-      const cached = localStorage.getItem(LS.clientConfig);
-      if (cached) {
-        currentClientConfig = JSON.parse(cached);
-        return currentClientConfig;
-      }
       return window.CLIENT_CONFIG || {};
     }
   } catch(e) {
     console.warn('[CourtBooking] Failed to load client config:', e.message);
-    // Fallback to cache or default
-    const cached = localStorage.getItem(LS.clientConfig);
-    if (cached) {
-      currentClientConfig = JSON.parse(cached);
-      return currentClientConfig;
-    }
     return window.CLIENT_CONFIG || {};
   }
 }
@@ -3257,7 +3310,47 @@ renderPublicPayTab('gcash');
 renderAdminQrManager('gcash');
 
 /* ---------- Admin ---------- */
-function getPin(){ return localStorage.getItem(LS.pin) || '1234'; }
+function getPin(){ 
+  const stored = localStorage.getItem(LS.pin);
+  if (!stored) return '1234'; // Default for demo
+  
+  // Check if it's already hashed (64 chars for SHA-256)
+  if (stored.length === 64 && /^[a-f0-9]+$/.test(stored)) {
+    return stored; // Return hash for comparison
+  }
+  
+  // Legacy plaintext PIN - return as-is for backward compatibility
+  // TODO: Migrate to hash on next admin login
+  return stored;
+}
+
+async function verifyAdminPin(inputPin) {
+  const stored = getPin();
+  
+  // If stored value is a hash (64 chars), verify using hash
+  if (stored.length === 64 && /^[a-f0-9]+$/.test(stored)) {
+    return await verifyPin(inputPin, stored);
+  }
+  
+  // Legacy plaintext comparison (for migration period)
+  return inputPin === stored;
+}
+
+async function saveAdminPin(newPin) {
+  const hashed = await hashPin(newPin);
+  localStorage.setItem(LS.pin, hashed);
+  
+  if (db && currentClientId) {
+    try {
+      await db.doc(fbDocPath('settings')).set({ 
+        data: { pin: hashed, payMethods: payMethods }, 
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp() 
+      }, { merge: true });
+    } catch(e) {
+      console.warn('Failed to save hashed PIN to Firestore:', e.message);
+    }
+  }
+}
 function savePin(pin){
   localStorage.setItem(LS.pin, pin);
   if (db) {
@@ -3265,10 +3358,11 @@ function savePin(pin){
   }
 }
 
-document.getElementById('adminUnlockBtn').addEventListener('click', ()=>{
+document.getElementById('adminUnlockBtn').addEventListener('click', async ()=>{
   const input = document.getElementById('adminPinInput').value.trim();
   const err = document.getElementById('adminLockError');
-  if(input===getPin()){
+  
+  if(await verifyAdminPin(input)){
     adminUnlocked=true;
     sessionStorage.setItem(LS.adminUnlocked,'true');
     updateAdminTabsVisibility();
@@ -3508,12 +3602,12 @@ document.getElementById('addCourtBtn').addEventListener('click', ()=>{
   toast(`"${name.trim()}" added`);
 });
 
-document.getElementById('savePinBtn').addEventListener('click', ()=>{
+document.getElementById('savePinBtn').addEventListener('click', async ()=>{
   const v=document.getElementById('newPinInput').value.trim();
   if(v.length<3){ toast('PIN too short'); return; }
-  savePin(v);
+  await saveAdminPin(v);
   document.getElementById('newPinInput').value='';
-  toast('PIN updated & synced');
+  toast('PIN updated & synced (hashed)');
 });
 
 document.getElementById('exportBtn').addEventListener('click', ()=>{

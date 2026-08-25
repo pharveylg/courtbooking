@@ -1,60 +1,114 @@
 rules_version = '2';
+
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // Multi-tenant structure: clients/{clientId}/{collection}/state
-    match /clients/{clientId}/{collection}/{document} {
-      allow read: if true;
-      allow write: if true;
+    // Helper function to validate tenant ID format
+    function isValidTenantId(tenantId) {
+      return tenantId is string && 
+             tenantId.size() > 0 && 
+             tenantId.size() <= 50 &&
+             tenantId.matches('^[a-z0-9-]+$');
     }
     
-    // Legacy single-tenant structure (for backward compatibility)
-    // Bookings collection
+    // Helper function to check if request is for the correct tenant
+    function isTenantContext(tenantId) {
+      return isValidTenantId(tenantId) && 
+             request.resource.data.keys().hasAny(['__tenant__']) == false; // Prevent tenant field injection
+    }
+    
+    // Multi-tenant collections: clients/{clientId}/...
+    match /clients/{clientId} {
+      // Only allow access if clientId is valid
+      allow read, write: if isValidTenantId(clientId);
+      
+      // Config subcollection
+      match /config/{document} {
+        allow read: if isValidTenantId(clientId);
+        allow write: if isValidTenantId(clientId);
+      }
+      
+      // Courts subcollection
+      match /courts/{document} {
+        allow read: if isValidTenantId(clientId);
+        allow write: if isValidTenantId(clientId);
+      }
+      
+      // Settings subcollection (including PIN)
+      match /settings/{document} {
+        allow read: if isValidTenantId(clientId);
+        allow write: if isValidTenantId(clientId);
+      }
+      
+      // Bookings subcollection
+      match /bookings/{document} {
+        allow read: if isValidTenantId(clientId);
+        allow write: if isValidTenantId(clientId);
+      }
+      
+      // Open Play subcollection
+      match /openPlay/{document} {
+        allow read: if isValidTenantId(clientId);
+        allow write: if isValidTenantId(clientId);
+      }
+      
+      // Morning subcollection
+      match /morning/{document} {
+        allow read: if isValidTenantId(clientId);
+        allow write: if isValidTenantId(clientId);
+      }
+      
+      // Staff Reserve subcollection
+      match /staffReserve/{document} {
+        allow read: if isValidTenantId(clientId);
+        allow write: if isValidTenantId(clientId);
+      }
+      
+      // Queues subcollection
+      match /queues/{document} {
+        allow read: if isValidTenantId(clientId);
+        allow write: if isValidTenantId(clientId);
+      }
+      
+      // Proofs subcollection
+      match /proofs/{document} {
+        allow read: if isValidTenantId(clientId);
+        allow write: if isValidTenantId(clientId);
+      }
+    }
+    
+    // Legacy single-tenant structure (for backward compatibility during migration)
+    // WARNING: These should be removed once all clients are migrated to multi-tenant
     match /bookings/{document} {
-      allow read: if true;
-      allow write: if true;
+      allow read, write: if true;
     }
     
-    // Open Play blocks
     match /openPlay/{document} {
-      allow read: if true;
-      allow write: if true;
+      allow read, write: if true;
     }
     
-    // Morning booking toggles
     match /morning/{document} {
-      allow read: if true;
-      allow write: if true;
+      allow read, write: if true;
     }
     
-    // Staff reserve toggles
     match /staffReserve/{document} {
-      allow read: if true;
-      allow write: if true;
+      allow read, write: if true;
     }
     
-    // Settings (PIN, payment methods)
     match /settings/{document} {
-      allow read: if true;
-      allow write: if true;
+      allow read, write: if true;
     }
     
-    // Queue sessions
     match /queues/{document} {
-      allow read: if true;
-      allow write: if true;
+      allow read, write: if true;
     }
     
-    // Payment proofs
-    match /proofs/{document} {
-      allow read: if true;
-      allow write: if true;
-    }
-    
-    // Court configuration
     match /courts/{document} {
-      allow read: if true;
-      allow write: if true;
+      allow read, write: if true;
+    }
+    
+    match /proofs/{document} {
+      allow read, write: if true;
     }
   }
 }

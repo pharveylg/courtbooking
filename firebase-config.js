@@ -11,11 +11,12 @@
 // queues, QR codes and settings across all devices live.
 // ============================================================
 
-window.FIREBASE_CONFIG = {
-  apiKey: "PASTE_FIREBASE_API_KEY",
-  authDomain: "",
-  projectId: "",
-  storageBucket: "",
-  messagingSenderId: "",
-  appId: ""
+const firebaseConfig = {
+  apiKey: "AIzaSyAkf7GJ3mrEUtykHLQ3wizwfGpl5OugE2I",
+  authDomain: "courtbooking-85175.firebaseapp.com",
+  projectId: "courtbooking-85175",
+  storageBucket: "courtbooking-85175.firebasestorage.app",
+  messagingSenderId: "291819153596",
+  appId: "1:291819153596:web:f31c27b24a5eaa718088b9"
 };
+

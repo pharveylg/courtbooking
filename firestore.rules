@@ -1,9 +1,51 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Allow read/write to all app documents
-    // For production, add authentication and restrict writes
-    match /app/{document=**} {
+    
+    // Bookings collection
+    match /bookings/{document} {
+      allow read: if true;
+      allow write: if true;
+    }
+    
+    // Open Play blocks
+    match /openPlay/{document} {
+      allow read: if true;
+      allow write: if true;
+    }
+    
+    // Morning booking toggles
+    match /morning/{document} {
+      allow read: if true;
+      allow write: if true;
+    }
+    
+    // Staff reserve toggles
+    match /staffReserve/{document} {
+      allow read: if true;
+      allow write: if true;
+    }
+    
+    // Settings (PIN, payment methods)
+    match /settings/{document} {
+      allow read: if true;
+      allow write: if true;
+    }
+    
+    // Queue sessions
+    match /queues/{document} {
+      allow read: if true;
+      allow write: if true;
+    }
+    
+    // Payment proofs
+    match /proofs/{document} {
+      allow read: if true;
+      allow write: if true;
+    }
+    
+    // Court configuration
+    match /courts/{document} {
       allow read: if true;
       allow write: if true;
     }

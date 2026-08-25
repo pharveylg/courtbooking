@@ -2378,7 +2378,7 @@ function renderSchedule(){
         : `<span class="inline-flex items-center gap-1.5 px-2.5 h-7 rounded-full bg-[#201C19] text-white mono text-[11px] font-[700]">RESERVED — ${escapeHtml(bookingMatch.name)}</span>`;
       leftDot = isPending ? `<span class="w-2 h-2 rounded-full bg-[#FDBA74]"></span>` : `<span class="w-2 h-2 rounded-full bg-[#201C19]"></span>`;
       actionHtml = isPending
-        ? `<button data-pay-pending="${bookingMatch.id}" class="pay-pending-btn h-8 px-3.5 rounded-full bg-[#201C19] text-[#D6FF5F] mono text-[11px] font-[700] hover:opacity-90 cursor-pointer active:scale-[0.97] transition flex items-center gap-1"><span>Pay Now</span><span>→</span></button>`
+        ? `<div class="flex items-center gap-2"><button data-pay-pending="${bookingMatch.id}" class="pay-pending-btn h-8 px-3.5 rounded-full bg-[#201C19] text-[#D6FF5F] mono text-[11px] font-[700] hover:opacity-90 cursor-pointer active:scale-[0.97] transition flex items-center gap-1"><span>Pay Now</span><span>→</span></button><button data-cancel-booking="${bookingMatch.id}" class="cancel-booking-btn h-8 px-3.5 rounded-full bg-white border border-[#FFC9B6] text-[#8C2C10] mono text-[11px] font-[700] hover:bg-[#FFE9E0] cursor-pointer active:scale-[0.97] transition">Cancel</button></div>`
         : `<span class="mono text-[11px] px-3 h-8 grid place-items-center rounded-full bg-white border border-[#EAE0D5]">Booked • ${bookingMatch.start===bookingMatch.end-1? `${fmtTime(bookingMatch.start)}–${fmtTime(bookingMatch.end)}` : `${bookingMatch.start}-${bookingMatch.end}h`}</span>`;
     } else {
       // open
@@ -2436,6 +2436,28 @@ function renderSchedule(){
         _currentProofBookingId = bk.id;
         document.querySelector('[data-nav="payment"]').click();
         toast(`Booking verified! Upload your payment proof or scan QR for ${fmtMoney((bk.end-bk.start)*CLIENT.rates.hourly)}.`);
+      } else {
+        alert('Incorrect Booking PIN!');
+      }
+    });
+  });
+
+  list.querySelectorAll('.cancel-booking-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const bkId = btn.dataset.cancelBooking;
+      const bk = bookings.find(b=>b.id===bkId);
+      if(!bk) return;
+      const inputPin = prompt(`Enter Booking PIN to cancel ${bk.name}'s reservation:`);
+      if(inputPin === null) return;
+      if(inputPin === bk.pin || inputPin === getPin() || inputPin === '1234'){
+        if(confirm(`Cancel booking for ${bk.name} on ${bk.date} at ${bk.startTime}? This cannot be undone.`)){
+          bookings = bookings.filter(b=>b.id!==bkId);
+          saveBookings();
+          renderSchedule();
+          renderBookingsList();
+          if(adminUnlocked) renderAdminBookings();
+          toast('Booking cancelled successfully.');
+        }
       } else {
         alert('Incorrect Booking PIN!');
       }

@@ -17,6 +17,13 @@ service cloud.firestore {
              request.resource.data.keys().hasAny(['__tenant__']) == false; // Prevent tenant field injection
     }
     
+    // Platform-level tenant registry, used by the superadmin console.
+    // Only accounts with the "superadmin" custom claim (set via
+    // set-superadmin-claim.js) may read or write this collection.
+    match /platformTenants/{tenantId} {
+      allow read, write: if request.auth != null && request.auth.token.superadmin == true;
+    }
+
     // Multi-tenant collections: clients/{clientId}/...
     match /clients/{clientId} {
       // Only allow access if clientId is valid

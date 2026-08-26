@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Superadmin — Court Booking Platform</title>
+<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="firebase-config.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+*{font-family:"Bricolage Grotesque",system-ui,sans-serif}
+.mono{font-family:"JetBrains Mono",monospace}
+body{background:#FFFBF5;color:#201C19}
+</style>
+</head>
+<body class="min-h-screen">
+
+<!-- Sign-in screen -->
+<div id="signInScreen" class="min-h-screen flex items-center justify-center p-4">
+  <div class="w-full max-w-[400px] rounded-[28px] bg-white border border-[#EAE0D5] shadow-[0_20px_60px_rgba(32,28,25,0.12)] p-7">
+    <div class="w-11 h-11 rounded-full bg-[#201C19] text-[#D6FF5F] grid place-items-center font-black text-[14px]">SA</div>
+    <h1 class="mt-4 text-[22px] font-[800] tracking-[-0.02em]">Superadmin Console</h1>
+    <p class="mono text-[12px] opacity-60 mt-1 leading-[1.5]">Sign in with a superadmin-authorized account to manage tenants across the platform.</p>
+    <form id="signInForm" class="mt-6 space-y-3">
+      <label class="flex flex-col gap-1.5">
+        <span class="mono text-[10px] uppercase tracking-widest opacity-60">Email</span>
+        <input type="email" id="signInEmail" required class="h-11 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-4 mono text-[13px] outline-none focus:border-[#201C19]"/>
+      </label>
+      <label class="flex flex-col gap-1.5">
+        <span class="mono text-[10px] uppercase tracking-widest opacity-60">Password</span>
+        <input type="password" id="signInPassword" required class="h-11 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-4 mono text-[13px] outline-none focus:border-[#201C19]"/>
+      </label>
+      <div id="signInError" class="hidden mono text-[12px] text-[#8C2C10] bg-[#FFE9E0] border border-[#FFC9B6] rounded-[14px] px-4 py-2.5"></div>
+      <button type="submit" class="w-full h-11 rounded-full bg-[#201C19] text-white font-[800] text-[13px] hover:opacity-90 transition cursor-pointer">Sign In</button>
+    </form>
+  </div>
+</div>
+
+<!-- Not authorized screen -->
+<div id="notAuthorizedScreen" class="hidden min-h-screen flex items-center justify-center p-4">
+  <div class="w-full max-w-[440px] rounded-[28px] bg-white border border-[#EAE0D5] shadow-[0_20px_60px_rgba(32,28,25,0.12)] p-7">
+    <div class="w-11 h-11 rounded-full bg-[#FFE0D1] text-[#8C2C10] grid place-items-center font-black text-[14px]">!</div>
+    <h1 class="mt-4 text-[20px] font-[800] tracking-[-0.02em]">Not authorized</h1>
+    <p class="mono text-[12px] opacity-70 mt-2 leading-[1.6]">Signed in as <b id="notAuthorizedEmail"></b>, but this account doesn't have superadmin access yet.</p>
+    <p class="mono text-[11px] opacity-60 mt-3 leading-[1.6]">Give the platform owner this account's UID to grant access:</p>
+    <div class="mt-2 p-3 rounded-[12px] bg-[#FFFBF5] border border-[#EAE0D5] mono text-[11px] break-all" id="notAuthorizedUid"></div>
+    <button id="notAuthorizedSignOutBtn" class="mt-5 w-full h-10 rounded-full bg-[#F1E9DF] border border-[#E9DDD0] mono text-[12px] font-[700] cursor-pointer hover:bg-[#E5DDD4] transition">Sign Out</button>
+  </div>
+</div>
+
+<!-- Dashboard -->
+<div id="dashboard" class="hidden max-w-[1100px] mx-auto px-4 md:px-6 py-8 md:py-10">
+  <div class="flex flex-wrap items-center justify-between gap-3 mb-7">
+    <div class="flex items-center gap-3">
+      <div class="w-10 h-10 rounded-full bg-[#201C19] text-[#D6FF5F] grid place-items-center font-black text-[13px]">SA</div>
+      <div>
+        <h1 class="text-[20px] font-[800] tracking-[-0.02em] leading-tight">Superadmin Console</h1>
+        <div class="mono text-[11px] opacity-60" id="signedInAsLabel"></div>
+      </div>
+    </div>
+    <button id="signOutBtn" class="h-9 px-4 rounded-full bg-[#F1E9DF] border border-[#E9DDD0] mono text-[11px] font-[700] cursor-pointer hover:bg-[#E5DDD4] transition">Sign Out</button>
+  </div>
+
+  <!-- Create / Register Tenant -->
+  <div class="rounded-[24px] bg-white border border-[#EAE0D5] p-6 shadow-xs mb-6">
+    <div class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#201C19] text-[#D6FF5F] mono text-[10px] font-[800] uppercase tracking-widest">Platform</div>
+    <h2 class="mt-1.5 text-[17px] font-[800] tracking-[-0.02em]">Create Tenant</h2>
+    <p class="mono text-[11px] opacity-60 mt-0.5">Provisions a fresh tenant with default courts, PIN, and settings. If the slug already has data (e.g. created organically by a visitor), this registers it into the directory instead of overwriting it.</p>
+    <form id="createTenantForm" class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+      <label class="flex flex-col gap-1.5">
+        <span class="mono text-[10px] uppercase tracking-widest opacity-60">Slug (used as ?client=)</span>
+        <input type="text" id="ctSlug" placeholder="e.g. new-club" pattern="[a-z0-9-]+" required class="h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-4 mono text-[12px] outline-none focus:border-[#201C19]"/>
+      </label>
+      <label class="flex flex-col gap-1.5">
+        <span class="mono text-[10px] uppercase tracking-widest opacity-60">Business Name</span>
+        <input type="text" id="ctName" placeholder="e.g. New Club Pickleball" required class="h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-4 mono text-[12px] outline-none focus:border-[#201C19]"/>
+      </label>
+      <label class="flex flex-col gap-1.5">
+        <span class="mono text-[10px] uppercase tracking-widest opacity-60">Starter Color</span>
+        <div class="flex items-center gap-1.5">
+          <input type="color" id="ctColorPicker" value="#D6FF5F" class="w-10 h-10 rounded-[8px] border border-[#EAE0D5] cursor-pointer p-0.5"/>
+          <input type="text" id="ctColor" value="#D6FF5F" maxlength="7" class="flex-1 h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-4 mono text-[12px] font-[700] outline-none focus:border-[#201C19]"/>
+        </div>
+      </label>
+      <label class="flex flex-col gap-1.5">
+        <span class="mono text-[10px] uppercase tracking-widest opacity-60">Initial Admin PIN</span>
+        <input type="text" id="ctPin" value="1234" maxlength="8" required class="h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-4 mono text-[12px] font-[700] outline-none focus:border-[#201C19]"/>
+      </label>
+      <div id="createTenantError" class="hidden md:col-span-2 mono text-[12px] text-[#8C2C10] bg-[#FFE9E0] border border-[#FFC9B6] rounded-[14px] px-4 py-2.5"></div>
+      <button type="submit" class="md:col-span-2 h-11 rounded-full bg-[#D6FF5F] hover:bg-[#CBF052] text-[#201C19] font-[800] text-[13px] border border-[#201C19]/10 transition cursor-pointer">Create / Register Tenant</button>
+    </form>
+  </div>
+
+  <!-- Tenant Directory -->
+  <div class="rounded-[24px] bg-white border border-[#EAE0D5] overflow-hidden">
+    <div class="px-6 h-[56px] flex items-center justify-between border-b border-[#F1E9DF]">
+      <div class="font-[750] text-[15px]">Tenant Directory</div>
+      <div class="mono text-[11px] opacity-60"><span id="tenantCount">0</span> tenants</div>
+    </div>
+    <div id="tenantList" class="divide-y divide-[#F5EDE4]"></div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast" class="fixed bottom-5 left-1/2 -translate-x-1/2 z-[60] hidden">
+  <div class="px-5 h-11 rounded-full bg-[#201C19] text-white shadow-[0_12px_30px_rgba(0,0,0,0.25)] mono text-[12px] font-[600] grid place-items-center">
+    <span id="toastText">Saved</span>
+  </div>
+</div>
+
+<script>
+const fbApp = firebase.initializeApp(window.FIREBASE_CONFIG);
+const auth = firebase.auth();
+const db = firebase.firestore();
+
+function toast(msg){
+  const t = document.getElementById('toast');
+  document.getElementById('toastText').textContent = msg;
+  t.classList.remove('hidden');
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => t.classList.add('hidden'), 2600);
+}
+function escapeHtml(s){ return (s||'').replace(/[&<>"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+function isValidSlug(s){ return /^[a-z0-9-]+$/.test(s); }
+function isValidHex(h){ return /^#[0-9a-fA-F]{6}$/.test(h); }
+function darkenHex(hex, amt = 0.15){
+  const n = parseInt(hex.slice(1), 16);
+  const r = Math.max(0, Math.round(((n >> 16) & 255) * (1 - amt)));
+  const g = Math.max(0, Math.round(((n >> 8) & 255) * (1 - amt)));
+  const b = Math.max(0, Math.round((n & 255) * (1 - amt)));
+  return '#' + [r, g, b].map(v => v.toString(16).padStart(2, '0')).join('');
+}
+async function hashPin(pin){
+  const encoder = new TextEncoder();
+  const data = encoder.encode(pin + 'picklecourt-salt-2024');
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+function getCurrentWeekId(){
+  const now = new Date();
+  const day = now.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  const mon = new Date(now.getFullYear(), now.getMonth(), now.getDate() + diff);
+  return mon.toISOString().slice(0,10);
+}
+
+/* ---------- Screens ---------- */
+function showScreen(id){
+  ['signInScreen','notAuthorizedScreen','dashboard'].forEach(s => {
+    document.getElementById(s).classList.toggle('hidden', s !== id);
+  });
+}
+
+auth.onAuthStateChanged(async (user) => {
+  if(!user){ showScreen('signInScreen'); return; }
+  const tokenResult = await user.getIdTokenResult(true);
+  if(tokenResult.claims && tokenResult.claims.superadmin === true){
+    document.getElementById('signedInAsLabel').textContent = `Signed in as ${user.email}`;
+    showScreen('dashboard');
+    loadTenants();
+  } else {
+    document.getElementById('notAuthorizedEmail').textContent = user.email;
+    document.getElementById('notAuthorizedUid').textContent = user.uid;
+    showScreen('notAuthorizedScreen');
+  }
+});
+
+document.getElementById('signInForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const email = document.getElementById('signInEmail').value.trim();
+  const password = document.getElementById('signInPassword').value;
+  const err = document.getElementById('signInError');
+  err.classList.add('hidden');
+  try {
+    await auth.signInWithEmailAndPassword(email, password);
+  } catch(ex) {
+    err.textContent = ex.message;
+    err.classList.remove('hidden');
+  }
+});
+document.getElementById('signOutBtn').addEventListener('click', () => auth.signOut());
+document.getElementById('notAuthorizedSignOutBtn').addEventListener('click', () => auth.signOut());
+
+/* ---------- Color picker <-> hex sync ---------- */
+document.getElementById('ctColorPicker').addEventListener('input', (e) => {
+  document.getElementById('ctColor').value = e.target.value;
+});
+document.getElementById('ctColor').addEventListener('change', (e) => {
+  if(isValidHex(e.target.value.trim())) document.getElementById('ctColorPicker').value = e.target.value.trim();
+});
+
+/* ---------- Tenant Directory ---------- */
+async function loadTenants(){
+  const list = document.getElementById('tenantList');
+  const countEl = document.getElementById('tenantCount');
+  list.innerHTML = `<div class="p-6 text-center mono text-[11px] opacity-50">Loading...</div>`;
+  try {
+    const snap = await db.collection('platformTenants').orderBy('createdAt', 'desc').get();
+    countEl.textContent = snap.size;
+    if(snap.empty){
+      list.innerHTML = `<div class="p-8 text-center mono text-[12px] opacity-50">No tenants registered yet. Create one above.</div>`;
+      return;
+    }
+    list.innerHTML = '';
+    snap.forEach(doc => renderTenantRow(doc.id, doc.data()));
+  } catch(ex) {
+    list.innerHTML = `<div class="p-6 text-center mono text-[11px] text-[#8C2C10]">Failed to load tenants: ${escapeHtml(ex.message)}</div>`;
+  }
+}
+
+function renderTenantRow(slug, data){
+  const list = document.getElementById('tenantList');
+  const isActive = data.status !== 'suspended';
+  const row = document.createElement('div');
+  row.className = 'p-4';
+  row.innerHTML = `
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <div class="flex items-center gap-3 min-w-0">
+        <div class="w-9 h-9 rounded-full shrink-0 border border-[#EAE0D5] grid place-items-center mono text-[10px] font-[800]" style="background:${escapeHtml(data.theme?.primary || '#D6FF5F')}">${escapeHtml((data.businessName||slug).slice(0,2).toUpperCase())}</div>
+        <div class="min-w-0">
+          <div class="font-[750] text-[14px] truncate">${escapeHtml(data.businessName || slug)}</div>
+          <div class="mono text-[10px] opacity-60">?client=${escapeHtml(slug)} • <span class="${isActive?'text-[#3F7019]':'text-[#8A5A00]'} font-[700]">${isActive?'ACTIVE':'SUSPENDED'}</span></div>
+        </div>
+      </div>
+      <div class="flex items-center gap-2 shrink-0">
+        <a href="index.html?client=${encodeURIComponent(slug)}" target="_blank" rel="noopener" class="h-8 px-3.5 rounded-full bg-white border border-[#EAE0D5] mono text-[11px] font-[700] hover:border-[#201C19] transition">Open Site ↗</a>
+        <button type="button" data-manage="${slug}" class="h-8 px-3.5 rounded-full bg-[#201C19] text-white mono text-[11px] font-[700] cursor-pointer hover:opacity-90 transition">Manage</button>
+        <button type="button" data-toggle-status="${slug}" data-current="${isActive}" class="h-8 px-3.5 rounded-full ${isActive?'bg-[#FFE9E0] text-[#8C2C10] border border-[#FFC9B6]':'bg-[#E8F5D8] text-[#3F7019] border border-[#CFE8B5]'} mono text-[11px] font-[700] cursor-pointer transition">${isActive?'Suspend':'Activate'}</button>
+      </div>
+    </div>
+    <div id="manage-${cssId(slug)}" class="hidden mt-4 pt-4 border-t border-[#F1E9DF] grid grid-cols-1 md:grid-cols-3 gap-3">
+      <label class="flex flex-col gap-1.5">
+        <span class="mono text-[10px] uppercase tracking-widest opacity-60">Rename Business</span>
+        <div class="flex gap-1.5">
+          <input type="text" id="rename-${cssId(slug)}" value="${escapeHtml(data.businessName||'')}" class="flex-1 min-w-0 h-9 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-3 mono text-[11px] outline-none focus:border-[#201C19]"/>
+          <button type="button" data-save-name="${slug}" class="h-9 px-3 rounded-full bg-[#201C19] text-white mono text-[10px] font-[700] cursor-pointer">Save</button>
+        </div>
+      </label>
+      <label class="flex flex-col gap-1.5">
+        <span class="mono text-[10px] uppercase tracking-widest opacity-60">Primary Color</span>
+        <div class="flex gap-1.5 items-center">
+          <input type="color" id="colorpick-${cssId(slug)}" value="${escapeHtml(data.theme?.primary || '#D6FF5F')}" class="w-9 h-9 rounded-[8px] border border-[#EAE0D5] cursor-pointer p-0.5"/>
+          <input type="text" id="color-${cssId(slug)}" value="${escapeHtml(data.theme?.primary || '#D6FF5F')}" class="flex-1 min-w-0 h-9 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-3 mono text-[11px] font-[700] outline-none focus:border-[#201C19]"/>
+          <button type="button" data-save-color="${slug}" class="h-9 px-3 rounded-full bg-[#201C19] text-white mono text-[10px] font-[700] cursor-pointer">Save</button>
+        </div>
+      </label>
+      <label class="flex flex-col gap-1.5">
+        <span class="mono text-[10px] uppercase tracking-widest opacity-60">Reset Admin PIN</span>
+        <div class="flex gap-1.5">
+          <input type="text" id="pin-${cssId(slug)}" placeholder="New PIN" maxlength="8" class="flex-1 min-w-0 h-9 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-3 mono text-[11px] font-[700] outline-none focus:border-[#201C19]"/>
+          <button type="button" data-save-pin="${slug}" class="h-9 px-3 rounded-full bg-[#201C19] text-white mono text-[10px] font-[700] cursor-pointer">Reset</button>
+        </div>
+      </label>
+    </div>
+  `;
+  list.appendChild(row);
+
+  row.querySelector(`[data-manage="${cssAttr(slug)}"]`).addEventListener('click', () => {
+    document.getElementById(`manage-${cssId(slug)}`).classList.toggle('hidden');
+  });
+  row.querySelector(`[data-toggle-status="${cssAttr(slug)}"]`).addEventListener('click', async (e) => {
+    const wasActive = e.target.dataset.current === 'true';
+    try {
+      await db.doc(`platformTenants/${slug}`).update({ status: wasActive ? 'suspended' : 'active' });
+      toast(`${data.businessName || slug} ${wasActive ? 'suspended' : 'activated'}`);
+      loadTenants();
+    } catch(ex) { toast('Failed: ' + ex.message); }
+  });
+  row.querySelector(`[data-save-name="${cssAttr(slug)}"]`).addEventListener('click', async () => {
+    const newName = document.getElementById(`rename-${cssId(slug)}`).value.trim();
+    if(!newName) { toast('Business name is required'); return; }
+    try {
+      await db.doc(`clients/${slug}/config/state`).update({ 'data.business.name': newName, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+      await db.doc(`platformTenants/${slug}`).set({ businessName: newName }, { merge: true });
+      toast('Business name updated');
+      loadTenants();
+    } catch(ex) { toast('Failed: ' + ex.message); }
+  });
+  const colorPickEl = document.getElementById(`colorpick-${cssId(slug)}`);
+  const colorHexEl = document.getElementById(`color-${cssId(slug)}`);
+  colorPickEl.addEventListener('input', () => { colorHexEl.value = colorPickEl.value; });
+  colorHexEl.addEventListener('change', () => { if(isValidHex(colorHexEl.value.trim())) colorPickEl.value = colorHexEl.value.trim(); });
+  row.querySelector(`[data-save-color="${cssAttr(slug)}"]`).addEventListener('click', async () => {
+    const hex = colorHexEl.value.trim();
+    if(!isValidHex(hex)) { toast('Enter a valid hex color'); return; }
+    try {
+      await db.doc(`clients/${slug}/config/state`).update({
+        'data.theme.primary': hex,
+        'data.theme.primaryHover': darkenHex(hex),
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      await db.doc(`platformTenants/${slug}`).set({ theme: { primary: hex } }, { merge: true });
+      toast('Color updated');
+      loadTenants();
+    } catch(ex) { toast('Failed: ' + ex.message); }
+  });
+  row.querySelector(`[data-save-pin="${cssAttr(slug)}"]`).addEventListener('click', async () => {
+    const newPin = document.getElementById(`pin-${cssId(slug)}`).value.trim();
+    if(!newPin) { toast('Enter a new PIN'); return; }
+    try {
+      const hash = await hashPin(newPin);
+      await db.doc(`clients/${slug}/settings/state`).update({ 'data.pin': hash, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+      toast(`PIN reset for ${data.businessName || slug}`);
+      document.getElementById(`pin-${cssId(slug)}`).value = '';
+    } catch(ex) { toast('Failed: ' + ex.message); }
+  });
+}
+function cssId(slug){ return slug.replace(/[^a-zA-Z0-9]/g, '_'); }
+function cssAttr(slug){ return slug; }
+
+/* ---------- Create / Register Tenant ---------- */
+document.getElementById('createTenantForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const errEl = document.getElementById('createTenantError');
+  errEl.classList.add('hidden');
+
+  const slug = document.getElementById('ctSlug').value.trim().toLowerCase();
+  const name = document.getElementById('ctName').value.trim();
+  const color = document.getElementById('ctColor').value.trim();
+  const pin = document.getElementById('ctPin').value.trim();
+
+  if(!isValidSlug(slug)){ errEl.textContent = 'Slug must be lowercase letters, numbers, and hyphens only.'; errEl.classList.remove('hidden'); return; }
+  if(!name){ errEl.textContent = 'Business name is required.'; errEl.classList.remove('hidden'); return; }
+  if(!isValidHex(color)){ errEl.textContent = 'Starter color must be a valid hex value.'; errEl.classList.remove('hidden'); return; }
+  if(!pin){ errEl.textContent = 'Initial PIN is required.'; errEl.classList.remove('hidden'); return; }
+
+  try {
+    const existingConfig = await db.doc(`clients/${slug}/config/state`).get();
+    if(existingConfig.exists){
+      // Tenant data already exists (e.g. created organically) -- register it
+      // into the directory using its existing business name, don't overwrite.
+      const existingName = existingConfig.data()?.data?.business?.name
+        || existingConfig.data()?.data?.businessName
+        || name;
+      const existingPrimary = existingConfig.data()?.data?.theme?.primary
+        || existingConfig.data()?.data?.theme?.primaryColor
+        || color;
+      await db.doc(`platformTenants/${slug}`).set({
+        businessName: existingName,
+        theme: { primary: existingPrimary },
+        status: 'active',
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+      toast(`"${slug}" already had data -- registered existing tenant "${existingName}"`);
+    } else {
+      await provisionTenantDefaults(slug, name, color, pin);
+      await db.doc(`platformTenants/${slug}`).set({
+        businessName: name,
+        theme: { primary: color },
+        status: 'active',
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      toast(`Tenant "${name}" created`);
+    }
+    document.getElementById('createTenantForm').reset();
+    document.getElementById('ctColor').value = '#D6FF5F';
+    document.getElementById('ctColorPicker').value = '#D6FF5F';
+    document.getElementById('ctPin').value = '1234';
+    loadTenants();
+  } catch(ex) {
+    errEl.textContent = 'Failed: ' + ex.message;
+    errEl.classList.remove('hidden');
+  }
+});
+
+async function provisionTenantDefaults(slug, name, color, pin){
+  const stamp = () => ({ updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+  const pinHash = await hashPin(pin);
+
+  // Only set fields that differ from index.html's _cfgDefaults -- omitting
+  // sub/tagline/location/contact lets the app fall back to its built-in
+  // placeholder copy instead of rendering literal blanks.
+  await db.doc(`clients/${slug}/config/state`).set({
+    data: {
+      business: { name },
+      branding: { monogram: name.slice(0,2).toUpperCase() },
+      theme: { primary: color, primaryHover: darkenHex(color) }
+    },
+    ...stamp()
+  });
+  await db.doc(`clients/${slug}/courts/state`).set({
+    data: [{ id: 'court1', name: 'Court 1', startHour: 13, active: true }],
+    ...stamp()
+  });
+  await db.doc(`clients/${slug}/settings/state`).set({
+    data: { pin: pinHash, payMethods: {} },
+    ...stamp()
+  });
+  await db.doc(`clients/${slug}/bookings/state`).set({ data: [], ...stamp() });
+  await db.doc(`clients/${slug}/openPlay/state`).set({ data: [], ...stamp() });
+  await db.doc(`clients/${slug}/morning/state`).set({ data: {"7":false,"8":false,"9":false,"10":false,"11":false}, ...stamp() });
+  await db.doc(`clients/${slug}/staffReserve/state`).set({
+    data: { weekId: getCurrentWeekId(), days: {"0":true,"2":true,"4":true,"6":true} },
+    ...stamp()
+  });
+  await db.doc(`clients/${slug}/queues/state`).set({ data: [], ...stamp() });
+}
+</script>
+</body>
+</html>

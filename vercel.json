@@ -20,6 +20,8 @@
     }
   ],
   "rewrites": [
+    { "source": "/superadmin", "destination": "/superadmin.html" },
+    { "source": "/superadmin.html", "destination": "/superadmin.html" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }

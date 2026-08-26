@@ -1102,32 +1102,52 @@ function _deepMerge(base, over){
 }
 let CLIENT = _deepMerge(_cfgDefaults, window.CLIENT_CONFIG || {});
 
-/* ---------- Theme remap: override the Tailwind palette at runtime ---------- */
+/* ---------- Theme remap: override the Tailwind palette at runtime ----------
+   The markup hardcodes a fixed warm cream/lime palette as Tailwind arbitrary-
+   value classes (bg-[#D6FF5F], bg-[#201C19], etc.) rather than referencing
+   _cfgDefaults.theme's grayscale placeholders, which barely appear in the
+   markup at all. To actually recolor the UI per tenant, the override rules
+   below must target the literal hex classes the markup really uses; only the
+   CSS *value* comes from the tenant's theme. ---------- */
+const _themeBaseHex = {
+  primary: '#D6FF5F', primaryHover: '#CBF052', dark: '#201C19', bg: '#FFFBF5',
+  border: '#EAE0D5', borderSoft: '#F1E9DF', borderSoft2: '#F5EDE4',
+  staff: '#FB923C', openPlay: '#8B5CF6', queue: '#34D399', pending: '#FBBF24',
+};
 function applyTheme(){
-  const t = CLIENT.theme;
+  const t = CLIENT.theme, base = _themeBaseHex;
   const esc = h => h.replace('#','\\#');
   const rules = [];
   const push = (cls, prop, val) => rules.push(`.${cls}{${prop}:${val} !important}`);
   // Primary accent
-  push(`bg-\\[${esc(t.primary)}\\]`,'background-color',t.primary);
-  push(`text-\\[${esc(t.primary)}\\]`,'color',t.primary);
-  push(`border-\\[${esc(t.primary)}\\]`,'border-color',t.primary);
-  push(`hover\\:bg-\\[${esc(t.primaryHover)}\\]:hover`,'background-color',t.primaryHover);
-  push(`ring-\\[${esc(t.primary)}\\]`,'--tw-ring-color',t.primary);
+  push(`bg-\\[${esc(base.primary)}\\]`,'background-color',t.primary);
+  push(`text-\\[${esc(base.primary)}\\]`,'color',t.primary);
+  push(`border-\\[${esc(base.primary)}\\]`,'border-color',t.primary);
+  push(`hover\\:bg-\\[${esc(base.primaryHover)}\\]:hover`,'background-color',t.primaryHover);
+  push(`hover\\:border-\\[${esc(base.primary)}\\]:hover`,'border-color',t.primary);
+  push(`hover\\:text-\\[${esc(base.primary)}\\]:hover`,'color',t.primary);
+  push(`ring-\\[${esc(base.primary)}\\]`,'--tw-ring-color',t.primary);
   // Dark
-  push(`bg-\\[${esc(t.dark)}\\]`,'background-color',t.dark);
-  push(`text-\\[${esc(t.dark)}\\]`,'color',t.dark);
-  push(`border-\\[${esc(t.dark)}\\]`,'border-color',t.dark);
+  push(`bg-\\[${esc(base.dark)}\\]`,'background-color',t.dark);
+  push(`text-\\[${esc(base.dark)}\\]`,'color',t.dark);
+  push(`border-\\[${esc(base.dark)}\\]`,'border-color',t.dark);
+  push(`hover\\:bg-\\[${esc(base.dark)}\\]:hover`,'background-color',t.dark);
+  push(`hover\\:border-\\[${esc(base.dark)}\\]:hover`,'border-color',t.dark);
+  push(`hover\\:text-\\[${esc(base.dark)}\\]:hover`,'color',t.dark);
   // Page bg + borders
-  push(`bg-\\[${esc(t.bg)}\\]`,'background-color',t.bg);
-  push(`border-\\[${esc(t.border)}\\]`,'border-color',t.border);
-  push(`border-\\[${esc(t.borderSoft)}\\]`,'border-color',t.borderSoft);
-  push(`divide-\\[${esc(t.borderSoft)}\\] > :not([hidden]) ~ :not([hidden])`,'border-color',t.borderSoft);
+  push(`bg-\\[${esc(base.bg)}\\]`,'background-color',t.bg);
+  push(`hover\\:bg-\\[${esc(base.bg)}\\]:hover`,'background-color',t.bg);
+  push(`text-\\[${esc(base.bg)}\\]`,'color',t.bg);
+  push(`border-\\[${esc(base.border)}\\]`,'border-color',t.border);
+  push(`bg-\\[${esc(base.border)}\\]`,'background-color',t.border);
+  push(`border-\\[${esc(base.borderSoft)}\\]`,'border-color',t.borderSoft);
+  push(`bg-\\[${esc(base.borderSoft)}\\]`,'background-color',t.borderSoft);
+  push(`divide-\\[${esc(base.borderSoft2)}\\] > :not([hidden]) ~ :not([hidden])`,'border-color',t.borderSoft);
   // Status colors
-  push(`bg-\\[${esc(t.staff)}\\]`,'background-color',t.staff);
-  push(`bg-\\[${esc(t.openPlay)}\\]`,'background-color',t.openPlay);
-  push(`bg-\\[${esc(t.queue)}\\]`,'background-color',t.queue);
-  push(`bg-\\[${esc(t.pending)}\\]`,'background-color',t.pending);
+  push(`bg-\\[${esc(base.staff)}\\]`,'background-color',t.staff);
+  push(`bg-\\[${esc(base.openPlay)}\\]`,'background-color',t.openPlay);
+  push(`bg-\\[${esc(base.queue)}\\]`,'background-color',t.queue);
+  push(`bg-\\[${esc(base.pending)}\\]`,'background-color',t.pending);
   let st = document.getElementById('client-theme');
   if(!st){ st = document.createElement('style'); st.id = 'client-theme'; document.head.appendChild(st); }
   st.textContent = rules.join('\n');
@@ -1273,10 +1293,10 @@ function updateOpenBadge(){
    NOTE: This is a basic improvement over plaintext. For production,
    consider Firebase Authentication with proper password hashing.
    ================================================================ */
-async function hashPin(pin) {
+async function hashPin(pin, salt = 'picklecourt-salt-2024') {
   // Simple hash using SubtleCrypto (SHA-256)
   const encoder = new TextEncoder();
-  const data = encoder.encode(pin + 'picklecourt-salt-2024');
+  const data = encoder.encode(pin + salt);
   const hashBuffer = await crypto.subtle.digest('SHA-256', data);
   const hashArray = Array.from(new Uint8Array(hashBuffer));
   return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
@@ -3374,12 +3394,21 @@ function getPin(){
 
 async function verifyAdminPin(inputPin) {
   const stored = getPin();
-  
+
   // If stored value is a hash (64 chars), verify using hash
   if (stored.length === 64 && /^[a-f0-9]+$/.test(stored)) {
-    return await verifyPin(inputPin, stored);
+    if (await verifyPin(inputPin, stored)) return true;
+    // Some sample tenants were seeded with an older salt ("dula-hq-salt-2024")
+    // before the salt was changed to "picklecourt-salt-2024". Fall back to it
+    // and migrate the stored hash forward on a successful match.
+    const legacyHash = await hashPin(inputPin, 'dula-hq-salt-2024');
+    if (legacyHash === stored) {
+      await saveAdminPin(inputPin);
+      return true;
+    }
+    return false;
   }
-  
+
   // Legacy plaintext comparison (for migration period)
   return inputPin === stored;
 }

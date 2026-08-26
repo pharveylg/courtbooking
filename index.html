@@ -2235,12 +2235,12 @@ if(headerAdminToggleMobile) headerAdminToggleMobile.addEventListener('click', ha
 
 const adminModalForm = document.getElementById('adminModalForm');
 if(adminModalForm){
-  adminModalForm.addEventListener('submit', (e)=>{
+  adminModalForm.addEventListener('submit', async (e)=>{
     e.preventDefault();
     const input = document.getElementById('modalPinInput');
     const err = document.getElementById('modalPinError');
     const pin = input.value.trim();
-    if(pin === getPin()){
+    if(await verifyAdminPin(pin)){
       adminUnlocked = true;
       sessionStorage.setItem(LS.adminUnlocked, 'true');
       document.getElementById('adminLoginModal').classList.add('hidden');

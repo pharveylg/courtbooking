@@ -1744,6 +1744,37 @@ async function loadClientConfig() {
   }
 }
 
+/* Background revalidation: the localStorage cache above never expires, so a
+   browser that visited a tenant once would keep rendering that config
+   forever, missing any later change made from the superadmin console (which
+   runs in a separate session/origin and has no way to invalidate it). This
+   re-fetches from Firestore after the cached config renders and live-patches
+   CLIENT/theme/branding if anything changed, without blocking first paint. */
+async function refreshClientConfigFromCloud(){
+  if(!currentClientId || !db) return;
+  try {
+    const configSnap = await db.doc(`clients/${currentClientId}/config/state`).get();
+    if(!configSnap.exists) return;
+    const fresh = normalizeClientConfig(configSnap.data().data);
+    const freshStr = JSON.stringify(fresh);
+    if(freshStr === JSON.stringify(currentClientConfig)) return; // already up to date
+    currentClientConfig = fresh;
+    clientConfigCache.set(currentClientId, fresh);
+    localStorage.setItem(LS.clientConfig, freshStr);
+    window.CLIENT_CONFIG = fresh;
+    CLIENT = _deepMerge(_cfgDefaults, fresh);
+    applyTheme();
+    computeSchedule();
+    computeHours();
+    applyBranding();
+    renderSchedule();
+    renderDateSlotPreview();
+    console.log('[CourtBooking] Tenant config changed since last visit -- refreshed');
+  } catch(e) {
+    console.warn('[CourtBooking] Background config refresh failed:', e.message);
+  }
+}
+
 /* ---------- Local cache keys (client-scoped for multi-tenancy) ---------- */
 function lsKey(baseKey) {
   return currentClientId ? `${baseKey}_${currentClientId}` : baseKey;
@@ -6117,6 +6148,7 @@ async function initializeApp() {
   renderProofStrip();        // proofs strip on Payment tab (local fallback proofs)
   _sweepLocalProofs();       // purge expired local proofs on boot (7-day retention)
   updateAdminTabsVisibility();   // Public Portal mode by default (Book + Payment only)
+  refreshClientConfigFromCloud(); // fire-and-forget: catch up if config changed since last cache
 }
 
 initializeApp();

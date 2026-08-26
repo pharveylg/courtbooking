@@ -1018,25 +1018,29 @@
 
         <!-- Controls -->
         <div class="col-span-12 lg:col-span-4 flex flex-col gap-4">
-          <!-- Morning toggle -->
+          <!-- Staff Reserved Hours -->
           <div class="rounded-[24px] bg-white border border-[#EAE0D5] p-5">
-            <div class="font-[750] text-[14px]">Morning Booking Toggle</div>
-            <div class="mono text-[11px] opacity-60 mt-1">Enable booking per morning hour (7AM–11AM). Default = Queue / walk-in only.</div>
-            <div id="morningToggles" class="mt-4 space-y-2.5"></div>
-            <div class="mt-4 p-3 rounded-[12px] bg-[#FFFBF5] border border-[#F1E9DF] mono text-[10px] leading-[1.4] opacity-70">When enabled, morning hour becomes bookable via form and appears as "Book Now" in Today's Schedule. When disabled, shows "Queue — Walk-in".</div>
-          </div>
-
-          <!-- Staff Reserve Toggle -->
-          <div class="rounded-[24px] bg-white border border-[#EAE0D5] p-5">
-            <div class="flex items-center justify-between">
-              <div class="font-[750] text-[14px]">Staff Reserve Toggle</div>
-              <span id="staffWeekBadge" class="mono text-[9px] px-2.5 py-0.5 rounded-full bg-[#FF8A5B]/15 text-[#8C2C10] font-[700]"></span>
-            </div>
-            <div class="mono text-[11px] opacity-60 mt-1">Enable/disable staff reservation per day, per court. Default: Tue, Thu, Sat, Sun (5PM–10PM).</div>
+            <div class="font-[750] text-[14px]">Staff Reserved Hours</div>
+            <div class="mono text-[11px] opacity-60 mt-1">Set a recurring weekly pattern per court, then use the calendar to override specific dates.</div>
             <div id="staffReserveCourtTabs" class="hidden mt-3 flex gap-2 flex-wrap"></div>
-            <div id="staffReserveToggles" class="mt-4 space-y-2.5"></div>
-            <div class="mt-4 p-3 rounded-[12px] bg-[#FFE0D1]/40 border border-[#FFC9B6]/50 mono text-[10px] leading-[1.4] text-[#6B3A20]">
-              <b>Weekly reset:</b> Changes apply for this week only (Mon–Sun). Every Monday at midnight, all toggles auto-reset back to the default schedule (Sun/Tue/Thu/Sat enabled).
+
+            <div class="mt-4">
+              <div class="mono text-[10px] uppercase tracking-widest opacity-60 mb-2">Weekly Pattern</div>
+              <div id="staffTemplateDays" class="space-y-2"></div>
+            </div>
+
+            <div class="mt-5 pt-4 border-t border-[#EAE0D5]">
+              <div class="flex items-center justify-between mb-2">
+                <div class="mono text-[10px] uppercase tracking-widest opacity-60">Date Overrides</div>
+                <div class="flex items-center gap-1.5">
+                  <button type="button" id="staffCalPrev" class="w-7 h-7 rounded-full bg-white border border-[#EAE0D5] grid place-items-center cursor-pointer hover:border-[#201C19] transition">‹</button>
+                  <span id="staffCalMonthLabel" class="mono text-[11px] font-[700] w-[96px] text-center"></span>
+                  <button type="button" id="staffCalNext" class="w-7 h-7 rounded-full bg-white border border-[#EAE0D5] grid place-items-center cursor-pointer hover:border-[#201C19] transition">›</button>
+                </div>
+              </div>
+              <div id="staffCalWeekdays" class="grid grid-cols-7 gap-1 mb-1"></div>
+              <div id="staffCalGrid" class="grid grid-cols-7 gap-1"></div>
+              <div id="staffCalSelectedPanel" class="hidden mt-3 p-3.5 rounded-[14px] bg-[#FFFBF5] border border-[#EAE0D5]"></div>
             </div>
           </div>
 
@@ -1325,21 +1329,19 @@ function applyBranding(){
   setText('payRateQueue', `${fmtMoney(CLIENT.rates.queuePerHead)} / head`);
   setText('payRateQueueLabel', `Morning Queue (${_hh12(SCHED.queueStart)}–${_hh12(SCHED.queueEnd)})`);
   // Staff chip + schedule footnote
-  setText('heroStaffChip', `${CLIENT.staff.label} ${_hh12(CLIENT.staff.startHour).replace(':00 ','')}–${_hh12(CLIENT.staff.endHour).replace(':00 ','')}`);
+  setText('heroStaffChip', `${CLIENT.staff.label} RESERVED HOURS`);
   const sfn = document.getElementById('scheduleFootNote');
   if(sfn){
-    const dayNames = STAFF_DAYS.map(d=>['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d]).join('/');
     sfn.innerHTML = `
       <span>Morning ${_hh12(SCHED.queueStart)}–${_hh12(SCHED.queueEnd)} = Walk-in queue unless admin unlocks booking</span>
       <span>•</span><span>Afternoon ${_hh12(SCHED.bookStart)}–${_hh12(SCHED.close)} = Hourly booking</span>
-      <span>•</span><span>${dayNames} ${_hh12(CLIENT.staff.startHour)}–${_hh12(CLIENT.staff.endHour)} = ${titleCase(CLIENT.staff.label)} reserved</span>`;
+      <span>•</span><span>${titleCase(CLIENT.staff.label)}-reserved hours vary by court and day — see today's schedule</span>`;
   }
   // Form total label + payment staff note
   setText('totalRateLabel', `Total • ${fmtMoney(CLIENT.rates.hourly)} / hour`);
   const psn = document.getElementById('payStaffNote');
   if(psn){
-    const dn = STAFF_DAYS.map(d=>['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d]).join(', ');
-    psn.innerHTML = `<b>${titleCase(CLIENT.staff.label)} reserved block:</b> ${dn} ${_hh12(CLIENT.staff.startHour)}–${_hh12(CLIENT.staff.endHour)} is blocked for ${titleCase(b.name)} staff play. Morning hours (${_hh12(SCHED.queueStart)}–${_hh12(SCHED.queueEnd)}) are walk-in queue (${fmtMoney(CLIENT.rates.queuePerHead)}/head, unlimited play) unless unlocked by admin.`;
+    psn.innerHTML = `<b>${titleCase(CLIENT.staff.label)} reserved hours:</b> vary by court and day for ${titleCase(b.name)} staff play — check the schedule before booking. Morning hours (${_hh12(SCHED.queueStart)}–${_hh12(SCHED.queueEnd)}) are walk-in queue (${fmtMoney(CLIENT.rates.queuePerHead)}/head, unlimited play) unless unlocked by admin.`;
   }
   buildContactUI();
   buildFooterHours();
@@ -1387,11 +1389,10 @@ function buildContactUI(){
 function buildFooterHours(){
   const el = document.getElementById('footHours');
   if(!el) return;
-  const dayNames = STAFF_DAYS.map(d=>['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d]);
   el.innerHTML = `
     <li class="flex justify-between gap-3"><span class="opacity-60">Queue / Walk-in</span><span class="font-[700]">${_hh12(SCHED.queueStart)}–${_hh12(SCHED.queueEnd)}</span></li>
     <li class="flex justify-between gap-3"><span class="opacity-60">Reservations</span><span class="font-[700]">${_hh12(SCHED.bookStart)}–${_hh12(SCHED.close)}</span></li>
-    <li class="flex justify-between gap-3 text-[#FF8A5B]"><span class="opacity-80">${CLIENT.staff.label} (${dayNames.join(' ')})</span><span class="font-[700]">${_hh12(CLIENT.staff.startHour)}–${_hh12(CLIENT.staff.endHour)}</span></li>`;
+    <li class="flex justify-between gap-3 text-[#FF8A5B]"><span class="opacity-80">${CLIENT.staff.label} reserved</span><span class="font-[700]">Varies by day</span></li>`;
 }
 function updateOpenBadge(){
   const dot = document.getElementById('footOpenDot');
@@ -1589,7 +1590,6 @@ function lsKey(baseKey) {
 
 const LS = {
   get bookings() { return lsKey('cb_bookings_v7'); },
-  get morning() { return lsKey('cb_morning_v7'); },
   get openPlay() { return lsKey('cb_openPlay_v7'); },
   get staffReserve() { return lsKey('cb_staffReserve_v7'); },
   get pin() { return lsKey('cb_adminPin_v7'); },
@@ -1648,42 +1648,38 @@ function to12Range(s,e){ return `${fmtTime(s)} – ${fmtTime(e)}`; }
 function loadBookings(){ return fbLoadCache(LS.bookings, []); }
 function saveBookings(arr){ bookings = arr; fbSave('bookings', LS.bookings, arr); }
 
-function loadMorning(){ return fbLoadCache(LS.morning, {"7":false,"8":false,"9":false,"10":false,"11":false}); }
-function saveMorning(obj){ morningEnabled = obj; fbSave('morning', LS.morning, obj); }
-
 function loadOpenPlay(){ return fbLoadCache(LS.openPlay, []); }
 function saveOpenPlay(arr){ openPlays = arr; fbSave('openPlay', LS.openPlay, arr); }
 
-const STAFF_RESERVE_DEFAULTS = {"0":true,"2":true,"4":true,"6":true};
-
-function getCurrentWeekId(){
-  // Returns ISO date string of this week's Monday (Mon-Sun week boundary)
-  const now = new Date();
-  const day = now.getDay(); // 0=Sun ... 6=Sat
-  const diff = day === 0 ? -6 : 1 - day; // offset to Monday
-  const mon = new Date(now.getFullYear(), now.getMonth(), now.getDate() + diff);
-  return mon.toISOString().slice(0,10); // e.g. "2026-01-05"
+/* ---------- Staff Reserved Hours: weekly template + per-date calendar overrides ----------
+   Shape: { template: {[courtId]: {[dow 0-6]: {[hour]: true}}}, overrides: {[courtId]: {[dateISO]: {[hour]: true}}} }
+   Only `true` entries are stored (absence = not reserved), keeping the doc small.
+   Legacy shapes (day-of-week on/off applying to a fixed 5-10pm block, with or
+   without per-court keys) are migrated in place the first time they're loaded. ---------- */
+const LEGACY_STAFF_HOURS = {"17":true,"18":true,"19":true,"20":true,"21":true}; // old fixed 5PM-10PM block
+function migrateStaffReserveShape(raw){
+  if(!raw || typeof raw !== 'object') return { template: {}, overrides: {} };
+  if(raw.template) return { template: raw.template, overrides: raw.overrides || {} };
+  const days = raw.days || {};
+  const isPerCourt = Object.keys(days).some(k => !/^[0-6]$/.test(k));
+  const template = {};
+  if(isPerCourt){
+    Object.entries(days).forEach(([courtId, dowMap]) => {
+      template[courtId] = {};
+      Object.entries(dowMap || {}).forEach(([dow, on]) => { if(on) template[courtId][dow] = {...LEGACY_STAFF_HOURS}; });
+    });
+  } else {
+    getActiveCourts().forEach(c => {
+      template[c.id] = {};
+      Object.entries(days).forEach(([dow, on]) => { if(on) template[c.id][dow] = {...LEGACY_STAFF_HOURS}; });
+    });
+  }
+  return { template, overrides: {} };
 }
-
 function loadStaffReserve(){
-  const raw = fbLoadCache(LS.staffReserve, { weekId: getCurrentWeekId(), days: {...STAFF_RESERVE_DEFAULTS} });
-  // If raw is old format (no weekId), migrate
-  if(!raw.weekId){
-    return { weekId: getCurrentWeekId(), days: {...STAFF_RESERVE_DEFAULTS, ...raw} };
-  }
-  // Weekly reset: if stored weekId doesn't match current week's Monday, reset to defaults
-  if(raw.weekId !== getCurrentWeekId()){
-    const reset = { weekId: getCurrentWeekId(), days: {...STAFF_RESERVE_DEFAULTS} };
-    // Save the reset immediately
-    fbSave('staffReserve', LS.staffReserve, reset);
-    return reset;
-  }
-  return raw;
+  return migrateStaffReserveShape(fbLoadCache(LS.staffReserve, null));
 }
-
 function saveStaffReserve(obj){
-  // Always stamp with current weekId
-  obj.weekId = getCurrentWeekId();
   staffReserveEnabled = obj;
   fbSave('staffReserve', LS.staffReserve, obj);
 }
@@ -1692,7 +1688,6 @@ function saveStaffReserve(obj){
 let selectedDate = todayISO();
 let calCursor = new Date(selectedDate+'T12:00:00');
 let bookings = loadBookings();
-let morningEnabled = loadMorning();
 let openPlays = loadOpenPlay();
 let staffReserveEnabled = loadStaffReserve();
 let _firebaseReady = false;
@@ -1701,7 +1696,10 @@ let _firebaseReady = false;
 let COURTS = [];
 let activeCourtTab = 'court1'; // currently selected court tab for schedule view
 let activeQueueCourtTab = 'all'; // currently selected court tab for queue view
-let activeStaffCourtTab = null; // currently selected court tab for Staff Reserve Toggle (admin)
+let activeStaffCourtTab = null; // currently selected court tab for Staff Reserved Hours (admin)
+let expandedTemplateDow = null; // which weekly-pattern day row is expanded, if any
+let selectedStaffCalDate = null; // which calendar date is expanded for overrides, if any
+let staffCalCursor = new Date(); // month currently shown in the Staff Reserved Hours calendar
 
 function loadCourts(){
   try { const v = JSON.parse(localStorage.getItem(LS.courts)); return v != null ? v : [{ id: 'court1', name: 'Court 1', startHour: 13, active: true }]; }
@@ -2125,30 +2123,14 @@ function startRealtimeListeners() {
     }
   }, e => console.warn('openPlay listener:', e.message));
 
-  db.doc(fbDocPath('morning')).onSnapshot(snap => {
-    if (!snap.exists) return;
-    const data = snap.data().data;
-    if (data) {
-      morningEnabled = data;
-      localStorage.setItem(LS.morning, JSON.stringify(data));
-      renderSchedule();
-      if (typeof populateTimeOptions === 'function') populateTimeOptions();
-      if (typeof renderMorningToggles === 'function') renderMorningToggles();
-    }
-  }, e => console.warn('morning listener:', e.message));
-
   db.doc(fbDocPath('staffReserve')).onSnapshot(snap => {
     if (!snap.exists) return;
-    let parsed = snap.data().data;
-    if(parsed && (!parsed.weekId || parsed.weekId !== getCurrentWeekId())){
-      staffReserveEnabled = { weekId: getCurrentWeekId(), days: {...STAFF_RESERVE_DEFAULTS} };
-      fbSave('staffReserve', LS.staffReserve, staffReserveEnabled);
-    } else if (parsed) {
-      staffReserveEnabled = parsed;
-    }
+    const parsed = snap.data().data;
+    if(!parsed) return;
+    staffReserveEnabled = migrateStaffReserveShape(parsed);
     localStorage.setItem(LS.staffReserve, JSON.stringify(staffReserveEnabled));
     renderSchedule();
-    if (typeof renderStaffReserveToggles === 'function') renderStaffReserveToggles();
+    if (typeof renderStaffReserveSection === 'function') renderStaffReserveSection();
     if (typeof updateStaffNote === 'function') updateStaffNote();
   }, e => console.warn('staffReserve listener:', e.message));
 
@@ -2263,31 +2245,16 @@ async function seedIfEmpty() {
     }
     localStorage.setItem(LS.openPlay, JSON.stringify(openPlays));
 
-    // --- Morning ---
-    const mSnap = await db.doc(fbDocPath('morning')).get();
-    if (!mSnap.exists) {
-      const def = {"7":false,"8":false,"9":false,"10":false,"11":false};
-      await db.doc(fbDocPath('morning')).set({ data: def, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
-      morningEnabled = def;
-    } else {
-      morningEnabled = mSnap.data().data;
-    }
-    localStorage.setItem(LS.morning, JSON.stringify(morningEnabled));
-
-    // --- Staff Reserve ---
+    // --- Staff Reserve (weekly template + calendar overrides) ---
     const srSnap = await db.doc(fbDocPath('staffReserve')).get();
     if (!srSnap.exists) {
-      const def = { weekId: getCurrentWeekId(), days: {...STAFF_RESERVE_DEFAULTS} };
+      const template = {};
+      COURTS.forEach(c => { template[c.id] = {"0":{...LEGACY_STAFF_HOURS},"2":{...LEGACY_STAFF_HOURS},"4":{...LEGACY_STAFF_HOURS},"6":{...LEGACY_STAFF_HOURS}}; });
+      const def = { template, overrides: {} };
       await db.doc(fbDocPath('staffReserve')).set({ data: def, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
       staffReserveEnabled = def;
     } else {
-      const parsed = srSnap.data().data;
-      if(!parsed.weekId || parsed.weekId !== getCurrentWeekId()){
-        staffReserveEnabled = { weekId: getCurrentWeekId(), days: {...STAFF_RESERVE_DEFAULTS} };
-        await fbSave('staffReserve', LS.staffReserve, staffReserveEnabled);
-      } else {
-        staffReserveEnabled = parsed;
-      }
+      staffReserveEnabled = migrateStaffReserveShape(srSnap.data().data);
     }
     localStorage.setItem(LS.staffReserve, JSON.stringify(staffReserveEnabled));
 
@@ -2325,10 +2292,12 @@ document.getElementById('hdrDate').textContent = new Date().toLocaleDateString('
 document.getElementById('todayLabel').textContent = fmtDateLabel(todayISO());
 const staffNoteEl = document.getElementById('staffNote');
 function updateStaffNote(){
-  const day = new Date().getDay();
-  const todayBlocked = getActiveCourts().some(c => getStaffDaysForCourt(c.id)[String(day)] === true);
+  const todayISOStr = todayISO();
+  const todayBlocked = getActiveCourts().some(c =>
+    ALL_HOURS_START.some(h => isStaffBlockedHour(c.id, todayISOStr, h))
+  );
   if(todayBlocked){
-    staffNoteEl.textContent = `${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][day]} 5PM–10PM is staff-reserved. Public booking blocked during that window.`;
+    staffNoteEl.textContent = `Some hours today are staff-reserved. Check the schedule below for exact times.`;
   } else {
     staffNoteEl.textContent = `Public hours all day today. No staff reserve block active.`;
   }
@@ -2361,7 +2330,6 @@ function updateAdminTabsVisibility(){
     if(lock) lock.classList.add('hidden');
     if(panel) panel.classList.remove('hidden');
     renderAdminBookings();
-    renderMorningToggles();
     renderOpenPlayList();
   } else {
     adminTabs.forEach(t => t.classList.add('hidden'));
@@ -2405,7 +2373,6 @@ document.querySelectorAll('.nav-btn').forEach(btn=>{
     if(id==='queue') renderQueueModule();
     if(id==='admin' && adminUnlocked){
       renderAdminBookings();
-      renderMorningToggles();
       renderOpenPlayList();
       renderAdminCourts();
       populateCourtSelectors();
@@ -2496,35 +2463,52 @@ document.getElementById('mobJumpToReserveBtn')?.addEventListener('click', ()=> s
 document.getElementById('mobBackToScheduleBtn')?.addEventListener('click', ()=> switchMobileTab('schedule'));
 
 /* ---------- Helpers: overlaps ----------
-   Staff Reserve is per-court. staffReserveEnabled.days is either:
-   - legacy flat:    {"0":true,"2":true,...}                (applies to every court)
-   - per-court:      {[courtId]: {"0":true,"2":true,...}, ...}
-   A shape is "per-court" if any key isn't a bare day-of-week digit. ---------- */
-function _isPerCourtStaffDays(days){
-  return Object.keys(days || {}).some(k => !/^[0-6]$/.test(k));
+   Staff Reserved Hours = a weekly template (per court, per day-of-week, per
+   hour) with optional per-date overrides layered on top for exceptions. See
+   migrateStaffReserveShape() near loadStaffReserve() for the doc shape. ---------- */
+function getTemplateHours(courtId, dow){
+  return (staffReserveEnabled?.template?.[courtId]?.[String(dow)]) || {};
 }
-function getStaffDaysForCourt(courtId){
-  const days = (staffReserveEnabled && staffReserveEnabled.days) || {};
-  if(!_isPerCourtStaffDays(days)) return { ...STAFF_RESERVE_DEFAULTS, ...days }; // legacy: same for every court
-  return { ...STAFF_RESERVE_DEFAULTS, ...(days[courtId] || {}) }; // no explicit config yet -> defaults
+function getOverrideHours(courtId, dateISO){
+  return staffReserveEnabled?.overrides?.[courtId]?.[dateISO];
 }
-/* Migrates a legacy flat day-map into a per-court map (seeding every active
-   court with the existing schedule) the first time an admin edits a specific
-   court's toggles. No-op if already per-court. */
-function ensurePerCourtStaffDays(){
-  const days = (staffReserveEnabled && staffReserveEnabled.days) || {};
-  if(_isPerCourtStaffDays(days)) return days;
-  const migrated = {};
-  getActiveCourts().forEach(c => { migrated[c.id] = { ...STAFF_RESERVE_DEFAULTS, ...days }; });
-  return migrated;
+function getEffectiveStaffHours(courtId, dateISO){
+  const dow = new Date(dateISO+'T12:00:00').getDay();
+  const tmpl = getTemplateHours(courtId, dow);
+  const ov = getOverrideHours(courtId, dateISO);
+  return ov ? { ...tmpl, ...ov } : tmpl;
+}
+function isStaffBlockedHour(courtId, dateISO, hour){
+  return getEffectiveStaffHours(courtId, dateISO)[String(hour)] === true;
 }
 function isStaffBlocked(dateISO, hourStart, hourEnd, courtId){
-  const d = new Date(dateISO+'T12:00:00'); const dow = d.getDay();
-  if(!STAFF_DAYS.includes(dow)) return false;
-  if(hourEnd<=17 || hourStart>=22) return false; // staff window is 17-22 (5PM-10PM)
-  if(courtId) return getStaffDaysForCourt(courtId)[String(dow)] !== false;
-  // No specific court given (merged "All Courts" view): blocked if any active court is staff-reserved
-  return getActiveCourts().some(c => getStaffDaysForCourt(c.id)[String(dow)] !== false);
+  if(!courtId) return getActiveCourts().some(c => isStaffBlocked(dateISO, hourStart, hourEnd, c.id));
+  for(let h = hourStart; h < hourEnd; h++){
+    if(isStaffBlockedHour(courtId, dateISO, h)) return true;
+  }
+  return false;
+}
+function setTemplateHour(courtId, dow, hour, value){
+  if(!staffReserveEnabled.template) staffReserveEnabled.template = {};
+  if(!staffReserveEnabled.template[courtId]) staffReserveEnabled.template[courtId] = {};
+  if(!staffReserveEnabled.template[courtId][dow]) staffReserveEnabled.template[courtId][dow] = {};
+  if(value) staffReserveEnabled.template[courtId][dow][String(hour)] = true;
+  else delete staffReserveEnabled.template[courtId][dow][String(hour)];
+  saveStaffReserve(staffReserveEnabled);
+}
+function setOverrideHour(courtId, dateISO, hour, value){
+  const dow = new Date(dateISO+'T12:00:00').getDay();
+  const matchesTemplate = (getTemplateHours(courtId, dow)[String(hour)] === true) === value;
+  if(!staffReserveEnabled.overrides) staffReserveEnabled.overrides = {};
+  if(!staffReserveEnabled.overrides[courtId]) staffReserveEnabled.overrides[courtId] = {};
+  if(matchesTemplate){
+    // Matches the template again -- clear the override rather than storing a no-op diff.
+    if(staffReserveEnabled.overrides[courtId][dateISO]) delete staffReserveEnabled.overrides[courtId][dateISO][String(hour)];
+  } else {
+    if(!staffReserveEnabled.overrides[courtId][dateISO]) staffReserveEnabled.overrides[courtId][dateISO] = {};
+    staffReserveEnabled.overrides[courtId][dateISO][String(hour)] = value;
+  }
+  saveStaffReserve(staffReserveEnabled);
 }
 function getBookingsForDate(dateISO){
   return bookings.filter(b=>b.date===dateISO);
@@ -3026,7 +3010,7 @@ function renderScheduleSlots(container, dateISO, courtFilter){
         : `<span class="mono text-[11px] px-3 h-8 grid place-items-center rounded-full bg-white border border-[#EAE0D5]">Booked • ${bookingMatch.start===bookingMatch.end-1? `${fmtTime(bookingMatch.start)}–${fmtTime(bookingMatch.end)}` : `${bookingMatch.start}-${bookingMatch.end}h`}</span>`;
     } else {
       // open
-      if(slot.type==='morning' && !morningEnabled[slot.s]){
+      if(slot.type==='morning'){
         statusChip=`<span class="inline-flex items-center gap-1.5 px-2.5 h-7 rounded-full bg-[#E8F5D8] border border-[#CFE8B5] mono text-[11px] font-[700]">QUEUE — WALK-IN • ${fmtMoney(CLIENT.rates.queuePerHead)}/head</span>`;
         leftDot=`<span class="w-2 h-2 rounded-full bg-[#4ADE80]"></span>`;
         actionHtml=`<span class="mono text-[11px] opacity-60 px-3 h-8 grid place-items-center rounded-full bg-[#FFFBF5] border border-[#E9DDD0]">Unlimited play all day</span>`;
@@ -3046,7 +3030,7 @@ function renderScheduleSlots(container, dateISO, courtFilter){
       </div>
       <div class="flex-1 flex items-center">${statusChip}</div>
       <div class="flex items-center justify-between md:justify-end gap-2 w-full md:w-auto">
-        ${slot.type==='morning'? `<span class="md:hidden mono text-[10px] uppercase tracking-widest opacity-50">${morningEnabled[slot.s]? 'Booking enabled' : 'Queue only'}</span>` : ''}
+        ${slot.type==='morning'? `<span class="md:hidden mono text-[10px] uppercase tracking-widest opacity-50">Queue only</span>` : ''}
         ${actionHtml}
       </div>
     `;
@@ -3132,7 +3116,7 @@ function renderDateSlotPreview(){
     const op = !staff && ops.find(o=> h<o.end && e>o.start);
     const bk = (!staff && !op) ? bks.find(b=> b.status!=='OpenPlay' && h<b.end && e>b.start) : null;
     const isMorning = (h>=7 && h<=11);
-    const isQueue = isMorning && !morningEnabled[String(h)];
+    const isQueue = isMorning;
 
     let cls='', txt='';
     if(staff){ cls='bg-[#FFE0D1] border-[#FFC9B6] text-[#8C2C10]'; txt='STAFF'; }
@@ -3236,18 +3220,11 @@ function populateTimeOptions(){
     }
   }
 
-  // Possible start hours from effective start hour
+  // Possible start hours from effective start hour (queue-window hours are
+  // always walk-in only and are never individually bookable)
   const possibleStarts = [];
   for(let h = effectiveStartHour; h < SCHED.close; h++){
     possibleStarts.push(h);
-  }
-  if (SCHED.queueStart < effectiveStartHour) {
-    for(let h = SCHED.queueStart; h < SCHED.queueEnd; h++){
-      if (morningEnabled[String(h)] && !possibleStarts.includes(h)) {
-        possibleStarts.push(h);
-      }
-    }
-    possibleStarts.sort((a,b) => a - b);
   }
 
   startSel.innerHTML='';
@@ -3341,7 +3318,7 @@ function validateForm(){
     ? document.getElementById('fCourt').value : null;
   const overlap = hasOverlap(date,s,e,null,courtId);
   if(overlap){
-    if(overlap.type==='staff') showFormError(`That slot is ${titleCase(CLIENT.staff.label)}-reserved (${_hh12(CLIENT.staff.startHour)}–${_hh12(CLIENT.staff.endHour)}). Choose another time.`);
+    if(overlap.type==='staff') showFormError(`That slot is ${titleCase(CLIENT.staff.label)}-reserved. Choose another time.`);
     else if(overlap.type==='openplay') showFormError(`Overlaps with Open Play block (${to12Range(overlap.data.start, overlap.data.end)}).`);
     else showFormError(`Overlaps with existing booking: ${escapeHtml(overlap.data.name)} (${to12Range(overlap.data.start, overlap.data.end)}) — ${overlap.data.status}`);
     return false;
@@ -3837,7 +3814,7 @@ function renderAdminBookings(){
   const count = document.getElementById('adminBookingsCount');
   count.textContent=bookings.length;
   list.innerHTML='';
-  if (typeof renderStaffReserveToggles === 'function') renderStaffReserveToggles();
+  if (typeof renderStaffReserveSection === 'function') renderStaffReserveSection();
   if (typeof renderPaymentProofsQueue === 'function') renderPaymentProofsQueue();
   if(bookings.length===0){
     list.innerHTML=`<div class="p-10 text-center mono text-[12px] opacity-60">No bookings</div>`;
@@ -3894,60 +3871,24 @@ function renderAdminBookings(){
   });
 }
 
-function renderMorningToggles(){
-  const container = document.getElementById('morningToggles');
-  container.innerHTML='';
-  HOURS.morning.forEach(h=>{
-    const enabled = !!morningEnabled[h];
-    const div=document.createElement('div');
-    div.className='flex items-center justify-between p-3 rounded-[14px] border border-[#F1E9DF] bg-[#FFFBF5]';
-    div.innerHTML=`
-      <div class="flex items-center gap-3">
-        <div class="w-9 h-9 rounded-full ${enabled?'bg-[#D6FF5F]':'bg-white'} border border-[#EAE0D5] grid place-items-center mono text-[11px] font-[800]">${h}</div>
-        <div>
-          <div class="mono text-[12px] font-[700]">${fmtTime(h)} – ${fmtTime(h+1)}</div>
-          <div class="mono text-[10px] opacity-60">${enabled?'Booking enabled':'Queue / walk-in only'}</div>
-        </div>
-      </div>
-      <label class="relative inline-flex items-center cursor-pointer">
-        <input type="checkbox" data-morning="${h}" class="sr-only peer" ${enabled?'checked':''}>
-        <div class="w-11 h-6 bg-[#E9DDD0] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#201C19]"></div>
-      </label>
-    `;
-    container.appendChild(div);
-  });
-  container.querySelectorAll('input[data-morning]').forEach(inp=>{
-    inp.addEventListener('change', ()=>{
-      const h=inp.dataset.morning;
-      morningEnabled[h]=inp.checked;
-      saveMorning(morningEnabled);
-      populateTimeOptions(); renderSchedule(); renderMorningToggles();
-      toast(inp.checked? `Morning ${h}:00 booking enabled` : `Morning ${h}:00 set to queue only`);
-    });
-  });
+const DOW_NAMES = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+function renderHourChips(hoursMap){
+  return ALL_HOURS_START.map(h => {
+    const on = hoursMap[String(h)] === true;
+    return `<button type="button" data-hour="${h}" class="h-8 px-2.5 rounded-full mono text-[10px] font-[700] border transition cursor-pointer ${on ? 'bg-[#FF8A5B] border-[#FF8A5B] text-white' : 'bg-white border-[#EAE0D5] text-[#201C19] hover:border-[#201C19]'}">${_hh12(h).replace(':00 ','')}</button>`;
+  }).join('');
 }
 
-function renderStaffReserveToggles(){
-  const container = document.getElementById('staffReserveToggles');
+function renderStaffReserveSection(){
   const tabsWrap = document.getElementById('staffReserveCourtTabs');
-  if(!container) return;
-  container.innerHTML='';
+  const templateWrap = document.getElementById('staffTemplateDays');
+  if(!templateWrap) return;
 
-  // Show current week badge
-  const weekBadge = document.getElementById('staffWeekBadge');
-  if(weekBadge){
-    const monDate = getCurrentWeekId();
-    const sunDate = new Date(monDate+'T12:00:00');
-    sunDate.setDate(sunDate.getDate()+6);
-    const monLabel = new Date(monDate+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'});
-    const sunLabel = sunDate.toLocaleDateString('en-US',{month:'short',day:'numeric'});
-    weekBadge.textContent = `Week of ${monLabel} – ${sunLabel}`;
-  }
-
-  // Court tab bar (hidden when there's only one active court)
   const activeCourts = getActiveCourts();
   if(!activeStaffCourtTab || !activeCourts.find(c => c.id === activeStaffCourtTab)){
     activeStaffCourtTab = activeCourts.length ? activeCourts[0].id : null;
+    expandedTemplateDow = null;
+    selectedStaffCalDate = null;
   }
   if(tabsWrap){
     if(activeCourts.length > 1){
@@ -3958,7 +3899,9 @@ function renderStaffReserveToggles(){
       tabsWrap.querySelectorAll('button[data-staff-court-tab]').forEach(btn => {
         btn.addEventListener('click', () => {
           activeStaffCourtTab = btn.dataset.staffCourtTab;
-          renderStaffReserveToggles();
+          expandedTemplateDow = null;
+          selectedStaffCalDate = null;
+          renderStaffReserveSection();
         });
       });
     } else {
@@ -3968,55 +3911,142 @@ function renderStaffReserveToggles(){
   }
 
   if(!activeStaffCourtTab){
-    container.innerHTML = `<div class="p-4 text-center mono text-[11px] opacity-50">No courts configured.</div>`;
+    templateWrap.innerHTML = `<div class="p-4 text-center mono text-[11px] opacity-50">No courts configured.</div>`;
+    const gridEl = document.getElementById('staffCalGrid'); if(gridEl) gridEl.innerHTML = '';
     return;
   }
-  const courtDays = getStaffDaysForCourt(activeStaffCourtTab);
 
-  const days = [
-    {dow:0, name:'Sunday'},
-    {dow:1, name:'Monday'},
-    {dow:2, name:'Tuesday'},
-    {dow:3, name:'Wednesday'},
-    {dow:4, name:'Thursday'},
-    {dow:5, name:'Friday'},
-    {dow:6, name:'Saturday'}
-  ];
-  days.forEach(day=>{
-    const enabled = courtDays[String(day.dow)] === true;
-    const isDefault = [0,2,4,6].includes(day.dow);
-    const div=document.createElement('div');
-    div.className='flex items-center justify-between p-3 rounded-[14px] border border-[#F1E9DF] bg-[#FFFBF5]';
-    const defaultTag = isDefault ? `<span class="mono text-[8px] px-1.5 py-0.5 rounded-full bg-[#F1E9DF] text-[#201C19]/60 font-[600] uppercase ml-1">default</span>` : '';
-    div.innerHTML=`
-      <div class="flex items-center gap-3">
-        <div class="w-9 h-9 rounded-full ${enabled?'bg-[#FF8A5B]':'bg-white'} ${enabled?'text-white':'text-[#201C19]'} border border-[#EAE0D5] grid place-items-center mono text-[10px] font-[800]">${day.name.slice(0,3)}</div>
-        <div>
-          <div class="flex items-center gap-1"><span class="mono text-[12px] font-[700]">${day.name}</span>${defaultTag}</div>
-          <div class="mono text-[10px] opacity-60">${enabled?'5PM–10PM Staff Reserved':'Public booking open all evening'}</div>
-        </div>
+  renderStaffTemplateDays();
+  renderStaffCalendar();
+}
+
+function renderStaffTemplateDays(){
+  const wrap = document.getElementById('staffTemplateDays');
+  if(!wrap) return;
+  wrap.innerHTML = DOW_NAMES.map((name, dow) => {
+    const hours = getTemplateHours(activeStaffCourtTab, dow);
+    const count = Object.values(hours).filter(Boolean).length;
+    const expanded = expandedTemplateDow === dow;
+    return `
+      <div class="rounded-[14px] border border-[#F1E9DF] overflow-hidden">
+        <button type="button" data-template-day="${dow}" class="w-full flex items-center justify-between p-3 bg-[#FFFBF5] cursor-pointer">
+          <span class="mono text-[12px] font-[700]">${name}</span>
+          <span class="flex items-center gap-2">
+            <span class="mono text-[10px] opacity-60">${count ? `${count} hr${count>1?'s':''} reserved` : 'None reserved'}</span>
+            <span class="mono text-[10px] opacity-50">${expanded ? '▲' : '▼'}</span>
+          </span>
+        </button>
+        ${expanded ? `<div class="p-3 pt-0 flex flex-wrap gap-1.5" data-template-hours="${dow}">${renderHourChips(hours)}</div>` : ''}
       </div>
-      <label class="relative inline-flex items-center cursor-pointer">
-        <input type="checkbox" data-staff="${day.dow}" class="sr-only peer" ${enabled?'checked':''}>
-        <div class="w-11 h-6 bg-[#E9DDD0] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#FF8A5B]"></div>
-      </label>
     `;
-    container.appendChild(div);
+  }).join('');
+
+  wrap.querySelectorAll('button[data-template-day]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const dow = parseInt(btn.dataset.templateDay, 10);
+      expandedTemplateDow = (expandedTemplateDow === dow) ? null : dow;
+      renderStaffTemplateDays();
+    });
   });
-  container.querySelectorAll('input[data-staff]').forEach(inp=>{
-    inp.addEventListener('change', ()=>{
-      const dow=inp.dataset.staff;
-      const courtId = activeStaffCourtTab;
-      const perCourtDays = ensurePerCourtStaffDays();
-      perCourtDays[courtId] = { ...getStaffDaysForCourt(courtId), [dow]: inp.checked };
-      staffReserveEnabled = { weekId: getCurrentWeekId(), days: perCourtDays };
-      saveStaffReserve(staffReserveEnabled);
-      renderSchedule(); renderStaffReserveToggles(); updateStaffNote();
-      const courtName = getCourtName(courtId) || 'This court';
-      toast(inp.checked? `${courtName}: ${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][dow]} staff reserve enabled` : `${courtName}: ${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][dow]} staff reserve disabled`);
+  wrap.querySelectorAll('[data-template-hours] button[data-hour]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const dow = parseInt(btn.closest('[data-template-hours]').dataset.templateHours, 10);
+      const hour = parseInt(btn.dataset.hour, 10);
+      const isOn = getTemplateHours(activeStaffCourtTab, dow)[String(hour)] === true;
+      setTemplateHour(activeStaffCourtTab, dow, hour, !isOn);
+      renderStaffTemplateDays();
+      renderStaffCalendar(); // template changes ripple into any date without its own override
+      renderSchedule();
+      updateStaffNote();
     });
   });
 }
+
+function renderStaffCalendar(){
+  const monthLabel = document.getElementById('staffCalMonthLabel');
+  const weekdaysEl = document.getElementById('staffCalWeekdays');
+  const gridEl = document.getElementById('staffCalGrid');
+  const panelEl = document.getElementById('staffCalSelectedPanel');
+  if(!gridEl) return;
+
+  monthLabel.textContent = staffCalCursor.toLocaleDateString('en-US', {month:'short', year:'numeric'});
+  weekdaysEl.innerHTML = ['S','M','T','W','T','F','S'].map(d => `<div class="text-center mono text-[9px] opacity-50 font-[700]">${d}</div>`).join('');
+
+  const year = staffCalCursor.getFullYear(), month = staffCalCursor.getMonth();
+  const startOffset = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month+1, 0).getDate();
+  const todayStr = todayISO();
+
+  let cells = '';
+  for(let i=0; i<startOffset; i++) cells += `<div></div>`;
+  for(let d=1; d<=daysInMonth; d++){
+    const dateISO = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const overrideForDay = staffReserveEnabled?.overrides?.[activeStaffCourtTab]?.[dateISO];
+    const hasOverride = !!(overrideForDay && Object.keys(overrideForDay).length);
+    const isSelected = selectedStaffCalDate === dateISO;
+    const isToday = dateISO === todayStr;
+    cells += `
+      <button type="button" data-staff-cal-day="${dateISO}" class="relative h-9 rounded-[10px] mono text-[11px] font-[700] transition cursor-pointer ${isSelected ? 'bg-[#201C19] text-white' : isToday ? 'bg-[#F1E9DF] text-[#201C19]' : 'bg-white text-[#201C19] hover:bg-[#F1E9DF]'} border border-[#EAE0D5]">
+        ${d}
+        ${hasOverride ? `<span class="absolute bottom-1 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full ${isSelected ? 'bg-[#D6FF5F]' : 'bg-[#FF8A5B]'}"></span>` : ''}
+      </button>
+    `;
+  }
+  gridEl.innerHTML = cells;
+
+  gridEl.querySelectorAll('button[data-staff-cal-day]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const dateISO = btn.dataset.staffCalDay;
+      selectedStaffCalDate = (selectedStaffCalDate === dateISO) ? null : dateISO;
+      renderStaffCalendar();
+    });
+  });
+
+  if(selectedStaffCalDate){
+    const hours = getEffectiveStaffHours(activeStaffCourtTab, selectedStaffCalDate);
+    const overrideForDay = staffReserveEnabled?.overrides?.[activeStaffCourtTab]?.[selectedStaffCalDate];
+    const hasOverride = !!(overrideForDay && Object.keys(overrideForDay).length);
+    panelEl.classList.remove('hidden');
+    panelEl.innerHTML = `
+      <div class="flex items-center justify-between mb-2">
+        <div class="mono text-[12px] font-[700]">${fmtDateLabel(selectedStaffCalDate)}</div>
+        ${hasOverride ? `<button type="button" id="staffCalClearOverride" class="mono text-[10px] px-2.5 py-1 rounded-full bg-[#FFE9E0] text-[#8C2C10] border border-[#FFC9B6] cursor-pointer">Clear override</button>` : `<span class="mono text-[9px] opacity-50 uppercase">Following weekly pattern</span>`}
+      </div>
+      <div class="flex flex-wrap gap-1.5" data-override-hours="${selectedStaffCalDate}">${renderHourChips(hours)}</div>
+    `;
+    panelEl.querySelectorAll('[data-override-hours] button[data-hour]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const hour = parseInt(btn.dataset.hour, 10);
+        const isOn = getEffectiveStaffHours(activeStaffCourtTab, selectedStaffCalDate)[String(hour)] === true;
+        setOverrideHour(activeStaffCourtTab, selectedStaffCalDate, hour, !isOn);
+        renderStaffCalendar();
+        renderSchedule();
+        updateStaffNote();
+      });
+    });
+    document.getElementById('staffCalClearOverride')?.addEventListener('click', () => {
+      if(staffReserveEnabled?.overrides?.[activeStaffCourtTab]) delete staffReserveEnabled.overrides[activeStaffCourtTab][selectedStaffCalDate];
+      saveStaffReserve(staffReserveEnabled);
+      renderStaffCalendar();
+      renderSchedule();
+      updateStaffNote();
+      toast('Override cleared — back to the weekly pattern');
+    });
+  } else {
+    panelEl.classList.add('hidden');
+    panelEl.innerHTML = '';
+  }
+}
+document.getElementById('staffCalPrev')?.addEventListener('click', () => {
+  staffCalCursor.setMonth(staffCalCursor.getMonth()-1);
+  selectedStaffCalDate = null;
+  renderStaffCalendar();
+});
+document.getElementById('staffCalNext')?.addEventListener('click', () => {
+  staffCalCursor.setMonth(staffCalCursor.getMonth()+1);
+  selectedStaffCalDate = null;
+  renderStaffCalendar();
+});
 
 function renderOpenPlayList(){
   const list = document.getElementById('openPlayList');
@@ -4102,16 +4132,16 @@ document.getElementById('exportBtn').addEventListener('click', ()=>{
   URL.revokeObjectURL(url);
 });
 document.getElementById('resetBtn').addEventListener('click', ()=>{
-  if(confirm('Wipe ALL data globally (bookings, open play, morning toggles, staff reserve, QR codes, queues, courts)? This affects all devices.')){
-    bookings=[]; openPlays=[]; morningEnabled={"7":false,"8":false,"9":false,"10":false,"11":false};
-    staffReserveEnabled={ weekId: getCurrentWeekId(), days: {...STAFF_RESERVE_DEFAULTS} };
+  if(confirm('Wipe ALL data globally (bookings, open play, staff reserve, QR codes, queues, courts)? This affects all devices.')){
+    bookings=[]; openPlays=[];
+    staffReserveEnabled = { template: {}, overrides: {} };
     payMethods = JSON.parse(JSON.stringify(DEFAULT_PAY_METHODS));
     COURTS = [{ id: 'court1', name: 'Court 1', startHour: 13, active: true }];
     activeCourtTab = 'court1';
     selectedQueueSessionId = null;
-    saveBookings(bookings); saveOpenPlay(openPlays); saveMorning(morningEnabled); saveStaffReserve(staffReserveEnabled); savePayMethods(payMethods); saveQueues([]); saveCourts(COURTS);
+    saveBookings(bookings); saveOpenPlay(openPlays); saveStaffReserve(staffReserveEnabled); savePayMethods(payMethods); saveQueues([]); saveCourts(COURTS);
     localStorage.removeItem(LS.queues);
-    renderSchedule(); renderBookingsList(); renderAdminBookings(); renderMorningToggles(); renderStaffReserveToggles(); renderOpenPlayList(); renderPublicPayTab(); renderAdminQrManager(); renderQueueModule(); renderAdminCourts(); renderCourtTabs(); populateCourtSelectors();
+    renderSchedule(); renderBookingsList(); renderAdminBookings(); renderStaffReserveSection(); renderOpenPlayList(); renderPublicPayTab(); renderAdminQrManager(); renderQueueModule(); renderAdminCourts(); renderCourtTabs(); populateCourtSelectors();
     toast('All data wiped globally across all devices');
   }
 });
@@ -5252,8 +5282,7 @@ const _origUpdateAdmin = updateAdminTabsVisibility;
 updateAdminTabsVisibility = function() {
   _origUpdateAdmin();
   if(adminUnlocked) {
-    if (typeof renderMorningToggles === 'function') renderMorningToggles();
-    if (typeof renderStaffReserveToggles === 'function') renderStaffReserveToggles();
+    if (typeof renderStaffReserveSection === 'function') renderStaffReserveSection();
     if (typeof renderAdminCourts === 'function') renderAdminCourts();
     if (typeof renderAdminBranding === 'function') renderAdminBranding();
     armProofWatcher();                    // start Firebase Storage housekeeping on first unlock

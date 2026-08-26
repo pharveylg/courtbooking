@@ -1353,25 +1353,65 @@ let clientConfigCache = new Map(); // Cache for client configs
 
 console.log('[CourtBooking] Tenant ID:', currentClientId || '(none - demo mode)');
 
+/* ---------- Normalize tenant config: adapt the flat schema written by the
+   setup-sample-tenants scripts (businessName, contactPhone, theme.primaryColor, ...)
+   into the nested schema _cfgDefaults/applyBranding/applyTheme expect
+   (business.name, contact.phone, theme.primary, ...). Already-nested configs
+   pass through unchanged. ---------- */
+function normalizeClientConfig(raw) {
+  if (!raw || typeof raw !== 'object') return raw;
+  if (raw.business || raw.contact || raw.branding) return raw; // already nested
+
+  const out = {};
+  if (raw.businessName || raw.tagline || raw.heroHeadline || raw.address) {
+    out.business = {
+      name: raw.businessName,
+      sub: raw.tagline,
+      tagline: raw.heroHeadline || raw.heroSubheadline,
+      location: raw.address,
+    };
+  }
+  if (raw.address || raw.contactPhone || raw.contactEmail || raw.social) {
+    out.contact = {
+      address: raw.address,
+      phone: raw.contactPhone,
+      email: raw.contactEmail,
+      facebook: raw.social?.facebook,
+      instagram: raw.social?.instagram,
+    };
+  }
+  if (raw.logoUrl || raw.faviconUrl) {
+    out.branding = { logoUrl: raw.logoUrl, faviconUrl: raw.faviconUrl };
+  }
+  if (raw.theme) {
+    out.theme = { ...raw.theme };
+    if (raw.theme.primaryColor && !out.theme.primary) out.theme.primary = raw.theme.primaryColor;
+  }
+  for (const k of ['currency','rates','hours','staff','booking']) {
+    if (raw[k] !== undefined) out[k] = raw[k];
+  }
+  return out;
+}
+
 /* ---------- Load client config from Firestore (with caching) ---------- */
 async function loadClientConfig() {
   if (!currentClientId || !db) {
     // No client ID or no Firebase - use default config from client-config.js
     return window.CLIENT_CONFIG || {};
   }
-  
+
   // Check cache first
   if (clientConfigCache.has(currentClientId)) {
     console.log('[CourtBooking] Using cached config for:', currentClientId);
     currentClientConfig = clientConfigCache.get(currentClientId);
     return currentClientConfig;
   }
-  
+
   // Check localStorage cache
   const cached = localStorage.getItem(LS.clientConfig);
   if (cached) {
     try {
-      currentClientConfig = JSON.parse(cached);
+      currentClientConfig = normalizeClientConfig(JSON.parse(cached));
       clientConfigCache.set(currentClientId, currentClientConfig);
       console.log('[CourtBooking] Using localStorage cache for:', currentClientId);
       return currentClientConfig;
@@ -1379,11 +1419,11 @@ async function loadClientConfig() {
       console.warn('[CourtBooking] Invalid localStorage cache, fetching fresh');
     }
   }
-  
+
   try {
     const configSnap = await db.doc(`clients/${currentClientId}/config/state`).get();
     if (configSnap.exists) {
-      currentClientConfig = configSnap.data().data;
+      currentClientConfig = normalizeClientConfig(configSnap.data().data);
       localStorage.setItem(LS.clientConfig, JSON.stringify(currentClientConfig));
       clientConfigCache.set(currentClientId, currentClientConfig);
       console.log('[CourtBooking] Loaded and cached client config for:', currentClientId);

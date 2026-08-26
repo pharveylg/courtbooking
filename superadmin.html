@@ -54,8 +54,8 @@ body{background:#FFFBF5;color:#201C19}
 </div>
 
 <!-- Dashboard -->
-<div id="dashboard" class="hidden max-w-[1100px] mx-auto px-4 md:px-6 py-8 md:py-10">
-  <div class="flex flex-wrap items-center justify-between gap-3 mb-7">
+<div id="dashboard" class="hidden max-w-[1320px] mx-auto px-4 md:px-6 py-8 md:py-10">
+  <div class="flex flex-wrap items-center justify-between gap-3 mb-6">
     <div class="flex items-center gap-3">
       <div class="w-10 h-10 rounded-full bg-[#201C19] text-[#D6FF5F] grid place-items-center font-black text-[13px]">SA</div>
       <div>
@@ -66,54 +66,113 @@ body{background:#FFFBF5;color:#201C19}
     <button id="signOutBtn" class="h-9 px-4 rounded-full bg-[#F1E9DF] border border-[#E9DDD0] mono text-[11px] font-[700] cursor-pointer hover:bg-[#E5DDD4] transition">Sign Out</button>
   </div>
 
-  <!-- Create / Register Tenant -->
-  <div class="rounded-[24px] bg-white border border-[#EAE0D5] p-6 shadow-xs mb-6">
-    <div class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#201C19] text-[#D6FF5F] mono text-[10px] font-[800] uppercase tracking-widest">Platform</div>
-    <h2 class="mt-1.5 text-[17px] font-[800] tracking-[-0.02em]">Create Tenant</h2>
-    <p class="mono text-[11px] opacity-60 mt-0.5">Provisions a fresh tenant with default courts, PIN, and settings. If the slug already has data (e.g. created organically by a visitor), this registers it into the directory instead of overwriting it.</p>
-    <form id="createTenantForm" class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
-      <label class="flex flex-col gap-1.5">
-        <span class="mono text-[10px] uppercase tracking-widest opacity-60">Slug (used as ?client=)</span>
-        <input type="text" id="ctSlug" placeholder="e.g. new-club" pattern="[a-z0-9-]+" required class="h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-4 mono text-[12px] outline-none focus:border-[#201C19]"/>
-      </label>
-      <label class="flex flex-col gap-1.5">
-        <span class="mono text-[10px] uppercase tracking-widest opacity-60">Business Name</span>
-        <input type="text" id="ctName" placeholder="e.g. New Club Pickleball" required class="h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-4 mono text-[12px] outline-none focus:border-[#201C19]"/>
-      </label>
-      <label class="flex flex-col gap-1.5">
-        <span class="mono text-[10px] uppercase tracking-widest opacity-60">Starter Color</span>
-        <div class="flex items-center gap-1.5">
-          <input type="color" id="ctColorPicker" value="#D6FF5F" class="w-10 h-10 rounded-[8px] border border-[#EAE0D5] cursor-pointer p-0.5"/>
-          <input type="text" id="ctColor" value="#D6FF5F" maxlength="7" class="flex-1 h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-4 mono text-[12px] font-[700] outline-none focus:border-[#201C19]"/>
+  <div class="flex flex-col md:flex-row gap-5">
+    <!-- Sidebar -->
+    <nav class="md:w-[200px] shrink-0 flex md:flex-col gap-1.5 overflow-x-auto md:overflow-visible pb-1 md:pb-0">
+      <button type="button" data-sa-tab="directory" class="sa-tab-btn shrink-0 text-left px-4 h-10 rounded-full md:rounded-[14px] mono text-[12px] font-[700] transition cursor-pointer whitespace-nowrap">Tenant Directory</button>
+      <button type="button" data-sa-tab="provisioning" class="sa-tab-btn shrink-0 text-left px-4 h-10 rounded-full md:rounded-[14px] mono text-[12px] font-[700] transition cursor-pointer whitespace-nowrap">Provisioning</button>
+      <button type="button" data-sa-tab="reports" class="sa-tab-btn shrink-0 text-left px-4 h-10 rounded-full md:rounded-[14px] mono text-[12px] font-[700] transition cursor-pointer whitespace-nowrap">Reports &amp; Billing</button>
+      <button type="button" data-sa-tab="ideas" class="sa-tab-btn shrink-0 text-left px-4 h-10 rounded-full md:rounded-[14px] mono text-[12px] font-[700] transition cursor-pointer whitespace-nowrap">Feature Ideas</button>
+    </nav>
+
+    <!-- Content -->
+    <div class="flex-1 min-w-0">
+      <!-- PANEL: Tenant Directory -->
+      <div id="sa-panel-directory" class="sa-panel">
+        <div class="rounded-[24px] bg-white border border-[#EAE0D5] overflow-hidden">
+          <div class="px-6 h-[56px] flex items-center justify-between border-b border-[#F1E9DF]">
+            <div class="font-[750] text-[15px]">Tenant Directory</div>
+            <div class="mono text-[11px] opacity-60"><span id="tenantCount">0</span> tenants</div>
+          </div>
+          <div id="tenantList" class="divide-y divide-[#F5EDE4]"></div>
         </div>
-      </label>
-      <label class="flex flex-col gap-1.5">
-        <span class="mono text-[10px] uppercase tracking-widest opacity-60">Initial Admin PIN</span>
-        <input type="text" id="ctPin" value="1234" maxlength="8" required class="h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-4 mono text-[12px] font-[700] outline-none focus:border-[#201C19]"/>
-      </label>
-      <div id="createTenantError" class="hidden md:col-span-2 mono text-[12px] text-[#8C2C10] bg-[#FFE9E0] border border-[#FFC9B6] rounded-[14px] px-4 py-2.5"></div>
-      <button type="submit" class="md:col-span-2 h-11 rounded-full bg-[#D6FF5F] hover:bg-[#CBF052] text-[#201C19] font-[800] text-[13px] border border-[#201C19]/10 transition cursor-pointer">Create / Register Tenant</button>
-    </form>
-  </div>
+      </div>
 
-  <!-- Tenant Directory -->
-  <div class="rounded-[24px] bg-white border border-[#EAE0D5] overflow-hidden mb-6">
-    <div class="px-6 h-[56px] flex items-center justify-between border-b border-[#F1E9DF]">
-      <div class="font-[750] text-[15px]">Tenant Directory</div>
-      <div class="mono text-[11px] opacity-60"><span id="tenantCount">0</span> tenants</div>
-    </div>
-    <div id="tenantList" class="divide-y divide-[#F5EDE4]"></div>
-  </div>
+      <!-- PANEL: Provisioning -->
+      <div id="sa-panel-provisioning" class="sa-panel hidden">
+        <div class="rounded-[24px] bg-white border border-[#EAE0D5] p-6 shadow-xs">
+          <div class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#201C19] text-[#D6FF5F] mono text-[10px] font-[800] uppercase tracking-widest">Platform</div>
+          <h2 class="mt-1.5 text-[17px] font-[800] tracking-[-0.02em]">Create Tenant</h2>
+          <p class="mono text-[11px] opacity-60 mt-0.5">Provisions a fresh tenant with default courts, PIN, and settings. If the slug already has data (e.g. created organically by a visitor), this registers it into the directory instead of overwriting it.</p>
+          <form id="createTenantForm" class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+            <label class="flex flex-col gap-1.5">
+              <span class="mono text-[10px] uppercase tracking-widest opacity-60">Slug (used as ?client=)</span>
+              <input type="text" id="ctSlug" placeholder="e.g. new-club" pattern="[a-z0-9-]+" required class="h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-4 mono text-[12px] outline-none focus:border-[#201C19]"/>
+            </label>
+            <label class="flex flex-col gap-1.5">
+              <span class="mono text-[10px] uppercase tracking-widest opacity-60">Business Name</span>
+              <input type="text" id="ctName" placeholder="e.g. New Club Pickleball" required class="h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-4 mono text-[12px] outline-none focus:border-[#201C19]"/>
+            </label>
+            <label class="flex flex-col gap-1.5">
+              <span class="mono text-[10px] uppercase tracking-widest opacity-60">Starter Color</span>
+              <div class="flex items-center gap-1.5">
+                <input type="color" id="ctColorPicker" value="#D6FF5F" class="w-10 h-10 rounded-[8px] border border-[#EAE0D5] cursor-pointer p-0.5"/>
+                <input type="text" id="ctColor" value="#D6FF5F" maxlength="7" class="flex-1 h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-4 mono text-[12px] font-[700] outline-none focus:border-[#201C19]"/>
+              </div>
+            </label>
+            <label class="flex flex-col gap-1.5">
+              <span class="mono text-[10px] uppercase tracking-widest opacity-60">Initial Admin PIN</span>
+              <input type="text" id="ctPin" value="1234" maxlength="8" required class="h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-4 mono text-[12px] font-[700] outline-none focus:border-[#201C19]"/>
+            </label>
+            <div id="createTenantError" class="hidden md:col-span-2 mono text-[12px] text-[#8C2C10] bg-[#FFE9E0] border border-[#FFC9B6] rounded-[14px] px-4 py-2.5"></div>
+            <button type="submit" class="md:col-span-2 h-11 rounded-full bg-[#D6FF5F] hover:bg-[#CBF052] text-[#201C19] font-[800] text-[13px] border border-[#201C19]/10 transition cursor-pointer">Create / Register Tenant</button>
+          </form>
+        </div>
+      </div>
 
-  <!-- Reporting -->
-  <div class="rounded-[24px] bg-white border border-[#EAE0D5] overflow-hidden">
-    <div class="px-6 h-[56px] flex items-center justify-between border-b border-[#F1E9DF]">
-      <div>
-        <div class="font-[750] text-[15px]">Reporting &amp; Billing</div>
-        <div class="mono text-[10px] opacity-50">Usage per tenant, a computed suggested charge from each tenant's billing formula, and prepaid balance. Tracked since this feature launched -- not full historical.</div>
+      <!-- PANEL: Reports & Billing -->
+      <div id="sa-panel-reports" class="sa-panel hidden">
+        <div class="rounded-[24px] bg-white border border-[#EAE0D5] overflow-hidden">
+          <div class="px-6 h-[56px] flex items-center justify-between border-b border-[#F1E9DF]">
+            <div>
+              <div class="font-[750] text-[15px]">Reporting &amp; Billing</div>
+              <div class="mono text-[10px] opacity-50">Usage per tenant, a computed suggested charge from each tenant's billing formula, and prepaid balance. Tracked since this feature launched -- not full historical.</div>
+            </div>
+          </div>
+          <div id="reportingList"></div>
+        </div>
+      </div>
+
+      <!-- PANEL: Feature Ideas -->
+      <div id="sa-panel-ideas" class="sa-panel hidden">
+        <div class="rounded-[24px] bg-white border border-[#EAE0D5] p-6 shadow-xs mb-5">
+          <div class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#201C19] text-[#D6FF5F] mono text-[10px] font-[800] uppercase tracking-widest">Roadmap</div>
+          <h2 class="mt-1.5 text-[17px] font-[800] tracking-[-0.02em]">Feature Ideas to Explore</h2>
+          <p class="mono text-[11px] opacity-60 mt-0.5">A running scratchpad for ideas worth scoping before committing to a build -- not tenant-facing, superadmin-only.</p>
+          <button type="button" id="fiAddBtn" class="mt-4 h-9 px-4 rounded-full bg-[#D6FF5F] hover:bg-[#CBF052] text-[#201C19] font-[800] text-[12px] border border-[#201C19]/10 transition cursor-pointer">+ Add Idea</button>
+          <form id="fiAddForm" class="hidden mt-4 space-y-3 p-4 rounded-[16px] bg-[#FFFBF5] border border-[#EAE0D5]">
+            <label class="flex flex-col gap-1.5">
+              <span class="mono text-[10px] uppercase tracking-widest opacity-60">Title</span>
+              <input type="text" id="fiTitle" required class="h-10 rounded-full border border-[#EAE0D5] bg-white px-4 mono text-[12px] font-[700] outline-none focus:border-[#201C19]"/>
+            </label>
+            <label class="flex flex-col gap-1.5">
+              <span class="mono text-[10px] uppercase tracking-widest opacity-60">One-line Summary</span>
+              <input type="text" id="fiSummary" required class="h-10 rounded-full border border-[#EAE0D5] bg-white px-4 mono text-[12px] outline-none focus:border-[#201C19]"/>
+            </label>
+            <label class="flex flex-col gap-1.5">
+              <span class="mono text-[10px] uppercase tracking-widest opacity-60">Status</span>
+              <select id="fiStatus" class="h-10 rounded-full border border-[#EAE0D5] bg-white px-3 mono text-[12px] font-[700] outline-none focus:border-[#201C19]">
+                <option value="idea">Idea</option>
+                <option value="scoping" selected>Scoping</option>
+                <option value="planned">Planned</option>
+                <option value="building">Building</option>
+                <option value="shipped">Shipped</option>
+                <option value="parked">Parked</option>
+              </select>
+            </label>
+            <label class="flex flex-col gap-1.5">
+              <span class="mono text-[10px] uppercase tracking-widest opacity-60">Details / Scoping Notes</span>
+              <textarea id="fiDetails" rows="8" class="rounded-[16px] border border-[#EAE0D5] bg-white px-4 py-3 mono text-[12px] leading-[1.6] outline-none focus:border-[#201C19] resize-y"></textarea>
+            </label>
+            <div class="flex gap-2">
+              <button type="submit" class="h-10 px-4 rounded-full bg-[#201C19] text-white mono text-[11px] font-[700] cursor-pointer">Save Idea</button>
+              <button type="button" id="fiCancelBtn" class="h-10 px-4 rounded-full bg-white border border-[#EAE0D5] mono text-[11px] font-[700] cursor-pointer">Cancel</button>
+            </div>
+          </form>
+        </div>
+        <div id="fiList" class="space-y-3"></div>
       </div>
     </div>
-    <div id="reportingList"></div>
   </div>
 </div>
 
@@ -168,6 +227,24 @@ function showScreen(id){
   });
 }
 
+/* ---------- Dashboard sidebar tabs ---------- */
+function showSaTab(tab){
+  document.querySelectorAll('.sa-panel').forEach(p => p.classList.toggle('hidden', p.id !== `sa-panel-${tab}`));
+  document.querySelectorAll('.sa-tab-btn').forEach(b => {
+    const active = b.dataset.saTab === tab;
+    b.classList.toggle('bg-[#201C19]', active);
+    b.classList.toggle('text-white', active);
+    b.classList.toggle('bg-white', !active);
+    b.classList.toggle('border', !active);
+    b.classList.toggle('border-[#EAE0D5]', !active);
+    b.classList.toggle('opacity-70', !active);
+  });
+}
+document.querySelectorAll('.sa-tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => showSaTab(btn.dataset.saTab));
+});
+showSaTab('directory');
+
 auth.onAuthStateChanged(async (user) => {
   if(!user){ showScreen('signInScreen'); return; }
   const tokenResult = await user.getIdTokenResult(true);
@@ -175,6 +252,7 @@ auth.onAuthStateChanged(async (user) => {
     document.getElementById('signedInAsLabel').textContent = `Signed in as ${user.email}`;
     showScreen('dashboard');
     loadTenants();
+    loadFeatureIdeas();
   } else {
     document.getElementById('notAuthorizedEmail').textContent = user.email;
     document.getElementById('notAuthorizedUid').textContent = user.uid;
@@ -816,6 +894,108 @@ async function provisionTenantDefaults(slug, name, color, pin){
     ...stamp()
   });
   await db.doc(`clients/${slug}/queues/state`).set({ data: [], ...stamp() });
+}
+
+/* ---------- Feature Ideas (superadmin-only planning notes, not tenant data) ---------- */
+const FI_STATUS_STYLE = {
+  idea:     'bg-[#F1E9DF] text-[#201C19]/70',
+  scoping:  'bg-[#FFF0D6] text-[#8A5A00]',
+  planned:  'bg-[#EDE8FF] text-[#3B2A9E]',
+  building: 'bg-[#FFE0D1] text-[#8C2C10]',
+  shipped:  'bg-[#E8F5D8] text-[#3F7019]',
+  parked:   'bg-[#F1E9DF] text-[#201C19]/50',
+};
+document.getElementById('fiAddBtn').addEventListener('click', () => {
+  document.getElementById('fiAddForm').classList.remove('hidden');
+  document.getElementById('fiAddForm').removeAttribute('data-editing');
+  document.getElementById('fiTitle').value = '';
+  document.getElementById('fiSummary').value = '';
+  document.getElementById('fiStatus').value = 'scoping';
+  document.getElementById('fiDetails').value = '';
+});
+document.getElementById('fiCancelBtn').addEventListener('click', () => {
+  document.getElementById('fiAddForm').classList.add('hidden');
+});
+document.getElementById('fiAddForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const title = document.getElementById('fiTitle').value.trim();
+  const summary = document.getElementById('fiSummary').value.trim();
+  const status = document.getElementById('fiStatus').value;
+  const details = document.getElementById('fiDetails').value;
+  if(!title || !summary) return;
+  const editingId = document.getElementById('fiAddForm').getAttribute('data-editing');
+  try {
+    if(editingId){
+      await db.doc(`platformFeatureIdeas/${editingId}`).update({ title, summary, status, details, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+      toast('Idea updated');
+    } else {
+      await db.collection('platformFeatureIdeas').add({ title, summary, status, details, createdAt: firebase.firestore.FieldValue.serverTimestamp(), updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+      toast('Idea added');
+    }
+    document.getElementById('fiAddForm').classList.add('hidden');
+    loadFeatureIdeas();
+  } catch(ex) { toast('Failed: ' + ex.message); }
+});
+
+async function loadFeatureIdeas(){
+  const list = document.getElementById('fiList');
+  if(!list) return;
+  list.innerHTML = `<div class="p-6 text-center mono text-[11px] opacity-50">Loading...</div>`;
+  try {
+    const snap = await db.collection('platformFeatureIdeas').orderBy('updatedAt', 'desc').get();
+    if(snap.empty){
+      list.innerHTML = `<div class="p-8 text-center mono text-[12px] opacity-50 rounded-[24px] bg-white border border-[#EAE0D5]">No ideas logged yet.</div>`;
+      return;
+    }
+    list.innerHTML = '';
+    snap.forEach(doc => renderFeatureIdeaCard(doc.id, doc.data()));
+  } catch(ex) {
+    list.innerHTML = `<div class="p-6 text-center mono text-[11px] text-[#8C2C10]">Failed to load: ${escapeHtml(ex.message)}</div>`;
+  }
+}
+
+function renderFeatureIdeaCard(id, data){
+  const list = document.getElementById('fiList');
+  const card = document.createElement('div');
+  card.className = 'rounded-[20px] bg-white border border-[#EAE0D5] overflow-hidden';
+  card.innerHTML = `
+    <button type="button" data-fi-toggle="${id}" class="w-full text-left p-4 flex items-center justify-between gap-3 hover:bg-[#FFFBF5] transition cursor-pointer">
+      <div class="min-w-0">
+        <div class="flex items-center gap-2 flex-wrap">
+          <span class="font-[750] text-[14px]">${escapeHtml(data.title)}</span>
+          <span class="mono text-[9px] px-2 py-0.5 rounded-full font-[700] uppercase ${FI_STATUS_STYLE[data.status]||FI_STATUS_STYLE.idea}">${escapeHtml(data.status||'idea')}</span>
+        </div>
+        <div class="mono text-[11px] opacity-60 mt-0.5">${escapeHtml(data.summary)}</div>
+      </div>
+      <span class="mono text-[10px] opacity-50 shrink-0">▾</span>
+    </button>
+    <div id="fi-body-${id}" class="hidden px-4 pb-4">
+      <div class="mono text-[12px] leading-[1.6] whitespace-pre-wrap p-3.5 rounded-[14px] bg-[#FFFBF5] border border-[#EAE0D5]">${escapeHtml(data.details || '(no details yet)')}</div>
+      <div class="flex gap-2 mt-3">
+        <button type="button" data-fi-edit="${id}" class="h-8 px-3.5 rounded-full bg-white border border-[#EAE0D5] mono text-[10px] font-[700] cursor-pointer hover:border-[#201C19]">Edit</button>
+        <button type="button" data-fi-delete="${id}" class="h-8 px-3.5 rounded-full bg-[#FFE9E0] text-[#8C2C10] border border-[#FFC9B6] mono text-[10px] font-[700] cursor-pointer hover:bg-[#FFD7C7]">Delete</button>
+      </div>
+    </div>
+  `;
+  list.appendChild(card);
+
+  card.querySelector(`[data-fi-toggle="${id}"]`).addEventListener('click', () => {
+    document.getElementById(`fi-body-${id}`).classList.toggle('hidden');
+  });
+  card.querySelector(`[data-fi-edit="${id}"]`).addEventListener('click', () => {
+    document.getElementById('fiAddForm').classList.remove('hidden');
+    document.getElementById('fiAddForm').setAttribute('data-editing', id);
+    document.getElementById('fiTitle').value = data.title || '';
+    document.getElementById('fiSummary').value = data.summary || '';
+    document.getElementById('fiStatus').value = data.status || 'scoping';
+    document.getElementById('fiDetails').value = data.details || '';
+    document.getElementById('fiAddForm').scrollIntoView({ behavior: 'smooth' });
+  });
+  card.querySelector(`[data-fi-delete="${id}"]`).addEventListener('click', async () => {
+    if(!confirm(`Delete "${data.title}"?`)) return;
+    await db.doc(`platformFeatureIdeas/${id}`).delete();
+    loadFeatureIdeas();
+  });
 }
 </script>
 </body>

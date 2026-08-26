@@ -17,6 +17,12 @@ service cloud.firestore {
              request.resource.data.keys().hasAny(['__tenant__']) == false; // Prevent tenant field injection
     }
     
+    // Superadmin-only planning notes ("Feature Ideas" tab). Not tenant
+    // data at all -- no visitor of any tenant ever reads or writes this.
+    match /platformFeatureIdeas/{ideaId} {
+      allow read, write: if request.auth != null && request.auth.token.superadmin == true;
+    }
+
     // Platform-level tenant registry, used by the superadmin console.
     // Only accounts with the "superadmin" custom claim (set via
     // set-superadmin-claim.js) may read or write this collection.

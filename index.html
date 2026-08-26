@@ -110,6 +110,7 @@
       <div id="colSchedule" class="col-span-12 lg:col-span-7 flex flex-col gap-4">
         <!-- Hero strip -->
         <div class="rounded-[24px] md:rounded-[28px] bg-[#201C19] text-[#FFFBF5] p-5 md:p-7 relative overflow-hidden">
+          <img id="heroWatermark" src="" alt="" class="hidden absolute inset-0 w-full h-full object-cover opacity-[0.14] pointer-events-none select-none"/>
           <div class="absolute -right-12 -top-12 w-[280px] h-[280px] rounded-full bg-[#D6FF5F] opacity-[0.18] blur-[2px]"></div>
           <div class="absolute right-[-20px] bottom-[-30px] rotate-[-10deg] mono text-[96px] leading-none font-[800] tracking-[-0.08em] text-white/[0.06]">PICKLE</div>
           <div class="relative z-10 flex flex-wrap items-start justify-between gap-6">
@@ -1279,6 +1280,9 @@
       <div class="mono text-[10px] opacity-45">© <span id="footYear"></span> <span id="footCopyName">Pickleball Court Booking</span>. All rights reserved.</div>
       <div class="mono text-[10px] opacity-45">Reservations held Pending until payment verified.</div>
     </div>
+    <div class="mt-3 text-center md:text-right">
+      <span class="mono text-[10px] opacity-40">Powered by Dulà HQ</span>
+    </div>
   </div>
 </footer>
 
@@ -1363,7 +1367,7 @@
 const _cfgDefaults = {
   business: { name:'COURT BOOKING', sub:'Pickleball • Single Court', tagline:'Book the court.\nRun the queue.', location:'Single Court' },
   contact: { address:'', phone:'', email:'', facebook:'', instagram:'' },
-  branding: { logoUrl:'', faviconUrl:'', monogram:'CB' },
+  branding: { logoUrl:'', faviconUrl:'', monogram:'CB', watermarkUrl:'' },
   theme: { primary:'#D4D4D8', primaryHover:'#A1A1AA', dark:'#18181B', bg:'#FAFAFA', border:'#E4E4E7', borderSoft:'#F4F4F5', staff:'#FB923C', openPlay:'#8B5CF6', queue:'#34D399', pending:'#FBBF24' },
   currency: '₱',
   rates: { hourly:300, queuePerHead:100 },
@@ -1472,6 +1476,12 @@ function applyBranding(){
     : (br.monogram || b.name.slice(0,2).toUpperCase());
   const bl = document.getElementById('brandLogo'); if(bl) bl.innerHTML = logoHtml;
   const fl = document.getElementById('footLogo');  if(fl) fl.innerHTML = br.logoUrl ? logoHtml : (br.monogram || b.name.slice(0,2).toUpperCase());
+  // Hero watermark: a subtle per-tenant image, personal touch behind the hero copy
+  const wm = document.getElementById('heroWatermark');
+  if(wm){
+    if(br.watermarkUrl){ wm.src = br.watermarkUrl; wm.classList.remove('hidden'); }
+    else { wm.classList.add('hidden'); wm.removeAttribute('src'); }
+  }
   // Rates + hours labels
   setText('chipHourly', `${fmtMoney(CLIENT.rates.hourly)} / hour • ${_hh12(SCHED.bookStart)}–${_hh12(SCHED.close)}`);
   setText('chipQueue', `${fmtMoney(CLIENT.rates.queuePerHead)} / head • ${_hh12(SCHED.queueStart)}–${_hh12(SCHED.queueEnd)} Queue`);

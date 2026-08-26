@@ -8,6 +8,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-storage-compat.js"></script>
 <script src="firebase-config.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -114,6 +115,11 @@ body{background:#FFFBF5;color:#201C19}
               <span class="mono text-[10px] uppercase tracking-widest opacity-60">Initial Admin PIN</span>
               <input type="text" id="ctPin" value="1234" maxlength="8" required class="h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-4 mono text-[12px] font-[700] outline-none focus:border-[#201C19]"/>
             </label>
+            <label class="flex flex-col gap-1.5 md:col-span-2">
+              <span class="mono text-[10px] uppercase tracking-widest opacity-60">Watermark Image (optional)</span>
+              <input type="file" id="ctWatermark" accept="image/*" class="h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-3 mono text-[11px] outline-none focus:border-[#201C19] file:mr-3 file:h-full file:border-0 file:rounded-full file:bg-[#201C19] file:text-white file:px-3 file:mono file:text-[10px] file:font-[700] file:cursor-pointer cursor-pointer"/>
+              <span class="mono text-[9px] opacity-50">Shown faintly on the tenant's booking page hero for a personal touch. Can be added or changed later from Manage.</span>
+            </label>
             <div id="createTenantError" class="hidden md:col-span-2 mono text-[12px] text-[#8C2C10] bg-[#FFE9E0] border border-[#FFC9B6] rounded-[14px] px-4 py-2.5"></div>
             <button type="submit" class="md:col-span-2 h-11 rounded-full bg-[#D6FF5F] hover:bg-[#CBF052] text-[#201C19] font-[800] text-[13px] border border-[#201C19]/10 transition cursor-pointer">Create / Register Tenant</button>
           </form>
@@ -187,6 +193,7 @@ body{background:#FFFBF5;color:#201C19}
 const fbApp = firebase.initializeApp(window.FIREBASE_CONFIG);
 const auth = firebase.auth();
 const db = firebase.firestore();
+const fbStorage = firebase.storage();
 
 function toast(msg){
   const t = document.getElementById('toast');
@@ -663,6 +670,15 @@ function renderTenantRow(slug, data){
           <button type="button" data-save-retention="${slug}" class="h-9 px-3 rounded-full bg-[#201C19] text-white mono text-[10px] font-[700] cursor-pointer">Save</button>
         </div>
       </label>
+      <label class="flex flex-col gap-1.5 md:col-span-2 lg:col-span-2">
+        <span class="mono text-[10px] uppercase tracking-widest opacity-60">Watermark Image</span>
+        <div class="flex gap-1.5 items-center">
+          <img id="wmPreview-${cssId(slug)}" src="" class="hidden w-9 h-9 rounded-[8px] object-cover border border-[#EAE0D5] shrink-0"/>
+          <input type="file" id="watermark-${cssId(slug)}" accept="image/*" class="flex-1 min-w-0 h-9 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] mono text-[10px] outline-none focus:border-[#201C19] file:mr-2 file:h-full file:border-0 file:rounded-full file:bg-[#201C19] file:text-white file:px-2.5 file:mono file:text-[9px] file:font-[700] file:cursor-pointer cursor-pointer"/>
+          <button type="button" data-save-watermark="${slug}" class="h-9 px-3 rounded-full bg-[#201C19] text-white mono text-[10px] font-[700] cursor-pointer shrink-0">Save</button>
+          <button type="button" data-remove-watermark="${slug}" class="hidden h-9 px-3 rounded-full bg-[#FFE9E0] text-[#8C2C10] border border-[#FFC9B6] mono text-[10px] font-[700] cursor-pointer shrink-0">Remove</button>
+        </div>
+      </label>
     </div>
     <div class="p-4 pt-0 md:p-0 md:mt-4 md:pt-4 md:border-t md:border-[#F1E9DF]" id="billingWrap-${cssId(slug)}">
       <div class="mono text-[10px] uppercase tracking-widest opacity-60 mb-2">Billing — base subscription + confirmed-booking overage</div>
@@ -714,6 +730,16 @@ function renderTenantRow(slug, data){
         const days = settingsSnap.exists && settingsSnap.data().data?.retentionDays;
         if(days) document.getElementById(`retention-${cssId(slug)}`).value = days;
       } catch(ex) { /* leave placeholder showing the 14-day default */ }
+      try {
+        const configSnap = await db.doc(`clients/${slug}/config/state`).get();
+        const wmUrl = configSnap.exists && configSnap.data().data?.branding?.watermarkUrl;
+        if(wmUrl){
+          const img = document.getElementById(`wmPreview-${cssId(slug)}`);
+          img.src = wmUrl;
+          img.classList.remove('hidden');
+          document.getElementById(`manage-${cssId(slug)}`).querySelector(`[data-remove-watermark="${cssAttr(slug)}"]`).classList.remove('hidden');
+        }
+      } catch(ex) { /* leave the "no watermark set" state showing */ }
       const b = data.billing || {};
       document.getElementById(`billBase-${cssId(slug)}`).value = b.baseFee || 0;
       document.getElementById(`billFreeB-${cssId(slug)}`).value = b.freeBookings || 0;
@@ -774,6 +800,32 @@ function renderTenantRow(slug, data){
     try {
       await db.doc(`clients/${slug}/settings/state`).update({ 'data.retentionDays': days, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
       toast(`Retention for ${data.businessName || slug} set to ${days} days`);
+    } catch(ex) { toast('Failed: ' + ex.message); }
+  });
+  row.querySelector(`[data-save-watermark="${cssAttr(slug)}"]`).addEventListener('click', async (e) => {
+    const file = document.getElementById(`watermark-${cssId(slug)}`).files[0];
+    if(!file){ toast('Choose an image file first'); return; }
+    e.target.disabled = true;
+    try {
+      const url = await uploadBrandingImage(slug, file, 'watermark');
+      await db.doc(`clients/${slug}/config/state`).update({ 'data.branding.watermarkUrl': url, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+      const img = document.getElementById(`wmPreview-${cssId(slug)}`);
+      img.src = url;
+      img.classList.remove('hidden');
+      row.querySelector(`[data-remove-watermark="${cssAttr(slug)}"]`).classList.remove('hidden');
+      document.getElementById(`watermark-${cssId(slug)}`).value = '';
+      toast(`Watermark updated for ${data.businessName || slug}`);
+    } catch(ex) { toast('Failed: ' + ex.message); }
+    finally { e.target.disabled = false; }
+  });
+  row.querySelector(`[data-remove-watermark="${cssAttr(slug)}"]`).addEventListener('click', async (e) => {
+    try {
+      await db.doc(`clients/${slug}/config/state`).update({ 'data.branding.watermarkUrl': '', updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+      const img = document.getElementById(`wmPreview-${cssId(slug)}`);
+      img.classList.add('hidden');
+      img.src = '';
+      e.target.classList.add('hidden');
+      toast(`Watermark removed for ${data.businessName || slug}`);
     } catch(ex) { toast('Failed: ' + ex.message); }
   });
   row.querySelector(`[data-save-billing="${cssAttr(slug)}"]`).addEventListener('click', async () => {
@@ -894,6 +946,18 @@ async function wipeSampleUsageData(slug){
   return snap.size;
 }
 
+/* ---------- Branding image upload (logo/watermark) ----------
+   Reuses the same Firebase Storage compat pattern index.html uses for
+   payment-proof uploads: client-side put() straight to Storage, then
+   store the resulting download URL on the tenant's config doc. */
+async function uploadBrandingImage(slug, file, kind){
+  const ext = (file.name.split('.').pop() || 'png').toLowerCase().replace(/[^a-z0-9]/g,'') || 'png';
+  const path = `clients/${slug}/branding/${kind}_${Date.now()}.${ext}`;
+  const ref = fbStorage.ref(path);
+  await ref.put(file, { contentType: file.type || 'image/png' });
+  return ref.getDownloadURL();
+}
+
 /* ---------- Create / Register Tenant ---------- */
 document.getElementById('createTenantForm').addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -904,6 +968,7 @@ document.getElementById('createTenantForm').addEventListener('submit', async (e)
   const name = document.getElementById('ctName').value.trim();
   const color = document.getElementById('ctColor').value.trim();
   const pin = document.getElementById('ctPin').value.trim();
+  const watermarkFile = document.getElementById('ctWatermark').files[0] || null;
 
   if(!isValidSlug(slug)){ errEl.textContent = 'Slug must be lowercase letters, numbers, and hyphens only.'; errEl.classList.remove('hidden'); return; }
   if(!name){ errEl.textContent = 'Business name is required.'; errEl.classList.remove('hidden'); return; }
@@ -911,6 +976,7 @@ document.getElementById('createTenantForm').addEventListener('submit', async (e)
   if(!pin){ errEl.textContent = 'Initial PIN is required.'; errEl.classList.remove('hidden'); return; }
 
   try {
+    const watermarkUrl = watermarkFile ? await uploadBrandingImage(slug, watermarkFile, 'watermark') : null;
     const existingConfig = await db.doc(`clients/${slug}/config/state`).get();
     if(existingConfig.exists){
       // Tenant data already exists (e.g. created organically) -- register it
@@ -927,9 +993,12 @@ document.getElementById('createTenantForm').addEventListener('submit', async (e)
         status: 'active',
         createdAt: firebase.firestore.FieldValue.serverTimestamp()
       }, { merge: true });
+      if(watermarkUrl){
+        await db.doc(`clients/${slug}/config/state`).update({ 'data.branding.watermarkUrl': watermarkUrl, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+      }
       toast(`"${slug}" already had data -- registered existing tenant "${existingName}"`);
     } else {
-      await provisionTenantDefaults(slug, name, color, pin);
+      await provisionTenantDefaults(slug, name, color, pin, watermarkUrl);
       await db.doc(`platformTenants/${slug}`).set({
         businessName: name,
         theme: { primary: color },
@@ -949,7 +1018,7 @@ document.getElementById('createTenantForm').addEventListener('submit', async (e)
   }
 });
 
-async function provisionTenantDefaults(slug, name, color, pin){
+async function provisionTenantDefaults(slug, name, color, pin, watermarkUrl){
   const stamp = () => ({ updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
   const pinHash = await hashPin(pin);
 
@@ -959,7 +1028,7 @@ async function provisionTenantDefaults(slug, name, color, pin){
   await db.doc(`clients/${slug}/config/state`).set({
     data: {
       business: { name },
-      branding: { monogram: name.slice(0,2).toUpperCase() },
+      branding: { monogram: name.slice(0,2).toUpperCase(), ...(watermarkUrl ? { watermarkUrl } : {}) },
       theme: { primary: color, primaryHover: darkenHex(color) }
     },
     ...stamp()

@@ -5,8 +5,15 @@ service firebase.storage {
       allow read: if true;
       allow write: if true;
     }
-    
+
     match /proofs/{allPaths=**} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    // Per-tenant branding assets (e.g. hero watermark image), uploaded from
+    // the superadmin console during provisioning or tenant management.
+    match /clients/{clientId}/branding/{allPaths=**} {
       allow read: if true;
       allow write: if true;
     }

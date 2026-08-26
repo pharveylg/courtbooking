@@ -1032,7 +1032,8 @@
               <div class="font-[750] text-[14px]">Staff Reserve Toggle</div>
               <span id="staffWeekBadge" class="mono text-[9px] px-2.5 py-0.5 rounded-full bg-[#FF8A5B]/15 text-[#8C2C10] font-[700]"></span>
             </div>
-            <div class="mono text-[11px] opacity-60 mt-1">Enable/disable staff reservation per day. Default: Tue, Thu, Sat, Sun (5PM–10PM).</div>
+            <div class="mono text-[11px] opacity-60 mt-1">Enable/disable staff reservation per day, per court. Default: Tue, Thu, Sat, Sun (5PM–10PM).</div>
+            <div id="staffReserveCourtTabs" class="hidden mt-3 flex gap-2 flex-wrap"></div>
             <div id="staffReserveToggles" class="mt-4 space-y-2.5"></div>
             <div class="mt-4 p-3 rounded-[12px] bg-[#FFE0D1]/40 border border-[#FFC9B6]/50 mono text-[10px] leading-[1.4] text-[#6B3A20]">
               <b>Weekly reset:</b> Changes apply for this week only (Mon–Sun). Every Monday at midnight, all toggles auto-reset back to the default schedule (Sun/Tue/Thu/Sat enabled).
@@ -1700,6 +1701,7 @@ let _firebaseReady = false;
 let COURTS = [];
 let activeCourtTab = 'court1'; // currently selected court tab for schedule view
 let activeQueueCourtTab = 'all'; // currently selected court tab for queue view
+let activeStaffCourtTab = null; // currently selected court tab for Staff Reserve Toggle (admin)
 
 function loadCourts(){
   try { const v = JSON.parse(localStorage.getItem(LS.courts)); return v != null ? v : [{ id: 'court1', name: 'Court 1', startHour: 13, active: true }]; }
@@ -2079,6 +2081,7 @@ function startRealtimeListeners() {
     localStorage.setItem(LS.staffReserve, JSON.stringify(staffReserveEnabled));
     renderSchedule();
     if (typeof renderStaffReserveToggles === 'function') renderStaffReserveToggles();
+    if (typeof updateStaffNote === 'function') updateStaffNote();
   }, e => console.warn('staffReserve listener:', e.message));
 
   db.doc(fbDocPath('settings')).onSnapshot(snap => {
@@ -2113,6 +2116,7 @@ function startRealtimeListeners() {
       renderSchedule();
       if (typeof renderDateSlotPreview === 'function') renderDateSlotPreview();
       populateCourtSelectors();
+      if (typeof updateStaffNote === 'function') updateStaffNote();
     }
   }, e => console.warn('courts listener:', e.message));
 }
@@ -2250,8 +2254,7 @@ document.getElementById('todayLabel').textContent = fmtDateLabel(todayISO());
 const staffNoteEl = document.getElementById('staffNote');
 function updateStaffNote(){
   const day = new Date().getDay();
-  const srDays = (staffReserveEnabled && staffReserveEnabled.days) ? staffReserveEnabled.days : staffReserveEnabled || {};
-  const todayBlocked = srDays[String(day)] === true;
+  const todayBlocked = getActiveCourts().some(c => getStaffDaysForCourt(c.id)[String(day)] === true);
   if(todayBlocked){
     staffNoteEl.textContent = `${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][day]} 5PM–10PM is staff-reserved. Public booking blocked during that window.`;
   } else {
@@ -2420,15 +2423,36 @@ document.getElementById('mobTabReserve')?.addEventListener('click', ()=> switchM
 document.getElementById('mobJumpToReserveBtn')?.addEventListener('click', ()=> switchMobileTab('reserve'));
 document.getElementById('mobBackToScheduleBtn')?.addEventListener('click', ()=> switchMobileTab('schedule'));
 
-/* ---------- Helpers: overlaps ---------- */
-function isStaffBlocked(dateISO, hourStart, hourEnd){
+/* ---------- Helpers: overlaps ----------
+   Staff Reserve is per-court. staffReserveEnabled.days is either:
+   - legacy flat:    {"0":true,"2":true,...}                (applies to every court)
+   - per-court:      {[courtId]: {"0":true,"2":true,...}, ...}
+   A shape is "per-court" if any key isn't a bare day-of-week digit. ---------- */
+function _isPerCourtStaffDays(days){
+  return Object.keys(days || {}).some(k => !/^[0-6]$/.test(k));
+}
+function getStaffDaysForCourt(courtId){
+  const days = (staffReserveEnabled && staffReserveEnabled.days) || {};
+  if(!_isPerCourtStaffDays(days)) return { ...STAFF_RESERVE_DEFAULTS, ...days }; // legacy: same for every court
+  return { ...STAFF_RESERVE_DEFAULTS, ...(days[courtId] || {}) }; // no explicit config yet -> defaults
+}
+/* Migrates a legacy flat day-map into a per-court map (seeding every active
+   court with the existing schedule) the first time an admin edits a specific
+   court's toggles. No-op if already per-court. */
+function ensurePerCourtStaffDays(){
+  const days = (staffReserveEnabled && staffReserveEnabled.days) || {};
+  if(_isPerCourtStaffDays(days)) return days;
+  const migrated = {};
+  getActiveCourts().forEach(c => { migrated[c.id] = { ...STAFF_RESERVE_DEFAULTS, ...days }; });
+  return migrated;
+}
+function isStaffBlocked(dateISO, hourStart, hourEnd, courtId){
   const d = new Date(dateISO+'T12:00:00'); const dow = d.getDay();
   if(!STAFF_DAYS.includes(dow)) return false;
-  // Check if staff reserve is enabled for this day (weekly-scoped)
-  const srDays = staffReserveEnabled.days || staffReserveEnabled;
-  if(srDays[String(dow)] === false) return false;
-  // staff 17-22 (5PM-10PM)
-  return !(hourEnd<=17 || hourStart>=22);
+  if(hourEnd<=17 || hourStart>=22) return false; // staff window is 17-22 (5PM-10PM)
+  if(courtId) return getStaffDaysForCourt(courtId)[String(dow)] !== false;
+  // No specific court given (merged "All Courts" view): blocked if any active court is staff-reserved
+  return getActiveCourts().some(c => getStaffDaysForCourt(c.id)[String(dow)] !== false);
 }
 function getBookingsForDate(dateISO){
   return bookings.filter(b=>b.date===dateISO);
@@ -2440,7 +2464,7 @@ function getOpenPlayForDate(dateISO){
   return [...fromBookings, ...fromOps];
 }
 function hasOverlap(dateISO, start, end, excludeId=null, courtId=null){
-  if(isStaffBlocked(dateISO,start,end)) return {type:'staff'};
+  if(isStaffBlocked(dateISO,start,end,courtId)) return {type:'staff'};
   const ops = getOpenPlayForDate(dateISO);
   for(const op of ops){
     if(excludeId && op.id===excludeId) continue;
@@ -2906,7 +2930,7 @@ function renderScheduleSlots(container, dateISO, courtFilter){
   }
 
   allSlots.forEach(slot=>{
-    const staffBlocked = isStaffBlocked(dateISO, slot.s, slot.e);
+    const staffBlocked = isStaffBlocked(dateISO, slot.s, slot.e, courtFilter);
     const opMatch = todaysOps.find(op=> slot.s < op.end && slot.e > op.start);
     const bookingMatch = todaysBookings.find(b=> b.status!=='OpenPlay' && slot.s < b.end && slot.e > b.start);
 
@@ -3032,7 +3056,7 @@ function renderDateSlotPreview(){
 
   ALL_HOURS_START.forEach(h=>{
     const e = h+1;
-    const staff = isStaffBlocked(ISO,h,e);
+    const staff = isStaffBlocked(ISO, h, e, activeCourtTab && activeCourtTab !== 'all' ? activeCourtTab : null);
     const op = !staff && ops.find(o=> h<o.end && e>o.start);
     const bk = (!staff && !op) ? bks.find(b=> b.status!=='OpenPlay' && h<b.end && e>b.start) : null;
     const isMorning = (h>=7 && h<=11);
@@ -3832,6 +3856,7 @@ function renderMorningToggles(){
 
 function renderStaffReserveToggles(){
   const container = document.getElementById('staffReserveToggles');
+  const tabsWrap = document.getElementById('staffReserveCourtTabs');
   if(!container) return;
   container.innerHTML='';
 
@@ -3846,6 +3871,35 @@ function renderStaffReserveToggles(){
     weekBadge.textContent = `Week of ${monLabel} – ${sunLabel}`;
   }
 
+  // Court tab bar (hidden when there's only one active court)
+  const activeCourts = getActiveCourts();
+  if(!activeStaffCourtTab || !activeCourts.find(c => c.id === activeStaffCourtTab)){
+    activeStaffCourtTab = activeCourts.length ? activeCourts[0].id : null;
+  }
+  if(tabsWrap){
+    if(activeCourts.length > 1){
+      tabsWrap.classList.remove('hidden');
+      tabsWrap.innerHTML = activeCourts.map(c => `
+        <button type="button" data-staff-court-tab="${c.id}" class="shrink-0 px-3.5 h-7 rounded-full mono text-[10px] font-[700] transition cursor-pointer ${activeStaffCourtTab === c.id ? 'bg-[#201C19] text-white shadow-xs' : 'bg-white border border-[#EAE0D5] text-[#201C19] hover:border-[#201C19]'}">${escapeHtml(c.name)}</button>
+      `).join('');
+      tabsWrap.querySelectorAll('button[data-staff-court-tab]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          activeStaffCourtTab = btn.dataset.staffCourtTab;
+          renderStaffReserveToggles();
+        });
+      });
+    } else {
+      tabsWrap.classList.add('hidden');
+      tabsWrap.innerHTML = '';
+    }
+  }
+
+  if(!activeStaffCourtTab){
+    container.innerHTML = `<div class="p-4 text-center mono text-[11px] opacity-50">No courts configured.</div>`;
+    return;
+  }
+  const courtDays = getStaffDaysForCourt(activeStaffCourtTab);
+
   const days = [
     {dow:0, name:'Sunday'},
     {dow:1, name:'Monday'},
@@ -3856,8 +3910,7 @@ function renderStaffReserveToggles(){
     {dow:6, name:'Saturday'}
   ];
   days.forEach(day=>{
-    const srDays = staffReserveEnabled.days || staffReserveEnabled;
-    const enabled = srDays[String(day.dow)] === true;
+    const enabled = courtDays[String(day.dow)] === true;
     const isDefault = [0,2,4,6].includes(day.dow);
     const div=document.createElement('div');
     div.className='flex items-center justify-between p-3 rounded-[14px] border border-[#F1E9DF] bg-[#FFFBF5]';
@@ -3880,11 +3933,14 @@ function renderStaffReserveToggles(){
   container.querySelectorAll('input[data-staff]').forEach(inp=>{
     inp.addEventListener('change', ()=>{
       const dow=inp.dataset.staff;
-      if(!staffReserveEnabled.days) staffReserveEnabled = { weekId: getCurrentWeekId(), days: {...STAFF_RESERVE_DEFAULTS} };
-      staffReserveEnabled.days[dow]=inp.checked;
+      const courtId = activeStaffCourtTab;
+      const perCourtDays = ensurePerCourtStaffDays();
+      perCourtDays[courtId] = { ...getStaffDaysForCourt(courtId), [dow]: inp.checked };
+      staffReserveEnabled = { weekId: getCurrentWeekId(), days: perCourtDays };
       saveStaffReserve(staffReserveEnabled);
-      renderSchedule(); renderStaffReserveToggles();
-      toast(inp.checked? `${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][dow]} staff reserve enabled` : `${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][dow]} staff reserve disabled`);
+      renderSchedule(); renderStaffReserveToggles(); updateStaffNote();
+      const courtName = getCourtName(courtId) || 'This court';
+      toast(inp.checked? `${courtName}: ${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][dow]} staff reserve enabled` : `${courtName}: ${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][dow]} staff reserve disabled`);
     });
   });
 }
@@ -5091,6 +5147,7 @@ async function initializeApp() {
   }
   
   COURTS = loadCourts();    // load courts from localStorage (will be overwritten by Firestore if available)
+  updateStaffNote();         // re-check today's staff-reserve banner now that COURTS is loaded
   selectedDate = todayISO();
   calCursor = new Date(selectedDate+'T12:00:00');
   renderCalendar();          // renders month picker + prefills time dropdowns

@@ -23,11 +23,23 @@ service cloud.firestore {
     match /platformTenants/{tenantId} {
       allow read, write: if request.auth != null && request.auth.token.superadmin == true;
 
-      // Usage counters (bookings created, page views) are written by every
-      // ordinary tenant visitor as they use the app, not just the
-      // superadmin, so this subcollection needs its own, more open write
-      // rule. Reads stay superadmin-only -- this feeds billing/costing.
+      // Usage counters (page views, etc.) are written by every ordinary
+      // tenant visitor as they use the app, not just the superadmin, so
+      // this subcollection needs its own, more open write rule. Reads
+      // stay superadmin-only -- this feeds billing/costing.
       match /usage/{period} {
+        allow read: if request.auth != null && request.auth.token.superadmin == true;
+        allow write: if isValidTenantId(tenantId);
+      }
+
+      // Append-only usage event ledger (booking confirmed/cancelled, queue
+      // session created, open play created). Same reasoning as /usage:
+      // ordinary visitors write these as the app is used; only superadmin
+      // reads them. This is the source of truth for confirmed-bookings
+      // billing and every derived analytic, kept as discrete events (not
+      // just a running total) so history survives even after the
+      // originating booking is pruned from clients/{tenantId}/bookings.
+      match /events/{eventId} {
         allow read: if request.auth != null && request.auth.token.superadmin == true;
         allow write: if isValidTenantId(tenantId);
       }

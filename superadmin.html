@@ -232,112 +232,296 @@ async function loadTenants(){
   }
 }
 
-/* ---------- Reporting ---------- */
+/* ---------- Reporting ----------
+   Billing metric is confirmed bookings only, per the reporting spec:
+   - A booking counts the moment it's confirmed (index.html's
+     setBookingStatus), never at creation, and stays counted even if later
+     cancelled -- cancellation is tracked separately, not subtracted.
+   - Page views, queue activity, staff reserve, and Open Play are tracked
+     for analytics but never enter the charge formula.
+   - Everything here reads from the platformTenants/{slug}/events ledger
+     (index.html's logUsageEvent), not from clients/{slug}/bookings, since
+     that array gets periodically pruned by each tenant's retention policy.
+   ---------- */
 function usagePeriod(offsetMonths = 0){
   const d = new Date();
   d.setMonth(d.getMonth() - offsetMonths);
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
 }
-/* Base fee + per-unit overage beyond a free allowance -- set baseFee/allowances
-   to 0 to get pure metered pay-per-unit; set them >0 for a base-plus-overage
-   plan. Same formula covers both. */
-function computeSuggestedCharge(billing, bookings, views){
+function monthStartDate(offsetMonths = 0){
+  const d = new Date();
+  d.setMonth(d.getMonth() - offsetMonths, 1);
+  d.setHours(0,0,0,0);
+  return d;
+}
+function datesInRange(startDate, endDate){
+  const out = [];
+  let cur = new Date(startDate); cur.setHours(12,0,0,0);
+  const end = new Date(endDate); end.setHours(12,0,0,0);
+  while(cur <= end){
+    out.push(cur.toISOString().slice(0,10));
+    cur = new Date(cur.getTime() + 86400000);
+  }
+  return out;
+}
+function fmtNum(n){ return Number(n||0).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2}); }
+
+/* Base fee + per-unit overage beyond a free allowance, billed on confirmed
+   bookings only -- set baseFee/freeBookings to 0 for pure per-booking
+   metering. */
+function computeSuggestedCharge(billing, confirmedBookings){
   const b = billing || {};
   const baseFee = Number(b.baseFee) || 0;
   const freeBookings = Number(b.freeBookings) || 0;
-  const freeViews = Number(b.freeViews) || 0;
   const perBookingRate = Number(b.perBookingRate) || 0;
-  const perViewRate = Number(b.perViewRate) || 0;
-  return baseFee
-    + Math.max(0, bookings - freeBookings) * perBookingRate
-    + Math.max(0, views - freeViews) * perViewRate;
+  return baseFee + Math.max(0, confirmedBookings - freeBookings) * perBookingRate;
 }
+
+/* Mirrors index.html's staffReserve shape migration + effective-hours
+   lookup, duplicated here (small, self-contained) since superadmin.html
+   has no shared module with the tenant-facing app. */
+const LEGACY_STAFF_HOURS_SA = {"17":true,"18":true,"19":true,"20":true,"21":true};
+function migrateStaffReserveShapeSA(raw, courtIds){
+  if(!raw || typeof raw !== 'object') return { template: {}, overrides: {} };
+  if(raw.template) return { template: raw.template, overrides: raw.overrides || {} };
+  const days = raw.days || {};
+  const isPerCourt = Object.keys(days).some(k => !/^[0-6]$/.test(k));
+  const template = {};
+  if(isPerCourt){
+    Object.entries(days).forEach(([courtId, dowMap]) => {
+      template[courtId] = {};
+      Object.entries(dowMap || {}).forEach(([dow, on]) => { if(on) template[courtId][dow] = {...LEGACY_STAFF_HOURS_SA}; });
+    });
+  } else {
+    (courtIds||[]).forEach(id => {
+      template[id] = {};
+      Object.entries(days).forEach(([dow, on]) => { if(on) template[id][dow] = {...LEGACY_STAFF_HOURS_SA}; });
+    });
+  }
+  return { template, overrides: {} };
+}
+function getEffectiveStaffHoursSA(sr, courtId, dateISO){
+  const dow = new Date(dateISO+'T12:00:00').getDay();
+  const tmpl = (sr.template?.[courtId]?.[String(dow)]) || {};
+  const ov = sr.overrides?.[courtId]?.[dateISO];
+  return ov ? {...tmpl, ...ov} : tmpl;
+}
+const _hourDefaults = { queueStart:7, queueEnd:7, bookingStart:7, close:22 };
+function allOperatingHours(hoursCfg){
+  const h = { ..._hourDefaults, ...(hoursCfg||{}) };
+  const out = [];
+  for(let x=h.queueStart; x<h.queueEnd; x++) out.push(x);
+  for(let x=h.bookingStart; x<h.close; x++) out.push(x);
+  return out;
+}
+
 let _lastReportingRows = [];
+
+async function computeTenantReport(t){
+  const slug = t.slug;
+  const thisMonthStart = monthStartDate(0);
+  const lastMonthStart = monthStartDate(1);
+  const now = new Date();
+
+  const usageSnap = await db.collection(`platformTenants/${slug}/usage`).get();
+  let thisViews = 0;
+  usageSnap.forEach(doc => { if(doc.id === usagePeriod(0)) thisViews = doc.data().views || 0; });
+
+  // One range query covers this month + last month (single-field range,
+  // no composite index needed).
+  const eventsSnap = await db.collection(`platformTenants/${slug}/events`)
+    .where('createdAt', '>=', lastMonthStart)
+    .get();
+  const thisMonthEvents = [], lastMonthEvents = [];
+  eventsSnap.forEach(doc => {
+    const e = doc.data();
+    const at = e.createdAt && e.createdAt.toDate ? e.createdAt.toDate() : null;
+    if(!at) return;
+    (at >= thisMonthStart ? thisMonthEvents : lastMonthEvents).push(e);
+  });
+
+  const bucket = (events) => {
+    const confirmed = events.filter(e => e.type === 'booking_confirmed');
+    const cancelled = events.filter(e => e.type === 'booking_cancelled');
+    const queueSessions = events.filter(e => e.type === 'queue_session_created');
+    const openPlay = events.filter(e => e.type === 'open_play_created');
+    return {
+      confirmedBookings: confirmed.length,
+      cancelledBookings: cancelled.length,
+      courtHours: confirmed.reduce((sum,e) => sum + (e.durationHours||0), 0),
+      uniquePlayers: new Set(confirmed.map(e => e.playerEmail).filter(Boolean)),
+      queueSessions: queueSessions.length,
+      openPlaySessions: openPlay.length,
+      openPlayCourtHours: openPlay.reduce((sum,e) => sum + (e.durationHours||0), 0),
+    };
+  };
+  const thisM = bucket(thisMonthEvents);
+  const lastM = bucket(lastMonthEvents);
+  const cancellationRate = thisM.confirmedBookings > 0 ? (thisM.cancelledBookings / thisM.confirmedBookings * 100) : 0;
+
+  // Returning players: this month's emails that also appear in lifetime
+  // history before this month. Capped -- fine at small-facility scale;
+  // revisit with a maintained running set if a tenant's history grows large.
+  let returningPlayers = 0;
+  try {
+    const lifetimeSnap = await db.collection(`platformTenants/${slug}/events`)
+      .where('type', '==', 'booking_confirmed')
+      .where('createdAt', '<', thisMonthStart)
+      .limit(5000)
+      .get();
+    const priorEmails = new Set();
+    lifetimeSnap.forEach(doc => { const e = doc.data().playerEmail; if(e) priorEmails.add(e); });
+    thisM.uniquePlayers.forEach(email => { if(priorEmails.has(email)) returningPlayers++; });
+  } catch(ex) { /* composite index still building, or none yet -- leave at 0 */ }
+
+  // Staff reserve + utilization: a config snapshot walked over the days
+  // elapsed this month, not an event stream (there's no "event" for a
+  // recurring template rule existing -- it's a standing config, not
+  // something that fires).
+  let staffHours = 0, availableCapacity = 0, utilizationPct = 0;
+  try {
+    const [courtsSnap, srSnap, cfgSnap] = await Promise.all([
+      db.doc(`clients/${slug}/courts/state`).get(),
+      db.doc(`clients/${slug}/staffReserve/state`).get(),
+      db.doc(`clients/${slug}/config/state`).get(),
+    ]);
+    const courts = (courtsSnap.exists && courtsSnap.data().data) || [];
+    const activeCourts = courts.filter(c => c.active !== false);
+    const sr = migrateStaffReserveShapeSA((srSnap.exists && srSnap.data().data) || {}, activeCourts.map(c=>c.id));
+    const hoursCfg = (cfgSnap.exists && cfgSnap.data().data && cfgSnap.data().data.hours) || {};
+    const allHours = allOperatingHours(hoursCfg);
+    const dates = datesInRange(thisMonthStart, now);
+    activeCourts.forEach(court => {
+      dates.forEach(dateISO => {
+        const hoursMap = getEffectiveStaffHoursSA(sr, court.id, dateISO);
+        allHours.forEach(h => {
+          availableCapacity++;
+          if(hoursMap[String(h)] === true) staffHours++;
+        });
+      });
+    });
+    utilizationPct = availableCapacity > 0 ? (thisM.courtHours / availableCapacity * 100) : 0;
+  } catch(ex) { /* leave utilization/staff at 0 if tenant config unreadable */ }
+
+  const suggestedCharge = computeSuggestedCharge(t.billing, thisM.confirmedBookings);
+
+  return { ...t, thisM, lastM, cancellationRate, returningPlayers, thisViews, staffHours, availableCapacity, utilizationPct, suggestedCharge };
+}
 
 async function loadReporting(tenants){
   const wrap = document.getElementById('reportingList');
   wrap.innerHTML = `<div class="p-6 text-center mono text-[11px] opacity-50">Loading...</div>`;
-  const thisMonth = usagePeriod(0), lastMonth = usagePeriod(1);
   const rows = [];
   for(const t of tenants){
-    try {
-      const usageSnap = await db.collection(`platformTenants/${t.slug}/usage`).get();
-      let thisB=0, thisV=0, lastB=0, lastV=0, totalB=0, totalV=0;
-      usageSnap.forEach(doc => {
-        const d = doc.data();
-        totalB += d.bookings||0; totalV += d.views||0;
-        if(doc.id === thisMonth){ thisB = d.bookings||0; thisV = d.views||0; }
-        if(doc.id === lastMonth){ lastB = d.bookings||0; lastV = d.views||0; }
-      });
-      const suggestedCharge = computeSuggestedCharge(t.billing, thisB, thisV);
-      rows.push({ ...t, thisB, thisV, lastB, lastV, totalB, totalV, suggestedCharge });
-    } catch(ex) {
-      rows.push({ ...t, error: ex.message });
-    }
+    try { rows.push(await computeTenantReport(t)); }
+    catch(ex) { rows.push({ ...t, error: ex.message }); }
   }
   _lastReportingRows = rows;
 
-  const maxBookings = Math.max(1, ...rows.map(r => r.thisB || 0));
+  const maxBookings = Math.max(1, ...rows.map(r => (r.thisM && r.thisM.confirmedBookings) || 0));
   const chartHtml = `
     <div class="p-5 border-b border-[#F1E9DF]">
-      <div class="mono text-[10px] uppercase tracking-widest opacity-60 mb-3">This Month's Bookings, by Tenant</div>
+      <div class="mono text-[10px] uppercase tracking-widest opacity-60 mb-3">This Month's Confirmed Bookings, by Tenant</div>
       <div class="space-y-2">
         ${rows.map(r => `
           <div class="flex items-center gap-3">
             <div class="w-32 shrink-0 mono text-[11px] font-[700] truncate">${escapeHtml(r.businessName)}</div>
             <div class="flex-1 h-5 rounded-full bg-[#F1E9DF] overflow-hidden">
-              <div class="h-full rounded-full bg-[#201C19]" style="width:${Math.round(((r.thisB||0)/maxBookings)*100)}%"></div>
+              <div class="h-full rounded-full bg-[#201C19]" style="width:${Math.round((((r.thisM&&r.thisM.confirmedBookings)||0)/maxBookings)*100)}%"></div>
             </div>
-            <div class="w-10 shrink-0 mono text-[11px] font-[700] text-right">${r.thisB||0}</div>
+            <div class="w-10 shrink-0 mono text-[11px] font-[700] text-right">${(r.thisM&&r.thisM.confirmedBookings)||0}</div>
           </div>
         `).join('')}
       </div>
     </div>
   `;
 
+  const cardsHtml = rows.map((r, i) => {
+    if(r.error) return `<div class="p-5 border-b border-[#F1E9DF] mono text-[11px] text-[#8C2C10]">${escapeHtml(r.businessName)}: Failed -- ${escapeHtml(r.error)}</div>`;
+    const m = r.thisM;
+    return `
+      <div class="border-b border-[#F1E9DF]">
+        <button type="button" data-report-toggle="${i}" class="w-full flex items-center justify-between p-4 hover:bg-[#FFFBF5] transition cursor-pointer text-left">
+          <div class="flex items-center gap-3 min-w-0">
+            <div class="font-[750] text-[14px] truncate">${escapeHtml(r.businessName)}</div>
+            <div class="mono text-[10px] opacity-60">${m.confirmedBookings} confirmed • ${fmtNum(r.suggestedCharge)} suggested • balance ${fmtNum(r.creditBalance||0)}${(r.creditBalance||0) <= 0 ? ' ⚠' : ''}</div>
+          </div>
+          <span class="mono text-[10px] opacity-50 shrink-0">▾</span>
+        </button>
+        <div id="report-card-${i}" class="hidden px-4 pb-4">
+          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div>
+              <div class="mono text-[9px] uppercase tracking-widest opacity-50 mb-1.5">Bookings</div>
+              <div class="mono text-[12px] space-y-0.5">
+                <div>Confirmed: <b>${m.confirmedBookings}</b> <span class="opacity-50">(last month ${r.lastM.confirmedBookings})</span></div>
+                <div>Cancelled: <b>${m.cancelledBookings}</b></div>
+                <div>Cancellation rate: <b>${r.cancellationRate.toFixed(1)}%</b></div>
+                <div>Court-hours: <b>${m.courtHours}</b></div>
+              </div>
+            </div>
+            <div>
+              <div class="mono text-[9px] uppercase tracking-widest opacity-50 mb-1.5">Players</div>
+              <div class="mono text-[12px] space-y-0.5">
+                <div>Unique: <b>${m.uniquePlayers.size}</b></div>
+                <div>Returning: <b>${r.returningPlayers}</b></div>
+              </div>
+            </div>
+            <div>
+              <div class="mono text-[9px] uppercase tracking-widest opacity-50 mb-1.5">Queue &amp; Open Play</div>
+              <div class="mono text-[12px] space-y-0.5">
+                <div>Queue sessions: <b>${m.queueSessions}</b> <span class="opacity-50">(analytics only)</span></div>
+                <div class="opacity-40 text-[10px] leading-tight">Conversion needs a queue&harr;booking link -- not yet captured</div>
+                <div>Open Play sessions: <b>${m.openPlaySessions}</b></div>
+                <div>Open Play court-hours: <b>${m.openPlayCourtHours}</b></div>
+                <div class="opacity-40 text-[10px] leading-tight">Participants need Open Play signup capture -- not yet captured</div>
+              </div>
+            </div>
+            <div>
+              <div class="mono text-[9px] uppercase tracking-widest opacity-50 mb-1.5">Staff &amp; Utilization (month-to-date)</div>
+              <div class="mono text-[12px] space-y-0.5">
+                <div>Staff-reserved hours: <b>${r.staffHours}</b> <span class="opacity-50">(analytics only)</span></div>
+                <div>Court utilization: <b>${r.utilizationPct.toFixed(1)}%</b></div>
+                <div class="opacity-50">${m.courtHours} / ${r.availableCapacity} court-hours</div>
+              </div>
+            </div>
+          </div>
+          <div class="mt-4 pt-3 border-t border-dashed border-[#EAE0D5] mono text-[12px]">
+            <b>Billing usage:</b> ${m.confirmedBookings} confirmed bookings billable → suggested charge <b>${fmtNum(r.suggestedCharge)}</b> • page views (${r.thisViews}) tracked but never billed
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+
   wrap.innerHTML = chartHtml + `
-    <div class="p-4 flex justify-end">
+    <div class="p-4 flex justify-end border-b border-[#F1E9DF]">
       <button type="button" id="exportReportingCsvBtn" class="h-9 px-4 rounded-full bg-white border border-[#EAE0D5] mono text-[11px] font-[700] cursor-pointer hover:border-[#201C19] transition">Export CSV</button>
     </div>
-    <div class="overflow-x-auto">
-    <table class="w-full text-left">
-      <thead><tr class="mono text-[10px] uppercase tracking-widest opacity-60 border-b border-[#F1E9DF]">
-        <th class="py-2.5 px-6">Tenant</th>
-        <th class="py-2.5 px-3">This Month</th>
-        <th class="py-2.5 px-3">Last Month</th>
-        <th class="py-2.5 px-3">Tracked Total</th>
-        <th class="py-2.5 px-3">Suggested Charge</th>
-        <th class="py-2.5 px-3">Prepaid Balance</th>
-      </tr></thead>
-      <tbody class="divide-y divide-[#F5EDE4]">
-        ${rows.map(r => r.error ? `
-          <tr><td class="py-2.5 px-6 font-[700] text-[13px]">${escapeHtml(r.businessName)}</td><td colspan="5" class="py-2.5 px-3 mono text-[11px] text-[#8C2C10]">Failed: ${escapeHtml(r.error)}</td></tr>
-        ` : `
-          <tr>
-            <td class="py-2.5 px-6 font-[700] text-[13px]">${escapeHtml(r.businessName)}</td>
-            <td class="py-2.5 px-3 mono text-[11px]">${r.thisB} bookings • ${r.thisV} views</td>
-            <td class="py-2.5 px-3 mono text-[11px] opacity-70">${r.lastB} bookings • ${r.lastV} views</td>
-            <td class="py-2.5 px-3 mono text-[11px] font-[700]">${r.totalB} bookings • ${r.totalV} views</td>
-            <td class="py-2.5 px-3 mono text-[11px] font-[700]">${r.suggestedCharge.toFixed(2)}</td>
-            <td class="py-2.5 px-3 mono text-[11px] font-[700] ${r.creditBalance <= 0 ? 'text-[#8C2C10]' : ''}">${r.creditBalance.toFixed(2)}${r.creditBalance <= 0 ? ' ⚠' : ''}</td>
-          </tr>
-        `).join('')}
-      </tbody>
-    </table>
-    </div>
+    ${cardsHtml}
   `;
 
   document.getElementById('exportReportingCsvBtn')?.addEventListener('click', exportReportingCsv);
+  wrap.querySelectorAll('button[data-report-toggle]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.getElementById(`report-card-${btn.dataset.reportToggle}`)?.classList.toggle('hidden');
+    });
+  });
 }
 
 function exportReportingCsv(){
   const rows = _lastReportingRows;
-  const header = ['Tenant','Slug','This Month Bookings','This Month Views','Last Month Bookings','Last Month Views','Tracked Total Bookings','Tracked Total Views','Suggested Charge','Prepaid Balance'];
+  const header = ['Tenant','Slug','Confirmed Bookings','Cancelled Bookings','Cancellation Rate %','Court-Hours','Unique Players','Returning Players','Queue Sessions','Open Play Sessions','Open Play Court-Hours','Staff-Reserved Hours (MTD)','Utilization % (MTD)','Views','Suggested Charge','Prepaid Balance'];
   const csvEscape = v => `"${String(v).replace(/"/g,'""')}"`;
   const lines = [header.map(csvEscape).join(',')];
   rows.forEach(r => {
     if(r.error) return;
-    lines.push([r.businessName, r.slug, r.thisB, r.thisV, r.lastB, r.lastV, r.totalB, r.totalV, r.suggestedCharge.toFixed(2), r.creditBalance.toFixed(2)].map(csvEscape).join(','));
+    const m = r.thisM;
+    lines.push([
+      r.businessName, r.slug, m.confirmedBookings, m.cancelledBookings, r.cancellationRate.toFixed(1),
+      m.courtHours, m.uniquePlayers.size, r.returningPlayers, m.queueSessions, m.openPlaySessions,
+      m.openPlayCourtHours, r.staffHours, r.utilizationPct.toFixed(1), r.thisViews,
+      r.suggestedCharge.toFixed(2), (r.creditBalance||0).toFixed(2)
+    ].map(csvEscape).join(','));
   });
   const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
   const url = URL.createObjectURL(blob);
@@ -400,29 +584,22 @@ function renderTenantRow(slug, data){
       </label>
     </div>
     <div class="p-4 pt-0 md:p-0 md:mt-4 md:pt-4 md:border-t md:border-[#F1E9DF]" id="billingWrap-${cssId(slug)}">
-      <div class="mono text-[10px] uppercase tracking-widest opacity-60 mb-2">Billing</div>
-      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
+      <div class="mono text-[10px] uppercase tracking-widest opacity-60 mb-2">Billing — base subscription + confirmed-booking overage</div>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
         <label class="flex flex-col gap-1.5">
-          <span class="mono text-[9px] uppercase tracking-widest opacity-50">Base Fee</span>
+          <span class="mono text-[9px] uppercase tracking-widest opacity-50">Base Fee (per month)</span>
           <input type="number" id="billBase-${cssId(slug)}" min="0" step="0.01" value="0" class="h-9 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-3 mono text-[11px] font-[700] outline-none focus:border-[#201C19]"/>
         </label>
         <label class="flex flex-col gap-1.5">
-          <span class="mono text-[9px] uppercase tracking-widest opacity-50">Free Bookings</span>
+          <span class="mono text-[9px] uppercase tracking-widest opacity-50">Free Confirmed Bookings</span>
           <input type="number" id="billFreeB-${cssId(slug)}" min="0" step="1" value="0" class="h-9 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-3 mono text-[11px] font-[700] outline-none focus:border-[#201C19]"/>
         </label>
         <label class="flex flex-col gap-1.5">
-          <span class="mono text-[9px] uppercase tracking-widest opacity-50">Rate / Booking</span>
+          <span class="mono text-[9px] uppercase tracking-widest opacity-50">Rate / Booking Over Allowance</span>
           <input type="number" id="billRateB-${cssId(slug)}" min="0" step="0.01" value="0" class="h-9 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-3 mono text-[11px] font-[700] outline-none focus:border-[#201C19]"/>
         </label>
-        <label class="flex flex-col gap-1.5">
-          <span class="mono text-[9px] uppercase tracking-widest opacity-50">Free Views</span>
-          <input type="number" id="billFreeV-${cssId(slug)}" min="0" step="1" value="0" class="h-9 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-3 mono text-[11px] font-[700] outline-none focus:border-[#201C19]"/>
-        </label>
-        <label class="flex flex-col gap-1.5">
-          <span class="mono text-[9px] uppercase tracking-widest opacity-50">Rate / View</span>
-          <input type="number" id="billRateV-${cssId(slug)}" min="0" step="0.01" value="0" class="h-9 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-3 mono text-[11px] font-[700] outline-none focus:border-[#201C19]"/>
-        </label>
       </div>
+      <div class="mono text-[9px] opacity-50 mt-1.5">Billed on confirmed bookings only, per the reporting spec -- page views, queue activity, staff reserve, and Open Play are analytics-only, never billed. Set Base Fee and Free Bookings to 0 for pure per-booking metering.</div>
       <button type="button" data-save-billing="${slug}" class="mt-2.5 h-9 px-4 rounded-full bg-[#201C19] text-white mono text-[10px] font-[700] cursor-pointer">Save Billing Formula</button>
 
       <div class="mt-4 pt-3 border-t border-dashed border-[#EAE0D5] flex flex-wrap items-end gap-2">
@@ -452,8 +629,6 @@ function renderTenantRow(slug, data){
       document.getElementById(`billBase-${cssId(slug)}`).value = b.baseFee || 0;
       document.getElementById(`billFreeB-${cssId(slug)}`).value = b.freeBookings || 0;
       document.getElementById(`billRateB-${cssId(slug)}`).value = b.perBookingRate || 0;
-      document.getElementById(`billFreeV-${cssId(slug)}`).value = b.freeViews || 0;
-      document.getElementById(`billRateV-${cssId(slug)}`).value = b.perViewRate || 0;
       document.getElementById(`balanceDisplay-${cssId(slug)}`).textContent = (data.creditBalance || 0).toFixed(2);
     }
   });
@@ -517,8 +692,6 @@ function renderTenantRow(slug, data){
       baseFee: parseFloat(document.getElementById(`billBase-${cssId(slug)}`).value) || 0,
       freeBookings: parseFloat(document.getElementById(`billFreeB-${cssId(slug)}`).value) || 0,
       perBookingRate: parseFloat(document.getElementById(`billRateB-${cssId(slug)}`).value) || 0,
-      freeViews: parseFloat(document.getElementById(`billFreeV-${cssId(slug)}`).value) || 0,
-      perViewRate: parseFloat(document.getElementById(`billRateV-${cssId(slug)}`).value) || 0,
     };
     try {
       await db.doc(`platformTenants/${slug}`).set({ billing }, { merge: true });

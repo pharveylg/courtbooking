@@ -1683,6 +1683,55 @@ function to12Range(s,e){ return `${fmtTime(s)} – ${fmtTime(e)}`; }
 function loadBookings(){ return fbLoadCache(LS.bookings, []); }
 function saveBookings(arr){ bookings = arr; fbSave('bookings', LS.bookings, arr); }
 
+/* ---------- Booking status transitions (single source of truth) ----------
+   This used to be two separately-maintained <select> change handlers (in
+   renderPaymentProofsQueue and renderAdminBookings) that both wrote
+   bookings[idx].status directly -- consolidated here so there's one place
+   that also fires the billing event. Confirmation is the billing event:
+   logUsageEvent('booking_confirmed', ...) fires exactly once per booking,
+   guarded by _billedConfirmed so toggling status back and forth (Pending ->
+   Reserved -> Pending -> Reserved) never double-counts. Cancellation only
+   logs 'booking_cancelled' for bookings that were actually confirmed first,
+   matching cancellation_rate's definition (cancelled confirmed bookings /
+   confirmed bookings) -- a booking cancelled while still Pending was never
+   billed, so it shouldn't count as a cancellation either. ---------- */
+function setBookingStatus(bookingId, newStatus){
+  const idx = bookings.findIndex(b => b.id === bookingId);
+  if(idx < 0) return null;
+  const b = bookings[idx];
+  b.status = newStatus;
+  if(newStatus === 'Reserved' && !b._billedConfirmed){
+    b._billedConfirmed = true;
+    logUsageEvent('booking_confirmed', {
+      bookingId: b.id,
+      court: b.court || null,
+      durationHours: b.end - b.start,
+      playerEmail: b.email || null
+    });
+  }
+  saveBookings(bookings);
+  renderSchedule(); renderBookingsList();
+  if(typeof renderAdminBookings === 'function') renderAdminBookings();
+  if(typeof renderPaymentProofsQueue === 'function') renderPaymentProofsQueue();
+  return b;
+}
+function removeBooking(bookingId){
+  const b = bookings.find(x => x.id === bookingId);
+  if(!b) return;
+  if(b._billedConfirmed){
+    logUsageEvent('booking_cancelled', {
+      bookingId: b.id,
+      court: b.court || null,
+      durationHours: b.end - b.start,
+      playerEmail: b.email || null
+    });
+  }
+  bookings = bookings.filter(x => x.id !== bookingId);
+  openPlays = openPlays.filter(x => x.id !== bookingId);
+  saveBookings(bookings);
+  saveOpenPlay(openPlays);
+}
+
 function loadOpenPlay(){ return fbLoadCache(LS.openPlay, []); }
 function saveOpenPlay(arr){ openPlays = arr; fbSave('openPlay', LS.openPlay, arr); }
 
@@ -2056,13 +2105,8 @@ function renderPaymentProofsQueue() {
   }
   list.querySelectorAll('select[data-verify]').forEach(sel => {
     sel.addEventListener('change', () => {
-      const idx = bookings.findIndex(x => x.id === sel.getAttribute('data-verify'));
-      if (idx >= 0) {
-        bookings[idx].status = sel.value;
-        saveBookings(bookings);
-        renderSchedule(); renderBookingsList(); renderAdminBookings(); renderPaymentProofsQueue();
-        toast(sel.value === 'Reserved' ? `${bookings[idx].name} marked as Reserved — slot confirmed.` : 'Status set to Pending.');
-      }
+      const b = setBookingStatus(sel.getAttribute('data-verify'), sel.value);
+      if(b) toast(sel.value === 'Reserved' ? `${b.name} marked as Reserved — slot confirmed.` : 'Status set to Pending.');
     });
   });
 }
@@ -2087,10 +2131,23 @@ function fbDocPath(collectionId) {
 }
 
 /* ================================================================
-   USAGE COUNTERS (feeds superadmin Reporting/costing)
-   Written as atomic increments to platformTenants/{tenantId}/usage/{yyyy-mm}
-   -- a platform-owned path, separate from clients/{tenantId}/*, so tenant-
-   level retention resets never touch billing history.
+   USAGE TRACKING (feeds superadmin Reporting/costing)
+   Two tiers, written to platformTenants/{tenantId}/* -- a platform-owned
+   path separate from clients/{tenantId}/*, so tenant-level retention
+   resets (bookings/openPlay/queues get periodically wiped) never touch
+   billing or analytics history:
+
+   - bumpUsageCounter(): a cheap incrementing counter for high-frequency,
+     never-billed signals (currently just page views). No per-event detail
+     is kept, so this stays fine even at high volume.
+   - logUsageEvent(): an append-only doc per billing/analytics-relevant
+     event (booking confirmed/cancelled, queue session created, open play
+     created). This is the source of truth for confirmed-bookings billing
+     and every derived metric (court-hours, unique players, cancellation
+     rate, queue/open-play counts) -- kept as discrete events, not just a
+     running total, specifically so a new dimension can be sliced out of
+     history later without needing the original (often-pruned) booking
+     record to still exist.
    ================================================================ */
 function currentUsagePeriod(){
   const d = new Date();
@@ -2101,6 +2158,14 @@ function bumpUsageCounter(field){
   db.doc(`platformTenants/${currentClientId}/usage/${currentUsagePeriod()}`)
     .set({ [field]: firebase.firestore.FieldValue.increment(1) }, { merge: true })
     .catch(e => console.warn('Usage counter write failed:', e.message));
+}
+function logUsageEvent(type, fields){
+  if(!currentClientId || !db) return;
+  db.collection(`platformTenants/${currentClientId}/events`).add({
+    type,
+    ...fields,
+    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+  }).catch(e => console.warn('Usage event log failed:', e.message));
 }
 
 /* ================================================================
@@ -3158,8 +3223,7 @@ function renderScheduleSlots(container, dateISO, courtFilter){
       if(inputPin === null) return;
       if(inputPin === bk.pin || inputPin === getPin() || inputPin === '1234'){
         if(confirm(`Cancel booking for ${bk.name} on ${bk.date} at ${bk.startTime}? This cannot be undone.`)){
-          bookings = bookings.filter(b=>b.id!==bkId);
-          saveBookings();
+          removeBooking(bkId);
           renderSchedule();
           renderBookingsList();
           if(adminUnlocked) renderAdminBookings();
@@ -3465,7 +3529,7 @@ document.getElementById('reserveForm').addEventListener('submit', (ev)=>{
   renderSchedule();
   renderBookingsList();
   if(adminUnlocked) renderAdminBookings();
-  bumpUsageCounter('bookings');
+  // Billing counts confirmed bookings, not creation -- see setBookingStatus().
 
   // show confirmation modal with email preview
   const hrs = e - s - (_crossesGap(s,e) ? _gapLength() : 0);
@@ -3946,20 +4010,15 @@ function renderAdminBookings(){
 
   list.querySelectorAll('select[data-status]').forEach(sel=>{
     sel.addEventListener('change', ()=>{
-      const id=sel.dataset.status;
-      const val=sel.value;
-      const idx=bookings.findIndex(x=>x.id===id);
-      if(idx>=0){ bookings[idx].status=val; saveBookings(bookings); renderSchedule(); renderBookingsList(); toast(`Marked as ${val}`); }
+      const b = setBookingStatus(sel.dataset.status, sel.value);
+      if(b) toast(`Marked as ${sel.value}`);
     });
   });
   list.querySelectorAll('button[data-del]').forEach(btn=>{
     btn.addEventListener('click', ()=>{
       const id=btn.dataset.del;
       if(confirm('Delete this booking?')){
-        bookings = bookings.filter(x=>x.id!==id);
-        // also remove from openPlays if openPlay booking
-        openPlays = openPlays.filter(x=>x.id!==id);
-        saveBookings(bookings); saveOpenPlay(openPlays);
+        removeBooking(id);
         renderAdminBookings(); renderSchedule(); renderBookingsList(); renderOpenPlayList();
         toast('Deleted');
       }
@@ -4292,6 +4351,7 @@ document.getElementById('openPlayForm').addEventListener('submit', e=>{
   // also add as booking with OpenPlay status for bookings list visibility
   bookings.unshift({id:entry.id, name:'Open Play', email:'', group:'Open Play block', court: opCourtId, date, start, end, status:'OpenPlay', createdAt:Date.now()});
   saveBookings(bookings);
+  logUsageEvent('open_play_created', { court: opCourtId, durationHours: end - start }); // analytics only, never billed
   renderOpenPlayList(); renderAdminBookings(); renderSchedule(); renderBookingsList();
   toast('Open play block added');
 });
@@ -5155,6 +5215,7 @@ document.getElementById('createQueueForm')?.addEventListener('submit', (e) => {
   const list = loadQueues();
   list.unshift(session);
   saveQueues(list);
+  logUsageEvent('queue_session_created', { court: session.court || null }); // analytics only, never billed
 
   selectedQueueSessionId = session.id;
   renderQueueModule();

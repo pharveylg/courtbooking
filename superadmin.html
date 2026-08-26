@@ -344,6 +344,29 @@ function datesInRange(startDate, endDate){
 }
 function fmtNum(n){ return Number(n||0).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2}); }
 
+/* This-month-vs-last-month mini bar chart for one metric. Scaled per row
+   (not globally) since metrics like "Court-Hours" and "Queue Sessions"
+   live on very different scales -- a shared max would flatten the smaller
+   ones to invisible slivers. */
+function chartRow(label, thisVal, lastVal){
+  const max = Math.max(thisVal, lastVal, 1);
+  return `
+    <div class="mb-2.5">
+      <div class="mono text-[10px] opacity-60 mb-1">${label}</div>
+      <div class="flex items-center gap-2 mb-1">
+        <div class="w-14 shrink-0 mono text-[9px] opacity-50">This mo.</div>
+        <div class="flex-1 h-3.5 rounded-full bg-[#F1E9DF] overflow-hidden"><div class="h-full bg-[#201C19] rounded-full" style="width:${Math.round(thisVal/max*100)}%"></div></div>
+        <div class="w-8 shrink-0 mono text-[10px] font-[700] text-right">${thisVal}</div>
+      </div>
+      <div class="flex items-center gap-2">
+        <div class="w-14 shrink-0 mono text-[9px] opacity-50">Last mo.</div>
+        <div class="flex-1 h-3.5 rounded-full bg-[#F1E9DF] overflow-hidden"><div class="h-full bg-[#201C19]/35 rounded-full" style="width:${Math.round(lastVal/max*100)}%"></div></div>
+        <div class="w-8 shrink-0 mono text-[10px] opacity-60 text-right">${lastVal}</div>
+      </div>
+    </div>
+  `;
+}
+
 /* Base fee + per-unit overage beyond a free allowance, billed on confirmed
    bookings only -- set baseFee/freeBookings to 0 for pure per-booking
    metering. */
@@ -422,7 +445,9 @@ async function computeTenantReport(t){
     const confirmed = events.filter(e => e.type === 'booking_confirmed');
     const cancelled = events.filter(e => e.type === 'booking_cancelled');
     const queueSessions = events.filter(e => e.type === 'queue_session_created');
-    const openPlay = events.filter(e => e.type === 'open_play_created');
+    const openPlay = events.filter(e => e.type === 'open_play_created'); // admin-run Open Play blocks
+    const openGamesCreated = events.filter(e => e.type === 'open_game_created'); // public matchmaking
+    const openGamesJoined = events.filter(e => e.type === 'open_game_joined');
     return {
       confirmedBookings: confirmed.length,
       cancelledBookings: cancelled.length,
@@ -431,6 +456,8 @@ async function computeTenantReport(t){
       queueSessions: queueSessions.length,
       openPlaySessions: openPlay.length,
       openPlayCourtHours: openPlay.reduce((sum,e) => sum + (e.durationHours||0), 0),
+      openGamesCreated: openGamesCreated.length,
+      openGamesJoined: openGamesJoined.length,
     };
   };
   const thisM = bucket(thisMonthEvents);
@@ -516,7 +543,7 @@ async function loadReporting(tenants){
 
   const cardsHtml = rows.map((r, i) => {
     if(r.error) return `<div class="p-5 border-b border-[#F1E9DF] mono text-[11px] text-[#8C2C10]">${escapeHtml(r.businessName)}: Failed -- ${escapeHtml(r.error)}</div>`;
-    const m = r.thisM;
+    const m = r.thisM, lm = r.lastM;
     return `
       <div class="border-b border-[#F1E9DF]">
         <button type="button" data-report-toggle="${i}" class="w-full flex items-center justify-between p-4 hover:bg-[#FFFBF5] transition cursor-pointer text-left">
@@ -527,43 +554,19 @@ async function loadReporting(tenants){
           <span class="mono text-[10px] opacity-50 shrink-0">▾</span>
         </button>
         <div id="report-card-${i}" class="hidden px-4 pb-4">
-          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div>
-              <div class="mono text-[9px] uppercase tracking-widest opacity-50 mb-1.5">Bookings</div>
-              <div class="mono text-[12px] space-y-0.5">
-                <div>Confirmed: <b>${m.confirmedBookings}</b> <span class="opacity-50">(last month ${r.lastM.confirmedBookings})</span></div>
-                <div>Cancelled: <b>${m.cancelledBookings}</b></div>
-                <div>Cancellation rate: <b>${r.cancellationRate.toFixed(1)}%</b></div>
-                <div>Court-hours: <b>${m.courtHours}</b></div>
-              </div>
-            </div>
-            <div>
-              <div class="mono text-[9px] uppercase tracking-widest opacity-50 mb-1.5">Players</div>
-              <div class="mono text-[12px] space-y-0.5">
-                <div>Unique: <b>${m.uniquePlayers.size}</b></div>
-                <div>Returning: <b>${r.returningPlayers}</b></div>
-              </div>
-            </div>
-            <div>
-              <div class="mono text-[9px] uppercase tracking-widest opacity-50 mb-1.5">Queue &amp; Open Play</div>
-              <div class="mono text-[12px] space-y-0.5">
-                <div>Queue sessions: <b>${m.queueSessions}</b> <span class="opacity-50">(analytics only)</span></div>
-                <div class="opacity-40 text-[10px] leading-tight">Conversion needs a queue&harr;booking link -- not yet captured</div>
-                <div>Open Play sessions: <b>${m.openPlaySessions}</b></div>
-                <div>Open Play court-hours: <b>${m.openPlayCourtHours}</b></div>
-                <div class="opacity-40 text-[10px] leading-tight">Participants need Open Play signup capture -- not yet captured</div>
-              </div>
-            </div>
-            <div>
-              <div class="mono text-[9px] uppercase tracking-widest opacity-50 mb-1.5">Staff &amp; Utilization (month-to-date)</div>
-              <div class="mono text-[12px] space-y-0.5">
-                <div>Staff-reserved hours: <b>${r.staffHours}</b> <span class="opacity-50">(analytics only)</span></div>
-                <div>Court utilization: <b>${r.utilizationPct.toFixed(1)}%</b></div>
-                <div class="opacity-50">${m.courtHours} / ${r.availableCapacity} court-hours</div>
-              </div>
-            </div>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-1">
+            ${chartRow('Confirmed Bookings', m.confirmedBookings, lm.confirmedBookings)}
+            ${chartRow('Cancelled Bookings', m.cancelledBookings, lm.cancelledBookings)}
+            ${chartRow('Court-Hours', m.courtHours, lm.courtHours)}
+            ${chartRow('Unique Players', m.uniquePlayers.size, lm.uniquePlayers.size)}
+            ${chartRow('Queue Sessions', m.queueSessions, lm.queueSessions)}
+            ${chartRow('Open Games + Open Play', m.openGamesCreated + m.openPlaySessions, lm.openGamesCreated + lm.openPlaySessions)}
           </div>
-          <div class="mt-4 pt-3 border-t border-dashed border-[#EAE0D5] mono text-[12px]">
+          <div class="mt-2 pt-3 border-t border-[#EAE0D5] mono text-[11px] space-y-0.5">
+            <div>Cancellation rate: <b>${r.cancellationRate.toFixed(1)}%</b> • Returning players: <b>${r.returningPlayers}</b> • Court utilization (MTD): <b>${r.utilizationPct.toFixed(1)}%</b> (${m.courtHours}/${r.availableCapacity} court-hrs)</div>
+            <div class="opacity-40 text-[10px] leading-tight">Staff-reserved hours (MTD, analytics only): ${r.staffHours} • Queue conversion and Open Play participants aren't tracked yet -- need a queue&harr;booking link and Open Play signup capture, respectively</div>
+          </div>
+          <div class="mt-3 pt-3 border-t border-dashed border-[#EAE0D5] mono text-[12px]">
             <b>Billing usage:</b> ${m.confirmedBookings} confirmed bookings billable → suggested charge <b>${fmtNum(r.suggestedCharge)}</b> • page views (${r.thisViews}) tracked but never billed
           </div>
         </div>
@@ -688,6 +691,14 @@ function renderTenantRow(slug, data){
         <button type="button" data-top-up="${slug}" class="h-9 px-3.5 rounded-full bg-[#D6FF5F] hover:bg-[#CBF052] text-[#201C19] font-[800] text-[11px] border border-[#201C19]/10 cursor-pointer">Top Up</button>
         <button type="button" data-apply-charge="${slug}" class="h-9 px-3.5 rounded-full bg-white border border-[#EAE0D5] mono text-[10px] font-[700] cursor-pointer hover:border-[#201C19]">Apply This Month's Charge</button>
       </div>
+
+      <div class="mt-4 pt-3 border-t border-dashed border-[#EAE0D5]">
+        <div class="mono text-[10px] uppercase tracking-widest opacity-60 mb-1.5">Demo Data <span class="opacity-50 normal-case">(for testing Reports -- clearly tagged, never mixed with real activity)</span></div>
+        <div class="flex flex-wrap gap-2">
+          <button type="button" data-seed-sample="${slug}" class="h-9 px-3.5 rounded-full bg-white border border-[#EAE0D5] mono text-[10px] font-[700] cursor-pointer hover:border-[#201C19]">Load Sample Usage Data</button>
+          <button type="button" data-wipe-sample="${slug}" class="h-9 px-3.5 rounded-full bg-[#FFE9E0] text-[#8C2C10] border border-[#FFC9B6] mono text-[10px] font-[700] cursor-pointer hover:bg-[#FFD7C7]">Wipe Sample Data (going live)</button>
+        </div>
+      </div>
     </div>
   `;
   list.appendChild(row);
@@ -804,9 +815,84 @@ function renderTenantRow(slug, data){
       loadTenants();
     } catch(ex) { toast('Failed: ' + ex.message); }
   });
+  row.querySelector(`[data-seed-sample="${cssAttr(slug)}"]`).addEventListener('click', async (e) => {
+    e.target.disabled = true;
+    try {
+      const count = await seedSampleUsageData(slug);
+      toast(`Loaded ${count} sample events for ${data.businessName || slug}`);
+      loadTenants();
+    } catch(ex) { toast('Failed: ' + ex.message); }
+    finally { e.target.disabled = false; }
+  });
+  row.querySelector(`[data-wipe-sample="${cssAttr(slug)}"]`).addEventListener('click', async (e) => {
+    if(!confirm(`Wipe all sample/demo usage data for ${data.businessName || slug}? Real usage events are untouched. Do this once the tenant is actually live.`)) return;
+    e.target.disabled = true;
+    try {
+      const count = await wipeSampleUsageData(slug);
+      toast(`Wiped ${count} sample events for ${data.businessName || slug}`);
+      loadTenants();
+    } catch(ex) { toast('Failed: ' + ex.message); }
+    finally { e.target.disabled = false; }
+  });
 }
 function cssId(slug){ return slug.replace(/[^a-zA-Z0-9]/g, '_'); }
 function cssAttr(slug){ return slug; }
+
+/* ---------- Sample/demo usage data (superadmin testing tool) ----------
+   Tagged sample:true on every event doc so it can be identified and
+   wiped in bulk once a tenant is confirmed live -- real usage events
+   never carry this field, so a wipe can never touch them. Timestamps
+   are explicit (firebase.firestore.Timestamp.fromDate), not
+   serverTimestamp(), since these need to be backdated across the last
+   ~75 days to make the Reports charts/trends look like real history. ---------- */
+const SAMPLE_PLAYER_EMAILS = ['alex.sample@example.com','jamie.sample@example.com','sam.sample@example.com','taylor.sample@example.com','morgan.sample@example.com','casey.sample@example.com','riley.sample@example.com','jordan.sample@example.com'];
+const SAMPLE_COURT_IDS = ['court1','court2','court3','court4'];
+function _sampleRandomPastDate(maxDaysBack){
+  const d = new Date();
+  d.setDate(d.getDate() - Math.floor(Math.random() * maxDaysBack));
+  d.setHours(7 + Math.floor(Math.random()*14), Math.floor(Math.random()*60), 0, 0);
+  return d;
+}
+function _sampleRandomCourt(){ return SAMPLE_COURT_IDS[Math.floor(Math.random()*SAMPLE_COURT_IDS.length)]; }
+function _sampleRandomEmail(){ return SAMPLE_PLAYER_EMAILS[Math.floor(Math.random()*SAMPLE_PLAYER_EMAILS.length)]; }
+
+async function seedSampleUsageData(slug){
+  const daysBack = 75;
+  const eventsRef = db.collection(`platformTenants/${slug}/events`);
+  const batch = db.batch();
+  let writes = 0;
+  const put = (fields) => { batch.set(eventsRef.doc(), { sample: true, ...fields }); writes++; };
+
+  const confirmedCount = 20 + Math.floor(Math.random()*20); // 20-39
+  for(let i=0; i<confirmedCount; i++){
+    const at = _sampleRandomPastDate(daysBack);
+    put({ type:'booking_confirmed', court:_sampleRandomCourt(), durationHours: Math.random()<0.7?1:2, playerEmail:_sampleRandomEmail(), createdAt: firebase.firestore.Timestamp.fromDate(at) });
+    if(Math.random() < 0.12){ // ~12% cancellation rate, cancelled a few hours after confirming
+      const cancelAt = new Date(at.getTime() + (1 + Math.random()*5) * 3600000);
+      put({ type:'booking_cancelled', court:_sampleRandomCourt(), durationHours:1, playerEmail:_sampleRandomEmail(), createdAt: firebase.firestore.Timestamp.fromDate(cancelAt) });
+    }
+  }
+  const queueCount = 4 + Math.floor(Math.random()*6);
+  for(let i=0; i<queueCount; i++) put({ type:'queue_session_created', court:_sampleRandomCourt(), createdAt: firebase.firestore.Timestamp.fromDate(_sampleRandomPastDate(daysBack)) });
+
+  const gameCount = 4 + Math.floor(Math.random()*6);
+  for(let i=0; i<gameCount; i++){
+    put({ type:'open_game_created', court:_sampleRandomCourt(), createdAt: firebase.firestore.Timestamp.fromDate(_sampleRandomPastDate(daysBack)) });
+    if(Math.random() < 0.6) put({ type:'open_game_joined', createdAt: firebase.firestore.Timestamp.fromDate(_sampleRandomPastDate(daysBack)) });
+  }
+
+  await batch.commit();
+  return writes;
+}
+
+async function wipeSampleUsageData(slug){
+  const snap = await db.collection(`platformTenants/${slug}/events`).where('sample', '==', true).get();
+  if(snap.empty) return 0;
+  const batch = db.batch();
+  snap.forEach(doc => batch.delete(doc.ref));
+  await batch.commit();
+  return snap.size;
+}
 
 /* ---------- Create / Register Tenant ---------- */
 document.getElementById('createTenantForm').addEventListener('submit', async (e) => {

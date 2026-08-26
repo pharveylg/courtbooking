@@ -22,6 +22,15 @@ service cloud.firestore {
     // set-superadmin-claim.js) may read or write this collection.
     match /platformTenants/{tenantId} {
       allow read, write: if request.auth != null && request.auth.token.superadmin == true;
+
+      // Usage counters (bookings created, page views) are written by every
+      // ordinary tenant visitor as they use the app, not just the
+      // superadmin, so this subcollection needs its own, more open write
+      // rule. Reads stay superadmin-only -- this feeds billing/costing.
+      match /usage/{period} {
+        allow read: if request.auth != null && request.auth.token.superadmin == true;
+        allow write: if isValidTenantId(tenantId);
+      }
     }
 
     // Multi-tenant collections: clients/{clientId}/...

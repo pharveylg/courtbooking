@@ -97,12 +97,23 @@ body{background:#FFFBF5;color:#201C19}
   </div>
 
   <!-- Tenant Directory -->
-  <div class="rounded-[24px] bg-white border border-[#EAE0D5] overflow-hidden">
+  <div class="rounded-[24px] bg-white border border-[#EAE0D5] overflow-hidden mb-6">
     <div class="px-6 h-[56px] flex items-center justify-between border-b border-[#F1E9DF]">
       <div class="font-[750] text-[15px]">Tenant Directory</div>
       <div class="mono text-[11px] opacity-60"><span id="tenantCount">0</span> tenants</div>
     </div>
     <div id="tenantList" class="divide-y divide-[#F5EDE4]"></div>
+  </div>
+
+  <!-- Reporting -->
+  <div class="rounded-[24px] bg-white border border-[#EAE0D5] overflow-hidden">
+    <div class="px-6 h-[56px] flex items-center justify-between border-b border-[#F1E9DF]">
+      <div>
+        <div class="font-[750] text-[15px]">Reporting</div>
+        <div class="mono text-[10px] opacity-50">Bookings created + page views per tenant, for costing. Tracked since this feature launched -- not full historical.</div>
+      </div>
+    </div>
+    <div id="reportingList"></div>
   </div>
 </div>
 
@@ -205,13 +216,68 @@ async function loadTenants(){
     countEl.textContent = snap.size;
     if(snap.empty){
       list.innerHTML = `<div class="p-8 text-center mono text-[12px] opacity-50">No tenants registered yet. Create one above.</div>`;
+      document.getElementById('reportingList').innerHTML = `<div class="p-8 text-center mono text-[12px] opacity-50">No tenants to report on yet.</div>`;
       return;
     }
     list.innerHTML = '';
-    snap.forEach(doc => renderTenantRow(doc.id, doc.data()));
+    const tenants = [];
+    snap.forEach(doc => { renderTenantRow(doc.id, doc.data()); tenants.push({ slug: doc.id, businessName: doc.data().businessName || doc.id }); });
+    loadReporting(tenants);
   } catch(ex) {
     list.innerHTML = `<div class="p-6 text-center mono text-[11px] text-[#8C2C10]">Failed to load tenants: ${escapeHtml(ex.message)}</div>`;
   }
+}
+
+/* ---------- Reporting ---------- */
+function usagePeriod(offsetMonths = 0){
+  const d = new Date();
+  d.setMonth(d.getMonth() - offsetMonths);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+}
+async function loadReporting(tenants){
+  const wrap = document.getElementById('reportingList');
+  wrap.innerHTML = `<div class="p-6 text-center mono text-[11px] opacity-50">Loading...</div>`;
+  const thisMonth = usagePeriod(0), lastMonth = usagePeriod(1);
+  const rows = [];
+  for(const t of tenants){
+    try {
+      const usageSnap = await db.collection(`platformTenants/${t.slug}/usage`).get();
+      let thisB=0, thisV=0, lastB=0, lastV=0, totalB=0, totalV=0;
+      usageSnap.forEach(doc => {
+        const d = doc.data();
+        totalB += d.bookings||0; totalV += d.views||0;
+        if(doc.id === thisMonth){ thisB = d.bookings||0; thisV = d.views||0; }
+        if(doc.id === lastMonth){ lastB = d.bookings||0; lastV = d.views||0; }
+      });
+      rows.push({ ...t, thisB, thisV, lastB, lastV, totalB, totalV });
+    } catch(ex) {
+      rows.push({ ...t, error: ex.message });
+    }
+  }
+  wrap.innerHTML = `
+    <div class="overflow-x-auto">
+    <table class="w-full text-left">
+      <thead><tr class="mono text-[10px] uppercase tracking-widest opacity-60 border-b border-[#F1E9DF]">
+        <th class="py-2.5 px-6">Tenant</th>
+        <th class="py-2.5 px-3">This Month</th>
+        <th class="py-2.5 px-3">Last Month</th>
+        <th class="py-2.5 px-3">Tracked Total</th>
+      </tr></thead>
+      <tbody class="divide-y divide-[#F5EDE4]">
+        ${rows.map(r => r.error ? `
+          <tr><td class="py-2.5 px-6 font-[700] text-[13px]">${escapeHtml(r.businessName)}</td><td colspan="3" class="py-2.5 px-3 mono text-[11px] text-[#8C2C10]">Failed: ${escapeHtml(r.error)}</td></tr>
+        ` : `
+          <tr>
+            <td class="py-2.5 px-6 font-[700] text-[13px]">${escapeHtml(r.businessName)}</td>
+            <td class="py-2.5 px-3 mono text-[11px]">${r.thisB} bookings • ${r.thisV} views</td>
+            <td class="py-2.5 px-3 mono text-[11px] opacity-70">${r.lastB} bookings • ${r.lastV} views</td>
+            <td class="py-2.5 px-3 mono text-[11px] font-[700]">${r.totalB} bookings • ${r.totalV} views</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+    </div>
+  `;
 }
 
 function renderTenantRow(slug, data){
@@ -234,7 +300,7 @@ function renderTenantRow(slug, data){
         <button type="button" data-toggle-status="${slug}" data-current="${isActive}" class="h-8 px-3.5 rounded-full ${isActive?'bg-[#FFE9E0] text-[#8C2C10] border border-[#FFC9B6]':'bg-[#E8F5D8] text-[#3F7019] border border-[#CFE8B5]'} mono text-[11px] font-[700] cursor-pointer transition">${isActive?'Suspend':'Activate'}</button>
       </div>
     </div>
-    <div id="manage-${cssId(slug)}" class="hidden mt-4 pt-4 border-t border-[#F1E9DF] grid grid-cols-1 md:grid-cols-3 gap-3">
+    <div id="manage-${cssId(slug)}" class="hidden mt-4 pt-4 border-t border-[#F1E9DF] grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
       <label class="flex flex-col gap-1.5">
         <span class="mono text-[10px] uppercase tracking-widest opacity-60">Rename Business</span>
         <div class="flex gap-1.5">
@@ -257,12 +323,29 @@ function renderTenantRow(slug, data){
           <button type="button" data-save-pin="${slug}" class="h-9 px-3 rounded-full bg-[#201C19] text-white mono text-[10px] font-[700] cursor-pointer">Reset</button>
         </div>
       </label>
+      <label class="flex flex-col gap-1.5">
+        <span class="mono text-[10px] uppercase tracking-widest opacity-60">Data Retention (days)</span>
+        <div class="flex gap-1.5">
+          <input type="number" id="retention-${cssId(slug)}" min="1" placeholder="14 (default)" class="flex-1 min-w-0 h-9 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-3 mono text-[11px] font-[700] outline-none focus:border-[#201C19]"/>
+          <button type="button" data-save-retention="${slug}" class="h-9 px-3 rounded-full bg-[#201C19] text-white mono text-[10px] font-[700] cursor-pointer">Save</button>
+        </div>
+      </label>
     </div>
   `;
   list.appendChild(row);
 
-  row.querySelector(`[data-manage="${cssAttr(slug)}"]`).addEventListener('click', () => {
-    document.getElementById(`manage-${cssId(slug)}`).classList.toggle('hidden');
+  row.querySelector(`[data-manage="${cssAttr(slug)}"]`).addEventListener('click', async () => {
+    const panel = document.getElementById(`manage-${cssId(slug)}`);
+    const willShow = panel.classList.contains('hidden');
+    panel.classList.toggle('hidden');
+    if(willShow && !panel.dataset.retentionLoaded){
+      panel.dataset.retentionLoaded = '1';
+      try {
+        const settingsSnap = await db.doc(`clients/${slug}/settings/state`).get();
+        const days = settingsSnap.exists && settingsSnap.data().data?.retentionDays;
+        if(days) document.getElementById(`retention-${cssId(slug)}`).value = days;
+      } catch(ex) { /* leave placeholder showing the 14-day default */ }
+    }
   });
   row.querySelector(`[data-toggle-status="${cssAttr(slug)}"]`).addEventListener('click', async (e) => {
     const wasActive = e.target.dataset.current === 'true';
@@ -308,6 +391,15 @@ function renderTenantRow(slug, data){
       await db.doc(`clients/${slug}/settings/state`).update({ 'data.pin': hash, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
       toast(`PIN reset for ${data.businessName || slug}`);
       document.getElementById(`pin-${cssId(slug)}`).value = '';
+    } catch(ex) { toast('Failed: ' + ex.message); }
+  });
+  row.querySelector(`[data-save-retention="${cssAttr(slug)}"]`).addEventListener('click', async () => {
+    const raw = document.getElementById(`retention-${cssId(slug)}`).value.trim();
+    const days = parseInt(raw, 10);
+    if(!raw || !Number.isFinite(days) || days < 1) { toast('Enter a whole number of days (1 or more)'); return; }
+    try {
+      await db.doc(`clients/${slug}/settings/state`).update({ 'data.retentionDays': days, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+      toast(`Retention for ${data.businessName || slug} set to ${days} days`);
     } catch(ex) { toast('Failed: ' + ex.message); }
   });
 }

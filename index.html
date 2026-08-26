@@ -2030,6 +2030,74 @@ function fbDocPath(collectionId) {
     : `${collectionId}/state`;
 }
 
+/* ================================================================
+   USAGE COUNTERS (feeds superadmin Reporting/costing)
+   Written as atomic increments to platformTenants/{tenantId}/usage/{yyyy-mm}
+   -- a platform-owned path, separate from clients/{tenantId}/*, so tenant-
+   level retention resets never touch billing history.
+   ================================================================ */
+function currentUsagePeriod(){
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+}
+function bumpUsageCounter(field){
+  if(!currentClientId || !db) return; // no tenant context / demo mode -- nothing to bill
+  db.doc(`platformTenants/${currentClientId}/usage/${currentUsagePeriod()}`)
+    .set({ [field]: firebase.firestore.FieldValue.increment(1) }, { merge: true })
+    .catch(e => console.warn('Usage counter write failed:', e.message));
+}
+
+/* ================================================================
+   TENANT-LEVEL DATA RETENTION
+   Bookings/openPlay/queues have no cap on growth today (a single Firestore
+   doc holds the whole array and is capped at 1MB), so they're periodically
+   reset -- lazily, on whichever visit crosses the retention window, same
+   pattern as the existing weekly Staff Reserve reset. Billing counts are
+   unaffected since those live under platformTenants/*, incremented at
+   create-time rather than derived from these arrays.
+   ================================================================ */
+async function applyRetentionIfDue(){
+  if(!currentClientId || !db) return;
+  try {
+    const settingsRef = db.doc(fbDocPath('settings'));
+    const snap = await settingsRef.get();
+    const data = (snap.exists && snap.data().data) || {};
+    const retentionDays = Number(data.retentionDays) > 0 ? Number(data.retentionDays) : 14;
+    const periodStart = data.retentionPeriodStart ? new Date(data.retentionPeriodStart) : null;
+
+    if(!periodStart){
+      // First time we've seen this tenant -- start the clock, don't reset yet.
+      await settingsRef.set({ data: { retentionPeriodStart: new Date().toISOString() } }, { merge: true });
+      return;
+    }
+
+    const daysElapsed = (Date.now() - periodStart.getTime()) / 86400000;
+    if(daysElapsed < retentionDays) return; // not due yet
+
+    // Reconcile the billing counter in case any booking was ever created
+    // without going through bumpUsageCounter (e.g. seeded/migrated data),
+    // then wipe the operational arrays and restamp the period.
+    const usageDocRef = db.doc(`platformTenants/${currentClientId}/usage/${currentUsagePeriod()}`);
+    const bSnap = await db.doc(fbDocPath('bookings')).get();
+    const currentCount = (bSnap.exists && Array.isArray(bSnap.data().data)) ? bSnap.data().data.length : 0;
+    if(currentCount > 0){
+      const usageSnap = await usageDocRef.get();
+      const trackedCount = (usageSnap.exists && usageSnap.data().bookings) || 0;
+      if(currentCount > trackedCount){
+        await usageDocRef.set({ bookings: currentCount }, { merge: true });
+      }
+    }
+
+    await db.doc(fbDocPath('bookings')).set({ data: [], updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+    await db.doc(fbDocPath('openPlay')).set({ data: [], updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+    await db.doc(fbDocPath('queues')).set({ data: [], updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+    await settingsRef.set({ data: { retentionPeriodStart: new Date().toISOString() } }, { merge: true });
+    console.log(`[CourtBooking] Retention reset applied for ${currentClientId} (window: ${retentionDays}d)`);
+  } catch(e) {
+    console.warn('Retention check failed:', e.message);
+  }
+}
+
 function startRealtimeListeners() {
   if (!db) return;
 
@@ -2246,7 +2314,11 @@ async function seedIfEmpty() {
 }
 
 // Kick off Firebase
-seedIfEmpty().then(() => startRealtimeListeners());
+seedIfEmpty().then(() => {
+  startRealtimeListeners();
+  bumpUsageCounter('views');
+  applyRetentionIfDue();
+});
 
 /* ---------- Header ---------- */
 document.getElementById('hdrDate').textContent = new Date().toLocaleDateString('en-US',{month:'short', day:'numeric'});
@@ -3320,6 +3392,7 @@ document.getElementById('reserveForm').addEventListener('submit', (ev)=>{
   renderSchedule();
   renderBookingsList();
   if(adminUnlocked) renderAdminBookings();
+  bumpUsageCounter('bookings');
 
   // show confirmation modal with email preview
   const hrs = e - s - (_crossesGap(s,e) ? _gapLength() : 0);

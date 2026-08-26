@@ -103,7 +103,22 @@ service cloud.firestore {
         allow read: if isValidTenantId(clientId);
         allow write: if isValidTenantId(clientId);
       }
-      
+
+      // Open Games subcollection (public matchmaking) -- one doc per game
+      // rather than a single state doc, so joins can be scoped Firestore
+      // transactions. Same open per-tenant rule as every other subcollection
+      // here; there is no user auth in this app to gate on further.
+      match /openGames/{gameId} {
+        allow read: if isValidTenantId(clientId);
+        allow write: if isValidTenantId(clientId);
+      }
+
+      // Soft abuse-limiting counters for Open Games creation
+      match /abuseTracking/{document} {
+        allow read: if isValidTenantId(clientId);
+        allow write: if isValidTenantId(clientId);
+      }
+
       // Proofs subcollection
       match /proofs/{document} {
         allow read: if isValidTenantId(clientId);

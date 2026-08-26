@@ -61,6 +61,7 @@
         <nav class="flex items-center gap-1 p-1 rounded-full bg-[#F1E9DF] border border-[#E9DDD0]">
           <button data-nav="book" class="nav-btn active px-5 h-8 rounded-full text-[13px] font-[650] tracking-[-0.01em] bg-[#201C19] text-white shadow-sm transition">Book</button>
           <button data-nav="queue" class="nav-btn px-5 h-8 rounded-full text-[13px] font-[550] opacity-70 hover:opacity-100 transition">Queue</button>
+          <button data-nav="opengames" class="nav-btn px-5 h-8 rounded-full text-[13px] font-[550] opacity-70 hover:opacity-100 transition">Find a Game</button>
           <button data-nav="payment" class="nav-btn px-5 h-8 rounded-full text-[13px] font-[550] opacity-70 hover:opacity-100 transition">Payment</button>
           <button data-nav="bookings" class="nav-btn admin-only-tab hidden px-5 h-8 rounded-full text-[13px] font-[550] opacity-70 hover:opacity-100 transition">
             Bookings <span id="hdrBookingsBadge" class="ml-1 px-1.5 py-0.5 rounded-full bg-[#201C19]/10 text-[10px]">0</span>
@@ -84,6 +85,7 @@
       <nav class="flex items-center gap-1 p-1 rounded-full bg-[#F1E9DF] border border-[#E9DDD0] flex-1 min-w-0">
         <button data-nav="book" class="nav-btn active flex-1 h-8 rounded-full text-[12px] font-[650] tracking-[-0.01em] bg-[#201C19] text-white shadow-sm transition whitespace-nowrap">Book</button>
         <button data-nav="queue" class="nav-btn flex-1 h-8 rounded-full text-[12px] font-[550] opacity-70 hover:opacity-100 transition whitespace-nowrap">Queue</button>
+        <button data-nav="opengames" class="nav-btn flex-1 h-8 rounded-full text-[12px] font-[550] opacity-70 hover:opacity-100 transition whitespace-nowrap">Find a Game</button>
         <button data-nav="payment" class="nav-btn flex-1 h-8 rounded-full text-[12px] font-[550] opacity-70 hover:opacity-100 transition whitespace-nowrap">Payment</button>
         <button data-nav="bookings" class="nav-btn admin-only-tab hidden flex-1 h-8 rounded-full text-[12px] font-[550] opacity-70 hover:opacity-100 transition whitespace-nowrap">Bookings</button>
         <button data-nav="admin" class="nav-btn admin-only-tab hidden flex-1 h-8 rounded-full text-[12px] font-[550] opacity-70 hover:opacity-100 transition whitespace-nowrap">Admin</button>
@@ -620,6 +622,121 @@
       </div>
     </div>
   </section>
+
+  <!-- VIEW: OPEN GAMES (public matchmaking, separate from the admin Queue Manager above) -->
+  <section id="view-opengames" class="view hidden">
+    <div class="grid grid-cols-12 gap-4 md:gap-6">
+      <div class="col-span-12 lg:col-span-8 flex flex-col gap-4">
+        <div class="rounded-[24px] bg-white border border-[#EAE0D5] shadow-[0_8px_30px_rgba(32,28,25,0.04)] overflow-hidden">
+          <div class="px-5 md:px-7 h-[64px] flex items-center justify-between border-b border-[#F1E9DF]">
+            <div>
+              <h2 class="text-[18px] font-[800] tracking-[-0.02em]">Find a Game</h2>
+              <div class="mono text-[10px] opacity-50">Open games looking for players — join one or start your own.</div>
+            </div>
+            <button type="button" id="ogCreateBtn" class="h-9 px-4 rounded-full bg-[#D6FF5F] hover:bg-[#CBF052] text-[#201C19] font-[800] text-[12px] border border-[#201C19]/10 transition cursor-pointer shrink-0">+ Create Game</button>
+          </div>
+          <div id="ogDiscoverList" class="divide-y divide-[#F5EDE4]"></div>
+        </div>
+      </div>
+      <div class="col-span-12 lg:col-span-4 flex flex-col gap-4">
+        <div class="rounded-[24px] bg-white border border-[#EAE0D5] p-5">
+          <div class="font-[750] text-[14px]">My Games</div>
+          <div class="mono text-[11px] opacity-60 mt-1">Games you created or joined on this device.</div>
+          <div id="ogMyGamesList" class="mt-3 space-y-2"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Create Open Game Modal -->
+  <div id="ogCreateModal" class="fixed inset-0 z-50 hidden">
+    <div class="absolute inset-0 bg-[#201C19]/60 backdrop-blur-[6px]" id="ogCreateBackdrop"></div>
+    <div class="absolute inset-0 overflow-y-auto overscroll-contain flex items-start justify-center p-4">
+      <div class="w-full max-w-[480px] rounded-[28px] bg-white border border-[#EAE0D5] shadow-[0_20px_60px_rgba(32,28,25,0.25)] p-5 md:p-7 my-4">
+        <div class="flex items-center justify-between">
+          <h3 class="text-[20px] font-[800] tracking-[-0.02em]">Create a Game</h3>
+          <button id="ogCreateCloseBtn" class="w-9 h-9 rounded-full bg-[#F1E9DF] grid place-items-center text-[14px] hover:bg-[#E5DDD4] transition cursor-pointer">✕</button>
+        </div>
+        <form id="ogCreateForm" class="mt-4 space-y-3">
+          <div id="ogSuggestBox" class="hidden p-3.5 rounded-[16px] bg-[#FFF8F0] border border-[#FFE0A3] mono text-[12px] leading-[1.5]"></div>
+          <div class="grid grid-cols-2 gap-3">
+            <label class="flex flex-col gap-1.5">
+              <span class="mono text-[10px] uppercase tracking-widest opacity-60">Date</span>
+              <input type="date" id="ogDate" required class="h-11 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-4 mono text-[13px] outline-none focus:border-[#201C19]"/>
+            </label>
+            <label class="flex flex-col gap-1.5">
+              <span class="mono text-[10px] uppercase tracking-widest opacity-60">Start Time</span>
+              <select id="ogStart" class="h-11 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-3 mono text-[13px] outline-none focus:border-[#201C19]"></select>
+            </label>
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <label class="flex flex-col gap-1.5">
+              <span class="mono text-[10px] uppercase tracking-widest opacity-60">Skill Level</span>
+              <select id="ogSkill" class="h-11 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-3 mono text-[13px] outline-none focus:border-[#201C19]">
+                <option value="Open">Open / Any</option>
+                <option value="Beginner">Beginner</option>
+                <option value="Intermediate">Intermediate</option>
+                <option value="Advanced">Advanced</option>
+              </select>
+            </label>
+            <label class="flex flex-col gap-1.5">
+              <span class="mono text-[10px] uppercase tracking-widest opacity-60">Format</span>
+              <select id="ogFormat" class="h-11 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-3 mono text-[13px] outline-none focus:border-[#201C19]">
+                <option value="Doubles">Doubles</option>
+                <option value="Singles">Singles</option>
+                <option value="Open">Open</option>
+              </select>
+            </label>
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <label class="flex flex-col gap-1.5">
+              <span class="mono text-[10px] uppercase tracking-widest opacity-60">Players Needed (total)</span>
+              <select id="ogPlayersNeeded" class="h-11 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-3 mono text-[13px] outline-none focus:border-[#201C19]">
+                <option value="2">2</option>
+                <option value="4" selected>4</option>
+                <option value="6">6</option>
+                <option value="8">8</option>
+              </select>
+            </label>
+            <label id="ogCourtLabel" class="hidden flex flex-col gap-1.5">
+              <span class="mono text-[10px] uppercase tracking-widest opacity-60">Court (optional)</span>
+              <select id="ogCourt" class="h-11 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-3 mono text-[13px] outline-none focus:border-[#201C19]"></select>
+            </label>
+          </div>
+          <label class="flex flex-col gap-1.5">
+            <span class="mono text-[10px] uppercase tracking-widest opacity-60">Notes (optional)</span>
+            <input type="text" id="ogNotes" maxlength="140" placeholder="e.g. Casual game, bring water" class="h-11 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-4 mono text-[13px] outline-none focus:border-[#201C19]"/>
+          </label>
+          <div class="grid grid-cols-2 gap-3">
+            <label class="flex flex-col gap-1.5">
+              <span class="mono text-[10px] uppercase tracking-widest opacity-60">Your Name</span>
+              <input type="text" id="ogCreatorName" required class="h-11 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-4 mono text-[13px] outline-none focus:border-[#201C19]"/>
+            </label>
+            <label class="flex flex-col gap-1.5">
+              <span class="mono text-[10px] uppercase tracking-widest opacity-60">Your Email</span>
+              <input type="email" id="ogCreatorEmail" required class="h-11 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-4 mono text-[13px] outline-none focus:border-[#201C19]"/>
+            </label>
+          </div>
+          <div id="ogCreateError" class="hidden mono text-[12px] text-[#8C2C10] bg-[#FFE9E0] border border-[#FFC9B6] rounded-[14px] px-4 py-2.5"></div>
+          <button type="submit" class="w-full h-12 rounded-full bg-[#201C19] text-white font-[800] text-[14px] hover:opacity-90 transition cursor-pointer">Create Game</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Open Game Detail Modal -->
+  <div id="ogDetailModal" class="fixed inset-0 z-50 hidden">
+    <div class="absolute inset-0 bg-[#201C19]/60 backdrop-blur-[6px]" id="ogDetailBackdrop"></div>
+    <div class="absolute inset-0 overflow-y-auto overscroll-contain flex items-start justify-center p-4">
+      <div class="w-full max-w-[480px] rounded-[28px] bg-white border border-[#EAE0D5] shadow-[0_20px_60px_rgba(32,28,25,0.25)] p-5 md:p-7 my-4">
+        <div class="flex items-center justify-between">
+          <h3 id="ogDetailTitle" class="text-[20px] font-[800] tracking-[-0.02em]">Game</h3>
+          <button id="ogDetailCloseBtn" class="w-9 h-9 rounded-full bg-[#F1E9DF] grid place-items-center text-[14px] hover:bg-[#E5DDD4] transition cursor-pointer">✕</button>
+        </div>
+        <div id="ogDetailBody" class="mt-4 space-y-4"></div>
+      </div>
+    </div>
+  </div>
 
   <!-- VIEW: PAYMENT -->
   <section id="view-payment" class="view hidden">
@@ -2427,6 +2544,7 @@ async function seedIfEmpty() {
 // Kick off Firebase
 seedIfEmpty().then(() => {
   startRealtimeListeners();
+  startOpenGamesListener();
   bumpUsageCounter('views');
   applyRetentionIfDue();
 });
@@ -2449,7 +2567,7 @@ function updateStaffNote(){
 updateStaffNote();
 
 /* ---------- Nav & Public Portal vs Admin Access ---------- */
-const views = {book:document.getElementById('view-book'), queue:document.getElementById('view-queue'), bookings:document.getElementById('view-bookings'), payment:document.getElementById('view-payment'), admin:document.getElementById('view-admin')};
+const views = {book:document.getElementById('view-book'), queue:document.getElementById('view-queue'), opengames:document.getElementById('view-opengames'), bookings:document.getElementById('view-bookings'), payment:document.getElementById('view-payment'), admin:document.getElementById('view-admin')};
 let adminUnlocked = sessionStorage.getItem(LS.adminUnlocked) === 'true';
 
 function updateAdminTabsVisibility(){
@@ -2515,6 +2633,7 @@ document.querySelectorAll('.nav-btn').forEach(btn=>{
     if(id==='bookings') renderBookingsList();
     if(id==='book') renderSchedule();
     if(id==='queue') renderQueueModule();
+    if(id==='opengames') renderOpenGames();
     if(id==='admin' && adminUnlocked){
       renderAdminBookings();
       renderOpenPlayList();
@@ -4298,6 +4417,474 @@ document.getElementById('pricingClearOverrideBtn')?.addEventListener('click', ()
   renderPricingSection(); renderSchedule(); recalcTotal();
   toast('Override cleared for selected hours');
 });
+
+/* ================================================================
+   OPEN GAMES — public cross-player matchmaking (separate from the
+   admin-managed Queue Manager elsewhere in this file, which is a
+   different, pre-existing feature: staff-run walk-in rotation boards,
+   not player-to-player game organizing).
+
+   Deliberately one Firestore doc PER GAME under
+   clients/{tenantId}/openGames/{gameId}, rather than this app's usual
+   single-doc-with-array pattern (bookings/queues/openPlay), so that
+   joining the last open slot can be a Firestore transaction scoped to
+   just that one game -- a mega-doc-with-array would force every join
+   anywhere to contend on one document, and would prevent an efficient
+   status query.
+
+   There is no user login anywhere in this app (auth only exists for
+   tenant admins and the platform owner). Player identity here is
+   name+email, remembered in localStorage for convenience, at the same
+   trust level as the existing booking PIN and admin PIN -- nothing here
+   is cryptographically secure against a determined attacker, consistent
+   with this app's existing security posture end to end.
+   ================================================================ */
+let openGames = [];
+let _ogUnsub = null;
+let _ogActiveGameId = null; // game currently shown in the detail modal
+let _ogPendingCreateConfirmed = false; // set once "join existing instead?" has been dismissed
+
+function ogIdentity(){
+  try { return JSON.parse(localStorage.getItem(lsKey('cb_og_identity_v1'))) || {}; }
+  catch { return {}; }
+}
+function ogSaveIdentity(name, email){
+  localStorage.setItem(lsKey('cb_og_identity_v1'), JSON.stringify({name, email}));
+}
+function ogMyGames(){
+  try { return JSON.parse(localStorage.getItem(lsKey('cb_og_mygames_v1'))) || {}; } // {gameId: {role:'creator'|'player', token}}
+  catch { return {}; }
+}
+function ogTrackMyGame(gameId, role, token){
+  const mine = ogMyGames();
+  mine[gameId] = { role, token: token || (mine[gameId] && mine[gameId].token) || null };
+  localStorage.setItem(lsKey('cb_og_mygames_v1'), JSON.stringify(mine));
+}
+function ogUntrackMyGame(gameId){
+  const mine = ogMyGames();
+  delete mine[gameId];
+  localStorage.setItem(lsKey('cb_og_mygames_v1'), JSON.stringify(mine));
+}
+
+/* Soft abuse-limiting: flags/blocks excessive game creation from the same
+   email. Not a hard security boundary (nothing is, in this app) -- just
+   enough friction that a careless or automated spam loop doesn't flood a
+   tenant's discovery feed or its usage/reporting numbers with junk. */
+async function ogCheckCreationRate(email){
+  if(!db || !currentClientId) return { ok: true };
+  const key = email.trim().toLowerCase().replace(/[^a-z0-9@._-]/g, '_');
+  const ref = db.doc(`clients/${currentClientId}/abuseTracking/${key}`);
+  try {
+    const snap = await ref.get();
+    const now = Date.now();
+    const cutoff = now - 3600000; // 1 hour
+    const recent = ((snap.exists && snap.data().createdTimestamps) || []).filter(t => t > cutoff);
+    if(recent.length >= 5){
+      await ref.set({ flagged: true, flaggedAt: firebase.firestore.FieldValue.serverTimestamp(), createdTimestamps: recent }, { merge: true });
+      return { ok: false, reason: 'Too many games created recently from this email. Please wait a bit before creating another.' };
+    }
+    recent.push(now);
+    await ref.set({ createdTimestamps: recent }, { merge: true });
+    return { ok: true };
+  } catch(e){ return { ok: true }; } // fail open -- soft limit, not a security gate
+}
+
+function ogGameStartsAt(game){ return new Date(game.date+'T00:00:00').getTime() + game.startHour * 3600000; }
+function ogGameEndsAt(game){ return new Date(game.date+'T00:00:00').getTime() + (game.startHour+1) * 3600000; }
+/* Derived, not persisted -- EXPIRED/COMPLETED are computed from the
+   stored status + current time rather than written back on every render. */
+function ogEffectiveStatus(game){
+  const now = Date.now();
+  if(game.status === 'CANCELLED') return 'CANCELLED';
+  if(game.status === 'RESERVED' && now > ogGameEndsAt(game)) return 'COMPLETED';
+  if((game.status === 'OPEN' || game.status === 'FULL') && now > ogGameEndsAt(game)) return 'EXPIRED';
+  return game.status;
+}
+
+function startOpenGamesListener(){
+  if(!db || !currentClientId || _ogUnsub) return;
+  _ogUnsub = db.collection(`clients/${currentClientId}/openGames`).onSnapshot(snap => {
+    const prevById = new Map(openGames.map(g => [g.id, g]));
+    openGames = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    ogNotifyMyGameChanges(prevById);
+    const view = document.getElementById('view-opengames');
+    if(view && !view.classList.contains('hidden')) renderOpenGames();
+    if(_ogActiveGameId) renderOgDetailModal(_ogActiveGameId);
+  }, e => console.warn('openGames listener:', e.message));
+}
+
+/* Meaningful, targeted, non-spammy: only for games this device is
+   tracked as creator/player of, only on the specific transitions that
+   matter, only once per transition (diffed against the previous
+   snapshot, never repeated on every re-render). */
+function ogNotifyMyGameChanges(prevById){
+  const mine = ogMyGames();
+  Object.keys(mine).forEach(gameId => {
+    const before = prevById.get(gameId);
+    const after = openGames.find(g => g.id === gameId);
+    if(!before || !after) return;
+    if(before.status !== 'FULL' && after.status === 'FULL'){
+      toast(`✓ Your game is full — all ${after.playersNeeded} players have joined.`);
+    } else if(before.status !== 'RESERVED' && after.status === 'RESERVED'){
+      toast(`✓ Reservation confirmed — your game is now linked to a court.`);
+    } else if(before.status !== 'CANCELLED' && after.status === 'CANCELLED'){
+      toast(`Your game on ${fmtDateLabel(after.date)} was cancelled.`);
+    } else if(before.players.length < after.players.length && after.players.length < after.playersNeeded){
+      if(mine[gameId].role === 'creator'){
+        const needed = after.playersNeeded - after.players.length;
+        toast(`🏓 ${after.players.length}/${after.playersNeeded} joined — ${needed} more needed.`);
+      }
+    }
+  });
+}
+
+/* ---------- Discovery + My Games rendering ---------- */
+function renderOpenGames(){
+  const discoverEl = document.getElementById('ogDiscoverList');
+  const mineEl = document.getElementById('ogMyGamesList');
+  if(!discoverEl) return;
+  if(!db){
+    discoverEl.innerHTML = `<div class="p-10 text-center mono text-[12px] opacity-60">Find a Game needs this site connected to Firebase (it's a live, cross-visitor feature) — unavailable in local demo mode.</div>`;
+    mineEl.innerHTML = '';
+    return;
+  }
+  startOpenGamesListener();
+
+  const discoverable = openGames
+    .map(g => ({ ...g, _status: ogEffectiveStatus(g) }))
+    .filter(g => g._status === 'OPEN')
+    .sort((a,b) => (ogGameStartsAt(a) - ogGameStartsAt(b)) || ((a.playersNeeded-a.players.length) - (b.playersNeeded-b.players.length)));
+
+  if(!discoverable.length){
+    discoverEl.innerHTML = `<div class="p-10 text-center mono text-[12px] opacity-60">No open games right now. Be the first to start one!</div>`;
+  } else {
+    discoverEl.innerHTML = discoverable.map(g => {
+      const needed = g.playersNeeded - g.players.length;
+      return `
+      <button type="button" data-og-view="${g.id}" class="w-full text-left px-5 md:px-7 py-4 flex flex-wrap items-center justify-between gap-3 hover:bg-[#FFFBF5] transition cursor-pointer">
+        <div class="min-w-0">
+          <div class="flex items-center gap-2 flex-wrap">
+            <span class="mono text-[10px] px-2 py-0.5 rounded-full bg-[#EDE8FF] text-[#3B2A9E] font-[700] uppercase">${escapeHtml(g.skillLevel)}</span>
+            <span class="mono text-[10px] px-2 py-0.5 rounded-full bg-[#F1E9DF] font-[700]">${escapeHtml(g.format)}</span>
+            <span class="font-[700] text-[14px]">${fmtDateLabel(g.date)} · ${fmtTime(g.startHour)}</span>
+          </div>
+          <div class="mono text-[11px] opacity-60 mt-1">${g.players.length} / ${g.playersNeeded} players • ${needed} needed${g.notes ? ' · '+escapeHtml(g.notes) : ''}</div>
+        </div>
+        <span class="h-8 px-4 rounded-full bg-[#D6FF5F] border border-[#201C19]/10 mono text-[11px] font-[800] grid place-items-center shrink-0">View →</span>
+      </button>`;
+    }).join('');
+  }
+  discoverEl.querySelectorAll('button[data-og-view]').forEach(btn => {
+    btn.addEventListener('click', () => openOgDetailModal(btn.dataset.ogView));
+  });
+
+  const mine = ogMyGames();
+  const mineIds = Object.keys(mine);
+  if(!mineIds.length){
+    mineEl.innerHTML = `<div class="mono text-[11px] opacity-50">You haven't created or joined a game yet.</div>`;
+  } else {
+    const mineGames = mineIds.map(id => openGames.find(g => g.id === id)).filter(Boolean)
+      .sort((a,b) => ogGameStartsAt(b) - ogGameStartsAt(a));
+    mineEl.innerHTML = mineGames.map(g => {
+      const status = ogEffectiveStatus(g);
+      const badgeColor = status==='RESERVED' ? 'bg-[#E8F5D8] text-[#3F7019]' : status==='FULL' ? 'bg-[#201C19] text-white' : (status==='CANCELLED'||status==='EXPIRED') ? 'bg-[#F1E9DF] text-[#201C19]/50' : 'bg-[#D6FF5F] text-[#201C19]';
+      return `
+      <button type="button" data-og-view="${g.id}" class="w-full text-left p-3 rounded-[14px] border border-[#F1E9DF] bg-[#FFFBF5] hover:border-[#201C19] transition cursor-pointer">
+        <div class="flex items-center justify-between gap-2">
+          <span class="mono text-[11px] font-[700] truncate">${fmtDateLabel(g.date)} · ${fmtTime(g.startHour)}</span>
+          <span class="mono text-[9px] px-2 py-0.5 rounded-full font-[700] uppercase ${badgeColor}">${status}</span>
+        </div>
+        <div class="mono text-[10px] opacity-60 mt-1">${g.players.length} / ${g.playersNeeded} players • ${mine[g.id].role === 'creator' ? 'You organized this' : 'You joined'}</div>
+      </button>`;
+    }).join('');
+  }
+  mineEl.querySelectorAll('button[data-og-view]').forEach(btn => {
+    btn.addEventListener('click', () => openOgDetailModal(btn.dataset.ogView));
+  });
+}
+
+/* ---------- Create Game ---------- */
+function ogPopulateCreateForm(){
+  const id = ogIdentity();
+  document.getElementById('ogCreatorName').value = id.name || '';
+  document.getElementById('ogCreatorEmail').value = id.email || '';
+  document.getElementById('ogDate').value = selectedDate || todayISO();
+  const startSel = document.getElementById('ogStart');
+  startSel.innerHTML = ALL_HOURS_START.map(h => `<option value="${h}">${fmtTime(h)}</option>`).join('');
+  const courtLabel = document.getElementById('ogCourtLabel');
+  const courtSel = document.getElementById('ogCourt');
+  const activeCourts = getActiveCourts();
+  if(activeCourts.length > 1){
+    courtLabel.classList.remove('hidden');
+    courtSel.innerHTML = `<option value="">No preference</option>` + activeCourts.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
+  } else {
+    courtLabel.classList.add('hidden');
+  }
+  document.getElementById('ogSuggestBox').classList.add('hidden');
+  document.getElementById('ogCreateError').classList.add('hidden');
+  document.querySelector('#ogCreateForm button[type=submit]').textContent = 'Create Game';
+  _ogPendingCreateConfirmed = false;
+}
+document.getElementById('ogCreateBtn')?.addEventListener('click', () => {
+  if(!db){ toast('Find a Game needs this site connected to Firebase.'); return; }
+  ogPopulateCreateForm();
+  document.getElementById('ogCreateModal').classList.remove('hidden');
+});
+document.getElementById('ogCreateCloseBtn')?.addEventListener('click', () => document.getElementById('ogCreateModal').classList.add('hidden'));
+document.getElementById('ogCreateBackdrop')?.addEventListener('click', () => document.getElementById('ogCreateModal').classList.add('hidden'));
+
+function ogFindCompatibleOpenGame(date, startHour, skillLevel, format){
+  return openGames.find(g => {
+    if(ogEffectiveStatus(g) !== 'OPEN') return false;
+    if(g.date !== date) return false;
+    if(Math.abs(g.startHour - startHour) > 1) return false;
+    if(skillLevel !== 'Open' && g.skillLevel !== 'Open' && g.skillLevel !== skillLevel) return false;
+    if(format !== 'Open' && g.format !== 'Open' && g.format !== format) return false;
+    return g.players.length < g.playersNeeded;
+  });
+}
+
+document.getElementById('ogCreateForm')?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const errEl = document.getElementById('ogCreateError');
+  errEl.classList.add('hidden');
+
+  const date = document.getElementById('ogDate').value;
+  const startHour = parseInt(document.getElementById('ogStart').value, 10);
+  const skillLevel = document.getElementById('ogSkill').value;
+  const format = document.getElementById('ogFormat').value;
+  const playersNeeded = parseInt(document.getElementById('ogPlayersNeeded').value, 10);
+  const court = (document.getElementById('ogCourt') && !document.getElementById('ogCourtLabel').classList.contains('hidden')) ? (document.getElementById('ogCourt').value || null) : null;
+  const notes = document.getElementById('ogNotes').value.trim();
+  const name = document.getElementById('ogCreatorName').value.trim();
+  const email = document.getElementById('ogCreatorEmail').value.trim();
+
+  if(!date || isNaN(startHour)){ errEl.textContent = 'Pick a date and start time.'; errEl.classList.remove('hidden'); return; }
+  if(!name || !email){ errEl.textContent = 'Your name and email are required.'; errEl.classList.remove('hidden'); return; }
+  if(ogGameStartsAt({date, startHour}) < Date.now() - 3600000){ errEl.textContent = 'That date/time has already passed.'; errEl.classList.remove('hidden'); return; }
+
+  if(!_ogPendingCreateConfirmed){
+    const match = ogFindCompatibleOpenGame(date, startHour, skillLevel, format);
+    if(match){
+      const box = document.getElementById('ogSuggestBox');
+      box.classList.remove('hidden');
+      box.innerHTML = `You already have a compatible open game at ${fmtTime(match.startHour)} on ${fmtDateLabel(match.date)} (${match.players.length}/${match.playersNeeded} players). Join that one instead of splitting the group?<div class="mt-2 flex gap-2"><button type="button" id="ogJoinSuggested" class="h-9 px-3.5 rounded-full bg-[#201C19] text-white mono text-[11px] font-[700] cursor-pointer">Join Existing Game</button></div>`;
+      document.getElementById('ogJoinSuggested').addEventListener('click', async () => {
+        document.getElementById('ogCreateModal').classList.add('hidden');
+        await ogJoinGame(match.id, name, email);
+      });
+      _ogPendingCreateConfirmed = true; // next submit proceeds to actually create
+      e.target.querySelector('button[type=submit]').textContent = 'Create New Game Anyway';
+      return;
+    }
+  }
+
+  const rateCheck = await ogCheckCreationRate(email);
+  if(!rateCheck.ok){ errEl.textContent = rateCheck.reason; errEl.classList.remove('hidden'); return; }
+
+  ogSaveIdentity(name, email);
+  const submitBtn = e.target.querySelector('button[type=submit]');
+  submitBtn.disabled = true;
+  try {
+    const ref = db.collection(`clients/${currentClientId}/openGames`).doc();
+    const creatorToken = 'ct_' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+    const game = {
+      creatorName: name, creatorEmail: email, creatorToken,
+      status: 'OPEN', date, startHour, skillLevel, format, playersNeeded,
+      court, notes,
+      players: [{ name, email, joinedAt: Date.now() }],
+      reservationId: null,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    };
+    await ref.set(game);
+    ogTrackMyGame(ref.id, 'creator', creatorToken);
+    logUsageEvent('open_game_created', { court: court || null }); // analytics only, never billed
+    document.getElementById('ogCreateModal').classList.add('hidden');
+    toast('Game created! Share it or wait for players to join.');
+    openOgDetailModal(ref.id);
+  } catch(ex){
+    errEl.textContent = 'Failed to create game: ' + ex.message;
+    errEl.classList.remove('hidden');
+  } finally {
+    submitBtn.disabled = false;
+  }
+});
+
+/* ---------- Join / Leave (transactional -- race-safe on the last slot,
+   atomic against Firestore's own servers even though this app has no
+   backend of its own) ---------- */
+async function ogJoinGame(gameId, name, email){
+  const ref = db.doc(`clients/${currentClientId}/openGames/${gameId}`);
+  try {
+    await db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if(!snap.exists) throw new Error('This game no longer exists.');
+      const g = snap.data();
+      if(ogEffectiveStatus(g) !== 'OPEN') throw new Error('This game is no longer open.');
+      if(g.players.some(p => p.email.toLowerCase() === email.toLowerCase())) throw new Error('You already joined this game.');
+      if(g.players.length >= g.playersNeeded) throw new Error('Sorry, that last spot was just taken.');
+      const players = [...g.players, { name, email, joinedAt: Date.now() }];
+      const status = players.length >= g.playersNeeded ? 'FULL' : 'OPEN';
+      tx.update(ref, { players, status, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+    });
+    ogSaveIdentity(name, email);
+    ogTrackMyGame(gameId, 'player', null);
+    logUsageEvent('open_game_joined', {}); // analytics only, never billed
+    toast('Joined the game!');
+  } catch(ex){
+    toast(ex.message || 'Could not join this game.');
+  }
+}
+async function ogLeaveGame(gameId, email){
+  const ref = db.doc(`clients/${currentClientId}/openGames/${gameId}`);
+  try {
+    await db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if(!snap.exists) return;
+      const g = snap.data();
+      if(g.creatorEmail.toLowerCase() === email.toLowerCase()) throw new Error("Organizers can't leave — cancel the game instead.");
+      const players = g.players.filter(p => p.email.toLowerCase() !== email.toLowerCase());
+      const status = g.status === 'FULL' ? 'OPEN' : g.status;
+      tx.update(ref, { players, status, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+    });
+    ogUntrackMyGame(gameId);
+    toast('Left the game.');
+  } catch(ex){
+    toast(ex.message || 'Could not leave this game.');
+  }
+}
+async function ogCancelGame(gameId, token){
+  const ref = db.doc(`clients/${currentClientId}/openGames/${gameId}`);
+  const snap = await ref.get();
+  if(!snap.exists) return;
+  const g = snap.data();
+  if(g.creatorToken !== token){ toast('Only the organizer can cancel this game.'); return; }
+  await ref.update({ status: 'CANCELLED', updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+  toast('Game cancelled.');
+}
+
+/* ---------- Link Reservation. Validated client-side against the real
+   booking record -- the same trust tier as this app's existing
+   cancel-by-PIN flow, since there is no backend to validate it
+   server-side. The PIN is used only transiently to look up the
+   booking; it's never stored or displayed. ---------- */
+async function ogLinkReservation(gameId, token, pin){
+  const game = openGames.find(g => g.id === gameId);
+  if(!game || game.creatorToken !== token) return { ok:false, error:'Only the organizer can link a reservation.' };
+  const booking = bookings.find(b => b.pin === pin && b.status === 'Reserved');
+  if(!booking) return { ok:false, error:'No confirmed reservation matches that PIN.' };
+  if(booking.date !== game.date || booking.start > game.startHour || booking.end <= game.startHour){
+    return { ok:false, error:"That reservation doesn't match this game's date/time." };
+  }
+  const ref = db.doc(`clients/${currentClientId}/openGames/${gameId}`);
+  await ref.update({ reservationId: booking.id, court: booking.court || game.court, status: 'RESERVED', updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+  return { ok:true };
+}
+
+/* ---------- Detail modal ---------- */
+function openOgDetailModal(gameId){
+  _ogActiveGameId = gameId;
+  document.getElementById('ogDetailModal').classList.remove('hidden');
+  renderOgDetailModal(gameId);
+}
+document.getElementById('ogDetailCloseBtn')?.addEventListener('click', () => {
+  _ogActiveGameId = null;
+  document.getElementById('ogDetailModal').classList.add('hidden');
+});
+document.getElementById('ogDetailBackdrop')?.addEventListener('click', () => {
+  _ogActiveGameId = null;
+  document.getElementById('ogDetailModal').classList.add('hidden');
+});
+
+function renderOgDetailModal(gameId){
+  const game = openGames.find(g => g.id === gameId);
+  const body = document.getElementById('ogDetailBody');
+  if(!game){ document.getElementById('ogDetailTitle').textContent = 'Game'; body.innerHTML = `<div class="mono text-[12px] opacity-60">This game is no longer available.</div>`; return; }
+  const status = ogEffectiveStatus(game);
+  const mine = ogMyGames()[game.id];
+  const myEmail = (ogIdentity().email || '').toLowerCase();
+  const alreadyJoined = game.players.some(p => p.email.toLowerCase() === myEmail) || !!(mine && mine.role);
+  const isCreator = !!(mine && mine.role === 'creator' && mine.token === game.creatorToken);
+
+  document.getElementById('ogDetailTitle').textContent = `${game.skillLevel} Game`;
+  const playersHtml = game.players.map(p => `<div class="flex items-center gap-2 mono text-[12px]"><span class="text-[#3F7019]">✓</span>${escapeHtml(p.name)}</div>`).join('')
+    + Array.from({length: Math.max(0, game.playersNeeded - game.players.length)}).map(() => `<div class="flex items-center gap-2 mono text-[12px] opacity-50"><span>○</span>spot available</div>`).join('');
+
+  let reservationHtml;
+  if(game.reservationId){
+    reservationHtml = `<div class="mono text-[12px]"><span class="text-[#3F7019] font-[700]">✓ Reservation Confirmed</span>${game.court ? ' · '+escapeHtml(getCourtName(game.court)) : ''}</div>`;
+  } else if(isCreator && status !== 'CANCELLED' && status !== 'EXPIRED'){
+    reservationHtml = `
+      <div class="mono text-[11px] opacity-60 mb-1.5">Not yet linked to a reservation.</div>
+      <form id="ogLinkForm" class="flex gap-2">
+        <input type="text" id="ogLinkPin" placeholder="Reservation PIN" maxlength="8" class="flex-1 h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-4 mono text-[13px] font-[700] outline-none focus:border-[#201C19]"/>
+        <button type="submit" class="h-10 px-4 rounded-full bg-[#201C19] text-white mono text-[11px] font-[700] cursor-pointer">Link Reservation</button>
+      </form>
+      <div id="ogLinkError" class="hidden mt-2 mono text-[11px] text-[#8C2C10]"></div>`;
+  } else {
+    reservationHtml = `<div class="mono text-[11px] opacity-50">Not yet linked to a reservation.</div>`;
+  }
+
+  const actions = [];
+  if(status === 'OPEN' && !alreadyJoined){
+    actions.push(`<button type="button" id="ogActionJoin" class="flex-1 h-11 rounded-full bg-[#D6FF5F] hover:bg-[#CBF052] text-[#201C19] font-[800] text-[13px] border border-[#201C19]/10 transition cursor-pointer">Join Game</button>`);
+  }
+  if(alreadyJoined && !isCreator && (status === 'OPEN' || status === 'FULL')){
+    actions.push(`<button type="button" id="ogActionLeave" class="flex-1 h-11 rounded-full bg-white border border-[#EAE0D5] mono text-[12px] font-[700] cursor-pointer hover:border-[#201C19]">Leave Game</button>`);
+  }
+  if(isCreator && status !== 'CANCELLED' && status !== 'COMPLETED' && status !== 'EXPIRED'){
+    actions.push(`<button type="button" id="ogActionCancel" class="h-11 px-4 rounded-full bg-[#FFE9E0] text-[#8C2C10] border border-[#FFC9B6] mono text-[11px] font-[700] cursor-pointer hover:bg-[#FFD7C7]">Cancel</button>`);
+  }
+
+  body.innerHTML = `
+    <div class="mono text-[13px] font-[700]">${fmtDateLabel(game.date)}<br/>${fmtTime(game.startHour)}</div>
+    <div class="flex items-center gap-2 flex-wrap">
+      <span class="mono text-[10px] px-2 py-0.5 rounded-full bg-[#F1E9DF] font-[700]">${escapeHtml(game.format)}</span>
+      <span class="mono text-[10px] px-2.5 py-1 rounded-full font-[800] uppercase ${status==='OPEN'?'bg-[#D6FF5F] text-[#201C19]':status==='FULL'?'bg-[#201C19] text-white':status==='RESERVED'?'bg-[#E8F5D8] text-[#3F7019]':'bg-[#F1E9DF] text-[#201C19]/50'}">${game.players.length} / ${game.playersNeeded} Players · ${status}</span>
+    </div>
+    ${game.notes ? `<div class="mono text-[12px] opacity-70">${escapeHtml(game.notes)}</div>` : ''}
+    <div>
+      <div class="mono text-[10px] uppercase tracking-widest opacity-60 mb-1.5">Players</div>
+      <div class="space-y-1">${playersHtml}</div>
+    </div>
+    <div class="pt-3 border-t border-[#EAE0D5]">
+      <div class="mono text-[10px] uppercase tracking-widest opacity-60 mb-1.5">Reservation</div>
+      ${reservationHtml}
+    </div>
+    ${actions.length ? `<div class="flex gap-2 pt-2">${actions.join('')}</div>` : ''}
+  `;
+
+  document.getElementById('ogActionJoin')?.addEventListener('click', async () => {
+    let id = ogIdentity();
+    if(!id.name || !id.email){
+      const name = prompt('Your name?'); if(!name) return;
+      const email = prompt('Your email?'); if(!email) return;
+      id = { name, email };
+    }
+    await ogJoinGame(game.id, id.name, id.email);
+    renderOgDetailModal(game.id);
+  });
+  document.getElementById('ogActionLeave')?.addEventListener('click', async () => {
+    if(!confirm('Leave this game?')) return;
+    await ogLeaveGame(game.id, ogIdentity().email || myEmail);
+    renderOgDetailModal(game.id);
+  });
+  document.getElementById('ogActionCancel')?.addEventListener('click', async () => {
+    if(!confirm('Cancel this game? This cannot be undone.')) return;
+    await ogCancelGame(game.id, mine.token);
+    renderOgDetailModal(game.id);
+  });
+  document.getElementById('ogLinkForm')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const pin = document.getElementById('ogLinkPin').value.trim();
+    const errEl = document.getElementById('ogLinkError');
+    errEl.classList.add('hidden');
+    const result = await ogLinkReservation(game.id, mine.token, pin);
+    if(result.ok){ toast('Reservation linked!'); renderOgDetailModal(game.id); }
+    else { errEl.textContent = result.error; errEl.classList.remove('hidden'); }
+  });
+}
 
 function renderOpenPlayList(){
   const list = document.getElementById('openPlayList');

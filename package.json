@@ -1,4 +1,4 @@
-﻿{
+{
   "scripts": {
     "patch": "node patch.js"
   },

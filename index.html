@@ -1905,23 +1905,23 @@ function saveStaffReserve(obj){
   fbSave('staffReserve', LS.staffReserve, obj);
 }
 
-/* ---------- App state ---------- */
-let selectedDate = todayISO();
-let calCursor = new Date(selectedDate+'T12:00:00');
-let bookings = loadBookings();
-let openPlays = loadOpenPlay();
-let staffReserveEnabled = loadStaffReserve();
-let courtPricing = loadCourtPricing();
-let activePricingCourtTab = null; // currently selected court tab for Pricing (admin)
-let selectedPricingHours = new Set(); // hour chips currently selected for bulk rate entry
-let _firebaseReady = false;
-
 /* ---------- Courts state ---------- */
 let COURTS = [];
 let activeCourtTab = 'court1'; // currently selected court tab for schedule view
 let activeQueueCourtTab = 'all'; // currently selected court tab for queue view
 let activeStaffCourtTab = null; // currently selected court tab for Staff Reserved Hours (admin)
 let expandedTemplateDow = null; // which weekly-pattern day row is expanded, if any
+
+/* ---------- App state ---------- */
+let selectedDate = todayISO();
+let calCursor = new Date(selectedDate+'T12:00:00');
+let bookings = loadBookings();
+let openPlays = loadOpenPlay();
+let staffReserveEnabled = loadStaffReserve(); // migrateStaffReserveShape() may call getActiveCourts(), so COURTS must exist before this runs
+let courtPricing = loadCourtPricing();
+let activePricingCourtTab = null; // currently selected court tab for Pricing (admin)
+let selectedPricingHours = new Set(); // hour chips currently selected for bulk rate entry
+let _firebaseReady = false;
 let selectedStaffCalDate = null; // which calendar date is expanded for overrides, if any
 let staffCalCursor = new Date(); // month currently shown in the Staff Reserved Hours calendar
 

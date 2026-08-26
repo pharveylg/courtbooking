@@ -1100,10 +1100,10 @@ function _deepMerge(base, over){
   }
   return out;
 }
-const CLIENT = _deepMerge(_cfgDefaults, window.CLIENT_CONFIG || {});
+let CLIENT = _deepMerge(_cfgDefaults, window.CLIENT_CONFIG || {});
 
 /* ---------- Theme remap: override the Tailwind palette at runtime ---------- */
-(function applyTheme(){
+function applyTheme(){
   const t = CLIENT.theme;
   const esc = h => h.replace('#','\\#');
   const rules = [];
@@ -1128,22 +1128,26 @@ const CLIENT = _deepMerge(_cfgDefaults, window.CLIENT_CONFIG || {});
   push(`bg-\\[${esc(t.openPlay)}\\]`,'background-color',t.openPlay);
   push(`bg-\\[${esc(t.queue)}\\]`,'background-color',t.queue);
   push(`bg-\\[${esc(t.pending)}\\]`,'background-color',t.pending);
-  const st = document.createElement('style');
-  st.id = 'client-theme';
+  let st = document.getElementById('client-theme');
+  if(!st){ st = document.createElement('style'); st.id = 'client-theme'; document.head.appendChild(st); }
   st.textContent = rules.join('\n');
-  document.head.appendChild(st);
-})();
+}
+applyTheme();
 
 /* ---------- Helpers ---------- */
 function fmtMoney(n){ return CLIENT.currency + Number(n).toLocaleString('en-PH'); }
 function _hh12(h){ return fmtTime(h); }
-const SCHED = {
-  queueStart: CLIENT.hours.queueStart,
-  queueEnd:   CLIENT.hours.queueEnd,
-  bookStart:  CLIENT.hours.bookingStart,
-  close:      CLIENT.hours.close,
-};
-const STAFF_DAYS = CLIENT.staff.days;
+let SCHED, STAFF_DAYS;
+function computeSchedule(){
+  SCHED = {
+    queueStart: CLIENT.hours.queueStart,
+    queueEnd:   CLIENT.hours.queueEnd,
+    bookStart:  CLIENT.hours.bookingStart,
+    close:      CLIENT.hours.close,
+  };
+  STAFF_DAYS = CLIENT.staff.days;
+}
+computeSchedule();
 
 /* ---------- Branding / contact application ---------- */
 function applyBranding(){
@@ -1427,11 +1431,15 @@ function fbLoadCache(lsKey, fallback) {
 
 /* ---------- Constants ---------- */
 /* Hours derived from client config (booking slots always 1h) */
-const HOURS = {
-  morning:   Array.from({length: Math.max(0, SCHED.queueEnd - SCHED.queueStart)}, (_,i)=> SCHED.queueStart + i),
-  afternoon: Array.from({length: Math.max(0, SCHED.close - SCHED.bookStart)}, (_,i)=> SCHED.bookStart + i)
-};
-const ALL_HOURS_START = [...HOURS.morning, ...HOURS.afternoon];
+let HOURS, ALL_HOURS_START;
+function computeHours(){
+  HOURS = {
+    morning:   Array.from({length: Math.max(0, SCHED.queueEnd - SCHED.queueStart)}, (_,i)=> SCHED.queueStart + i),
+    afternoon: Array.from({length: Math.max(0, SCHED.close - SCHED.bookStart)}, (_,i)=> SCHED.bookStart + i)
+  };
+  ALL_HOURS_START = [...HOURS.morning, ...HOURS.afternoon];
+}
+computeHours();
 
 /* ---------- Formatters ---------- */
 function todayISO(){
@@ -4722,9 +4730,13 @@ function toast(msg){
 async function initializeApp() {
   // Load client config from Firestore (multi-tenancy)
   const clientConfig = await loadClientConfig();
-  
-  // Merge client config with defaults and apply branding
+
+  // Merge client config with defaults, recompute derived state, and apply branding
   window.CLIENT_CONFIG = clientConfig;
+  CLIENT = _deepMerge(_cfgDefaults, clientConfig || {});
+  applyTheme();              // re-apply theme CSS with the tenant's colors
+  computeSchedule();         // recompute SCHED/STAFF_DAYS from the tenant's hours
+  computeHours();            // recompute HOURS/ALL_HOURS_START from SCHED
   applyBranding();           // white-label: brand, theme labels, contact, footer
   
   if (!FB_ENABLED) {

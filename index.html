@@ -1044,6 +1044,40 @@
             </div>
           </div>
 
+          <!-- Pricing -->
+          <div class="rounded-[24px] bg-white border border-[#EAE0D5] p-5">
+            <div class="font-[750] text-[14px]">Pricing</div>
+            <div class="mono text-[11px] opacity-60 mt-1">Set a default hourly rate per court, then select one hour, a range, or all hours to override.</div>
+            <div id="pricingCourtTabs" class="hidden mt-3 flex gap-2 flex-wrap"></div>
+
+            <div class="mt-4 flex items-end gap-2">
+              <label class="flex flex-col gap-1.5 flex-1">
+                <span class="mono text-[10px] uppercase tracking-widest opacity-60">Default Rate (all hours)</span>
+                <input type="number" id="pricingDefaultRate" min="0" step="1" class="h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-4 mono text-[12px] font-[700] outline-none focus:border-[#201C19]"/>
+              </label>
+              <button type="button" id="pricingSaveDefaultBtn" class="h-10 px-4 rounded-full bg-[#201C19] text-white mono text-[11px] font-[700] cursor-pointer">Save</button>
+            </div>
+
+            <div class="mt-5 pt-4 border-t border-[#EAE0D5]">
+              <div class="flex items-center justify-between mb-2">
+                <div class="mono text-[10px] uppercase tracking-widest opacity-60">Hour Overrides — click to select</div>
+                <div class="flex gap-1.5">
+                  <button type="button" id="pricingSelectAllBtn" class="mono text-[9px] px-2.5 py-1 rounded-full bg-white border border-[#EAE0D5] cursor-pointer hover:border-[#201C19]">Select All</button>
+                  <button type="button" id="pricingClearSelBtn" class="mono text-[9px] px-2.5 py-1 rounded-full bg-white border border-[#EAE0D5] cursor-pointer hover:border-[#201C19]">Clear Selection</button>
+                </div>
+              </div>
+              <div id="pricingHourGrid" class="flex flex-wrap gap-1.5"></div>
+              <div class="mt-3 flex items-end gap-2">
+                <label class="flex flex-col gap-1.5 flex-1">
+                  <span class="mono text-[10px] uppercase tracking-widest opacity-60">Rate for Selected Hours</span>
+                  <input type="number" id="pricingBulkRate" min="0" step="1" placeholder="e.g. 400" class="h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-4 mono text-[12px] font-[700] outline-none focus:border-[#201C19]"/>
+                </label>
+                <button type="button" id="pricingApplyBulkBtn" class="h-10 px-4 rounded-full bg-[#D6FF5F] hover:bg-[#CBF052] text-[#201C19] font-[800] text-[12px] border border-[#201C19]/10 transition cursor-pointer">Apply</button>
+                <button type="button" id="pricingClearOverrideBtn" class="h-10 px-4 rounded-full bg-[#FFE9E0] text-[#8C2C10] border border-[#FFC9B6] mono text-[11px] font-[700] hover:bg-[#FFD7C7] transition cursor-pointer">Clear</button>
+              </div>
+            </div>
+          </div>
+
           <!-- Open Play -->
           <div class="rounded-[24px] bg-[#201C19] text-white p-5">
             <div class="font-[750] text-[14px]">Create Open Play Entry</div>
@@ -1592,6 +1626,7 @@ const LS = {
   get bookings() { return lsKey('cb_bookings_v7'); },
   get openPlay() { return lsKey('cb_openPlay_v7'); },
   get staffReserve() { return lsKey('cb_staffReserve_v7'); },
+  get pricing() { return lsKey('cb_pricing_v7'); },
   get pin() { return lsKey('cb_adminPin_v7'); },
   get adminUnlocked() { return lsKey('cb_admin_unlocked_v7'); },
   get payMethods() { return lsKey('cb_pay_methods_v7'); },
@@ -1651,6 +1686,26 @@ function saveBookings(arr){ bookings = arr; fbSave('bookings', LS.bookings, arr)
 function loadOpenPlay(){ return fbLoadCache(LS.openPlay, []); }
 function saveOpenPlay(arr){ openPlays = arr; fbSave('openPlay', LS.openPlay, arr); }
 
+/* ---------- Court Pricing: per-court default rate + per-hour overrides ----------
+   Shape: { [courtId]: { default: number, hours: {[hour]: number} } }
+   A court with no entry (or a missing default/hour) falls back to the
+   tenant-wide CLIENT.rates.hourly, so existing tenants are unaffected until
+   an admin actually customizes a court's pricing. ---------- */
+function loadCourtPricing(){ return fbLoadCache(LS.pricing, {}); }
+function saveCourtPricing(obj){ courtPricing = obj; fbSave('pricing', LS.pricing, obj); }
+function getCourtRate(courtId, hour){
+  if(!courtId) return CLIENT.rates.hourly;
+  const table = courtPricing[courtId];
+  if(!table) return CLIENT.rates.hourly;
+  if(table.hours && table.hours[String(hour)] !== undefined) return table.hours[String(hour)];
+  return table.default !== undefined ? table.default : CLIENT.rates.hourly;
+}
+function sumCourtRate(courtId, hourStart, hourEnd){
+  let total = 0;
+  for(let h = hourStart; h < hourEnd; h++) total += getCourtRate(courtId, h);
+  return total;
+}
+
 /* ---------- Staff Reserved Hours: weekly template + per-date calendar overrides ----------
    Shape: { template: {[courtId]: {[dow 0-6]: {[hour]: true}}}, overrides: {[courtId]: {[dateISO]: {[hour]: true}}} }
    Only `true` entries are stored (absence = not reserved), keeping the doc small.
@@ -1690,6 +1745,9 @@ let calCursor = new Date(selectedDate+'T12:00:00');
 let bookings = loadBookings();
 let openPlays = loadOpenPlay();
 let staffReserveEnabled = loadStaffReserve();
+let courtPricing = loadCourtPricing();
+let activePricingCourtTab = null; // currently selected court tab for Pricing (admin)
+let selectedPricingHours = new Set(); // hour chips currently selected for bulk rate entry
 let _firebaseReady = false;
 
 /* ---------- Courts state ---------- */
@@ -1977,7 +2035,7 @@ function renderPaymentProofsQueue() {
           <div class="mono text-[11px] opacity-50 mt-0.5 truncate">${escapeHtml(b.email || '')}${b.group ? ' · ' + escapeHtml(b.group) : ''}</div>
         </div>
         <div class="flex items-center gap-2 shrink-0">
-          <span class="mono text-[11px] font-[700] opacity-75">${fmtMoney((b.end - b.start) * CLIENT.rates.hourly)}</span>
+          <span class="mono text-[11px] font-[700] opacity-75">${fmtMoney(sumCourtRate(b.court, b.start, b.end))}</span>
           <select data-verify="${b.id}" class="h-9 rounded-full border border-[#EAE0D5] bg-white pl-3 pr-2 mono text-[11px] font-[800] cursor-pointer">
             <option value="Pending" selected>Pending</option>
             <option value="Reserved">Reserved ✓</option>
@@ -2134,6 +2192,17 @@ function startRealtimeListeners() {
     if (typeof updateStaffNote === 'function') updateStaffNote();
   }, e => console.warn('staffReserve listener:', e.message));
 
+  db.doc(fbDocPath('pricing')).onSnapshot(snap => {
+    if (!snap.exists) return;
+    const parsed = snap.data().data;
+    if(!parsed) return;
+    courtPricing = parsed;
+    localStorage.setItem(LS.pricing, JSON.stringify(courtPricing));
+    renderSchedule();
+    recalcTotal();
+    if (typeof renderPricingSection === 'function') renderPricingSection();
+  }, e => console.warn('pricing listener:', e.message));
+
   db.doc(fbDocPath('settings')).onSnapshot(snap => {
     if (!snap.exists) return;
     const d = snap.data().data || {};
@@ -2257,6 +2326,16 @@ async function seedIfEmpty() {
       staffReserveEnabled = migrateStaffReserveShape(srSnap.data().data);
     }
     localStorage.setItem(LS.staffReserve, JSON.stringify(staffReserveEnabled));
+
+    // --- Pricing (per-court default rate + hour overrides) ---
+    const priceSnap = await db.doc(fbDocPath('pricing')).get();
+    if (!priceSnap.exists) {
+      await db.doc(fbDocPath('pricing')).set({ data: {}, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+      courtPricing = {};
+    } else {
+      courtPricing = priceSnap.data().data || {};
+    }
+    localStorage.setItem(LS.pricing, JSON.stringify(courtPricing));
 
     // --- Settings (PIN + payMethods) ---
     const sSnap = await db.doc(fbDocPath('settings')).get();
@@ -3015,7 +3094,7 @@ function renderScheduleSlots(container, dateISO, courtFilter){
         leftDot=`<span class="w-2 h-2 rounded-full bg-[#4ADE80]"></span>`;
         actionHtml=`<span class="mono text-[11px] opacity-60 px-3 h-8 grid place-items-center rounded-full bg-[#FFFBF5] border border-[#E9DDD0]">Unlimited play all day</span>`;
       } else {
-        statusChip=`<span class="inline-flex items-center gap-1.5 px-2.5 h-7 rounded-full bg-[#D6FF5F] border border-[#201C19]/10 mono text-[11px] font-[800]">OPEN • ${fmtMoney(CLIENT.rates.hourly)}/hr</span>`;
+        statusChip=`<span class="inline-flex items-center gap-1.5 px-2.5 h-7 rounded-full bg-[#D6FF5F] border border-[#201C19]/10 mono text-[11px] font-[800]">OPEN • ${fmtMoney(getCourtRate(courtFilter, slot.s))}/hr</span>`;
         leftDot=`<span class="w-2 h-2 rounded-full bg-[#4ADE80]"></span>`;
         actionHtml=`<button data-book="${slot.s}" class="book-now-btn h-8 px-4 rounded-full bg-[#201C19] text-white mono text-[11px] font-[700] hover:opacity-90 active:scale-[0.97] transition">Book Now →</button>`;
       }
@@ -3063,7 +3142,7 @@ function renderScheduleSlots(container, dateISO, courtFilter){
       if(inputPin === bk.pin || inputPin === getPin() || inputPin === '1234'){
         _currentProofBookingId = bk.id;
         document.querySelector('[data-nav="payment"]').click();
-        toast(`Booking verified! Upload your payment proof or scan QR for ${fmtMoney((bk.end-bk.start)*CLIENT.rates.hourly)}.`);
+        toast(`Booking verified! Upload your payment proof or scan QR for ${fmtMoney(sumCourtRate(bk.court, bk.start, bk.end))}.`);
       } else {
         alert('Incorrect Booking PIN!');
       }
@@ -3272,13 +3351,28 @@ function populateTimeOptions(){
 function _gapLength(){ return Math.max(0, SCHED.bookStart - SCHED.queueEnd); }
 function _crossesGap(s,e){ return _gapLength()>0 && s < SCHED.bookStart && e > SCHED.queueEnd; }
 
+function _selectedBookingCourtId(){
+  const fCourt = document.getElementById('fCourt');
+  const fCourtLabel = document.getElementById('fCourtLabel');
+  return (fCourt && fCourtLabel && !fCourtLabel.classList.contains('hidden'))
+    ? fCourt.value
+    : (COURTS[0] ? COURTS[0].id : 'court1');
+}
+function _sumBillableCourtRate(courtId, s, e){
+  let total = 0;
+  for(let h = s; h < e; h++){
+    if(h >= SCHED.queueEnd && h < SCHED.bookStart) continue; // break hour, not billed
+    total += getCourtRate(courtId, h);
+  }
+  return total;
+}
 function recalcTotal(){
   const s = parseInt(document.getElementById('fStart').value,10);
   const e = parseInt(document.getElementById('fEnd').value,10);
   const totalLine = document.getElementById('totalLine');
   const totalAmount = document.getElementById('totalAmount');
   const hint = document.getElementById('totalHint');
-  const rate = CLIENT.rates.hourly;
+  const courtId = _selectedBookingCourtId();
   if(isNaN(s)||isNaN(e)|| e<=s){
     totalLine.textContent='Invalid range';
     totalAmount.textContent=fmtMoney(0);
@@ -3288,15 +3382,17 @@ function recalcTotal(){
   const hrs = e - s;
   if(_crossesGap(s,e)){
     const gap = _gapLength();
+    const amount = _sumBillableCourtRate(courtId, s, e);
     totalLine.textContent=`${to12Range(s,e)} • ${hrs-gap}h billable + ${gap}h break`;
-    totalAmount.textContent=fmtMoney((hrs-gap)*rate);
+    totalAmount.textContent=fmtMoney(amount);
     hint.textContent=`Note: ${_hh12(SCHED.queueEnd)}–${_hh12(SCHED.bookStart)} is break (not counted). We bill only open hours.`;
-    return {valid:false, reason:'crosses break', hrs:hrs-gap, amount:(hrs-gap)*rate};
+    return {valid:false, reason:'crosses break', hrs:hrs-gap, amount};
   }
+  const amount = _sumBillableCourtRate(courtId, s, e);
   totalLine.textContent=`${to12Range(s,e)} • ${hrs} hour${hrs>1?'s':''}`;
-  totalAmount.textContent=fmtMoney(hrs*rate);
+  totalAmount.textContent=fmtMoney(amount);
   hint.textContent = s < SCHED.bookStart ? 'Morning queue unlocked by admin' : 'Afternoon reservation';
-  return {valid:true, hrs, amount:hrs*rate};
+  return {valid:true, hrs, amount};
 }
 
 function validateForm(){
@@ -3373,7 +3469,7 @@ document.getElementById('reserveForm').addEventListener('submit', (ev)=>{
 
   // show confirmation modal with email preview
   const hrs = e - s - (_crossesGap(s,e) ? _gapLength() : 0);
-  const amount = hrs * CLIENT.rates.hourly;
+  const amount = _sumBillableCourtRate(newBooking.court, s, e);
   const bizName = titleCase(CLIENT.business.name);
   const preview = `To: ${email}
 Subject: ${bizName} Pickleball — Reservation ${newBooking.status} for ${fmtDateLabel(selectedDate)}
@@ -3384,7 +3480,7 @@ Your reservation is received and is now PENDING verification:
 
 📅 Date: ${fmtDateLabel(selectedDate)}
 🕖 Time: ${to12Range(s,e)} (${hrs} hour${hrs>1?'s':''})
-💰 Total: ${fmtMoney(amount)} @ ${fmtMoney(CLIENT.rates.hourly)}/hour
+💰 Total: ${fmtMoney(amount)}${hrs>0 ? ` (avg ${fmtMoney(Math.round(amount/hrs))}/hour)` : ''}
 👥 Group: ${group || '—'}
 🏟️ Court: ${getCourtName(newBooking.court) || '—'}
 🔑 Booking PIN: ${pin} (use this to pay later from schedule)
@@ -3462,7 +3558,7 @@ function renderBookingsList(){
         ${courtChip}
       </div>
       <div class="flex items-center gap-2 md:ml-auto">
-        <span class="mono text-[11px] px-3 h-7 rounded-full bg-white border border-[#EAE0D5] grid place-items-center">${fmtMoney((b.end-b.start)*CLIENT.rates.hourly)}</span>
+        <span class="mono text-[11px] px-3 h-7 rounded-full bg-white border border-[#EAE0D5] grid place-items-center">${fmtMoney(sumCourtRate(b.court, b.start, b.end))}</span>
       </div>
     `;
     list.appendChild(row);
@@ -4048,6 +4144,102 @@ document.getElementById('staffCalNext')?.addEventListener('click', () => {
   renderStaffCalendar();
 });
 
+/* ---------- Pricing admin UI ---------- */
+function renderPricingSection(){
+  const tabsWrap = document.getElementById('pricingCourtTabs');
+  const gridEl = document.getElementById('pricingHourGrid');
+  if(!gridEl) return;
+
+  const activeCourts = getActiveCourts();
+  if(!activePricingCourtTab || !activeCourts.find(c => c.id === activePricingCourtTab)){
+    activePricingCourtTab = activeCourts.length ? activeCourts[0].id : null;
+    selectedPricingHours.clear();
+  }
+  if(tabsWrap){
+    if(activeCourts.length > 1){
+      tabsWrap.classList.remove('hidden');
+      tabsWrap.innerHTML = activeCourts.map(c => `
+        <button type="button" data-pricing-court-tab="${c.id}" class="shrink-0 px-3.5 h-7 rounded-full mono text-[10px] font-[700] transition cursor-pointer ${activePricingCourtTab === c.id ? 'bg-[#201C19] text-white shadow-xs' : 'bg-white border border-[#EAE0D5] text-[#201C19] hover:border-[#201C19]'}">${escapeHtml(c.name)}</button>
+      `).join('');
+      tabsWrap.querySelectorAll('button[data-pricing-court-tab]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          activePricingCourtTab = btn.dataset.pricingCourtTab;
+          selectedPricingHours.clear();
+          renderPricingSection();
+        });
+      });
+    } else {
+      tabsWrap.classList.add('hidden');
+      tabsWrap.innerHTML = '';
+    }
+  }
+
+  if(!activePricingCourtTab){
+    gridEl.innerHTML = `<div class="p-4 text-center mono text-[11px] opacity-50">No courts configured.</div>`;
+    return;
+  }
+
+  const table = courtPricing[activePricingCourtTab];
+  const defaultRate = table?.default !== undefined ? table.default : CLIENT.rates.hourly;
+  const defaultInput = document.getElementById('pricingDefaultRate');
+  if(document.activeElement !== defaultInput) defaultInput.value = defaultRate;
+
+  gridEl.innerHTML = ALL_HOURS_START.map(h => {
+    const rate = getCourtRate(activePricingCourtTab, h);
+    const isOverride = table?.hours && table.hours[String(h)] !== undefined;
+    const isSelected = selectedPricingHours.has(h);
+    return `<button type="button" data-pricing-hour="${h}" class="h-11 px-2.5 rounded-[12px] mono text-[9px] font-[700] border transition cursor-pointer leading-tight ${isSelected ? 'bg-[#201C19] text-white border-[#201C19]' : isOverride ? 'bg-[#D6FF5F] border-[#201C19]/20 text-[#201C19]' : 'bg-white border-[#EAE0D5] text-[#201C19] hover:border-[#201C19]'}">${_hh12(h).replace(':00 ','')}<br/>${fmtMoney(rate)}</button>`;
+  }).join('');
+  gridEl.querySelectorAll('button[data-pricing-hour]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const h = parseInt(btn.dataset.pricingHour, 10);
+      if(selectedPricingHours.has(h)) selectedPricingHours.delete(h); else selectedPricingHours.add(h);
+      renderPricingSection();
+    });
+  });
+}
+
+document.getElementById('pricingSaveDefaultBtn')?.addEventListener('click', () => {
+  const val = parseFloat(document.getElementById('pricingDefaultRate').value);
+  if(isNaN(val) || val < 0){ toast('Enter a valid non-negative rate'); return; }
+  if(!courtPricing[activePricingCourtTab]) courtPricing[activePricingCourtTab] = { default: val, hours: {} };
+  else courtPricing[activePricingCourtTab].default = val;
+  saveCourtPricing(courtPricing);
+  renderPricingSection(); renderSchedule(); recalcTotal();
+  toast('Default rate saved');
+});
+document.getElementById('pricingSelectAllBtn')?.addEventListener('click', () => {
+  ALL_HOURS_START.forEach(h => selectedPricingHours.add(h));
+  renderPricingSection();
+});
+document.getElementById('pricingClearSelBtn')?.addEventListener('click', () => {
+  selectedPricingHours.clear();
+  renderPricingSection();
+});
+document.getElementById('pricingApplyBulkBtn')?.addEventListener('click', () => {
+  const val = parseFloat(document.getElementById('pricingBulkRate').value);
+  if(isNaN(val) || val < 0){ toast('Enter a valid non-negative rate'); return; }
+  if(selectedPricingHours.size === 0){ toast('Select at least one hour first'); return; }
+  if(!courtPricing[activePricingCourtTab]) courtPricing[activePricingCourtTab] = { default: CLIENT.rates.hourly, hours: {} };
+  if(!courtPricing[activePricingCourtTab].hours) courtPricing[activePricingCourtTab].hours = {};
+  selectedPricingHours.forEach(h => { courtPricing[activePricingCourtTab].hours[String(h)] = val; });
+  saveCourtPricing(courtPricing);
+  document.getElementById('pricingBulkRate').value = '';
+  selectedPricingHours.clear();
+  renderPricingSection(); renderSchedule(); recalcTotal();
+  toast('Rate applied to selected hours');
+});
+document.getElementById('pricingClearOverrideBtn')?.addEventListener('click', () => {
+  if(selectedPricingHours.size === 0){ toast('Select at least one hour first'); return; }
+  if(courtPricing[activePricingCourtTab]?.hours){
+    selectedPricingHours.forEach(h => delete courtPricing[activePricingCourtTab].hours[String(h)]);
+  }
+  saveCourtPricing(courtPricing);
+  selectedPricingHours.clear();
+  renderPricingSection(); renderSchedule(); recalcTotal();
+  toast('Override cleared for selected hours');
+});
+
 function renderOpenPlayList(){
   const list = document.getElementById('openPlayList');
   list.innerHTML='';
@@ -4132,16 +4324,17 @@ document.getElementById('exportBtn').addEventListener('click', ()=>{
   URL.revokeObjectURL(url);
 });
 document.getElementById('resetBtn').addEventListener('click', ()=>{
-  if(confirm('Wipe ALL data globally (bookings, open play, staff reserve, QR codes, queues, courts)? This affects all devices.')){
+  if(confirm('Wipe ALL data globally (bookings, open play, staff reserve, pricing, QR codes, queues, courts)? This affects all devices.')){
     bookings=[]; openPlays=[];
     staffReserveEnabled = { template: {}, overrides: {} };
+    courtPricing = {};
     payMethods = JSON.parse(JSON.stringify(DEFAULT_PAY_METHODS));
     COURTS = [{ id: 'court1', name: 'Court 1', startHour: 13, active: true }];
     activeCourtTab = 'court1';
     selectedQueueSessionId = null;
-    saveBookings(bookings); saveOpenPlay(openPlays); saveStaffReserve(staffReserveEnabled); savePayMethods(payMethods); saveQueues([]); saveCourts(COURTS);
+    saveBookings(bookings); saveOpenPlay(openPlays); saveStaffReserve(staffReserveEnabled); saveCourtPricing(courtPricing); savePayMethods(payMethods); saveQueues([]); saveCourts(COURTS);
     localStorage.removeItem(LS.queues);
-    renderSchedule(); renderBookingsList(); renderAdminBookings(); renderStaffReserveSection(); renderOpenPlayList(); renderPublicPayTab(); renderAdminQrManager(); renderQueueModule(); renderAdminCourts(); renderCourtTabs(); populateCourtSelectors();
+    renderSchedule(); renderBookingsList(); renderAdminBookings(); renderStaffReserveSection(); renderPricingSection(); renderOpenPlayList(); renderPublicPayTab(); renderAdminQrManager(); renderQueueModule(); renderAdminCourts(); renderCourtTabs(); populateCourtSelectors();
     toast('All data wiped globally across all devices');
   }
 });
@@ -5283,6 +5476,7 @@ updateAdminTabsVisibility = function() {
   _origUpdateAdmin();
   if(adminUnlocked) {
     if (typeof renderStaffReserveSection === 'function') renderStaffReserveSection();
+    if (typeof renderPricingSection === 'function') renderPricingSection();
     if (typeof renderAdminCourts === 'function') renderAdminCourts();
     if (typeof renderAdminBranding === 'function') renderAdminBranding();
     armProofWatcher();                    // start Firebase Storage housekeeping on first unlock

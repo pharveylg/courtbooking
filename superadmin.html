@@ -109,8 +109,8 @@ body{background:#FFFBF5;color:#201C19}
   <div class="rounded-[24px] bg-white border border-[#EAE0D5] overflow-hidden">
     <div class="px-6 h-[56px] flex items-center justify-between border-b border-[#F1E9DF]">
       <div>
-        <div class="font-[750] text-[15px]">Reporting</div>
-        <div class="mono text-[10px] opacity-50">Bookings created + page views per tenant, for costing. Tracked since this feature launched -- not full historical.</div>
+        <div class="font-[750] text-[15px]">Reporting &amp; Billing</div>
+        <div class="mono text-[10px] opacity-50">Usage per tenant, a computed suggested charge from each tenant's billing formula, and prepaid balance. Tracked since this feature launched -- not full historical.</div>
       </div>
     </div>
     <div id="reportingList"></div>
@@ -221,7 +221,11 @@ async function loadTenants(){
     }
     list.innerHTML = '';
     const tenants = [];
-    snap.forEach(doc => { renderTenantRow(doc.id, doc.data()); tenants.push({ slug: doc.id, businessName: doc.data().businessName || doc.id }); });
+    snap.forEach(doc => {
+      const d = doc.data();
+      renderTenantRow(doc.id, d);
+      tenants.push({ slug: doc.id, businessName: d.businessName || doc.id, billing: d.billing || {}, creditBalance: d.creditBalance || 0 });
+    });
     loadReporting(tenants);
   } catch(ex) {
     list.innerHTML = `<div class="p-6 text-center mono text-[11px] text-[#8C2C10]">Failed to load tenants: ${escapeHtml(ex.message)}</div>`;
@@ -234,6 +238,22 @@ function usagePeriod(offsetMonths = 0){
   d.setMonth(d.getMonth() - offsetMonths);
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
 }
+/* Base fee + per-unit overage beyond a free allowance -- set baseFee/allowances
+   to 0 to get pure metered pay-per-unit; set them >0 for a base-plus-overage
+   plan. Same formula covers both. */
+function computeSuggestedCharge(billing, bookings, views){
+  const b = billing || {};
+  const baseFee = Number(b.baseFee) || 0;
+  const freeBookings = Number(b.freeBookings) || 0;
+  const freeViews = Number(b.freeViews) || 0;
+  const perBookingRate = Number(b.perBookingRate) || 0;
+  const perViewRate = Number(b.perViewRate) || 0;
+  return baseFee
+    + Math.max(0, bookings - freeBookings) * perBookingRate
+    + Math.max(0, views - freeViews) * perViewRate;
+}
+let _lastReportingRows = [];
+
 async function loadReporting(tenants){
   const wrap = document.getElementById('reportingList');
   wrap.innerHTML = `<div class="p-6 text-center mono text-[11px] opacity-50">Loading...</div>`;
@@ -249,12 +269,36 @@ async function loadReporting(tenants){
         if(doc.id === thisMonth){ thisB = d.bookings||0; thisV = d.views||0; }
         if(doc.id === lastMonth){ lastB = d.bookings||0; lastV = d.views||0; }
       });
-      rows.push({ ...t, thisB, thisV, lastB, lastV, totalB, totalV });
+      const suggestedCharge = computeSuggestedCharge(t.billing, thisB, thisV);
+      rows.push({ ...t, thisB, thisV, lastB, lastV, totalB, totalV, suggestedCharge });
     } catch(ex) {
       rows.push({ ...t, error: ex.message });
     }
   }
-  wrap.innerHTML = `
+  _lastReportingRows = rows;
+
+  const maxBookings = Math.max(1, ...rows.map(r => r.thisB || 0));
+  const chartHtml = `
+    <div class="p-5 border-b border-[#F1E9DF]">
+      <div class="mono text-[10px] uppercase tracking-widest opacity-60 mb-3">This Month's Bookings, by Tenant</div>
+      <div class="space-y-2">
+        ${rows.map(r => `
+          <div class="flex items-center gap-3">
+            <div class="w-32 shrink-0 mono text-[11px] font-[700] truncate">${escapeHtml(r.businessName)}</div>
+            <div class="flex-1 h-5 rounded-full bg-[#F1E9DF] overflow-hidden">
+              <div class="h-full rounded-full bg-[#201C19]" style="width:${Math.round(((r.thisB||0)/maxBookings)*100)}%"></div>
+            </div>
+            <div class="w-10 shrink-0 mono text-[11px] font-[700] text-right">${r.thisB||0}</div>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `;
+
+  wrap.innerHTML = chartHtml + `
+    <div class="p-4 flex justify-end">
+      <button type="button" id="exportReportingCsvBtn" class="h-9 px-4 rounded-full bg-white border border-[#EAE0D5] mono text-[11px] font-[700] cursor-pointer hover:border-[#201C19] transition">Export CSV</button>
+    </div>
     <div class="overflow-x-auto">
     <table class="w-full text-left">
       <thead><tr class="mono text-[10px] uppercase tracking-widest opacity-60 border-b border-[#F1E9DF]">
@@ -262,22 +306,46 @@ async function loadReporting(tenants){
         <th class="py-2.5 px-3">This Month</th>
         <th class="py-2.5 px-3">Last Month</th>
         <th class="py-2.5 px-3">Tracked Total</th>
+        <th class="py-2.5 px-3">Suggested Charge</th>
+        <th class="py-2.5 px-3">Prepaid Balance</th>
       </tr></thead>
       <tbody class="divide-y divide-[#F5EDE4]">
         ${rows.map(r => r.error ? `
-          <tr><td class="py-2.5 px-6 font-[700] text-[13px]">${escapeHtml(r.businessName)}</td><td colspan="3" class="py-2.5 px-3 mono text-[11px] text-[#8C2C10]">Failed: ${escapeHtml(r.error)}</td></tr>
+          <tr><td class="py-2.5 px-6 font-[700] text-[13px]">${escapeHtml(r.businessName)}</td><td colspan="5" class="py-2.5 px-3 mono text-[11px] text-[#8C2C10]">Failed: ${escapeHtml(r.error)}</td></tr>
         ` : `
           <tr>
             <td class="py-2.5 px-6 font-[700] text-[13px]">${escapeHtml(r.businessName)}</td>
             <td class="py-2.5 px-3 mono text-[11px]">${r.thisB} bookings • ${r.thisV} views</td>
             <td class="py-2.5 px-3 mono text-[11px] opacity-70">${r.lastB} bookings • ${r.lastV} views</td>
             <td class="py-2.5 px-3 mono text-[11px] font-[700]">${r.totalB} bookings • ${r.totalV} views</td>
+            <td class="py-2.5 px-3 mono text-[11px] font-[700]">${r.suggestedCharge.toFixed(2)}</td>
+            <td class="py-2.5 px-3 mono text-[11px] font-[700] ${r.creditBalance <= 0 ? 'text-[#8C2C10]' : ''}">${r.creditBalance.toFixed(2)}${r.creditBalance <= 0 ? ' ⚠' : ''}</td>
           </tr>
         `).join('')}
       </tbody>
     </table>
     </div>
   `;
+
+  document.getElementById('exportReportingCsvBtn')?.addEventListener('click', exportReportingCsv);
+}
+
+function exportReportingCsv(){
+  const rows = _lastReportingRows;
+  const header = ['Tenant','Slug','This Month Bookings','This Month Views','Last Month Bookings','Last Month Views','Tracked Total Bookings','Tracked Total Views','Suggested Charge','Prepaid Balance'];
+  const csvEscape = v => `"${String(v).replace(/"/g,'""')}"`;
+  const lines = [header.map(csvEscape).join(',')];
+  rows.forEach(r => {
+    if(r.error) return;
+    lines.push([r.businessName, r.slug, r.thisB, r.thisV, r.lastB, r.lastV, r.totalB, r.totalV, r.suggestedCharge.toFixed(2), r.creditBalance.toFixed(2)].map(csvEscape).join(','));
+  });
+  const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `superadmin-reporting-${usagePeriod(0)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 function renderTenantRow(slug, data){
@@ -331,6 +399,41 @@ function renderTenantRow(slug, data){
         </div>
       </label>
     </div>
+    <div class="p-4 pt-0 md:p-0 md:mt-4 md:pt-4 md:border-t md:border-[#F1E9DF]" id="billingWrap-${cssId(slug)}">
+      <div class="mono text-[10px] uppercase tracking-widest opacity-60 mb-2">Billing</div>
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
+        <label class="flex flex-col gap-1.5">
+          <span class="mono text-[9px] uppercase tracking-widest opacity-50">Base Fee</span>
+          <input type="number" id="billBase-${cssId(slug)}" min="0" step="0.01" value="0" class="h-9 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-3 mono text-[11px] font-[700] outline-none focus:border-[#201C19]"/>
+        </label>
+        <label class="flex flex-col gap-1.5">
+          <span class="mono text-[9px] uppercase tracking-widest opacity-50">Free Bookings</span>
+          <input type="number" id="billFreeB-${cssId(slug)}" min="0" step="1" value="0" class="h-9 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-3 mono text-[11px] font-[700] outline-none focus:border-[#201C19]"/>
+        </label>
+        <label class="flex flex-col gap-1.5">
+          <span class="mono text-[9px] uppercase tracking-widest opacity-50">Rate / Booking</span>
+          <input type="number" id="billRateB-${cssId(slug)}" min="0" step="0.01" value="0" class="h-9 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-3 mono text-[11px] font-[700] outline-none focus:border-[#201C19]"/>
+        </label>
+        <label class="flex flex-col gap-1.5">
+          <span class="mono text-[9px] uppercase tracking-widest opacity-50">Free Views</span>
+          <input type="number" id="billFreeV-${cssId(slug)}" min="0" step="1" value="0" class="h-9 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-3 mono text-[11px] font-[700] outline-none focus:border-[#201C19]"/>
+        </label>
+        <label class="flex flex-col gap-1.5">
+          <span class="mono text-[9px] uppercase tracking-widest opacity-50">Rate / View</span>
+          <input type="number" id="billRateV-${cssId(slug)}" min="0" step="0.01" value="0" class="h-9 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-3 mono text-[11px] font-[700] outline-none focus:border-[#201C19]"/>
+        </label>
+      </div>
+      <button type="button" data-save-billing="${slug}" class="mt-2.5 h-9 px-4 rounded-full bg-[#201C19] text-white mono text-[10px] font-[700] cursor-pointer">Save Billing Formula</button>
+
+      <div class="mt-4 pt-3 border-t border-dashed border-[#EAE0D5] flex flex-wrap items-end gap-2">
+        <div class="mono text-[10px] uppercase tracking-widest opacity-60">Prepaid Balance:</div>
+        <div id="balanceDisplay-${cssId(slug)}" class="mono text-[13px] font-[800]">0.00</div>
+        <div class="flex-1"></div>
+        <input type="number" id="topUpAmount-${cssId(slug)}" min="0" step="0.01" placeholder="Amount received" class="w-40 h-9 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-3 mono text-[11px] font-[700] outline-none focus:border-[#201C19]"/>
+        <button type="button" data-top-up="${slug}" class="h-9 px-3.5 rounded-full bg-[#D6FF5F] hover:bg-[#CBF052] text-[#201C19] font-[800] text-[11px] border border-[#201C19]/10 cursor-pointer">Top Up</button>
+        <button type="button" data-apply-charge="${slug}" class="h-9 px-3.5 rounded-full bg-white border border-[#EAE0D5] mono text-[10px] font-[700] cursor-pointer hover:border-[#201C19]">Apply This Month's Charge</button>
+      </div>
+    </div>
   `;
   list.appendChild(row);
 
@@ -345,6 +448,13 @@ function renderTenantRow(slug, data){
         const days = settingsSnap.exists && settingsSnap.data().data?.retentionDays;
         if(days) document.getElementById(`retention-${cssId(slug)}`).value = days;
       } catch(ex) { /* leave placeholder showing the 14-day default */ }
+      const b = data.billing || {};
+      document.getElementById(`billBase-${cssId(slug)}`).value = b.baseFee || 0;
+      document.getElementById(`billFreeB-${cssId(slug)}`).value = b.freeBookings || 0;
+      document.getElementById(`billRateB-${cssId(slug)}`).value = b.perBookingRate || 0;
+      document.getElementById(`billFreeV-${cssId(slug)}`).value = b.freeViews || 0;
+      document.getElementById(`billRateV-${cssId(slug)}`).value = b.perViewRate || 0;
+      document.getElementById(`balanceDisplay-${cssId(slug)}`).textContent = (data.creditBalance || 0).toFixed(2);
     }
   });
   row.querySelector(`[data-toggle-status="${cssAttr(slug)}"]`).addEventListener('click', async (e) => {
@@ -400,6 +510,47 @@ function renderTenantRow(slug, data){
     try {
       await db.doc(`clients/${slug}/settings/state`).update({ 'data.retentionDays': days, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
       toast(`Retention for ${data.businessName || slug} set to ${days} days`);
+    } catch(ex) { toast('Failed: ' + ex.message); }
+  });
+  row.querySelector(`[data-save-billing="${cssAttr(slug)}"]`).addEventListener('click', async () => {
+    const billing = {
+      baseFee: parseFloat(document.getElementById(`billBase-${cssId(slug)}`).value) || 0,
+      freeBookings: parseFloat(document.getElementById(`billFreeB-${cssId(slug)}`).value) || 0,
+      perBookingRate: parseFloat(document.getElementById(`billRateB-${cssId(slug)}`).value) || 0,
+      freeViews: parseFloat(document.getElementById(`billFreeV-${cssId(slug)}`).value) || 0,
+      perViewRate: parseFloat(document.getElementById(`billRateV-${cssId(slug)}`).value) || 0,
+    };
+    try {
+      await db.doc(`platformTenants/${slug}`).set({ billing }, { merge: true });
+      data.billing = billing;
+      toast(`Billing formula saved for ${data.businessName || slug}`);
+    } catch(ex) { toast('Failed: ' + ex.message); }
+  });
+  row.querySelector(`[data-top-up="${cssAttr(slug)}"]`).addEventListener('click', async () => {
+    const amount = parseFloat(document.getElementById(`topUpAmount-${cssId(slug)}`).value);
+    if(!Number.isFinite(amount) || amount <= 0){ toast('Enter a positive top-up amount'); return; }
+    try {
+      await db.doc(`platformTenants/${slug}`).update({ creditBalance: firebase.firestore.FieldValue.increment(amount) });
+      const newBalance = (data.creditBalance || 0) + amount;
+      data.creditBalance = newBalance;
+      document.getElementById(`balanceDisplay-${cssId(slug)}`).textContent = newBalance.toFixed(2);
+      document.getElementById(`topUpAmount-${cssId(slug)}`).value = '';
+      toast(`Topped up ${amount.toFixed(2)} for ${data.businessName || slug} — new balance ${newBalance.toFixed(2)}`);
+      loadTenants();
+    } catch(ex) { toast('Failed: ' + ex.message); }
+  });
+  row.querySelector(`[data-apply-charge="${cssAttr(slug)}"]`).addEventListener('click', async () => {
+    const rowData = _lastReportingRows.find(r => r.slug === slug);
+    const charge = rowData ? rowData.suggestedCharge : 0;
+    if(!charge){ toast('No suggested charge to apply this month'); return; }
+    if(!confirm(`Deduct ${charge.toFixed(2)} from ${data.businessName || slug}'s prepaid balance for this month's usage?`)) return;
+    try {
+      await db.doc(`platformTenants/${slug}`).update({ creditBalance: firebase.firestore.FieldValue.increment(-charge) });
+      const newBalance = (data.creditBalance || 0) - charge;
+      data.creditBalance = newBalance;
+      document.getElementById(`balanceDisplay-${cssId(slug)}`).textContent = newBalance.toFixed(2);
+      toast(`Deducted ${charge.toFixed(2)} — new balance ${newBalance.toFixed(2)}${newBalance <= 0 ? ' (balance is now zero or negative)' : ''}`);
+      loadTenants();
     } catch(ex) { toast('Failed: ' + ex.message); }
   });
 }

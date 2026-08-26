@@ -79,7 +79,13 @@ service cloud.firestore {
         allow read: if isValidTenantId(clientId);
         allow write: if isValidTenantId(clientId);
       }
-      
+
+      // Pricing subcollection
+      match /pricing/{document} {
+        allow read: if isValidTenantId(clientId);
+        allow write: if isValidTenantId(clientId);
+      }
+
       // Queues subcollection
       match /queues/{document} {
         allow read: if isValidTenantId(clientId);

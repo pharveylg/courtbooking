@@ -891,6 +891,129 @@
               </div>
             </div>
           </div>
+
+          <!-- Branding & Site Settings (Admin only, per-tenant) -->
+          <div class="rounded-[24px] bg-white border border-[#EAE0D5] p-6 shadow-xs">
+            <div>
+              <div class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#201C19] text-[#D6FF5F] mono text-[10px] font-[800] uppercase tracking-widest">Admin Control</div>
+              <h3 class="mt-1.5 text-[18px] font-[800] tracking-[-0.02em]">Branding &amp; Site Settings</h3>
+              <p class="mono text-[11px] opacity-60 mt-0.5">Customize the color theme, logo, business info, and hero copy shown to guests.</p>
+            </div>
+
+            <div id="brandingNoTenantNote" class="hidden mt-4 p-4 rounded-[14px] bg-[#FFF8F0] border border-[#FFE0A3] mono text-[11px] leading-[1.5] text-[#8A5A00]">
+              Branding settings require a tenant. Open this app with <code>?client=yourslug</code> to enable this section.
+            </div>
+
+            <div id="brandingFieldsWrap">
+              <!-- Color Theme -->
+              <div class="mt-5 pt-5 border-t border-[#EAE0D5] first:mt-0 first:pt-0 first:border-t-0">
+                <div class="font-[750] text-[14px]">Color Theme</div>
+                <div class="mono text-[11px] opacity-60 mt-1">Sets the accent, header/nav, page background, and border colors site-wide.</div>
+                <div class="mt-3.5 grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <label class="flex flex-col gap-1.5">
+                    <span class="mono text-[10px] uppercase tracking-widest opacity-60">Primary Accent</span>
+                    <div class="flex items-center gap-1.5">
+                      <input type="color" id="themeColorPrimary" class="w-9 h-9 rounded-[8px] border border-[#EAE0D5] cursor-pointer p-0.5"/>
+                      <input type="text" id="themeHexPrimary" maxlength="7" class="flex-1 min-w-0 h-9 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-3 mono text-[11px] font-[700] outline-none focus:border-[#201C19]"/>
+                    </div>
+                  </label>
+                  <label class="flex flex-col gap-1.5">
+                    <span class="mono text-[10px] uppercase tracking-widest opacity-60">Dark / Header</span>
+                    <div class="flex items-center gap-1.5">
+                      <input type="color" id="themeColorDark" class="w-9 h-9 rounded-[8px] border border-[#EAE0D5] cursor-pointer p-0.5"/>
+                      <input type="text" id="themeHexDark" maxlength="7" class="flex-1 min-w-0 h-9 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-3 mono text-[11px] font-[700] outline-none focus:border-[#201C19]"/>
+                    </div>
+                  </label>
+                  <label class="flex flex-col gap-1.5">
+                    <span class="mono text-[10px] uppercase tracking-widest opacity-60">Page Background</span>
+                    <div class="flex items-center gap-1.5">
+                      <input type="color" id="themeColorBg" class="w-9 h-9 rounded-[8px] border border-[#EAE0D5] cursor-pointer p-0.5"/>
+                      <input type="text" id="themeHexBg" maxlength="7" class="flex-1 min-w-0 h-9 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-3 mono text-[11px] font-[700] outline-none focus:border-[#201C19]"/>
+                    </div>
+                  </label>
+                  <label class="flex flex-col gap-1.5">
+                    <span class="mono text-[10px] uppercase tracking-widest opacity-60">Border</span>
+                    <div class="flex items-center gap-1.5">
+                      <input type="color" id="themeColorBorder" class="w-9 h-9 rounded-[8px] border border-[#EAE0D5] cursor-pointer p-0.5"/>
+                      <input type="text" id="themeHexBorder" maxlength="7" class="flex-1 min-w-0 h-9 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-3 mono text-[11px] font-[700] outline-none focus:border-[#201C19]"/>
+                    </div>
+                  </label>
+                </div>
+                <button type="button" id="saveThemeBtn" class="mt-3.5 h-10 px-5 rounded-full bg-[#201C19] text-white mono text-[11px] font-[700] hover:opacity-90 transition cursor-pointer">Save Theme</button>
+              </div>
+
+              <!-- Logo -->
+              <div class="mt-5 pt-5 border-t border-[#EAE0D5]">
+                <div class="font-[750] text-[14px]">Logo</div>
+                <div class="mono text-[11px] opacity-60 mt-1">Square image, 512&times;512px recommended (min 256&times;256). Transparent PNG or SVG, under ~300KB. Falls back to a text monogram when removed.</div>
+                <div class="mt-3.5 flex items-center gap-4">
+                  <div id="logoPreview" class="w-16 h-16 rounded-full bg-[#201C19] text-white grid place-items-center font-black text-[18px] shrink-0 overflow-hidden border border-[#EAE0D5]">CB</div>
+                  <div class="flex flex-col gap-2">
+                    <input type="file" id="logoFileInput" accept="image/png,image/svg+xml,image/jpeg,image/webp" class="hidden"/>
+                    <div class="flex gap-2">
+                      <button type="button" id="logoUploadBtn" class="h-9 px-4 rounded-full bg-[#D6FF5F] hover:bg-[#CBF052] text-[#201C19] font-[800] text-[12px] border border-[#201C19]/10 transition cursor-pointer">Upload Logo...</button>
+                      <button type="button" id="logoRemoveBtn" class="h-9 px-4 rounded-full bg-[#FFE9E0] text-[#8C2C10] border border-[#FFC9B6] mono text-[11px] font-[700] hover:bg-[#FFD7C7] transition cursor-pointer">Remove</button>
+                    </div>
+                    <div id="logoSizeNote" class="mono text-[10px] opacity-50"></div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Business & Contact -->
+              <div class="mt-5 pt-5 border-t border-[#EAE0D5]">
+                <div class="font-[750] text-[14px]">Business &amp; Contact</div>
+                <div class="mono text-[11px] opacity-60 mt-1">Shown in the header, footer, page title, emails, and the Payment tab contact card.</div>
+                <div class="mt-3.5 grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <label class="flex flex-col gap-1.5 md:col-span-2">
+                    <span class="mono text-[10px] uppercase tracking-widest opacity-60">Business Name</span>
+                    <input type="text" id="bizNameInput" placeholder="e.g. Rally Point Sports" class="h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-4 mono text-[12px] font-[700] outline-none focus:border-[#201C19]"/>
+                  </label>
+                  <label class="flex flex-col gap-1.5 md:col-span-2">
+                    <span class="mono text-[10px] uppercase tracking-widest opacity-60">Address</span>
+                    <input type="text" id="bizAddressInput" placeholder="e.g. 123 Street, City" class="h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-4 mono text-[12px] outline-none focus:border-[#201C19]"/>
+                  </label>
+                  <label class="flex flex-col gap-1.5">
+                    <span class="mono text-[10px] uppercase tracking-widest opacity-60">Phone</span>
+                    <input type="text" id="bizPhoneInput" placeholder="+63 900 000 0000" class="h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-4 mono text-[12px] outline-none focus:border-[#201C19]"/>
+                  </label>
+                  <label class="flex flex-col gap-1.5">
+                    <span class="mono text-[10px] uppercase tracking-widest opacity-60">Email</span>
+                    <input type="email" id="bizEmailInput" placeholder="hello@yourclub.com" class="h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-4 mono text-[12px] outline-none focus:border-[#201C19]"/>
+                  </label>
+                  <label class="flex flex-col gap-1.5">
+                    <span class="mono text-[10px] uppercase tracking-widest opacity-60">Facebook URL</span>
+                    <input type="url" id="bizFacebookInput" placeholder="https://facebook.com/..." class="h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-4 mono text-[12px] outline-none focus:border-[#201C19]"/>
+                  </label>
+                  <label class="flex flex-col gap-1.5">
+                    <span class="mono text-[10px] uppercase tracking-widest opacity-60">Instagram URL</span>
+                    <input type="url" id="bizInstagramInput" placeholder="https://instagram.com/..." class="h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-4 mono text-[12px] outline-none focus:border-[#201C19]"/>
+                  </label>
+                </div>
+                <button type="button" id="saveBizBtn" class="mt-3.5 h-10 px-5 rounded-full bg-[#201C19] text-white mono text-[11px] font-[700] hover:opacity-90 transition cursor-pointer">Save Business Info</button>
+              </div>
+
+              <!-- Hero Copy -->
+              <div class="mt-5 pt-5 border-t border-[#EAE0D5]">
+                <div class="font-[750] text-[14px]">Hero Call-outs</div>
+                <div class="mono text-[11px] opacity-60 mt-1">Auto-generated from your business info by default &mdash; edit any field to override it.</div>
+                <div class="mt-3.5 space-y-3">
+                  <label class="flex flex-col gap-1.5">
+                    <span class="mono text-[10px] uppercase tracking-widest opacity-60">Header / Footer Subtitle</span>
+                    <input type="text" id="heroSubInput" placeholder="e.g. Pickleball • Single Court" class="h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-4 mono text-[12px] outline-none focus:border-[#201C19]"/>
+                  </label>
+                  <label class="flex flex-col gap-1.5">
+                    <span class="mono text-[10px] uppercase tracking-widest opacity-60">Hero Headline (use a blank line for a line break)</span>
+                    <textarea id="heroTaglineInput" rows="2" placeholder="e.g. Book the court.&#10;Run the queue." class="rounded-[16px] border border-[#EAE0D5] bg-[#FFFBF5] px-4 py-2.5 mono text-[12px] outline-none focus:border-[#201C19] resize-none"></textarea>
+                  </label>
+                  <label class="flex flex-col gap-1.5">
+                    <span class="mono text-[10px] uppercase tracking-widest opacity-60">Hero Location Badge</span>
+                    <input type="text" id="heroLocationInput" placeholder="e.g. Single Court" class="h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-4 mono text-[12px] outline-none focus:border-[#201C19]"/>
+                  </label>
+                </div>
+                <button type="button" id="saveHeroBtn" class="mt-3.5 h-10 px-5 rounded-full bg-[#201C19] text-white mono text-[11px] font-[700] hover:opacity-90 transition cursor-pointer">Save Hero Copy</button>
+              </div>
+            </div>
+          </div>
         </div>
 
         <!-- Controls -->
@@ -2561,6 +2684,160 @@ function renderAdminCourts(){
     });
   });
 }
+
+/* ---------- Admin Branding & Site Settings ---------- */
+function _isValidHex(h){ return /^#[0-9a-fA-F]{6}$/.test(h); }
+function _darkenHex(hex, amt = 0.15){
+  const n = parseInt(hex.slice(1), 16);
+  const r = Math.max(0, Math.round(((n >> 16) & 255) * (1 - amt)));
+  const g = Math.max(0, Math.round(((n >> 8) & 255) * (1 - amt)));
+  const b = Math.max(0, Math.round((n & 255) * (1 - amt)));
+  return '#' + [r, g, b].map(v => v.toString(16).padStart(2, '0')).join('');
+}
+
+/* Mutates the tenant's raw (pre-defaults) config, re-applies it live, and
+   persists to clients/{tenantId}/config/state. Returns true on success. */
+async function saveTenantConfigPatch(mutate){
+  if(!currentClientId || !db){ toast('Branding requires a tenant (?client=yourslug)'); return false; }
+  if(!currentClientConfig || typeof currentClientConfig !== 'object') currentClientConfig = {};
+  mutate(currentClientConfig);
+  window.CLIENT_CONFIG = currentClientConfig;
+  CLIENT = _deepMerge(_cfgDefaults, currentClientConfig);
+  applyTheme();
+  applyBranding();
+  clientConfigCache.set(currentClientId, currentClientConfig);
+  localStorage.setItem(LS.clientConfig, JSON.stringify(currentClientConfig));
+  try {
+    await db.doc(`clients/${currentClientId}/config/state`).set({
+      data: currentClientConfig,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    return true;
+  } catch(e) {
+    console.warn('Failed to save tenant config:', e.message);
+    toast('Saved locally, but failed to sync to Firestore');
+    return false;
+  }
+}
+
+function renderAdminBranding(){
+  const noTenant = document.getElementById('brandingNoTenantNote');
+  const fields = document.getElementById('brandingFieldsWrap');
+  if(!noTenant || !fields) return;
+  if(!currentClientId || !db){
+    noTenant.classList.remove('hidden');
+    fields.classList.add('hidden');
+    return;
+  }
+  noTenant.classList.add('hidden');
+  fields.classList.remove('hidden');
+
+  const t = CLIENT.theme, b = CLIENT.business, c = CLIENT.contact, br = CLIENT.branding;
+  document.getElementById('themeColorPrimary').value = t.primary;
+  document.getElementById('themeHexPrimary').value = t.primary;
+  document.getElementById('themeColorDark').value = t.dark;
+  document.getElementById('themeHexDark').value = t.dark;
+  document.getElementById('themeColorBg').value = t.bg;
+  document.getElementById('themeHexBg').value = t.bg;
+  document.getElementById('themeColorBorder').value = t.border;
+  document.getElementById('themeHexBorder').value = t.border;
+
+  const logoPreview = document.getElementById('logoPreview');
+  logoPreview.innerHTML = br.logoUrl
+    ? `<img src="${br.logoUrl}" alt="Logo" class="w-full h-full object-cover"/>`
+    : (br.monogram || (b.name || 'CB').slice(0, 2).toUpperCase());
+
+  document.getElementById('bizNameInput').value = b.name || '';
+  document.getElementById('bizAddressInput').value = c.address || '';
+  document.getElementById('bizPhoneInput').value = c.phone || '';
+  document.getElementById('bizEmailInput').value = c.email || '';
+  document.getElementById('bizFacebookInput').value = c.facebook || '';
+  document.getElementById('bizInstagramInput').value = c.instagram || '';
+
+  document.getElementById('heroSubInput').value = b.sub || '';
+  document.getElementById('heroTaglineInput').value = b.tagline || '';
+  document.getElementById('heroLocationInput').value = b.location || '';
+}
+
+// Color picker <-> hex text sync
+[['themeColorPrimary','themeHexPrimary'],['themeColorDark','themeHexDark'],
+ ['themeColorBg','themeHexBg'],['themeColorBorder','themeHexBorder']].forEach(([colorId, hexId]) => {
+  const colorEl = document.getElementById(colorId);
+  const hexEl = document.getElementById(hexId);
+  if(!colorEl || !hexEl) return;
+  colorEl.addEventListener('input', () => { hexEl.value = colorEl.value; });
+  hexEl.addEventListener('change', () => {
+    const v = hexEl.value.trim();
+    if(_isValidHex(v)) colorEl.value = v;
+    else { hexEl.value = colorEl.value; toast('Enter a valid hex color, e.g. #8B5CF6'); }
+  });
+});
+
+document.getElementById('saveThemeBtn')?.addEventListener('click', async () => {
+  const primary = document.getElementById('themeHexPrimary').value.trim();
+  const dark = document.getElementById('themeHexDark').value.trim();
+  const bg = document.getElementById('themeHexBg').value.trim();
+  const border = document.getElementById('themeHexBorder').value.trim();
+  if(![primary, dark, bg, border].every(_isValidHex)){ toast('One or more colors are invalid hex values'); return; }
+  const ok = await saveTenantConfigPatch(cfg => {
+    cfg.theme = { ...(cfg.theme || {}), primary, primaryHover: _darkenHex(primary), dark, bg, border };
+    delete cfg.theme.primaryColor; // legacy alias from the sample-tenant seed schema
+  });
+  if(ok) toast('Theme saved');
+});
+
+document.getElementById('logoUploadBtn')?.addEventListener('click', () => {
+  document.getElementById('logoFileInput').click();
+});
+document.getElementById('logoFileInput')?.addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if(!file) return;
+  if(file.size > 500 * 1024) toast('Logo file is large — consider compressing it under ~300KB');
+  const dataUrl = await new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = ev => res(ev.target.result);
+    r.onerror = rej;
+    r.readAsDataURL(file);
+  });
+  const ok = await saveTenantConfigPatch(cfg => {
+    cfg.branding = { ...(cfg.branding || {}), logoUrl: dataUrl };
+  });
+  renderAdminBranding();
+  e.target.value = '';
+  if(ok) toast('Logo updated');
+});
+document.getElementById('logoRemoveBtn')?.addEventListener('click', async () => {
+  const ok = await saveTenantConfigPatch(cfg => {
+    cfg.branding = { ...(cfg.branding || {}), logoUrl: '' };
+  });
+  renderAdminBranding();
+  if(ok) toast('Logo removed');
+});
+
+document.getElementById('saveBizBtn')?.addEventListener('click', async () => {
+  const name = document.getElementById('bizNameInput').value.trim();
+  const address = document.getElementById('bizAddressInput').value.trim();
+  const phone = document.getElementById('bizPhoneInput').value.trim();
+  const email = document.getElementById('bizEmailInput').value.trim();
+  const facebook = document.getElementById('bizFacebookInput').value.trim();
+  const instagram = document.getElementById('bizInstagramInput').value.trim();
+  if(!name){ toast('Business name is required'); return; }
+  const ok = await saveTenantConfigPatch(cfg => {
+    cfg.business = { ...(cfg.business || {}), name };
+    cfg.contact = { ...(cfg.contact || {}), address, phone, email, facebook, instagram };
+  });
+  if(ok) toast('Business info saved');
+});
+
+document.getElementById('saveHeroBtn')?.addEventListener('click', async () => {
+  const sub = document.getElementById('heroSubInput').value.trim();
+  const tagline = document.getElementById('heroTaglineInput').value.trim();
+  const location = document.getElementById('heroLocationInput').value.trim();
+  const ok = await saveTenantConfigPatch(cfg => {
+    cfg.business = { ...(cfg.business || {}), sub, tagline, location };
+  });
+  if(ok) toast('Hero copy saved');
+});
 
 /* ---------- Schedule Rendering ---------- */
 function renderSchedule(){
@@ -4848,6 +5125,7 @@ updateAdminTabsVisibility = function() {
     if (typeof renderMorningToggles === 'function') renderMorningToggles();
     if (typeof renderStaffReserveToggles === 'function') renderStaffReserveToggles();
     if (typeof renderAdminCourts === 'function') renderAdminCourts();
+    if (typeof renderAdminBranding === 'function') renderAdminBranding();
     armProofWatcher();                    // start Firebase Storage housekeeping on first unlock
     renderPaymentProofsQueue();           // populate the Admin payment review queue
     populateCourtSelectors();             // refresh court dropdowns

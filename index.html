@@ -1732,7 +1732,14 @@ console.log('[CourtBooking] Tenant ID:', currentClientId || '(none - demo mode)'
    pass through unchanged. ---------- */
 function normalizeClientConfig(raw) {
   if (!raw || typeof raw !== 'object') return raw;
-  if (raw.business || raw.contact || raw.branding) return raw; // already nested
+  // "Already nested" is only reliably signaled by business/contact having been
+  // migrated -- raw.branding alone is NOT a safe signal, since a dot-path
+  // update (e.g. superadmin setting data.branding.watermarkUrl) can create a
+  // nested `branding` object on an otherwise still-flat legacy doc without
+  // migrating the rest of it. Trusting `raw.branding` here would then return
+  // the whole doc un-transformed, silently breaking business name/contact/
+  // theme display for that tenant the moment a watermark was set.
+  if (raw.business || raw.contact) return raw;
 
   const out = {};
   if (raw.businessName || raw.tagline || raw.heroHeadline || raw.address) {
@@ -1752,14 +1759,14 @@ function normalizeClientConfig(raw) {
       instagram: raw.social?.instagram,
     };
   }
-  if (raw.logoUrl || raw.faviconUrl) {
-    out.branding = { logoUrl: raw.logoUrl, faviconUrl: raw.faviconUrl };
+  if (raw.logoUrl || raw.faviconUrl || raw.branding) {
+    out.branding = { logoUrl: raw.logoUrl, faviconUrl: raw.faviconUrl, ...(raw.branding || {}) };
   }
   if (raw.theme) {
     out.theme = { ...raw.theme };
     if (raw.theme.primaryColor && !out.theme.primary) out.theme.primary = raw.theme.primaryColor;
   }
-  for (const k of ['currency','rates','hours','staff','booking']) {
+  for (const k of ['currency','rates','hours','staff','booking','paused']) {
     if (raw[k] !== undefined) out[k] = raw[k];
   }
   return out;

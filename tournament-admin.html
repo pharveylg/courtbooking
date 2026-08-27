@@ -422,6 +422,19 @@ function enterApp(bizName){
   document.getElementById('appBizName').textContent = bizName;
   showListView();
   loadTournaments();
+  loadCourtsForScheduling();
+}
+
+/* Courts are the tenant's real court list (clients/{id}/courts/state --
+   the same collection index.html's own Admin -> Court Management edits),
+   fetched once so match scheduling assigns a real court, not a made-up
+   one. */
+let COURTS = [];
+async function loadCourtsForScheduling(){
+  try {
+    const snap = await db.doc(`clients/${currentClientId}/courts/state`).get();
+    COURTS = (snap.exists && snap.data().data) || [];
+  } catch(ex) { console.warn('[PickleTournaments] Failed to load courts:', ex.message); }
 }
 document.getElementById('lockBtn').addEventListener('click', () => {
   sessionStorage.removeItem(LS_UNLOCKED());
@@ -1102,12 +1115,35 @@ function renderMatchesList(division, matches){
   wrap.querySelectorAll('[data-submit-score]').forEach(btn => btn.addEventListener('click', () => submitScore(btn.dataset.submitScore)));
   wrap.querySelectorAll('[data-forfeit]').forEach(btn => btn.addEventListener('click', () => submitForfeit(btn.dataset.forfeit, btn.dataset.winner)));
   wrap.querySelectorAll('[data-submit-correction]').forEach(btn => btn.addEventListener('click', () => submitCorrection(btn.dataset.submitCorrection)));
+  wrap.querySelectorAll('[data-schedule-toggle]').forEach(btn => btn.addEventListener('click', () => {
+    document.getElementById(`scheduleForm-${btn.dataset.scheduleToggle}`).classList.toggle('hidden');
+  }));
+  wrap.querySelectorAll('[data-save-schedule]').forEach(btn => btn.addEventListener('click', () => saveSchedule(btn.dataset.saveSchedule)));
+  wrap.querySelectorAll('[data-unschedule]').forEach(btn => btn.addEventListener('click', () => unscheduleMatch(btn.dataset.unschedule)));
 }
 function renderMatchCard(m){
   const [nameA, nameB] = m.participantNames;
+  const isBye = m.isBye || m.participantIds.includes('BYE');
   const resultLine = m.status !== 'scheduled'
     ? `<div class="mono text-[11px] mt-1">${m.score ? `${m.score.a} - ${m.score.b}` : (m.isBye ? 'Bye' : 'Forfeit')} · winner: <b>${escapeHtml(m.participantNames[m.participantIds.indexOf(m.winnerParticipantId)] || '')}</b></div>`
     : '';
+  const scheduleLine = (!isBye && m.court) ? (() => {
+    const courtDef = COURTS.find(c => c.id === m.court);
+    return `<div class="mono text-[10px] opacity-60 mt-1">📍 ${escapeHtml(courtDef ? courtDef.name : m.court)} · ${escapeHtml(m.scheduledDate || '')} · ${m.scheduledHour}:00</div>`;
+  })() : '';
+  const courtOptions = COURTS.map(c => `<option value="${c.id}" ${c.id===m.court?'selected':''}>${escapeHtml(c.name)}</option>`).join('');
+  const scheduleForm = !isBye ? `
+    <div id="scheduleForm-${m.id}" class="hidden mt-2 p-2.5 rounded-[12px] bg-[#F1E9DF] border border-[#EAE0D5] flex flex-wrap items-end gap-2">
+      <label class="flex flex-col gap-1"><span class="mono text-[9px] opacity-50">Court</span>
+        <select id="scheduleCourt-${m.id}" class="h-8 rounded-full border border-[#EAE0D5] bg-white px-2 mono text-[10px] font-[700] outline-none focus:border-[#201C19]">
+          ${courtOptions || '<option value="">No courts configured</option>'}
+        </select>
+      </label>
+      <label class="flex flex-col gap-1"><span class="mono text-[9px] opacity-50">Date</span><input type="date" id="scheduleDate-${m.id}" value="${escapeHtml(m.scheduledDate || '')}" class="h-8 rounded-full border border-[#EAE0D5] bg-white px-2 mono text-[10px] outline-none focus:border-[#201C19]"/></label>
+      <label class="flex flex-col gap-1"><span class="mono text-[9px] opacity-50">Hour (0-23)</span><input type="number" min="0" max="23" id="scheduleHour-${m.id}" value="${m.scheduledHour ?? ''}" class="w-16 h-8 rounded-full border border-[#EAE0D5] bg-white px-2 mono text-[10px] text-center outline-none focus:border-[#201C19]"/></label>
+      <button data-save-schedule="${m.id}" class="h-8 px-3 rounded-full bg-[#201C19] text-white mono text-[10px] font-[700] cursor-pointer">Save</button>
+      ${m.court ? `<button data-unschedule="${m.id}" class="h-8 px-2.5 rounded-full bg-white border border-[#EAE0D5] mono text-[9px] font-[700] cursor-pointer">Unschedule</button>` : ''}
+    </div>` : '';
   const scoreForm = m.status === 'scheduled' && !m.participantIds.includes('BYE') ? `
     <div id="scoreForm-${m.id}" class="hidden mt-2 p-2.5 rounded-[12px] bg-[#FFFBF5] border border-[#EAE0D5] flex flex-wrap items-end gap-2">
       <label class="flex flex-col gap-1"><span class="mono text-[9px] opacity-50">${escapeHtml(nameA)}</span><input type="number" id="scoreA-${m.id}" class="w-16 h-8 rounded-full border border-[#EAE0D5] bg-white px-2 mono text-[11px] text-center outline-none focus:border-[#201C19]"/></label>
@@ -1129,11 +1165,14 @@ function renderMatchCard(m){
         <span class="font-[700] text-[12.5px]">${escapeHtml(nameA)} <span class="opacity-40 font-[500]">vs</span> ${escapeHtml(nameB)}</span>
         <div class="flex items-center gap-1.5">
           ${matchStatusBadge(m.status)}
+          ${!isBye ? `<button data-schedule-toggle="${m.id}" class="h-7 px-2.5 rounded-full bg-white border border-[#EAE0D5] mono text-[9px] font-[700] cursor-pointer hover:border-[#201C19]">${m.court ? 'Reschedule' : 'Assign Court'}</button>` : ''}
           ${m.status === 'scheduled' && !m.participantIds.includes('BYE') ? `<button data-score-form-toggle="${m.id}" class="h-7 px-2.5 rounded-full bg-white border border-[#EAE0D5] mono text-[9px] font-[700] cursor-pointer hover:border-[#201C19]">Enter Score</button>` : ''}
           ${(['completed','forfeit','walkover'].includes(m.status) && !m.isBye) ? `<button data-correct-toggle="${m.id}" class="h-7 px-2.5 rounded-full bg-white border border-[#EAE0D5] mono text-[9px] font-[700] cursor-pointer hover:border-[#201C19]">Correct</button>` : ''}
         </div>
       </div>
       ${resultLine}
+      ${scheduleLine}
+      ${scheduleForm}
       ${scoreForm}
       ${correctForm}
     </div>`;
@@ -1164,6 +1203,27 @@ async function submitCorrection(matchId){
   try {
     const result = await callEngine('correctMatchScore', { clientId: currentClientId, tournamentId: CURRENT_TOURNAMENT_ID, matchId, scoreA: Number(a), scoreB: Number(b), reason });
     toast(result.data.warning ? `Corrected -- ${result.data.warning}` : 'Correction saved');
+    await loadMatchesForDivision(CURRENT_MATCHES_DIVISION_ID);
+  } catch(ex) { toast('Failed: ' + (ex.message || ex)); }
+}
+
+async function saveSchedule(matchId){
+  const court = document.getElementById(`scheduleCourt-${matchId}`).value;
+  const date = document.getElementById(`scheduleDate-${matchId}`).value;
+  const startHour = document.getElementById(`scheduleHour-${matchId}`).value;
+  if(!court){ toast('Add a court in Admin -> Court Management first'); return; }
+  if(!date || startHour === ''){ toast('Pick a date and hour'); return; }
+  try {
+    await callEngine('scheduleMatch', { clientId: currentClientId, tournamentId: CURRENT_TOURNAMENT_ID, matchId, court, date, startHour: Number(startHour), durationHours: 1 });
+    toast('Match scheduled -- blocked on the real booking calendar too');
+    await loadMatchesForDivision(CURRENT_MATCHES_DIVISION_ID);
+  } catch(ex) { toast('Failed: ' + (ex.message || ex)); }
+}
+async function unscheduleMatch(matchId){
+  if(!confirm('Remove this match\'s court assignment? Its booking-calendar slot will be freed.')) return;
+  try {
+    await callEngine('scheduleMatch', { clientId: currentClientId, tournamentId: CURRENT_TOURNAMENT_ID, matchId, court: null });
+    toast('Match unscheduled');
     await loadMatchesForDivision(CURRENT_MATCHES_DIVISION_ID);
   } catch(ex) { toast('Failed: ' + (ex.message || ex)); }
 }

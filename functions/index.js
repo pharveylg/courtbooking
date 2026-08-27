@@ -293,6 +293,85 @@ exports.correctMatchScore = onCall({ region: REGION }, async (request) => {
   return { winnerParticipantId, warning };
 });
 
+/* ================================================================
+   scheduleMatch -- the one place a tournament match touches the
+   REAL court/booking data (clients/{id}/bookings/state), not a
+   parallel calendar. A scheduled match is written into that same
+   array as an ordinary booking, tagged with matchId/tournamentId, so
+   the existing slot-conflict logic in index.html sees it exactly the
+   way it would see a walk-in reservation -- no second reservation
+   system, per the original brief. Passing court:null unschedules
+   (drops the match's court/time and removes its booking row).
+
+   bookings/state is the single-doc-array pattern index.html has used
+   since before this feature existed -- read the whole array, splice
+   this match's row out (if any), append/skip it, write the whole
+   array back. That's a real concurrency ceiling this app already
+   lived with for ordinary bookings; scheduling matches through here
+   inherits it rather than fixing it, which is a pre-existing
+   limitation flagged in the proposal, not new scope for this phase.
+   ================================================================ */
+exports.scheduleMatch = onCall({ region: REGION }, async (request) => {
+  const { clientId, tournamentId, matchId, court, date, startHour, durationHours } = request.data || {};
+  assertValidTenantId(clientId);
+  requireString(tournamentId, 'tournamentId');
+  requireString(matchId, 'matchId');
+
+  const tRef = tournamentRef(clientId, tournamentId);
+  const matchRef = tRef.collection('matches').doc(matchId);
+  const matchSnap = await matchRef.get();
+  if (!matchSnap.exists) throw new HttpsError('not-found', 'Match not found.');
+  const match = matchSnap.data();
+  if (match.isBye) throw new HttpsError('failed-precondition', "Bye matches don't need a court.");
+
+  const bookingsRef = db.doc(`clients/${clientId}/bookings/state`);
+  const bookingId = `tmatch_${matchId}`;
+
+  if (!court) {
+    await matchRef.set({
+      court: admin.firestore.FieldValue.delete(),
+      scheduledDate: admin.firestore.FieldValue.delete(),
+      scheduledHour: admin.firestore.FieldValue.delete(),
+    }, { merge: true });
+    const bookingsSnap = await bookingsRef.get();
+    const bookings = (bookingsSnap.exists && bookingsSnap.data().data) || [];
+    const next = bookings.filter((b) => b.id !== bookingId);
+    if (next.length !== bookings.length) {
+      await bookingsRef.set({ data: next, updatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+    }
+    await logAudit(tRef, 'match-unscheduled', `Unscheduled ${match.participantNames.join(' vs ')}`);
+    return { scheduled: false };
+  }
+
+  requireString(date, 'date');
+  const startHourNum = Number(startHour);
+  const duration = Number(durationHours) || 1;
+  if (!Number.isFinite(startHourNum)) throw new HttpsError('invalid-argument', 'startHour is required.');
+  const endHourNum = startHourNum + duration;
+
+  const courtsSnap = await db.doc(`clients/${clientId}/courts/state`).get();
+  const courts = (courtsSnap.exists && courtsSnap.data().data) || [];
+  const courtDef = courts.find((c) => c.id === court);
+  if (!courtDef) throw new HttpsError('invalid-argument', 'Unknown court.');
+
+  const bookingsSnap = await bookingsRef.get();
+  const bookings = (bookingsSnap.exists && bookingsSnap.data().data) || [];
+  const conflict = bookings.find((b) => b.id !== bookingId && b.court === court && b.date === date && startHourNum < b.end && b.start < endHourNum);
+  if (conflict) throw new HttpsError('already-exists', `${courtDef.name} is already booked ${conflict.start}:00-${conflict.end}:00 on that date.`);
+
+  const newBooking = {
+    id: bookingId, name: `[Tournament] ${match.participantNames.join(' vs ')}`, email: '',
+    court, date, start: startHourNum, end: endHourNum, status: 'Reserved',
+    group: 'Tournament match', createdAt: Date.now(),
+    source: 'tournament', tournamentId, matchId, divisionId: match.divisionId,
+  };
+  const next = [...bookings.filter((b) => b.id !== bookingId), newBooking];
+  await bookingsRef.set({ data: next, updatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+  await matchRef.set({ court, scheduledDate: date, scheduledHour: startHourNum }, { merge: true });
+  await logAudit(tRef, 'match-scheduled', `Scheduled ${match.participantNames.join(' vs ')} -> ${courtDef.name}, ${date} ${startHourNum}:00`);
+  return { scheduled: true };
+});
+
 /* ---------------- shared helpers ---------------- */
 
 async function attemptAdvance(tRef, completedMatch, roundsTotal) {

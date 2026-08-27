@@ -11,6 +11,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-storage-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
 <script src="firebase-config.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -1668,12 +1669,13 @@ async function verifyPin(inputPin, storedHash) {
    ================================================================ */
 const FIREBASE_CFG = (window.FIREBASE_CONFIG && window.FIREBASE_CONFIG.apiKey && !String(window.FIREBASE_CONFIG.apiKey).startsWith('PASTE')) ? window.FIREBASE_CONFIG : null;
 const FB_ENABLED = !!(FIREBASE_CFG && FIREBASE_CFG.projectId);
-let fbApp = null, db = null, fbStorage = null;
+let fbApp = null, db = null, fbStorage = null, fbAuth = null;
 if (FB_ENABLED) {
   try {
     fbApp = firebase.initializeApp(FIREBASE_CFG);
     db = firebase.firestore();
     fbStorage = firebase.storage();
+    fbAuth = firebase.auth();
     console.log('[CourtBooking] Firebase connected:', FIREBASE_CFG.projectId);
   } catch(e) {
     console.warn('[CourtBooking] Firebase init failed:', e.message);
@@ -2877,6 +2879,31 @@ document.getElementById('adminModalBackdrop').addEventListener('click', ()=>{
 document.getElementById('modalPinInput').addEventListener('keydown', e=>{
   if(e.key==='Enter'){ e.preventDefault(); adminModalForm.dispatchEvent(new Event('submit')); }
 });
+
+/* ---------- Superadmin auto-unlock ----------
+   The Superadmin Console (superadmin.html) and this tenant site share the
+   same Firebase project and origin, so a signed-in superadmin's auth
+   session (Firebase's default persistence) is visible here too. If the
+   visitor is signed in with the `superadmin` custom claim, skip the PIN
+   entirely and unlock Admin the same way a correct PIN would -- the
+   platform owner shouldn't need to know every tenant's PIN just to look
+   at their site. Ordinary staff/guests with no Firebase session are
+   completely unaffected; this only ever adds access, never removes it. */
+if (fbAuth) {
+  fbAuth.onAuthStateChanged(async (user) => {
+    if (!user || adminUnlocked) return;
+    try {
+      const token = await user.getIdTokenResult();
+      if (token.claims && token.claims.superadmin === true) {
+        adminUnlocked = true;
+        sessionStorage.setItem(LS.adminUnlocked, 'true');
+        document.getElementById('adminLoginModal')?.classList.add('hidden');
+        updateAdminTabsVisibility();
+        toast('Signed in as platform superadmin • Admin unlocked');
+      }
+    } catch (e) { console.warn('[CourtBooking] Superadmin auth check failed:', e.message); }
+  });
+}
 
 /* ---------- Mobile Layout Switcher (< lg breakpoint) ---------- */
 function switchMobileTab(tab){

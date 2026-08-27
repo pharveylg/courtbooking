@@ -1,9 +1,14 @@
 {
   "scripts": {
-    "patch": "node patch.js"
+    "patch": "node patch.js",
+    "build": "tailwindcss -i ./tailwind-input.css -o ./tailwind.css --minify"
   },
   "dependencies": {
     "firebase": "^12.18.0",
     "firebase-admin": "^13.10.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/cli": "^4.3.3",
+    "tailwindcss": "^4.3.3"
   }
 }

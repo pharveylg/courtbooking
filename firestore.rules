@@ -23,6 +23,15 @@ service cloud.firestore {
       allow read, write: if request.auth != null && request.auth.token.superadmin == true;
     }
 
+    // Superadmin action audit log. Append-only from the app's perspective --
+    // create is allowed so every mutating superadmin action can log itself,
+    // but update/delete are explicitly denied so a logged entry can't later
+    // be edited or removed through the client.
+    match /platformAuditLog/{entryId} {
+      allow read, create: if request.auth != null && request.auth.token.superadmin == true;
+      allow update, delete: if false;
+    }
+
     // Platform-level tenant registry, used by the superadmin console.
     // Only accounts with the "superadmin" custom claim (set via
     // set-superadmin-claim.js) may read or write this collection.
@@ -60,6 +69,19 @@ service cloud.firestore {
       match /config/{document} {
         allow read: if isValidTenantId(clientId);
         allow write: if isValidTenantId(clientId);
+      }
+
+      // Suspend/pause status -- deliberately its own doc, NOT part of the
+      // open-write config/ above. Publicly readable (every visitor's
+      // browser needs to check it), but only a superadmin can flip it.
+      // Keeping this the same open rule as config/ would mean anyone who
+      // knows a tenant's slug could pause (or un-pause) that tenant with a
+      // raw Firestore write, with no auth at all -- this is the one field
+      // in this app where "which tenant" isn't a sufficient check; "who is
+      // asking" matters too.
+      match /status/{document} {
+        allow read: if isValidTenantId(clientId);
+        allow write: if request.auth != null && request.auth.token.superadmin == true;
       }
       
       // Courts subcollection

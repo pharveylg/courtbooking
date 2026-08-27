@@ -74,6 +74,7 @@ body{background:#FFFBF5;color:#201C19}
       <button type="button" data-sa-tab="provisioning" class="sa-tab-btn shrink-0 text-left px-4 h-10 rounded-full md:rounded-[14px] mono text-[12px] font-[700] transition cursor-pointer whitespace-nowrap">Provisioning</button>
       <button type="button" data-sa-tab="reports" class="sa-tab-btn shrink-0 text-left px-4 h-10 rounded-full md:rounded-[14px] mono text-[12px] font-[700] transition cursor-pointer whitespace-nowrap">Reports &amp; Billing</button>
       <button type="button" data-sa-tab="ideas" class="sa-tab-btn shrink-0 text-left px-4 h-10 rounded-full md:rounded-[14px] mono text-[12px] font-[700] transition cursor-pointer whitespace-nowrap">Feature Ideas</button>
+      <button type="button" data-sa-tab="security" class="sa-tab-btn shrink-0 text-left px-4 h-10 rounded-full md:rounded-[14px] mono text-[12px] font-[700] transition cursor-pointer whitespace-nowrap">Security</button>
     </nav>
 
     <!-- Content -->
@@ -178,6 +179,27 @@ body{background:#FFFBF5;color:#201C19}
         </div>
         <div id="fiList" class="space-y-3"></div>
       </div>
+
+      <!-- PANEL: Security -->
+      <div id="sa-panel-security" class="sa-panel hidden">
+        <div class="rounded-[24px] bg-white border border-[#EAE0D5] p-6 shadow-xs mb-5">
+          <div class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#201C19] text-[#D6FF5F] mono text-[10px] font-[800] uppercase tracking-widest">Platform</div>
+          <h2 class="mt-1.5 text-[17px] font-[800] tracking-[-0.02em]">Known Risk Areas</h2>
+          <p class="mono text-[11px] opacity-60 mt-0.5">This app has no per-player authentication anywhere -- Firestore security rules are the only real gate, and most of them only check that a tenant ID is *shaped* correctly, not who's asking. This list tracks where that trust model has a concrete, known consequence, and whether it's been addressed.</p>
+          <div id="riskList" class="mt-4 space-y-2.5"></div>
+        </div>
+
+        <div class="rounded-[24px] bg-white border border-[#EAE0D5] overflow-hidden">
+          <div class="px-6 h-[56px] flex items-center justify-between border-b border-[#F1E9DF]">
+            <div>
+              <div class="font-[750] text-[15px]">Audit Log</div>
+              <div class="mono text-[10px] opacity-50">Every mutating action taken from this console -- suspend/activate, PIN resets, billing changes, and more. Append-only; entries can't be edited or deleted through the app.</div>
+            </div>
+            <button type="button" id="refreshAuditBtn" class="h-9 px-4 rounded-full bg-white border border-[#EAE0D5] mono text-[11px] font-[700] cursor-pointer hover:border-[#201C19] transition shrink-0">Refresh</button>
+          </div>
+          <div id="auditLogList" class="divide-y divide-[#F5EDE4] max-h-[560px] overflow-auto"></div>
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -203,6 +225,25 @@ function toast(msg){
   toast._t = setTimeout(() => t.classList.add('hidden'), 2600);
 }
 function escapeHtml(s){ return (s||'').replace(/[&<>"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+
+/* ---------- Superadmin action audit log ----------
+   Every mutating action taken from this console writes one entry here --
+   who, what, on which tenant, and a short human-readable detail. Append-
+   only: firestore.rules allows create but denies update/delete, so this
+   can't be edited or cleaned up through the app once written. Failures are
+   swallowed (logged to console only) so a logging hiccup never blocks the
+   actual action from completing. */
+async function logAudit(action, slug, details){
+  try {
+    await db.collection('platformAuditLog').add({
+      action,
+      slug: slug || null,
+      details: details || '',
+      actorEmail: (auth.currentUser && auth.currentUser.email) || 'unknown',
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+  } catch(ex) { console.warn('[Superadmin] Audit log write failed:', ex.message); }
+}
 function isValidSlug(s){ return /^[a-z0-9-]+$/.test(s); }
 function isValidHex(h){ return /^#[0-9a-fA-F]{6}$/.test(h); }
 function darkenHex(hex, amt = 0.15){
@@ -260,6 +301,7 @@ auth.onAuthStateChanged(async (user) => {
     showScreen('dashboard');
     loadTenants();
     loadFeatureIdeas();
+    loadSecurityPanel();
   } else {
     document.getElementById('notAuthorizedEmail').textContent = user.email;
     document.getElementById('notAuthorizedUid').textContent = user.uid;
@@ -756,14 +798,15 @@ function renderTenantRow(slug, data){
     const wasActive = e.target.dataset.current === 'true';
     try {
       await db.doc(`platformTenants/${slug}`).update({ status: wasActive ? 'suspended' : 'active' });
-      // Mirrored onto the tenant's own config doc (which the tenant-facing
-      // app can actually read -- platformTenants is superadmin-only) so
-      // suspending really takes the site down instead of just flagging it
-      // here in the directory.
-      await db.doc(`clients/${slug}/config/state`).update({
-        'data.paused': wasActive,
+      // Mirrored onto clients/{slug}/status/state -- a separate doc from
+      // the open-write config/state, locked in firestore.rules to
+      // superadmin-only writes, since this is the one flag where "which
+      // tenant" isn't enough of a check; "who is asking" matters here too.
+      await db.doc(`clients/${slug}/status/state`).set({
+        data: { paused: wasActive },
         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-      });
+      }, { merge: true });
+      await logAudit(wasActive ? 'suspend' : 'activate', slug, `${data.businessName || slug} ${wasActive ? 'suspended' : 'activated'}`);
       toast(`${data.businessName || slug} ${wasActive ? 'suspended' : 'activated'}`);
       loadTenants();
     } catch(ex) { toast('Failed: ' + ex.message); }
@@ -772,8 +815,10 @@ function renderTenantRow(slug, data){
     const newName = document.getElementById(`rename-${cssId(slug)}`).value.trim();
     if(!newName) { toast('Business name is required'); return; }
     try {
+      const oldName = data.businessName || slug;
       await db.doc(`clients/${slug}/config/state`).update({ 'data.business.name': newName, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
       await db.doc(`platformTenants/${slug}`).set({ businessName: newName }, { merge: true });
+      await logAudit('rename', slug, `"${oldName}" -> "${newName}"`);
       toast('Business name updated');
       loadTenants();
     } catch(ex) { toast('Failed: ' + ex.message); }
@@ -792,6 +837,7 @@ function renderTenantRow(slug, data){
         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
       });
       await db.doc(`platformTenants/${slug}`).set({ theme: { primary: hex } }, { merge: true });
+      await logAudit('color-change', slug, `${data.businessName || slug} primary color -> ${hex}`);
       toast('Color updated');
       loadTenants();
     } catch(ex) { toast('Failed: ' + ex.message); }
@@ -802,6 +848,7 @@ function renderTenantRow(slug, data){
     try {
       const hash = await hashPin(newPin);
       await db.doc(`clients/${slug}/settings/state`).update({ 'data.pin': hash, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+      await logAudit('pin-reset', slug, `Admin PIN reset for ${data.businessName || slug}`); // never logs the actual PIN
       toast(`PIN reset for ${data.businessName || slug}`);
       document.getElementById(`pin-${cssId(slug)}`).value = '';
     } catch(ex) { toast('Failed: ' + ex.message); }
@@ -812,6 +859,7 @@ function renderTenantRow(slug, data){
     if(!raw || !Number.isFinite(days) || days < 1) { toast('Enter a whole number of days (1 or more)'); return; }
     try {
       await db.doc(`clients/${slug}/settings/state`).update({ 'data.retentionDays': days, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+      await logAudit('retention-change', slug, `${data.businessName || slug} retention -> ${days} days`);
       toast(`Retention for ${data.businessName || slug} set to ${days} days`);
     } catch(ex) { toast('Failed: ' + ex.message); }
   });
@@ -827,6 +875,7 @@ function renderTenantRow(slug, data){
       img.classList.remove('hidden');
       row.querySelector(`[data-remove-watermark="${cssAttr(slug)}"]`).classList.remove('hidden');
       document.getElementById(`watermark-${cssId(slug)}`).value = '';
+      await logAudit('watermark-update', slug, `Watermark updated for ${data.businessName || slug}`);
       toast(`Watermark updated for ${data.businessName || slug}`);
     } catch(ex) { toast('Failed: ' + ex.message); }
     finally { e.target.disabled = false; }
@@ -838,6 +887,7 @@ function renderTenantRow(slug, data){
       img.classList.add('hidden');
       img.src = '';
       e.target.classList.add('hidden');
+      await logAudit('watermark-remove', slug, `Watermark removed for ${data.businessName || slug}`);
       toast(`Watermark removed for ${data.businessName || slug}`);
     } catch(ex) { toast('Failed: ' + ex.message); }
   });
@@ -850,6 +900,7 @@ function renderTenantRow(slug, data){
     try {
       await db.doc(`platformTenants/${slug}`).set({ billing }, { merge: true });
       data.billing = billing;
+      await logAudit('billing-change', slug, `${data.businessName || slug} billing -> base ${billing.baseFee}, free ${billing.freeBookings}, rate ${billing.perBookingRate}`);
       toast(`Billing formula saved for ${data.businessName || slug}`);
     } catch(ex) { toast('Failed: ' + ex.message); }
   });
@@ -862,6 +913,7 @@ function renderTenantRow(slug, data){
       data.creditBalance = newBalance;
       document.getElementById(`balanceDisplay-${cssId(slug)}`).textContent = newBalance.toFixed(2);
       document.getElementById(`topUpAmount-${cssId(slug)}`).value = '';
+      await logAudit('top-up', slug, `+${amount.toFixed(2)} for ${data.businessName || slug} -> balance ${newBalance.toFixed(2)}`);
       toast(`Topped up ${amount.toFixed(2)} for ${data.businessName || slug} — new balance ${newBalance.toFixed(2)}`);
       loadTenants();
     } catch(ex) { toast('Failed: ' + ex.message); }
@@ -876,6 +928,7 @@ function renderTenantRow(slug, data){
       const newBalance = (data.creditBalance || 0) - charge;
       data.creditBalance = newBalance;
       document.getElementById(`balanceDisplay-${cssId(slug)}`).textContent = newBalance.toFixed(2);
+      await logAudit('apply-charge', slug, `-${charge.toFixed(2)} for ${data.businessName || slug} -> balance ${newBalance.toFixed(2)}`);
       toast(`Deducted ${charge.toFixed(2)} — new balance ${newBalance.toFixed(2)}${newBalance <= 0 ? ' (balance is now zero or negative)' : ''}`);
       loadTenants();
     } catch(ex) { toast('Failed: ' + ex.message); }
@@ -1009,6 +1062,7 @@ document.getElementById('createTenantForm').addEventListener('submit', async (e)
       if(watermarkUrl){
         await db.doc(`clients/${slug}/config/state`).update({ 'data.branding.watermarkUrl': watermarkUrl, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
       }
+      await logAudit('register-tenant', slug, `Registered existing tenant "${existingName}" (data already present)`);
       toast(`"${slug}" already had data -- registered existing tenant "${existingName}"`);
     } else {
       await provisionTenantDefaults(slug, name, color, pin, watermarkUrl);
@@ -1018,6 +1072,7 @@ document.getElementById('createTenantForm').addEventListener('submit', async (e)
         status: 'active',
         createdAt: firebase.firestore.FieldValue.serverTimestamp()
       });
+      await logAudit('create-tenant', slug, `Created tenant "${name}"`);
       toast(`Tenant "${name}" created`);
     }
     document.getElementById('createTenantForm').reset();
@@ -1165,6 +1220,95 @@ function renderFeatureIdeaCard(id, data){
     loadFeatureIdeas();
   });
 }
+
+/* ---------- Security tab: known risks + audit log ---------- */
+const KNOWN_RISKS = [
+  {
+    status: 'mitigated',
+    title: 'Anyone could pause/unpause any tenant',
+    detail: 'clients/{id}/config/state was open-write to anyone who knew a slug, and the paused flag lived there -- a raw Firestore write could take down any tenant\'s site with no auth at all. Fixed: paused now lives in its own clients/{id}/status/state doc, publicly readable but writable only by an authenticated superadmin.',
+  },
+  {
+    status: 'open',
+    title: 'Tenant Admin PINs are brute-forceable offline',
+    detail: 'The PIN hash is stored in clients/{id}/settings/state, which is publicly readable, and hashed with a fixed salt. A 4-8 digit PIN has a small enough search space that anyone who reads the hash can crack it offline in well under a second. The PIN is a UI speed bump for casual staff use, not real access control -- don\'t treat it as one.',
+  },
+  {
+    status: 'open',
+    title: 'Billing event ledger is open-write',
+    detail: 'platformTenants/{id}/events accepts writes from any visitor (ordinary bookings/queue/game activity write here client-side). Anyone could inject fake booking_confirmed events to inflate a tenant\'s suggested charge, or fake cancellations to distort their reporting. Tightening this needs either server-side write validation (Cloud Functions) or a different trust boundary -- flagged for a future pass, not fixed yet.',
+  },
+  {
+    status: 'open',
+    title: 'No rate limiting anywhere',
+    detail: 'There is no App Check, no Cloud Functions, and no request throttling in front of Firestore or Storage. A scripted burst of writes against any single tenant runs up the shared Firebase project\'s usage for every tenant on the platform -- a cost-based way to degrade or take down the whole platform, not just one tenant. Real mitigation needs Firebase App Check and/or a Cloud Functions gatekeeper -- a real architecture addition, not a rules tweak.',
+  },
+  {
+    status: 'open',
+    title: 'Watermark/branding Storage path has no tenant-ID format check',
+    detail: 'clients/{clientId}/branding/** in storage.rules is allow read, write: if true -- it doesn\'t even validate that clientId looks like a real slug, let alone who\'s writing. Anyone can upload arbitrary files there or overwrite an existing tenant\'s watermark.',
+  },
+];
+function renderRiskList(){
+  const wrap = document.getElementById('riskList');
+  if(!wrap) return;
+  wrap.innerHTML = KNOWN_RISKS.map(r => `
+    <div class="rounded-[16px] border ${r.status === 'mitigated' ? 'border-[#CFE8B5] bg-[#F3FAEA]' : 'border-[#FFE0A3] bg-[#FFFAF0]'} p-4">
+      <div class="flex items-center gap-2">
+        <span class="mono text-[9px] uppercase tracking-widest font-[800] px-2 py-0.5 rounded-full ${r.status === 'mitigated' ? 'bg-[#E8F5D8] text-[#3F7019]' : 'bg-[#FFF0D6] text-[#8A5A00]'}">${r.status === 'mitigated' ? 'Mitigated' : 'Open'}</span>
+        <div class="font-[750] text-[13px]">${escapeHtml(r.title)}</div>
+      </div>
+      <div class="mono text-[11px] leading-[1.6] opacity-70 mt-2">${escapeHtml(r.detail)}</div>
+    </div>
+  `).join('');
+}
+
+const AUDIT_ACTION_LABELS = {
+  'suspend': 'Suspended tenant', 'activate': 'Activated tenant', 'rename': 'Renamed business',
+  'color-change': 'Changed color', 'pin-reset': 'Reset PIN', 'retention-change': 'Changed retention',
+  'watermark-update': 'Updated watermark', 'watermark-remove': 'Removed watermark',
+  'billing-change': 'Changed billing formula', 'top-up': 'Prepaid top-up', 'apply-charge': 'Applied monthly charge',
+  'create-tenant': 'Created tenant', 'register-tenant': 'Registered existing tenant',
+};
+async function loadAuditLog(){
+  const list = document.getElementById('auditLogList');
+  if(!list) return;
+  list.innerHTML = `<div class="p-6 text-center mono text-[11px] opacity-50">Loading...</div>`;
+  try {
+    const snap = await db.collection('platformAuditLog').orderBy('createdAt', 'desc').limit(200).get();
+    if(snap.empty){
+      list.innerHTML = `<div class="p-10 text-center mono text-[12px] opacity-50">No actions logged yet.</div>`;
+      return;
+    }
+    list.innerHTML = snap.docs.map(doc => {
+      const d = doc.data();
+      const when = d.createdAt && d.createdAt.toDate ? d.createdAt.toDate().toLocaleString() : 'just now';
+      const label = AUDIT_ACTION_LABELS[d.action] || d.action;
+      return `
+        <div class="p-4 flex flex-wrap items-start justify-between gap-2">
+          <div class="min-w-0">
+            <div class="flex items-center gap-2 flex-wrap">
+              <span class="font-[700] text-[13px]">${escapeHtml(label)}</span>
+              ${d.slug ? `<span class="mono text-[9px] px-1.5 py-0.5 rounded-full bg-[#F1E9DF] text-[#201C19]/70 font-[600]">${escapeHtml(d.slug)}</span>` : ''}
+            </div>
+            <div class="mono text-[11px] opacity-60 mt-1">${escapeHtml(d.details || '')}</div>
+          </div>
+          <div class="text-right shrink-0">
+            <div class="mono text-[10px] opacity-50">${escapeHtml(when)}</div>
+            <div class="mono text-[10px] opacity-50">${escapeHtml(d.actorEmail || 'unknown')}</div>
+          </div>
+        </div>
+      `;
+    }).join('');
+  } catch(ex) {
+    list.innerHTML = `<div class="p-6 text-center mono text-[11px] text-[#8C2C10]">Failed to load: ${escapeHtml(ex.message)}</div>`;
+  }
+}
+function loadSecurityPanel(){
+  renderRiskList();
+  loadAuditLog();
+}
+document.getElementById('refreshAuditBtn')?.addEventListener('click', loadAuditLog);
 </script>
 </body>
 </html>

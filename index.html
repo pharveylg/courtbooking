@@ -1768,10 +1768,28 @@ function normalizeClientConfig(raw) {
     out.theme = { ...raw.theme };
     if (raw.theme.primaryColor && !out.theme.primary) out.theme.primary = raw.theme.primaryColor;
   }
-  for (const k of ['currency','rates','hours','staff','booking','paused']) {
+  for (const k of ['currency','rates','hours','staff','booking']) {
     if (raw[k] !== undefined) out[k] = raw[k];
   }
   return out;
+}
+
+/* ---------- Tenant suspend/pause status ----------
+   Deliberately NOT cached in localStorage and NOT part of config/state --
+   see the matching note in firestore.rules. Only a superadmin can write
+   clients/{id}/status/state, so this is the one flag in the app that's
+   actually access-controlled rather than just "shaped like a valid tenant
+   ID." Always fetched fresh; caching a pause flag would let a paused
+   tenant keep operating from a stale cache, which defeats the point. ---------- */
+async function loadTenantStatus(){
+  if (!currentClientId || !db) return { paused: false };
+  try {
+    const snap = await db.doc(`clients/${currentClientId}/status/state`).get();
+    return (snap.exists && snap.data().data) || { paused: false };
+  } catch(e) {
+    console.warn('[CourtBooking] Failed to load tenant status:', e.message);
+    return { paused: false };
+  }
 }
 
 /* ---------- Load client config from Firestore (with caching) ---------- */
@@ -1828,16 +1846,9 @@ async function loadClientConfig() {
 async function refreshClientConfigFromCloud(){
   if(!currentClientId || !db) return;
   try {
-    const configSnap = await db.doc(`clients/${currentClientId}/config/state`).get();
-    if(!configSnap.exists) return;
-    const fresh = normalizeClientConfig(configSnap.data().data);
-    const freshStr = JSON.stringify(fresh);
-    if(freshStr === JSON.stringify(currentClientConfig)) return; // already up to date
     const wasPaused = !!CLIENT.paused;
-    const nowPaused = !!fresh.paused;
-    currentClientConfig = fresh;
-    clientConfigCache.set(currentClientId, fresh);
-    localStorage.setItem(LS.clientConfig, freshStr);
+    const status = await loadTenantStatus();
+    const nowPaused = !!status.paused;
     if(wasPaused !== nowPaused){
       // Pausing/unpausing changes what the whole page renders (paused
       // overlay vs. the full booking app) -- simplest correct behavior is
@@ -1845,8 +1856,18 @@ async function refreshClientConfigFromCloud(){
       location.reload();
       return;
     }
+
+    const configSnap = await db.doc(`clients/${currentClientId}/config/state`).get();
+    if(!configSnap.exists) return;
+    const fresh = normalizeClientConfig(configSnap.data().data);
+    const freshStr = JSON.stringify(fresh);
+    if(freshStr === JSON.stringify(currentClientConfig)) return; // already up to date
+    currentClientConfig = fresh;
+    clientConfigCache.set(currentClientId, fresh);
+    localStorage.setItem(LS.clientConfig, freshStr);
     window.CLIENT_CONFIG = fresh;
     CLIENT = _deepMerge(_cfgDefaults, fresh);
+    CLIENT.paused = nowPaused;
     applyTheme();
     computeSchedule();
     computeHours();
@@ -6363,12 +6384,14 @@ function toast(msg){
 
 /* ---------- Init ---------- */
 async function initializeApp() {
-  // Load client config from Firestore (multi-tenancy)
-  const clientConfig = await loadClientConfig();
+  // Load client config from Firestore (multi-tenancy) and the (always-fresh,
+  // never cached) suspend/pause status in parallel.
+  const [clientConfig, tenantStatus] = await Promise.all([loadClientConfig(), loadTenantStatus()]);
 
   // Merge client config with defaults, recompute derived state, and apply branding
   window.CLIENT_CONFIG = clientConfig;
   CLIENT = _deepMerge(_cfgDefaults, clientConfig || {});
+  CLIENT.paused = !!tenantStatus.paused;
   applyTheme();              // re-apply theme CSS with the tenant's colors
   computeSchedule();         // recompute SCHED/STAFF_DAYS from the tenant's hours
   computeHours();            // recompute HOURS/ALL_HOURS_START from SCHED

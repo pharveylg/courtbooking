@@ -54,6 +54,7 @@
   <main class="max-w-[1200px] mx-auto px-4 py-6">
     <!-- POS -->
     <section id="view-pos" class="store-view grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-5">
+      <div id="shiftBanner" class="col-span-full rounded-[20px] border p-4"></div>
       <div class="rounded-[24px] bg-white border border-[#EAE0D5] p-5">
         <input id="posSearch" placeholder="Search products..." class="w-full h-11 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-4 mono text-[13px] outline-none focus:border-[#201C19]"/>
         <div id="posCategoryChips" class="mt-3 flex flex-wrap gap-1.5"></div>
@@ -161,12 +162,22 @@
         <div class="px-5 h-[56px] flex items-center border-b border-[#F1E9DF] font-[750] text-[14px]">Sales by Product</div>
         <div id="salesByProductList" class="divide-y divide-[#F5EDE4]"></div>
       </div>
-      <div class="rounded-[24px] bg-white border border-[#EAE0D5] overflow-hidden">
+      <div class="rounded-[24px] bg-white border border-[#EAE0D5] overflow-hidden mb-5">
         <div class="px-5 h-[56px] flex items-center justify-between border-b border-[#F1E9DF]">
           <div class="font-[750] text-[14px]">Sales History</div>
           <button id="refreshSalesBtn" class="h-8 px-3.5 rounded-full bg-white border border-[#EAE0D5] mono text-[10px] font-[700] cursor-pointer hover:border-[#201C19]">Refresh</button>
         </div>
         <div id="salesHistoryList" class="divide-y divide-[#F5EDE4] max-h-[500px] overflow-y-auto"></div>
+      </div>
+      <div class="rounded-[24px] bg-white border border-[#EAE0D5] overflow-hidden">
+        <div class="px-5 h-[56px] flex items-center justify-between border-b border-[#F1E9DF]">
+          <div>
+            <div class="font-[750] text-[14px]">Cash Reconciliation</div>
+            <div class="mono text-[9px] opacity-50">Closed shifts -- declared cash vs. what the register expected, not full accounting</div>
+          </div>
+          <button id="refreshShiftsBtn" class="h-8 px-3.5 rounded-full bg-white border border-[#EAE0D5] mono text-[10px] font-[700] cursor-pointer hover:border-[#201C19]">Refresh</button>
+        </div>
+        <div id="shiftHistoryList" class="divide-y divide-[#F5EDE4] max-h-[420px] overflow-y-auto"></div>
       </div>
     </section>
   </main>
@@ -290,6 +301,7 @@ function enterApp(bizName){
   document.getElementById('gateScreen').classList.add('hidden');
   document.getElementById('appScreen').classList.remove('hidden');
   document.getElementById('appBizName').textContent = bizName;
+  loadCurrentShift().then(renderShiftBanner);
   loadProducts().then(() => { renderPOS(); renderProducts(); renderInventory(); });
   renderReports();
   showStoreTab('pos');
@@ -309,7 +321,7 @@ function showStoreTab(tab){
     b.classList.toggle('opacity-70', !active);
   });
   if(tab === 'inventory') loadInventoryLog();
-  if(tab === 'reports') loadSalesAndRenderReports();
+  if(tab === 'reports'){ loadSalesAndRenderReports(); loadShiftHistory(); }
 }
 document.querySelectorAll('.store-tab-btn').forEach(btn => {
   btn.addEventListener('click', () => showStoreTab(btn.dataset.storeTab));
@@ -563,6 +575,7 @@ async function completeSale(){
       tx.set(productsRef, { data: products, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
       tx.set(saleRef, {
         items, subtotal, total: subtotal, paymentMethod, status: 'completed',
+        shiftId: CURRENT_SHIFT ? CURRENT_SHIFT.id : null,
         createdAt: firebase.firestore.FieldValue.serverTimestamp()
       });
     });
@@ -574,6 +587,156 @@ async function completeSale(){
     alert('Sale failed: ' + ex.message);
   } finally { btn.disabled = false; }
 }
+
+/* ================================================================
+   CASH RECONCILIATION / SHIFT CLOSING
+   Not full accounting -- just: open with a declared starting cash
+   amount, sales made while open get tagged with the shift, close by
+   declaring actual counted cash and see the variance against what the
+   register expected (opening cash + cash sales). Sales made with no
+   shift open are still recorded normally (shiftId: null); shift
+   tracking is opt-in, not required to use the POS.
+   ================================================================ */
+let CURRENT_SHIFT = null; // the open clients/{id}/storeShifts/{id} doc, or null
+
+async function loadCurrentShift(){
+  try {
+    const snap = await db.collection(`clients/${currentClientId}/storeShifts`).where('status', '==', 'open').limit(1).get();
+    CURRENT_SHIFT = snap.empty ? null : { id: snap.docs[0].id, ...snap.docs[0].data() };
+  } catch(ex) { console.warn('[PickleStore] Failed to load current shift:', ex.message); CURRENT_SHIFT = null; }
+}
+
+function renderShiftBanner(){
+  const wrap = document.getElementById('shiftBanner');
+  if(!CURRENT_SHIFT){
+    wrap.className = 'col-span-full rounded-[20px] border border-[#EAE0D5] bg-[#FFFBF5] p-4 flex flex-wrap items-center justify-between gap-3';
+    wrap.innerHTML = `
+      <div class="mono text-[11px] opacity-70">No shift open. Sales are still recorded either way -- opening a shift is only needed if you want end-of-day cash reconciliation.</div>
+      <button type="button" id="openShiftBtn" class="h-9 px-4 rounded-full bg-[#201C19] text-white mono text-[11px] font-[700] cursor-pointer shrink-0">Open Shift</button>
+    `;
+    document.getElementById('openShiftBtn').addEventListener('click', toggleOpenShiftForm);
+  } else {
+    const openedAt = CURRENT_SHIFT.openedAt && CURRENT_SHIFT.openedAt.toDate ? CURRENT_SHIFT.openedAt.toDate().toLocaleString() : 'just now';
+    wrap.className = 'col-span-full rounded-[20px] border border-[#CFE8B5] bg-[#F3FAEA] p-4 flex flex-wrap items-center justify-between gap-3';
+    wrap.innerHTML = `
+      <div class="mono text-[11px]">
+        <span class="font-[800] text-[#3F7019]">Shift Open</span>
+        <span class="opacity-70"> • Opened ${escapeHtml(openedAt)} • Opening cash ${fmtMoney(CURRENT_SHIFT.openingCash)}${CURRENT_SHIFT.openedBy ? ` • by ${escapeHtml(CURRENT_SHIFT.openedBy)}` : ''}</span>
+      </div>
+      <button type="button" id="closeShiftBtn" class="h-9 px-4 rounded-full bg-white border border-[#EAE0D5] mono text-[11px] font-[700] cursor-pointer hover:border-[#201C19] shrink-0">Close Shift</button>
+    `;
+    document.getElementById('closeShiftBtn').addEventListener('click', toggleCloseShiftForm);
+  }
+}
+function toggleOpenShiftForm(){
+  const wrap = document.getElementById('shiftBanner');
+  wrap.insertAdjacentHTML('beforeend', `
+    <div id="openShiftForm" class="w-full mt-3 pt-3 border-t border-[#EAE0D5] flex flex-wrap gap-2 items-end">
+      <label class="flex flex-col gap-1">
+        <span class="mono text-[9px] opacity-50">Opening Cash (₱)</span>
+        <input type="number" id="openShiftCash" min="0" step="0.01" value="0" class="h-9 w-32 rounded-full border border-[#EAE0D5] bg-white px-3 mono text-[11px] font-[700] outline-none focus:border-[#201C19]"/>
+      </label>
+      <label class="flex flex-col gap-1">
+        <span class="mono text-[9px] opacity-50">Opened By (optional)</span>
+        <input id="openShiftBy" class="h-9 w-40 rounded-full border border-[#EAE0D5] bg-white px-3 mono text-[11px] outline-none focus:border-[#201C19]"/>
+      </label>
+      <button type="button" id="confirmOpenShiftBtn" class="h-9 px-4 rounded-full bg-[#201C19] text-white mono text-[10px] font-[700] cursor-pointer">Confirm Open</button>
+    </div>
+  `);
+  document.getElementById('confirmOpenShiftBtn').addEventListener('click', async () => {
+    const openingCash = parseFloat(document.getElementById('openShiftCash').value) || 0;
+    const openedBy = document.getElementById('openShiftBy').value.trim();
+    try {
+      const ref = await db.collection(`clients/${currentClientId}/storeShifts`).add({
+        status: 'open', openingCash, openedBy,
+        openedAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      CURRENT_SHIFT = { id: ref.id, status: 'open', openingCash, openedBy, openedAt: new Date() };
+      renderShiftBanner();
+      toast('Shift opened');
+    } catch(ex) { toast('Failed: ' + ex.message); }
+  });
+}
+async function toggleCloseShiftForm(){
+  const wrap = document.getElementById('shiftBanner');
+  wrap.insertAdjacentHTML('beforeend', `<div id="closeShiftForm" class="w-full mt-3 pt-3 border-t border-[#CFE8B5]"><div class="mono text-[11px] opacity-60">Calculating expected cash...</div></div>`);
+  let cashSales = 0, otherSales = 0;
+  try {
+    const snap = await db.collection(`clients/${currentClientId}/storeSales`).where('shiftId', '==', CURRENT_SHIFT.id).get();
+    snap.forEach(doc => {
+      const s = doc.data();
+      if(s.status === 'voided') return;
+      if(s.paymentMethod === 'Cash') cashSales += s.total; else otherSales += s.total;
+    });
+  } catch(ex) { toast('Failed to total sales: ' + ex.message); }
+  const expectedCash = CURRENT_SHIFT.openingCash + cashSales;
+  const form = document.getElementById('closeShiftForm');
+  form.innerHTML = `
+    <div class="mono text-[11px] leading-[1.8]">
+      Opening cash ${fmtMoney(CURRENT_SHIFT.openingCash)} + cash sales ${fmtMoney(cashSales)} = <b>Expected cash ${fmtMoney(expectedCash)}</b><br/>
+      <span class="opacity-60">Other-payment-method sales this shift: ${fmtMoney(otherSales)} (not part of the cash count)</span>
+    </div>
+    <div class="mt-3 flex flex-wrap gap-2 items-end">
+      <label class="flex flex-col gap-1">
+        <span class="mono text-[9px] opacity-50">Actual Declared Cash (₱)</span>
+        <input type="number" id="closeShiftCash" min="0" step="0.01" class="h-9 w-32 rounded-full border border-[#EAE0D5] bg-white px-3 mono text-[11px] font-[700] outline-none focus:border-[#201C19]"/>
+      </label>
+      <label class="flex flex-col gap-1">
+        <span class="mono text-[9px] opacity-50">Closed By (optional)</span>
+        <input id="closeShiftBy" class="h-9 w-40 rounded-full border border-[#EAE0D5] bg-white px-3 mono text-[11px] outline-none focus:border-[#201C19]"/>
+      </label>
+      <label class="flex flex-col gap-1 flex-1 min-w-[160px]">
+        <span class="mono text-[9px] opacity-50">Notes (optional)</span>
+        <input id="closeShiftNotes" class="h-9 w-full rounded-full border border-[#EAE0D5] bg-white px-3 mono text-[11px] outline-none focus:border-[#201C19]"/>
+      </label>
+      <button type="button" id="confirmCloseShiftBtn" class="h-9 px-4 rounded-full bg-[#201C19] text-white mono text-[10px] font-[700] cursor-pointer">Confirm Close</button>
+    </div>
+  `;
+  document.getElementById('confirmCloseShiftBtn').addEventListener('click', async () => {
+    const declaredCash = parseFloat(document.getElementById('closeShiftCash').value);
+    if(isNaN(declaredCash) || declaredCash < 0){ toast('Enter the actual declared cash amount'); return; }
+    const closedBy = document.getElementById('closeShiftBy').value.trim();
+    const notes = document.getElementById('closeShiftNotes').value.trim();
+    const variance = declaredCash - expectedCash;
+    try {
+      await db.doc(`clients/${currentClientId}/storeShifts/${CURRENT_SHIFT.id}`).update({
+        status: 'closed', cashSales, otherSales, totalSales: cashSales + otherSales,
+        expectedCash, declaredCash, variance, closedBy, notes,
+        closedAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      CURRENT_SHIFT = null;
+      renderShiftBanner();
+      loadShiftHistory();
+      toast(`Shift closed${variance !== 0 ? ` — variance ${variance > 0 ? '+' : ''}${fmtMoney(variance)}` : ''}`);
+    } catch(ex) { toast('Failed: ' + ex.message); }
+  });
+}
+async function loadShiftHistory(){
+  const wrap = document.getElementById('shiftHistoryList');
+  wrap.innerHTML = `<div class="p-6 text-center mono text-[11px] opacity-50">Loading...</div>`;
+  try {
+    const snap = await db.collection(`clients/${currentClientId}/storeShifts`).where('status', '==', 'closed').orderBy('closedAt', 'desc').limit(50).get();
+    if(snap.empty){ wrap.innerHTML = `<div class="p-10 text-center mono text-[12px] opacity-50">No closed shifts yet.</div>`; return; }
+    wrap.innerHTML = snap.docs.map(doc => {
+      const d = doc.data();
+      const closedAt = d.closedAt && d.closedAt.toDate ? d.closedAt.toDate().toLocaleString() : '';
+      const varianceCls = d.variance === 0 ? 'bg-[#F1E9DF] text-[#201C19]/70' : d.variance > 0 ? 'bg-[#E8F5D8] text-[#3F7019]' : 'bg-[#FFE9E0] text-[#8C2C10]';
+      return `
+        <div class="p-4">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <div class="mono text-[11px]">${escapeHtml(closedAt)}${d.closedBy ? ` • ${escapeHtml(d.closedBy)}` : ''}</div>
+            <span class="mono text-[10px] px-2 py-0.5 rounded-full font-[700] ${varianceCls}">${d.variance > 0 ? '+' : ''}${fmtMoney(d.variance)} variance</span>
+          </div>
+          <div class="mono text-[10px] opacity-60 mt-1.5">Opening ${fmtMoney(d.openingCash)} + cash sales ${fmtMoney(d.cashSales)} = expected ${fmtMoney(d.expectedCash)} • declared ${fmtMoney(d.declaredCash)} • other-method sales ${fmtMoney(d.otherSales)}</div>
+          ${d.notes ? `<div class="mono text-[10px] opacity-50 mt-1">Note: ${escapeHtml(d.notes)}</div>` : ''}
+        </div>
+      `;
+    }).join('');
+  } catch(ex) {
+    wrap.innerHTML = `<div class="p-6 text-center mono text-[11px] text-[#8C2C10]">Failed to load: ${escapeHtml(ex.message)}</div>`;
+  }
+}
+document.getElementById('refreshShiftsBtn').addEventListener('click', loadShiftHistory);
 
 /* ================================================================
    INVENTORY: stock levels, receive, adjust, movement log

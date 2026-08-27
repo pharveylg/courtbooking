@@ -127,6 +127,14 @@ service cloud.firestore {
         allow write: if isValidTenantId(clientId);
       }
 
+      // Store cash-reconciliation shifts (open/close register, one doc
+      // per shift). Same open per-tenant trust level as every other Store
+      // collection above.
+      match /storeShifts/{document} {
+        allow read: if isValidTenantId(clientId);
+        allow write: if isValidTenantId(clientId);
+      }
+
       // Bookings subcollection
       match /bookings/{document} {
         allow read: if isValidTenantId(clientId);

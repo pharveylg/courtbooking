@@ -46,6 +46,7 @@
         <button data-store-tab="products" class="store-tab-btn shrink-0 px-3.5 h-8 rounded-full mono text-[11px] font-[700] transition cursor-pointer">Products</button>
         <button data-store-tab="inventory" class="store-tab-btn shrink-0 px-3.5 h-8 rounded-full mono text-[11px] font-[700] transition cursor-pointer">Inventory</button>
         <button data-store-tab="reports" class="store-tab-btn shrink-0 px-3.5 h-8 rounded-full mono text-[11px] font-[700] transition cursor-pointer">Reports</button>
+        <button data-store-tab="credit" class="store-tab-btn shrink-0 px-3.5 h-8 rounded-full mono text-[11px] font-[700] transition cursor-pointer">Credit</button>
         <button data-store-tab="settings" class="store-tab-btn shrink-0 px-3.5 h-8 rounded-full mono text-[11px] font-[700] transition cursor-pointer">Settings</button>
       </nav>
       <button id="lockBtn" class="h-9 px-3.5 rounded-full bg-white border border-[#EAE0D5] mono text-[11px] font-[700] cursor-pointer hover:border-[#201C19] transition shrink-0">🔒 Lock</button>
@@ -78,9 +79,17 @@
             <option>Maya</option>
             <option>Bank Transfer</option>
             <option>Card</option>
+            <option>Credit / Pay Later</option>
             <option>Other</option>
           </select>
         </label>
+        <div id="posCreditFields" class="hidden mt-3 space-y-1.5">
+          <label class="flex flex-col gap-1.5">
+            <span class="mono text-[9px] uppercase tracking-widest opacity-50">Customer Name (required for credit)</span>
+            <input id="posCreditCustomer" placeholder="Who is this credit for?" class="w-full h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-4 mono text-[12px] outline-none focus:border-[#201C19]"/>
+          </label>
+          <div class="mono text-[9px] opacity-50 px-1">This sale will need sign-off from the Credit tab before it counts as approved.</div>
+        </div>
         <button id="posCompleteBtn" class="mt-3 w-full h-12 rounded-full bg-[#201C19] text-white font-[800] text-[13px] cursor-pointer hover:opacity-90 active:scale-[0.98] transition">Complete Sale</button>
       </div>
     </section>
@@ -183,6 +192,29 @@
     </section>
 
     <!-- Settings -->
+    <!-- Credit -->
+    <section id="view-credit" class="store-view hidden">
+      <div id="creditSummary" class="grid grid-cols-2 md:grid-cols-3 gap-3 mb-5"></div>
+      <div class="rounded-[24px] bg-white border border-[#EAE0D5] overflow-hidden">
+        <div class="px-5 h-[56px] flex items-center justify-between border-b border-[#F1E9DF] flex-wrap gap-2">
+          <div>
+            <div class="font-[750] text-[14px]">Store Credit / Pay Later</div>
+            <div class="mono text-[9px] opacity-50">Purchases where payment was deferred -- each needs sign-off before it counts as approved, and can be marked paid once settled</div>
+          </div>
+          <div class="flex gap-2 shrink-0">
+            <select id="creditFilter" class="h-8 rounded-full border border-[#EAE0D5] bg-white px-3 mono text-[10px] font-[700] outline-none">
+              <option value="pending">Pending Sign-off</option>
+              <option value="outstanding">Signed Off, Unpaid</option>
+              <option value="paid">Paid</option>
+              <option value="all">All</option>
+            </select>
+            <button id="refreshCreditBtn" class="h-8 px-3.5 rounded-full bg-white border border-[#EAE0D5] mono text-[10px] font-[700] cursor-pointer hover:border-[#201C19]">Refresh</button>
+          </div>
+        </div>
+        <div id="creditList" class="divide-y divide-[#F5EDE4] max-h-[560px] overflow-y-auto"></div>
+      </div>
+    </section>
+
     <section id="view-settings" class="store-view hidden">
       <div class="max-w-[420px] rounded-[24px] bg-white border border-[#EAE0D5] p-5">
         <div class="font-[750] text-[14px]">Change Store PIN</div>
@@ -352,6 +384,7 @@ function showStoreTab(tab){
   });
   if(tab === 'inventory') loadInventoryLog();
   if(tab === 'reports'){ loadSalesAndRenderReports(); loadShiftHistory(); }
+  if(tab === 'credit') loadCreditSales();
 }
 document.querySelectorAll('.store-tab-btn').forEach(btn => {
   btn.addEventListener('click', () => showStoreTab(btn.dataset.storeTab));
@@ -572,10 +605,17 @@ function renderCart(){
   document.getElementById('posTotal').textContent = fmtMoney(total);
 }
 document.getElementById('posCompleteBtn').addEventListener('click', completeSale);
+document.getElementById('posPaymentMethod').addEventListener('change', () => {
+  const isCredit = document.getElementById('posPaymentMethod').value === 'Credit / Pay Later';
+  document.getElementById('posCreditFields').classList.toggle('hidden', !isCredit);
+});
 
 async function completeSale(){
   if(CART.length === 0){ toast('Cart is empty'); return; }
   const paymentMethod = document.getElementById('posPaymentMethod').value;
+  const isCredit = paymentMethod === 'Credit / Pay Later';
+  const customerName = document.getElementById('posCreditCustomer').value.trim();
+  if(isCredit && !customerName){ toast('Enter who this credit is for'); return; }
   const productsRef = db.doc(`clients/${currentClientId}/storeProducts/state`);
   const saleRef = db.collection(`clients/${currentClientId}/storeSales`).doc();
   const btn = document.getElementById('posCompleteBtn');
@@ -608,16 +648,175 @@ async function completeSale(){
       tx.set(saleRef, {
         items, subtotal, total: subtotal, paymentMethod, status: 'completed',
         shiftId: CURRENT_SHIFT ? CURRENT_SHIFT.id : null,
+        ...(isCredit ? {
+          customerName, creditStatus: 'pending', signedOffBy: null, signOffComment: null,
+          signedOffAt: null, paid: false, paidAt: null, settledVia: null,
+        } : {}),
         createdAt: firebase.firestore.FieldValue.serverTimestamp()
       });
     });
     CART = [];
+    document.getElementById('posCreditCustomer').value = '';
+    document.getElementById('posCreditFields').classList.add('hidden');
+    document.getElementById('posPaymentMethod').value = 'Cash';
     await loadProducts();
     renderPOS(); renderProducts(); renderInventory();
-    toast('Sale completed');
+    toast(isCredit ? 'Credit sale recorded -- needs sign-off in the Credit tab' : 'Sale completed');
   } catch(ex) {
     alert('Sale failed: ' + ex.message);
   } finally { btn.disabled = false; }
+}
+
+/* ================================================================
+   STORE CREDIT / PAY LATER
+   A Credit sale records normally (stock decrements immediately, same
+   as any other sale) but carries creditStatus:'pending' until a staff
+   member signs off on it with a required comment -- an after-the-fact
+   approval/audit trail, not a pre-sale gate, since the goods already
+   left the store by the time anyone could review it. Separately, a
+   signed-off credit can be marked Paid once the customer settles up.
+   Voiding a credit sale (via the normal Sales History void, Reports
+   tab) restores stock exactly like any other void; voided credit
+   sales are excluded from every Credit tab view below.
+   ================================================================ */
+let CREDIT_SALES = [];
+async function loadCreditSales(){
+  const wrap = document.getElementById('creditList');
+  wrap.innerHTML = `<div class="p-6 text-center mono text-[11px] opacity-50">Loading...</div>`;
+  try {
+    const snap = await db.collection(`clients/${currentClientId}/storeSales`)
+      .where('paymentMethod', '==', 'Credit / Pay Later').get();
+    CREDIT_SALES = snap.docs
+      .map(doc => ({ id: doc.id, ...doc.data() }))
+      .filter(s => s.status !== 'voided')
+      .sort((a,b) => (b.createdAt?.toMillis?.()||0) - (a.createdAt?.toMillis?.()||0));
+    renderCreditSummary();
+    renderCreditList();
+  } catch(ex) {
+    wrap.innerHTML = `<div class="p-6 text-center mono text-[11px] text-[#8C2C10]">Failed to load: ${escapeHtml(ex.message)}</div>`;
+  }
+}
+function renderCreditSummary(){
+  const wrap = document.getElementById('creditSummary');
+  const pending = CREDIT_SALES.filter(s => s.creditStatus === 'pending');
+  const outstanding = CREDIT_SALES.filter(s => s.creditStatus === 'signed_off' && !s.paid);
+  const paid = CREDIT_SALES.filter(s => s.paid);
+  const card = (label, value, sub) => `
+    <div class="rounded-[18px] bg-white border border-[#EAE0D5] p-4">
+      <div class="mono text-[9px] uppercase tracking-widest opacity-50">${label}</div>
+      <div class="text-[20px] font-[800] mt-1">${value}</div>
+      ${sub ? `<div class="mono text-[10px] opacity-50 mt-0.5">${sub}</div>` : ''}
+    </div>
+  `;
+  wrap.innerHTML =
+    card('Pending Sign-off', pending.length, fmtMoney(pending.reduce((s,x)=>s+x.total,0))) +
+    card('Outstanding (Signed Off)', outstanding.length, fmtMoney(outstanding.reduce((s,x)=>s+x.total,0))) +
+    card('Paid', paid.length, fmtMoney(paid.reduce((s,x)=>s+x.total,0)));
+}
+function renderCreditList(){
+  const wrap = document.getElementById('creditList');
+  const filter = document.getElementById('creditFilter').value;
+  let rows = CREDIT_SALES;
+  if(filter === 'pending') rows = rows.filter(s => s.creditStatus === 'pending');
+  else if(filter === 'outstanding') rows = rows.filter(s => s.creditStatus === 'signed_off' && !s.paid);
+  else if(filter === 'paid') rows = rows.filter(s => s.paid);
+
+  if(rows.length === 0){ wrap.innerHTML = `<div class="p-10 text-center mono text-[12px] opacity-50">Nothing here.</div>`; return; }
+  wrap.innerHTML = rows.map(s => {
+    const when = s.createdAt && s.createdAt.toDate ? s.createdAt.toDate().toLocaleString() : 'just now';
+    const itemsLine = s.items.map(i => `${i.qty}× ${escapeHtml(i.name)}`).join(', ');
+    const statusBadge = s.paid
+      ? `<span class="mono text-[9px] px-1.5 py-0.5 rounded-full font-[700] bg-[#E8F5D8] text-[#3F7019]">PAID</span>`
+      : s.creditStatus === 'signed_off'
+        ? `<span class="mono text-[9px] px-1.5 py-0.5 rounded-full font-[700] bg-[#FFF0D6] text-[#8A5A00]">SIGNED OFF -- UNPAID</span>`
+        : `<span class="mono text-[9px] px-1.5 py-0.5 rounded-full font-[700] bg-[#FFE9E0] text-[#8C2C10]">PENDING SIGN-OFF</span>`;
+    return `
+      <div class="p-4">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <div class="min-w-0">
+            <div class="flex items-center gap-2 flex-wrap">
+              <span class="font-[700] text-[13px]">${escapeHtml(s.customerName||'(no name)')}</span>
+              <span class="font-[700] text-[13px]">${fmtMoney(s.total)}</span>
+              ${statusBadge}
+            </div>
+            <div class="mono text-[11px] opacity-60 mt-1 truncate max-w-[440px]">${itemsLine}</div>
+            <div class="mono text-[9px] opacity-40 mt-0.5">${escapeHtml(when)}</div>
+            ${s.signOffComment ? `<div class="mono text-[10px] opacity-60 mt-1.5">Sign-off by ${escapeHtml(s.signedOffBy||'staff')}: "${escapeHtml(s.signOffComment)}"</div>` : ''}
+            ${s.paid ? `<div class="mono text-[10px] opacity-60 mt-1">Paid via ${escapeHtml(s.settledVia||'unspecified')}${s.paidAt && s.paidAt.toDate ? ` on ${escapeHtml(s.paidAt.toDate().toLocaleDateString())}` : ''}</div>` : ''}
+          </div>
+          <div class="flex gap-2 shrink-0">
+            ${s.creditStatus === 'pending' ? `<button type="button" data-signoff-credit="${s.id}" class="h-8 px-3.5 rounded-full bg-[#201C19] text-white mono text-[10px] font-[700] cursor-pointer">Sign Off</button>` : ''}
+            ${s.creditStatus === 'signed_off' && !s.paid ? `<button type="button" data-pay-credit="${s.id}" class="h-8 px-3.5 rounded-full bg-[#E8F5D8] text-[#3F7019] border border-[#CFE8B5] mono text-[10px] font-[700] cursor-pointer">Mark Paid</button>` : ''}
+          </div>
+        </div>
+        <div id="credit-inline-${s.id}" class="hidden mt-3 p-3.5 rounded-[14px] bg-[#FFFBF5] border border-[#EAE0D5]"></div>
+      </div>
+    `;
+  }).join('');
+  wrap.querySelectorAll('[data-signoff-credit]').forEach(btn => btn.addEventListener('click', () => toggleSignOffForm(btn.dataset.signoffCredit)));
+  wrap.querySelectorAll('[data-pay-credit]').forEach(btn => btn.addEventListener('click', () => toggleMarkPaidForm(btn.dataset.payCredit)));
+}
+document.getElementById('creditFilter').addEventListener('change', renderCreditList);
+document.getElementById('refreshCreditBtn').addEventListener('click', loadCreditSales);
+
+function toggleSignOffForm(saleId){
+  const el = document.getElementById(`credit-inline-${saleId}`);
+  document.querySelectorAll('[id^="credit-inline-"]').forEach(e => e.classList.add('hidden'));
+  el.classList.remove('hidden');
+  el.innerHTML = `
+    <div class="mono text-[10px] uppercase tracking-widest opacity-60 mb-2">Sign Off This Credit Sale</div>
+    <div class="flex flex-wrap gap-2 items-end">
+      <label class="flex flex-col gap-1 flex-1 min-w-[160px]">
+        <span class="mono text-[9px] opacity-50">Comment (required)</span>
+        <input id="signoffComment-${saleId}" placeholder="Why is this approved?" class="h-9 w-full rounded-full border border-[#EAE0D5] bg-white px-3 mono text-[11px] outline-none focus:border-[#201C19]"/>
+      </label>
+      <label class="flex flex-col gap-1">
+        <span class="mono text-[9px] opacity-50">Signed Off By</span>
+        <input id="signoffBy-${saleId}" placeholder="Your name" class="h-9 w-32 rounded-full border border-[#EAE0D5] bg-white px-3 mono text-[11px] outline-none focus:border-[#201C19]"/>
+      </label>
+      <button type="button" data-confirm-signoff="${saleId}" class="h-9 px-4 rounded-full bg-[#201C19] text-white mono text-[10px] font-[700] cursor-pointer">Confirm Sign-off</button>
+    </div>
+  `;
+  el.querySelector(`[data-confirm-signoff="${saleId}"]`).addEventListener('click', async () => {
+    const comment = document.getElementById(`signoffComment-${saleId}`).value.trim();
+    const signedOffBy = document.getElementById(`signoffBy-${saleId}`).value.trim();
+    if(!comment){ toast('A comment is required to sign off'); return; }
+    try {
+      await db.doc(`clients/${currentClientId}/storeSales/${saleId}`).update({
+        creditStatus: 'signed_off', signOffComment: comment, signedOffBy: signedOffBy || 'Store staff',
+        signedOffAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      toast('Credit sale signed off');
+      loadCreditSales();
+    } catch(ex) { toast('Failed: ' + ex.message); }
+  });
+}
+function toggleMarkPaidForm(saleId){
+  const el = document.getElementById(`credit-inline-${saleId}`);
+  document.querySelectorAll('[id^="credit-inline-"]').forEach(e => e.classList.add('hidden'));
+  el.classList.remove('hidden');
+  el.innerHTML = `
+    <div class="mono text-[10px] uppercase tracking-widest opacity-60 mb-2">Mark as Paid</div>
+    <div class="flex flex-wrap gap-2 items-end">
+      <label class="flex flex-col gap-1">
+        <span class="mono text-[9px] opacity-50">Settled Via</span>
+        <select id="settledVia-${saleId}" class="h-9 rounded-full border border-[#EAE0D5] bg-white px-3 mono text-[11px] font-[700] outline-none focus:border-[#201C19]">
+          <option>Cash</option><option>GCash</option><option>Maya</option><option>Bank Transfer</option><option>Card</option><option>Other</option>
+        </select>
+      </label>
+      <button type="button" data-confirm-paid="${saleId}" class="h-9 px-4 rounded-full bg-[#201C19] text-white mono text-[10px] font-[700] cursor-pointer">Confirm Paid</button>
+    </div>
+  `;
+  el.querySelector(`[data-confirm-paid="${saleId}"]`).addEventListener('click', async () => {
+    const settledVia = document.getElementById(`settledVia-${saleId}`).value;
+    try {
+      await db.doc(`clients/${currentClientId}/storeSales/${saleId}`).update({
+        paid: true, settledVia, paidAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      toast('Credit sale marked paid');
+      loadCreditSales();
+    } catch(ex) { toast('Failed: ' + ex.message); }
+  });
 }
 
 /* ================================================================
@@ -956,6 +1155,7 @@ function monthStart(offset){
   const d = new Date(); d.setMonth(d.getMonth()-offset); d.setDate(1); d.setHours(0,0,0,0);
   return d;
 }
+let OUTSTANDING_CREDIT_TOTAL = 0;
 async function loadSalesAndRenderReports(){
   const wrap = document.getElementById('salesHistoryList');
   wrap.innerHTML = `<div class="p-6 text-center mono text-[11px] opacity-50">Loading...</div>`;
@@ -964,6 +1164,14 @@ async function loadSalesAndRenderReports(){
     const snap = await db.collection(`clients/${currentClientId}/storeSales`)
       .where('createdAt', '>=', since).orderBy('createdAt', 'desc').get();
     SALES_CACHE = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    try {
+      const creditSnap = await db.collection(`clients/${currentClientId}/storeSales`)
+        .where('paymentMethod', '==', 'Credit / Pay Later').get();
+      OUTSTANDING_CREDIT_TOTAL = creditSnap.docs
+        .map(doc => doc.data())
+        .filter(s => s.status !== 'voided' && !s.paid)
+        .reduce((sum, s) => sum + s.total, 0);
+    } catch(ex) { OUTSTANDING_CREDIT_TOTAL = 0; }
     renderReports();
     renderSalesHistory();
   } catch(ex) {
@@ -1056,7 +1264,8 @@ function renderReports(){
     card('Revenue (MTD)', fmtMoney(revenue), `${thisMonth.length} sale${thisMonth.length===1?'':'s'} • ${unitsSold} units`) +
     card('Est. Gross Profit', fmtMoney(grossProfit), `${margin.toFixed(1)}% margin • COGS ${fmtMoney(cogs)}`) +
     card('Inventory Value', fmtMoney(stockValue), `${PRODUCTS.length} product${PRODUCTS.length===1?'':'s'} tracked`) +
-    card('Stock Alerts', `${lowStockCount + outOfStockCount}`, `${lowStockCount} low • ${outOfStockCount} out of stock`);
+    card('Stock Alerts', `${lowStockCount + outOfStockCount}`, `${lowStockCount} low • ${outOfStockCount} out of stock`) +
+    card('Outstanding Credit', fmtMoney(OUTSTANDING_CREDIT_TOTAL), 'Unpaid, pending or signed off -- see Credit tab');
 
   const byProduct = document.getElementById('salesByProductList');
   const totals = {};

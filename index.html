@@ -3343,15 +3343,18 @@ function renderStoreAdminCard(){
 
 /* ---------- Pickle Court Tournaments entry point (Admin Console) ----------
    Same independent-entitlement pattern as Store (tournamentEnabled/
-   tournamentPaused on clients/{id}/status/state, superadmin-only writes).
-   The management dashboard itself ships in a later phase, so an enabled
-   tenant sees an active-but-not-yet-built note rather than a dead link. ---------- */
+   tournamentPaused on clients/{id}/status/state, superadmin-only writes),
+   linking out to tournament-admin.html the same way Store links to
+   store.html -- its own page rather than a tab in here, since tournament
+   management (divisions, registration, scheduling, matches) is at least
+   as much surface area as Store and this file is already large enough.
+   No separate PIN: it reuses the tenant's existing Booking Admin PIN. ---------- */
 function renderTournamentAdminCard(){
   const actionWrap = document.getElementById('tournamentAdminActionWrap');
   if(!actionWrap) return;
 
   if(CLIENT.tournamentEnabled && !CLIENT.tournamentPaused){
-    actionWrap.innerHTML = `<span class="mono text-[10px] px-3 h-7 rounded-full bg-[#E8F5D8] text-[#3F7019] font-[700] grid place-items-center whitespace-nowrap">Active — dashboard coming soon</span>`;
+    actionWrap.innerHTML = `<a href="tournament-admin.html?client=${encodeURIComponent(currentClientId)}" target="_blank" rel="noopener" class="inline-flex items-center gap-1.5 h-8 px-3.5 rounded-full bg-[#D6FF5F] hover:bg-[#CBF052] border border-[#201C19]/10 mono text-[11px] font-[800] text-[#201C19] transition">Go to Tournaments →</a>`;
     return;
   }
   const label = CLIENT.tournamentPaused ? 'Paused — contact operator' : 'Not enabled — contact support';

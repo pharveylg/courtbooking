@@ -1362,7 +1362,8 @@ function renderTournamentWidget(slug, data, status){
         ${tournamentEnabled ? `<button type="button" data-tournament-remove="${slug}" class="h-9 px-3.5 rounded-full bg-white border border-[#EAE0D5] mono text-[10px] font-[700] cursor-pointer hover:border-[#201C19]">Remove Tournaments</button>` : ''}
       </div>
     </div>
-    <div class="mt-2 mono text-[10px] opacity-50">${tournamentEnabled ? 'Managed from the tenant\'s own Admin Console (Tournaments tab) -- no separate PIN.' : 'Uses the tenant\'s existing Admin PIN once added -- no separate PIN to provision.'}</div>
+    ${tournamentEnabled ? `<a href="tournament-admin.html?client=${encodeURIComponent(slug)}" target="_blank" rel="noopener" class="inline-block mt-2 mono text-[10px] opacity-60 hover:opacity-100 underline">Open Tournaments ↗</a>` : ''}
+    <div class="mt-2 mono text-[10px] opacity-50">${tournamentEnabled ? 'Uses the tenant\'s existing Admin PIN -- no separate PIN to manage here.' : 'Uses the tenant\'s existing Admin PIN once added -- no separate PIN to provision.'}</div>
   `;
 
   wrap.querySelector(`[data-tournament-add="${cssAttr(slug)}"]`)?.addEventListener('click', async (e) => {

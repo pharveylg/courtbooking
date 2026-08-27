@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Pickle Court Tournaments</title>
+<link rel="stylesheet" href="tailwind.css">
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+*{font-family:"Bricolage Grotesque",system-ui,sans-serif}
+.mono{font-family:"JetBrains Mono",monospace}
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-thumb{background:#e5ddd4;border-radius:999px}
+</style>
+</head>
+<body class="bg-[#FFFBF5] text-[#201C19] antialiased">
+
+<!-- Gate screen: not-available / paused / PIN entry -->
+<div id="gateScreen" class="min-h-screen grid place-items-center p-6">
+  <div class="w-full max-w-[440px] rounded-[28px] bg-white border border-[#EAE0D5] shadow-[0_20px_60px_rgba(32,28,25,0.1)] p-7 md:p-9 text-center">
+    <div class="mx-auto w-14 h-14 rounded-full bg-[#201C19] text-[#D6FF5F] grid place-items-center font-black text-[20px]">🏆</div>
+    <div id="gateStateWrap">
+      <p class="mt-5 mono text-[12px] opacity-60">Loading Tournaments...</p>
+    </div>
+  </div>
+</div>
+
+<!-- Main app: shown once the PIN gate is passed -->
+<div id="appScreen" class="hidden">
+  <header class="sticky top-0 z-30 backdrop-blur-xl bg-[#FFFBF5]/90 border-b border-[#EAE0D5]">
+    <div class="max-w-[1100px] mx-auto px-4 h-16 flex items-center justify-between gap-3 flex-wrap">
+      <div class="flex items-center gap-2.5 shrink-0">
+        <div class="w-9 h-9 rounded-full bg-[#201C19] text-[#D6FF5F] grid place-items-center font-black text-[15px]">🏆</div>
+        <div>
+          <div id="appBizName" class="font-[800] text-[14px] leading-none"></div>
+          <div class="mono text-[9px] uppercase tracking-widest opacity-50">Pickle Court Tournaments</div>
+        </div>
+      </div>
+      <button id="lockBtn" class="h-9 px-3.5 rounded-full bg-white border border-[#EAE0D5] mono text-[11px] font-[700] cursor-pointer hover:border-[#201C19] transition shrink-0">🔒 Lock</button>
+    </div>
+  </header>
+
+  <main class="max-w-[1100px] mx-auto px-4 py-6">
+
+    <!-- LIST VIEW -->
+    <section id="view-list">
+      <div class="flex items-center justify-between mb-4 flex-wrap gap-2">
+        <h2 class="text-[18px] font-[800] tracking-[-0.02em]">Tournaments</h2>
+        <button id="newTournamentBtn" class="h-9 px-4 rounded-full bg-[#D6FF5F] hover:bg-[#CBF052] text-[#201C19] font-[800] text-[12px] border border-[#201C19]/10 transition cursor-pointer">+ New Tournament</button>
+      </div>
+      <div id="tournamentList" class="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div class="mono text-[11px] opacity-50">Loading tournaments...</div>
+      </div>
+    </section>
+
+    <!-- DETAIL / CREATE VIEW -->
+    <section id="view-detail" class="hidden">
+      <button id="backToListBtn" class="mono text-[11px] font-[700] opacity-60 hover:opacity-100 mb-4 cursor-pointer">← All Tournaments</button>
+
+      <div class="rounded-[24px] bg-white border border-[#EAE0D5] p-5 md:p-6">
+        <div class="flex items-center justify-between flex-wrap gap-2 mb-4">
+          <h2 id="detailTitle" class="text-[18px] font-[800] tracking-[-0.02em]">New Tournament</h2>
+          <span id="detailStatusBadge"></span>
+        </div>
+
+        <form id="tournamentForm" class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <label class="flex flex-col gap-1.5 md:col-span-2">
+            <span class="mono text-[10px] uppercase tracking-widest opacity-60">Tournament Name</span>
+            <input id="tfName" required placeholder="e.g. Saturday Club Championship" class="h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-4 mono text-[12px] outline-none focus:border-[#201C19]"/>
+          </label>
+
+          <label class="flex flex-col gap-1.5">
+            <span class="mono text-[10px] uppercase tracking-widest opacity-60">Event Type</span>
+            <select id="tfEventType" class="h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-3 mono text-[12px] font-[700] outline-none focus:border-[#201C19]">
+              <option value="intra">Intra-Tenant (this club only)</option>
+              <option value="dual">Dual Meet / Inter-Club</option>
+            </select>
+          </label>
+          <label class="flex flex-col gap-1.5">
+            <span class="mono text-[10px] uppercase tracking-widest opacity-60">Venue</span>
+            <input id="tfVenue" placeholder="e.g. Main Courts" class="h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-4 mono text-[12px] outline-none focus:border-[#201C19]"/>
+          </label>
+
+          <div id="tfDualWrap" class="hidden md:col-span-2 p-3 rounded-[16px] bg-[#FFF7EA] border border-[#FFD9A8]">
+            <span class="mono text-[10px] uppercase tracking-widest opacity-60">Other Participating Club(s)</span>
+            <p class="mono text-[10px] opacity-50 mt-1 mb-2">Free text -- e.g. "Club B, Club C". Platform-tenant vs. external club isn't distinguished yet; this is display-only for now.</p>
+            <input id="tfOtherClubs" placeholder="e.g. Rally Point Pickleball Club" class="w-full h-10 rounded-full border border-[#EAE0D5] bg-white px-4 mono text-[12px] outline-none focus:border-[#201C19]"/>
+          </div>
+
+          <label class="flex flex-col gap-1.5">
+            <span class="mono text-[10px] uppercase tracking-widest opacity-60">Start Date</span>
+            <input id="tfStartDate" type="date" required class="h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-4 mono text-[12px] outline-none focus:border-[#201C19]"/>
+          </label>
+          <label class="flex flex-col gap-1.5">
+            <span class="mono text-[10px] uppercase tracking-widest opacity-60">End Date</span>
+            <input id="tfEndDate" type="date" required class="h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-4 mono text-[12px] outline-none focus:border-[#201C19]"/>
+          </label>
+
+          <div class="md:col-span-2 mt-2 pt-4 border-t border-dashed border-[#EAE0D5]">
+            <div class="mono text-[10px] uppercase tracking-widest opacity-60 mb-2">Premium Pricing (₱ PHP -- charged to this club, settled the same way Store/Booking billing is)</div>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <label class="flex flex-col gap-1.5">
+                <span class="mono text-[10px] uppercase tracking-widest opacity-50">Base Fee</span>
+                <input id="tfBaseFee" type="number" min="0" step="0.01" value="5000" class="h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-4 mono text-[12px] outline-none focus:border-[#201C19]"/>
+              </label>
+              <label class="flex flex-col gap-1.5">
+                <span class="mono text-[10px] uppercase tracking-widest opacity-50">Per Participant</span>
+                <input id="tfPerParticipantFee" type="number" min="0" step="0.01" value="250" class="h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-4 mono text-[12px] outline-none focus:border-[#201C19]"/>
+              </label>
+              <label class="flex flex-col gap-1.5">
+                <span class="mono text-[10px] uppercase tracking-widest opacity-50">Per Day</span>
+                <input id="tfPerDayFee" type="number" min="0" step="0.01" value="2000" class="h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-4 mono text-[12px] outline-none focus:border-[#201C19]"/>
+              </label>
+            </div>
+            <label class="flex flex-col gap-1.5 mt-3 max-w-[240px]">
+              <span class="mono text-[10px] uppercase tracking-widest opacity-50">Expected Participants (for this preview only)</span>
+              <input id="tfExpectedParticipants" type="number" min="0" step="1" value="0" class="h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-4 mono text-[12px] outline-none focus:border-[#201C19]"/>
+            </label>
+
+            <div class="mt-4 rounded-[16px] bg-[#F1E9DF] p-4">
+              <div id="pricingBreakdown" class="mono text-[11px] leading-[1.8] opacity-70"></div>
+              <div class="flex items-center justify-between mt-2 pt-2 border-t border-[#E4D8C6]">
+                <span class="mono text-[10px] uppercase tracking-widest opacity-60">Total Before Publish</span>
+                <span id="pricingTotal" class="text-[20px] font-[800]">₱0.00</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="md:col-span-2 flex flex-wrap gap-2 mt-3">
+            <button type="submit" class="h-10 px-5 rounded-full bg-[#201C19] text-white mono text-[12px] font-[700] cursor-pointer hover:opacity-90">Save Draft</button>
+            <button type="button" id="publishBtn" class="hidden h-10 px-5 rounded-full bg-[#D6FF5F] hover:bg-[#CBF052] text-[#201C19] mono text-[12px] font-[800] border border-[#201C19]/10 cursor-pointer">Publish →</button>
+            <button type="button" id="cancelTournamentBtn" class="hidden h-10 px-5 rounded-full bg-[#FFE9E0] text-[#8C2C10] border border-[#FFC9B6] mono text-[12px] font-[700] cursor-pointer hover:bg-[#FFD7C7]">Cancel Tournament</button>
+          </div>
+        </form>
+      </div>
+
+      <!-- Divisions -->
+      <div id="divisionsWrap" class="hidden mt-5 rounded-[24px] bg-white border border-[#EAE0D5] p-5 md:p-6">
+        <div class="flex items-center justify-between flex-wrap gap-2 mb-1">
+          <h3 class="text-[16px] font-[800] tracking-[-0.02em]">Divisions</h3>
+          <button id="addDivisionBtn" class="h-9 px-3.5 rounded-full bg-white border border-[#EAE0D5] mono text-[11px] font-[700] cursor-pointer hover:border-[#201C19]">+ Add Division</button>
+        </div>
+        <p class="mono text-[10px] opacity-50 mb-3">At least one division is required before this tournament can be published.</p>
+        <form id="divisionForm" class="hidden mb-4 p-4 rounded-[16px] bg-[#FFFBF5] border border-[#EAE0D5] grid grid-cols-1 md:grid-cols-2 gap-3">
+          <label class="flex flex-col gap-1.5">
+            <span class="mono text-[10px] uppercase tracking-widest opacity-60">Division Name</span>
+            <input id="dfName" required placeholder="e.g. Men's Doubles" class="h-10 rounded-full border border-[#EAE0D5] bg-white px-4 mono text-[12px] outline-none focus:border-[#201C19]"/>
+          </label>
+          <label class="flex flex-col gap-1.5">
+            <span class="mono text-[10px] uppercase tracking-widest opacity-60">Category</span>
+            <select id="dfCategory" class="h-10 rounded-full border border-[#EAE0D5] bg-white px-3 mono text-[12px] font-[700] outline-none focus:border-[#201C19]">
+              <option value="MS">Men's Singles</option>
+              <option value="WS">Women's Singles</option>
+              <option value="MD">Men's Doubles</option>
+              <option value="WD">Women's Doubles</option>
+              <option value="MX">Mixed Doubles</option>
+              <option value="custom">Custom / Other</option>
+            </select>
+          </label>
+          <label class="flex flex-col gap-1.5">
+            <span class="mono text-[10px] uppercase tracking-widest opacity-60">Format</span>
+            <select id="dfFormat" class="h-10 rounded-full border border-[#EAE0D5] bg-white px-3 mono text-[12px] font-[700] outline-none focus:border-[#201C19]">
+              <option value="round_robin">Round Robin</option>
+              <option value="single_elim">Single Elimination</option>
+              <option value="group_knockout">Group Stage → Knockout</option>
+            </select>
+          </label>
+          <label class="flex flex-col gap-1.5">
+            <span class="mono text-[10px] uppercase tracking-widest opacity-60">Seeding Method</span>
+            <select id="dfSeeding" class="h-10 rounded-full border border-[#EAE0D5] bg-white px-3 mono text-[12px] font-[700] outline-none focus:border-[#201C19]">
+              <option value="random">Random</option>
+              <option value="dupr">DUPR Rating</option>
+              <option value="manual">Manual (set by Director)</option>
+            </select>
+          </label>
+          <label class="flex flex-col gap-1.5">
+            <span class="mono text-[10px] uppercase tracking-widest opacity-60">Max Participants</span>
+            <input id="dfMaxParticipants" type="number" min="0" step="1" placeholder="No limit if blank" class="h-10 rounded-full border border-[#EAE0D5] bg-white px-4 mono text-[12px] outline-none focus:border-[#201C19]"/>
+          </label>
+          <div class="flex gap-2">
+            <label class="flex flex-col gap-1.5 flex-1">
+              <span class="mono text-[10px] uppercase tracking-widest opacity-60">DUPR Min</span>
+              <input id="dfDuprMin" type="number" min="0" step="0.01" placeholder="Optional" class="h-10 rounded-full border border-[#EAE0D5] bg-white px-4 mono text-[12px] outline-none focus:border-[#201C19]"/>
+            </label>
+            <label class="flex flex-col gap-1.5 flex-1">
+              <span class="mono text-[10px] uppercase tracking-widest opacity-60">DUPR Max</span>
+              <input id="dfDuprMax" type="number" min="0" step="0.01" placeholder="Optional" class="h-10 rounded-full border border-[#EAE0D5] bg-white px-4 mono text-[12px] outline-none focus:border-[#201C19]"/>
+            </label>
+          </div>
+          <div class="md:col-span-2">
+            <button type="submit" class="h-10 px-4 rounded-full bg-[#201C19] text-white mono text-[11px] font-[700] cursor-pointer">Add Division</button>
+          </div>
+        </form>
+        <div id="divisionsList" class="space-y-2">
+          <div class="mono text-[11px] opacity-50">No divisions yet.</div>
+        </div>
+      </div>
+
+      <!-- Audit log -->
+      <div id="auditWrap" class="hidden mt-5 rounded-[24px] bg-white border border-[#EAE0D5] p-5 md:p-6">
+        <h3 class="text-[15px] font-[800] tracking-[-0.02em] mb-3">Activity</h3>
+        <div id="auditList" class="space-y-1.5">
+          <div class="mono text-[11px] opacity-50">No activity yet.</div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- Toast -->
+<div id="toast" class="fixed bottom-5 left-1/2 -translate-x-1/2 z-[60] hidden">
+  <div class="px-5 h-11 rounded-full bg-[#201C19] text-white shadow-[0_12px_30px_rgba(0,0,0,0.25)] mono text-[12px] font-[600] grid place-items-center">
+    <span id="toastText">Saved</span>
+  </div>
+</div>
+
+<script>
+/* ================================================================
+   TENANT RESOLUTION + FIREBASE INIT
+   (same conventions as store.html)
+   ================================================================ */
+function getCurrentTenant(){
+  const urlParams = new URLSearchParams(window.location.search);
+  const queryClient = urlParams.get('client');
+  if(queryClient && /^[a-z0-9-]+$/.test(queryClient)) return queryClient;
+  return null;
+}
+const currentClientId = getCurrentTenant();
+
+const FIREBASE_CFG = (window.FIREBASE_CONFIG && window.FIREBASE_CONFIG.apiKey && !String(window.FIREBASE_CONFIG.apiKey).startsWith('PASTE')) ? window.FIREBASE_CONFIG : null;
+const FB_ENABLED = !!(FIREBASE_CFG && FIREBASE_CFG.projectId);
+let db = null;
+if (FB_ENABLED) {
+  try { firebase.initializeApp(FIREBASE_CFG); db = firebase.firestore(); }
+  catch(e) { console.warn('[PickleTournaments] Firebase init failed:', e.message); }
+}
+
+function escapeHtml(s){ return (s==null?'':String(s)).replace(/[&<>"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+function fmtMoney(n){ return '₱' + Number(n||0).toLocaleString('en-PH', {minimumFractionDigits:2, maximumFractionDigits:2}); }
+function genId(prefix){ return `${prefix}_${Date.now().toString(36)}${Math.random().toString(36).slice(2,7)}`; }
+async function hashPin(pin, salt = 'picklecourt-salt-2024'){
+  const encoder = new TextEncoder();
+  const data = encoder.encode(pin + salt);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+function toast(msg){
+  const t = document.getElementById('toast');
+  document.getElementById('toastText').textContent = msg;
+  t.classList.remove('hidden');
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => t.classList.add('hidden'), 2600);
+}
+function fmtDate(iso){
+  if(!iso) return '';
+  try { return new Date(iso + 'T00:00:00').toLocaleDateString('en-PH', {month:'short', day:'numeric', year:'numeric'}); }
+  catch(e){ return iso; }
+}
+const LS_UNLOCKED = () => `pct_admin_unlocked_${currentClientId}`;
+
+/* ================================================================
+   GATE SCREEN: not-added / paused / PIN entry
+   Tournaments has no PIN of its own -- it reuses the tenant's existing
+   Booking Admin PIN (settings/state), consistent with the Phase 1
+   entitlement decision (one less PIN for staff to keep track of).
+   ================================================================ */
+function renderGateState(html){
+  document.getElementById('gateStateWrap').innerHTML = html;
+}
+function renderNoTenant(){
+  renderGateState(`
+    <h1 class="mt-5 text-[20px] font-[800] tracking-[-0.02em]">No Facility Selected</h1>
+    <p class="mt-2.5 mono text-[12px] leading-[1.6] opacity-70">Open this page with <code class="bg-[#F1E9DF] px-1.5 py-0.5 rounded">?client=yourfacility</code> in the URL.</p>
+  `);
+}
+function renderNotAvailable(bizName){
+  renderGateState(`
+    <h1 class="mt-5 text-[20px] font-[800] tracking-[-0.02em]">Tournaments Not Available</h1>
+    <p class="mt-2.5 mono text-[12px] leading-[1.6] opacity-70">${escapeHtml(bizName)} hasn't added Pickle Court Tournaments yet. This is separate from Booking and Store, which are unaffected either way.</p>
+  `);
+}
+function renderPaused(bizName){
+  renderGateState(`
+    <h1 class="mt-5 text-[20px] font-[800] tracking-[-0.02em]">Tournaments Paused</h1>
+    <p class="mt-2.5 mono text-[12px] leading-[1.6] opacity-70">${escapeHtml(bizName)}'s Tournaments add-on has been temporarily paused by the platform operator. Booking and Store are unaffected -- this pause is Tournaments-only. Already-published tournaments stay visible on their public pages.</p>
+  `);
+}
+function renderPinGate(bizName){
+  renderGateState(`
+    <h1 class="mt-5 text-[20px] font-[800] tracking-[-0.02em]">${escapeHtml(bizName)} Tournaments</h1>
+    <p class="mt-2.5 mono text-[12px] leading-[1.6] opacity-70">Enter the facility's Admin PIN to continue.</p>
+    <form id="tPinForm" class="mt-5 space-y-3">
+      <input id="tPinInput" type="password" inputmode="numeric" maxlength="8" placeholder="Admin PIN" class="w-full h-12 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-5 mono text-[16px] font-[700] tracking-widest outline-none focus:border-[#201C19] text-center"/>
+      <div id="tPinError" class="hidden mono text-[12px] text-[#8C2C10] bg-[#FFE9E0] border border-[#FFC9B6] rounded-full px-4 py-2.5 text-center font-[600]"></div>
+      <button type="submit" class="w-full h-12 rounded-full bg-[#201C19] text-white font-[800] text-[14px] tracking-wide hover:opacity-90 active:scale-[0.98] transition">Unlock →</button>
+    </form>
+  `);
+  document.getElementById('tPinForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const input = document.getElementById('tPinInput');
+    const err = document.getElementById('tPinError');
+    try {
+      const ok = await verifyAdminPin(input.value.trim());
+      if(ok){
+        sessionStorage.setItem(LS_UNLOCKED(), 'true');
+        enterApp(bizName);
+      } else {
+        err.textContent = 'Incorrect PIN.';
+        err.classList.remove('hidden');
+      }
+    } catch(ex) {
+      err.textContent = 'Failed to verify PIN: ' + ex.message;
+      err.classList.remove('hidden');
+    }
+  });
+}
+async function verifyAdminPin(inputPin){
+  const snap = await db.doc(`clients/${currentClientId}/settings/state`).get();
+  const storedHash = snap.exists && snap.data().data && snap.data().data.pin;
+  if(!storedHash) return false;
+  const inputHash = await hashPin(inputPin);
+  return inputHash === storedHash;
+}
+
+/* ================================================================
+   MAIN APP
+   ================================================================ */
+let BIZ_NAME = '';
+let TOURNAMENTS = [];
+let CURRENT_TOURNAMENT_ID = null; // null while creating a new one
+let CURRENT_DIVISIONS = [];
+
+function enterApp(bizName){
+  BIZ_NAME = bizName;
+  document.getElementById('gateScreen').classList.add('hidden');
+  document.getElementById('appScreen').classList.remove('hidden');
+  document.getElementById('appBizName').textContent = bizName;
+  showListView();
+  loadTournaments();
+}
+document.getElementById('lockBtn').addEventListener('click', () => {
+  sessionStorage.removeItem(LS_UNLOCKED());
+  location.reload();
+});
+
+/* ---------- View switching ---------- */
+function showListView(){
+  document.getElementById('view-list').classList.remove('hidden');
+  document.getElementById('view-detail').classList.add('hidden');
+}
+function showDetailView(){
+  document.getElementById('view-list').classList.add('hidden');
+  document.getElementById('view-detail').classList.remove('hidden');
+}
+document.getElementById('backToListBtn').addEventListener('click', () => { showListView(); loadTournaments(); });
+
+/* ================================================================
+   TOURNAMENTS (clients/{id}/tournaments/{tournamentId} -- one doc per
+   tournament, append-log pattern, not a single-array doc -- this is
+   the collection type the Store add-on's storeSales/storeInventoryLog
+   already established, chosen deliberately over the older single-
+   array-doc pattern that clients/{id}/bookings still uses, since that
+   pattern doesn't hold up once more than one person can be writing
+   concurrently.)
+   ================================================================ */
+async function loadTournaments(){
+  const list = document.getElementById('tournamentList');
+  try {
+    const snap = await db.collection(`clients/${currentClientId}/tournaments`).orderBy('createdAt', 'desc').get();
+    TOURNAMENTS = [];
+    snap.forEach(doc => TOURNAMENTS.push({ id: doc.id, ...doc.data() }));
+    renderTournamentList();
+  } catch(ex) {
+    list.innerHTML = `<div class="mono text-[11px] text-[#8C2C10] md:col-span-2">Failed to load tournaments: ${escapeHtml(ex.message)}</div>`;
+  }
+}
+function statusBadge(status){
+  const map = {
+    draft:   { bg:'#F1E9DF', fg:'#201C19', op:'opacity-60', label:'Draft' },
+    published: { bg:'#E8F5D8', fg:'#3F7019', op:'', label:'Published' },
+    live:    { bg:'#D6FF5F', fg:'#201C19', op:'', label:'Live' },
+    completed: { bg:'#E4E1FF', fg:'#4A3FA0', op:'', label:'Completed' },
+    cancelled: { bg:'#FFE9E0', fg:'#8C2C10', op:'', label:'Cancelled' },
+  };
+  const s = map[status] || map.draft;
+  return `<span class="mono text-[9px] uppercase tracking-widest font-[800] px-2 py-0.5 rounded-full ${s.op}" style="background:${s.bg};color:${s.fg}">${s.label}</span>`;
+}
+function renderTournamentList(){
+  const list = document.getElementById('tournamentList');
+  if(TOURNAMENTS.length === 0){
+    list.innerHTML = `<div class="mono text-[11px] opacity-50 md:col-span-2 py-6 text-center">No tournaments yet. Click "+ New Tournament" to create one.</div>`;
+    return;
+  }
+  list.innerHTML = TOURNAMENTS.map(t => `
+    <div data-open-tournament="${t.id}" class="rounded-[20px] bg-white border border-[#EAE0D5] p-4 cursor-pointer hover:border-[#201C19] transition">
+      <div class="flex items-center justify-between gap-2">
+        <span class="font-[800] text-[14px] truncate">${escapeHtml(t.name || 'Untitled Tournament')}</span>
+        ${statusBadge(t.status)}
+      </div>
+      <div class="mono text-[10px] opacity-60 mt-1.5">${t.eventType === 'dual' ? 'Dual Meet' : 'Intra-Tenant'} • ${fmtDate(t.startDate)}${t.endDate && t.endDate !== t.startDate ? ' – ' + fmtDate(t.endDate) : ''}</div>
+      ${t.venue ? `<div class="mono text-[10px] opacity-45 mt-1">${escapeHtml(t.venue)}</div>` : ''}
+    </div>
+  `).join('');
+  list.querySelectorAll('[data-open-tournament]').forEach(el => {
+    el.addEventListener('click', () => openTournament(el.dataset.openTournament));
+  });
+}
+document.getElementById('newTournamentBtn').addEventListener('click', () => openTournament(null));
+
+function daysBetween(startISO, endISO){
+  if(!startISO || !endISO) return 1;
+  const start = new Date(startISO + 'T00:00:00');
+  const end = new Date(endISO + 'T00:00:00');
+  const diff = Math.round((end - start) / 86400000);
+  return Math.max(1, diff + 1);
+}
+function recomputePricing(){
+  const base = parseFloat(document.getElementById('tfBaseFee').value) || 0;
+  const perParticipant = parseFloat(document.getElementById('tfPerParticipantFee').value) || 0;
+  const perDay = parseFloat(document.getElementById('tfPerDayFee').value) || 0;
+  const expected = parseInt(document.getElementById('tfExpectedParticipants').value) || 0;
+  const days = daysBetween(document.getElementById('tfStartDate').value, document.getElementById('tfEndDate').value);
+  const participantTotal = expected * perParticipant;
+  const dayTotal = days * perDay;
+  const total = base + participantTotal + dayTotal;
+  document.getElementById('pricingBreakdown').innerHTML = `
+    <div class="flex justify-between"><span>Base fee</span><span>${fmtMoney(base)}</span></div>
+    <div class="flex justify-between"><span>${expected} participants × ${fmtMoney(perParticipant)}</span><span>${fmtMoney(participantTotal)}</span></div>
+    <div class="flex justify-between"><span>${days} day${days===1?'':'s'} × ${fmtMoney(perDay)}</span><span>${fmtMoney(dayTotal)}</span></div>
+  `;
+  document.getElementById('pricingTotal').textContent = fmtMoney(total);
+  return { baseFee: base, perParticipantFee: perParticipant, perDayFee: perDay, expectedParticipants: expected, computedTotal: total };
+}
+['tfBaseFee','tfPerParticipantFee','tfPerDayFee','tfExpectedParticipants','tfStartDate','tfEndDate'].forEach(id => {
+  document.getElementById(id).addEventListener('input', recomputePricing);
+});
+document.getElementById('tfEventType').addEventListener('change', (e) => {
+  document.getElementById('tfDualWrap').classList.toggle('hidden', e.target.value !== 'dual');
+});
+
+async function openTournament(tournamentId){
+  CURRENT_TOURNAMENT_ID = tournamentId;
+  showDetailView();
+  const form = document.getElementById('tournamentForm');
+  form.reset();
+  document.getElementById('tfDualWrap').classList.add('hidden');
+  document.getElementById('divisionsWrap').classList.add('hidden');
+  document.getElementById('auditWrap').classList.add('hidden');
+  document.getElementById('publishBtn').classList.add('hidden');
+  document.getElementById('cancelTournamentBtn').classList.add('hidden');
+
+  if(!tournamentId){
+    document.getElementById('detailTitle').textContent = 'New Tournament';
+    document.getElementById('detailStatusBadge').innerHTML = '';
+    document.getElementById('tfBaseFee').value = 5000;
+    document.getElementById('tfPerParticipantFee').value = 250;
+    document.getElementById('tfPerDayFee').value = 2000;
+    document.getElementById('tfExpectedParticipants').value = 0;
+    recomputePricing();
+    return;
+  }
+
+  const t = TOURNAMENTS.find(x => x.id === tournamentId);
+  if(!t) return;
+  document.getElementById('detailTitle').textContent = t.name || 'Untitled Tournament';
+  document.getElementById('detailStatusBadge').innerHTML = statusBadge(t.status);
+  document.getElementById('tfName').value = t.name || '';
+  document.getElementById('tfEventType').value = t.eventType || 'intra';
+  document.getElementById('tfVenue').value = t.venue || '';
+  document.getElementById('tfOtherClubs').value = t.otherClubsText || '';
+  document.getElementById('tfDualWrap').classList.toggle('hidden', t.eventType !== 'dual');
+  document.getElementById('tfStartDate').value = t.startDate || '';
+  document.getElementById('tfEndDate').value = t.endDate || '';
+  const p = t.pricing || {};
+  document.getElementById('tfBaseFee').value = p.baseFee ?? 5000;
+  document.getElementById('tfPerParticipantFee').value = p.perParticipantFee ?? 250;
+  document.getElementById('tfPerDayFee').value = p.perDayFee ?? 2000;
+  document.getElementById('tfExpectedParticipants').value = p.expectedParticipants ?? 0;
+  recomputePricing();
+
+  document.getElementById('divisionsWrap').classList.remove('hidden');
+  document.getElementById('auditWrap').classList.remove('hidden');
+  if(t.status !== 'cancelled' && t.status !== 'completed'){
+    document.getElementById('cancelTournamentBtn').classList.remove('hidden');
+  }
+  if(t.status === 'draft'){
+    document.getElementById('publishBtn').classList.remove('hidden');
+  }
+  loadDivisions(tournamentId);
+  loadAuditLog(tournamentId);
+}
+
+document.getElementById('tournamentForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const name = document.getElementById('tfName').value.trim();
+  if(!name){ toast('Enter a tournament name'); return; }
+  const startDate = document.getElementById('tfStartDate').value;
+  const endDate = document.getElementById('tfEndDate').value || startDate;
+  if(endDate < startDate){ toast('End date is before start date'); return; }
+  const pricing = recomputePricing();
+  const eventType = document.getElementById('tfEventType').value;
+  const payload = {
+    name,
+    eventType,
+    venue: document.getElementById('tfVenue').value.trim(),
+    otherClubsText: eventType === 'dual' ? document.getElementById('tfOtherClubs').value.trim() : '',
+    startDate, endDate,
+    pricing,
+  };
+  try {
+    if(!CURRENT_TOURNAMENT_ID){
+      const ref = await db.collection(`clients/${currentClientId}/tournaments`).add({
+        ...payload,
+        status: 'draft',
+        hostTenant: currentClientId,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      });
+      CURRENT_TOURNAMENT_ID = ref.id;
+      await logTournamentAudit(ref.id, 'create', `Created "${name}"`);
+      toast('Tournament created as a draft');
+      await loadTournaments();
+      openTournament(ref.id);
+    } else {
+      await db.doc(`clients/${currentClientId}/tournaments/${CURRENT_TOURNAMENT_ID}`).set(payload, { merge: true });
+      await logTournamentAudit(CURRENT_TOURNAMENT_ID, 'update', `Updated details for "${name}"`);
+      toast('Tournament details saved');
+      await loadTournaments();
+      openTournament(CURRENT_TOURNAMENT_ID);
+    }
+  } catch(ex) { toast('Failed: ' + ex.message); }
+});
+
+document.getElementById('publishBtn').addEventListener('click', async () => {
+  if(!CURRENT_TOURNAMENT_ID) return;
+  if(CURRENT_DIVISIONS.length === 0){ toast('Add at least one division before publishing'); return; }
+  const t = TOURNAMENTS.find(x => x.id === CURRENT_TOURNAMENT_ID);
+  try {
+    await db.doc(`clients/${currentClientId}/tournaments/${CURRENT_TOURNAMENT_ID}`).set({
+      status: 'published', publishedAt: firebase.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+    await logTournamentAudit(CURRENT_TOURNAMENT_ID, 'publish', `Published "${t?.name || CURRENT_TOURNAMENT_ID}"`);
+    toast('Tournament published');
+    await loadTournaments();
+    openTournament(CURRENT_TOURNAMENT_ID);
+  } catch(ex) { toast('Failed: ' + ex.message); }
+});
+document.getElementById('cancelTournamentBtn').addEventListener('click', async () => {
+  if(!CURRENT_TOURNAMENT_ID) return;
+  const t = TOURNAMENTS.find(x => x.id === CURRENT_TOURNAMENT_ID);
+  if(!confirm(`Cancel "${t?.name || 'this tournament'}"? Registrations and data are kept, not deleted.`)) return;
+  try {
+    await db.doc(`clients/${currentClientId}/tournaments/${CURRENT_TOURNAMENT_ID}`).set({ status: 'cancelled' }, { merge: true });
+    await logTournamentAudit(CURRENT_TOURNAMENT_ID, 'cancel', `Cancelled "${t?.name || CURRENT_TOURNAMENT_ID}"`);
+    toast('Tournament cancelled');
+    await loadTournaments();
+    openTournament(CURRENT_TOURNAMENT_ID);
+  } catch(ex) { toast('Failed: ' + ex.message); }
+});
+
+/* ================================================================
+   DIVISIONS (clients/{id}/tournaments/{tournamentId}/divisions/{id})
+   ================================================================ */
+async function loadDivisions(tournamentId){
+  const wrap = document.getElementById('divisionsList');
+  try {
+    const snap = await db.collection(`clients/${currentClientId}/tournaments/${tournamentId}/divisions`).orderBy('createdAt', 'asc').get();
+    CURRENT_DIVISIONS = [];
+    snap.forEach(doc => CURRENT_DIVISIONS.push({ id: doc.id, ...doc.data() }));
+    renderDivisions();
+  } catch(ex) {
+    wrap.innerHTML = `<div class="mono text-[11px] text-[#8C2C10]">Failed to load divisions: ${escapeHtml(ex.message)}</div>`;
+  }
+}
+const CATEGORY_LABELS = { MS:"Men's Singles", WS:"Women's Singles", MD:"Men's Doubles", WD:"Women's Doubles", MX:'Mixed Doubles', custom:'Custom' };
+const FORMAT_LABELS = { round_robin:'Round Robin', single_elim:'Single Elimination', group_knockout:'Group Stage → Knockout' };
+function renderDivisions(){
+  const wrap = document.getElementById('divisionsList');
+  if(CURRENT_DIVISIONS.length === 0){
+    wrap.innerHTML = `<div class="mono text-[11px] opacity-50">No divisions yet.</div>`;
+    return;
+  }
+  wrap.innerHTML = CURRENT_DIVISIONS.map(d => `
+    <div class="flex items-center justify-between gap-2 p-3 rounded-[14px] bg-[#FFFBF5] border border-[#EAE0D5] flex-wrap">
+      <div>
+        <span class="font-[700] text-[13px]">${escapeHtml(d.name)}</span>
+        <span class="mono text-[10px] opacity-50 ml-1.5">${CATEGORY_LABELS[d.category] || d.category}</span>
+      </div>
+      <div class="mono text-[10px] opacity-60 flex items-center gap-2 flex-wrap">
+        <span>${FORMAT_LABELS[d.format] || d.format}</span>
+        <span>•</span>
+        <span>${d.maxParticipants ? d.maxParticipants + ' max' : 'No limit'}</span>
+        ${(d.duprMin || d.duprMax) ? `<span>• DUPR ${d.duprMin || '0'}–${d.duprMax || '∞'}</span>` : ''}
+      </div>
+    </div>
+  `).join('');
+}
+document.getElementById('addDivisionBtn').addEventListener('click', () => {
+  document.getElementById('divisionForm').classList.toggle('hidden');
+});
+document.getElementById('divisionForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const name = document.getElementById('dfName').value.trim();
+  if(!name){ toast('Enter a division name'); return; }
+  const payload = {
+    name,
+    category: document.getElementById('dfCategory').value,
+    format: document.getElementById('dfFormat').value,
+    seedingMethod: document.getElementById('dfSeeding').value,
+    maxParticipants: parseInt(document.getElementById('dfMaxParticipants').value) || null,
+    duprMin: parseFloat(document.getElementById('dfDuprMin').value) || null,
+    duprMax: parseFloat(document.getElementById('dfDuprMax').value) || null,
+    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+  };
+  try {
+    await db.collection(`clients/${currentClientId}/tournaments/${CURRENT_TOURNAMENT_ID}/divisions`).add(payload);
+    await logTournamentAudit(CURRENT_TOURNAMENT_ID, 'division-add', `Added division "${name}" (${FORMAT_LABELS[payload.format]})`);
+    toast('Division added');
+    document.getElementById('divisionForm').reset();
+    document.getElementById('divisionForm').classList.add('hidden');
+    loadDivisions(CURRENT_TOURNAMENT_ID);
+  } catch(ex) { toast('Failed: ' + ex.message); }
+});
+
+/* ================================================================
+   AUDIT LOG (clients/{id}/tournaments/{tournamentId}/auditLog/{id})
+   Append-only from the app's perspective (rules deny update/delete),
+   same shape as platformAuditLog/store's audit trail.
+   ================================================================ */
+async function logTournamentAudit(tournamentId, action, detail){
+  try {
+    await db.collection(`clients/${currentClientId}/tournaments/${tournamentId}/auditLog`).add({
+      action, detail, actorRole: 'tenant-admin',
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+  } catch(ex) { console.warn('[PickleTournaments] Failed to write audit log:', ex.message); }
+}
+async function loadAuditLog(tournamentId){
+  const wrap = document.getElementById('auditList');
+  try {
+    const snap = await db.collection(`clients/${currentClientId}/tournaments/${tournamentId}/auditLog`).orderBy('createdAt', 'desc').limit(20).get();
+    if(snap.empty){ wrap.innerHTML = `<div class="mono text-[11px] opacity-50">No activity yet.</div>`; return; }
+    wrap.innerHTML = snap.docs.map(doc => {
+      const d = doc.data();
+      const when = d.createdAt && d.createdAt.toDate ? d.createdAt.toDate().toLocaleString('en-PH') : '';
+      return `<div class="mono text-[10.5px] opacity-70 flex justify-between gap-2"><span>${escapeHtml(d.detail || d.action)}</span><span class="opacity-50 shrink-0">${when}</span></div>`;
+    }).join('');
+  } catch(ex) {
+    wrap.innerHTML = `<div class="mono text-[11px] text-[#8C2C10]">Failed to load activity: ${escapeHtml(ex.message)}</div>`;
+  }
+}
+
+/* ================================================================
+   INIT
+   ================================================================ */
+async function init(){
+  if(!currentClientId){ renderNoTenant(); return; }
+  if(!db){ renderGateState(`<p class="mt-5 mono text-[12px] text-[#8C2C10]">Firebase is not configured.</p>`); return; }
+  try {
+    const [statusSnap, configSnap] = await Promise.all([
+      db.doc(`clients/${currentClientId}/status/state`).get(),
+      db.doc(`clients/${currentClientId}/config/state`).get(),
+    ]);
+    const status = (statusSnap.exists && statusSnap.data().data) || {};
+    const cfg = (configSnap.exists && configSnap.data().data) || {};
+    const bizName = (cfg.business && cfg.business.name) || cfg.businessName || currentClientId;
+    document.title = `${bizName} — Pickle Court Tournaments`;
+
+    if(!status.tournamentEnabled){ renderNotAvailable(bizName); return; }
+    if(status.tournamentPaused){ renderPaused(bizName); return; }
+    if(sessionStorage.getItem(LS_UNLOCKED()) === 'true'){ enterApp(bizName); return; }
+    renderPinGate(bizName);
+  } catch(ex) {
+    renderGateState(`<p class="mt-5 mono text-[12px] text-[#8C2C10]">Failed to load: ${escapeHtml(ex.message)}</p>`);
+  }
+}
+init();
+</script>
+</body>
+</html>

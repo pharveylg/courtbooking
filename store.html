@@ -46,6 +46,7 @@
         <button data-store-tab="products" class="store-tab-btn shrink-0 px-3.5 h-8 rounded-full mono text-[11px] font-[700] transition cursor-pointer">Products</button>
         <button data-store-tab="inventory" class="store-tab-btn shrink-0 px-3.5 h-8 rounded-full mono text-[11px] font-[700] transition cursor-pointer">Inventory</button>
         <button data-store-tab="reports" class="store-tab-btn shrink-0 px-3.5 h-8 rounded-full mono text-[11px] font-[700] transition cursor-pointer">Reports</button>
+        <button data-store-tab="settings" class="store-tab-btn shrink-0 px-3.5 h-8 rounded-full mono text-[11px] font-[700] transition cursor-pointer">Settings</button>
       </nav>
       <button id="lockBtn" class="h-9 px-3.5 rounded-full bg-white border border-[#EAE0D5] mono text-[11px] font-[700] cursor-pointer hover:border-[#201C19] transition shrink-0">🔒 Lock</button>
     </div>
@@ -180,6 +181,21 @@
         <div id="shiftHistoryList" class="divide-y divide-[#F5EDE4] max-h-[420px] overflow-y-auto"></div>
       </div>
     </section>
+
+    <!-- Settings -->
+    <section id="view-settings" class="store-view hidden">
+      <div class="max-w-[420px] rounded-[24px] bg-white border border-[#EAE0D5] p-5">
+        <div class="font-[750] text-[14px]">Change Store PIN</div>
+        <div class="mono text-[10px] opacity-50 mt-1">Changes what staff enter to unlock this Store. Separate from the facility's Booking Admin PIN.</div>
+        <form id="changePinForm" class="mt-4 flex gap-2 items-end">
+          <label class="flex flex-col gap-1.5 flex-1">
+            <span class="mono text-[9px] uppercase tracking-widest opacity-50">New PIN</span>
+            <input type="text" id="newStorePin" maxlength="8" placeholder="New PIN" class="h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-4 mono text-[12px] font-[700] outline-none focus:border-[#201C19]"/>
+          </label>
+          <button type="submit" class="h-10 px-4 rounded-full bg-[#201C19] text-white mono text-[11px] font-[700] cursor-pointer">Save</button>
+        </form>
+      </div>
+    </section>
   </main>
 </div>
 
@@ -310,6 +326,20 @@ document.getElementById('lockBtn').addEventListener('click', () => {
   sessionStorage.removeItem(LS_UNLOCKED());
   location.reload();
 });
+document.getElementById('changePinForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const input = document.getElementById('newStorePin');
+  const pin = input.value.trim();
+  if(!pin){ toast('Enter a new PIN'); return; }
+  try {
+    const hash = await hashPin(pin);
+    await db.doc(`clients/${currentClientId}/storeSettings/state`).set({
+      data: { pin: hash }, updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+    input.value = '';
+    toast('Store PIN updated');
+  } catch(ex) { toast('Failed: ' + ex.message); }
+});
 
 /* ---------- Tabs ---------- */
 function showStoreTab(tab){
@@ -365,6 +395,7 @@ function renderProducts(){
             ${p.category ? `<span class="mono text-[9px] opacity-50">${escapeHtml(p.category)}</span>` : ''}
             <span class="mono text-[9px] px-1.5 py-0.5 rounded-full font-[700] ${st.cls}">${st.label}</span>
             ${p.active === false ? `<span class="mono text-[9px] px-1.5 py-0.5 rounded-full bg-[#F1E9DF] text-[#201C19]/50 font-[700]">INACTIVE</span>` : ''}
+            ${p.sample ? `<span class="mono text-[9px] px-1.5 py-0.5 rounded-full bg-[#EDE8FF] text-[#3B2A9E] font-[700]" title="Sample data -- ask your platform operator to wipe it before going live">SAMPLE</span>` : ''}
           </div>
           <div class="mono text-[11px] opacity-60 mt-1">${fmtMoney(p.price)} sell • ${fmtMoney(p.cost)} cost • ${p.stock} ${escapeHtml(p.unit||'unit')}${p.stock===1?'':'s'} in stock</div>
         </div>
@@ -480,7 +511,8 @@ function renderPOS(){
     grid.innerHTML = visible.map(p => {
       const out = p.stock <= 0;
       return `
-      <button type="button" data-pos-add="${p.id}" ${out?'disabled':''} class="rounded-[16px] border p-3 text-left transition ${out ? 'bg-[#F1E9DF] border-[#EAE0D5] opacity-50 cursor-not-allowed' : 'bg-white border-[#EAE0D5] hover:border-[#201C19] cursor-pointer active:scale-[0.98]'}">
+      <button type="button" data-pos-add="${p.id}" ${out?'disabled':''} class="relative rounded-[16px] border p-3 text-left transition ${out ? 'bg-[#F1E9DF] border-[#EAE0D5] opacity-50 cursor-not-allowed' : 'bg-white border-[#EAE0D5] hover:border-[#201C19] cursor-pointer active:scale-[0.98]'}">
+        ${p.sample ? `<span class="absolute top-1.5 right-1.5 mono text-[7px] px-1 py-0.5 rounded-full bg-[#EDE8FF] text-[#3B2A9E] font-[700]">SAMPLE</span>` : ''}
         <div class="font-[700] text-[12px] truncate">${escapeHtml(p.name)}</div>
         <div class="mono text-[11px] font-[800] mt-1">${fmtMoney(p.price)}</div>
         <div class="mono text-[9px] opacity-50 mt-0.5">${out ? 'Out of stock' : `${p.stock} in stock`}</div>

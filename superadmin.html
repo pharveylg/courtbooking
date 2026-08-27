@@ -1018,6 +1018,55 @@ async function wipeSampleUsageData(slug){
   return snap.size;
 }
 
+/* ---------- Sample Store products (superadmin testing tool) ----------
+   Same idea as Load/Wipe Sample Usage Data above, but for the Store
+   product catalog: storeProducts/state is a single array doc (like
+   courts/pricing), so each seeded product carries sample:true and
+   wiping just filters the array back down -- no batch/collection
+   delete needed, and any real products a tenant already added are
+   left untouched either way. */
+const SAMPLE_STORE_PRODUCTS = [
+  { name:'Bottled Water (500ml)', sku:'WTR-500', category:'Drinks', unit:'bottle', price:25, cost:12, stock:48, threshold:10 },
+  { name:'Sports Drink', sku:'SPD-001', category:'Drinks', unit:'bottle', price:45, cost:28, stock:36, threshold:8 },
+  { name:'Soft Drink (Can)', sku:'SFT-001', category:'Drinks', unit:'can', price:35, cost:20, stock:36, threshold:8 },
+  { name:'Iced Coffee', sku:'COF-001', category:'Drinks', unit:'cup', price:60, cost:35, stock:24, threshold:6 },
+  { name:'Energy Drink', sku:'NRG-001', category:'Drinks', unit:'can', price:65, cost:40, stock:24, threshold:6 },
+  { name:'Potato Chips', sku:'SNK-001', category:'Snacks', unit:'pack', price:35, cost:20, stock:30, threshold:8 },
+  { name:'Protein Bar', sku:'SNK-002', category:'Snacks', unit:'piece', price:55, cost:32, stock:30, threshold:8 },
+  { name:'Trail Mix Pack', sku:'SNK-003', category:'Snacks', unit:'pack', price:45, cost:25, stock:24, threshold:6 },
+  { name:'Banana', sku:'SNK-004', category:'Snacks', unit:'piece', price:15, cost:8, stock:40, threshold:10 },
+  { name:'Chocolate Bar', sku:'SNK-005', category:'Snacks', unit:'piece', price:40, cost:22, stock:30, threshold:8 },
+  { name:'Pickleball Balls (Outdoor, 3-pack)', sku:'PBG-001', category:'Pickleball Gear', unit:'pack', price:450, cost:280, stock:15, threshold:4 },
+  { name:'Pickleball Ball (Indoor)', sku:'PBG-002', category:'Pickleball Gear', unit:'piece', price:180, cost:110, stock:20, threshold:5 },
+  { name:'Overgrip Tape', sku:'PBG-003', category:'Pickleball Gear', unit:'piece', price:150, cost:80, stock:20, threshold:5 },
+  { name:'Paddle Cover', sku:'PBG-004', category:'Pickleball Gear', unit:'piece', price:350, cost:200, stock:10, threshold:3 },
+  { name:'Wristband Set (Pair)', sku:'PBG-005', category:'Pickleball Gear', unit:'set', price:120, cost:60, stock:15, threshold:4 },
+  { name:'Pickleball Socks', sku:'PBG-006', category:'Pickleball Gear', unit:'pair', price:180, cost:95, stock:15, threshold:4 },
+  { name:'Headband', sku:'PBG-007', category:'Pickleball Gear', unit:'piece', price:90, cost:45, stock:15, threshold:4 },
+];
+async function seedSampleStoreProducts(slug){
+  const ref = db.doc(`clients/${slug}/storeProducts/state`);
+  const snap = await ref.get();
+  const existing = (snap.exists && snap.data().data) || [];
+  if(existing.some(p => p.sample)) return 0; // already seeded -- avoid duplicating
+  const seeded = SAMPLE_STORE_PRODUCTS.map(p => ({
+    id: `prod_${Date.now().toString(36)}${Math.random().toString(36).slice(2,7)}`,
+    ...p, active: true, description: '', sample: true,
+  }));
+  await ref.set({ data: [...existing, ...seeded], updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+  return seeded.length;
+}
+async function wipeSampleStoreProducts(slug){
+  const ref = db.doc(`clients/${slug}/storeProducts/state`);
+  const snap = await ref.get();
+  const existing = (snap.exists && snap.data().data) || [];
+  const kept = existing.filter(p => !p.sample);
+  const removed = existing.length - kept.length;
+  if(removed === 0) return 0;
+  await ref.set({ data: kept, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+  return removed;
+}
+
 /* ---------- Branding image upload (logo/watermark) ----------
    Reuses the same Firebase Storage compat pattern index.html uses for
    payment-proof uploads: client-side put() straight to Storage, then
@@ -1150,6 +1199,13 @@ function renderStoreWidget(slug, data, status){
         <button type="button" data-store-reset-pin="${slug}" class="h-9 px-3 rounded-full bg-white border border-[#EAE0D5] mono text-[10px] font-[700] cursor-pointer hover:border-[#201C19]">Reset</button>
       </div>
       <a href="store.html?client=${encodeURIComponent(slug)}" target="_blank" rel="noopener" class="inline-block mt-2 mono text-[10px] opacity-60 hover:opacity-100 underline">Open Store ↗</a>
+      <div class="mt-3 pt-3 border-t border-dashed border-[#D8D0FF]">
+        <div class="mono text-[9px] uppercase tracking-widest opacity-50 mb-1.5">Sample Products <span class="opacity-70 normal-case">(refreshments, snacks, pickleball gear -- for testing before going live)</span></div>
+        <div class="flex flex-wrap gap-2">
+          <button type="button" data-seed-store-products="${slug}" class="h-9 px-3.5 rounded-full bg-white border border-[#EAE0D5] mono text-[10px] font-[700] cursor-pointer hover:border-[#201C19]">Load Sample Products</button>
+          <button type="button" data-wipe-store-products="${slug}" class="h-9 px-3.5 rounded-full bg-[#FFE9E0] text-[#8C2C10] border border-[#FFC9B6] mono text-[10px] font-[700] cursor-pointer hover:bg-[#FFD7C7]">Wipe Sample Products (going live)</button>
+        </div>
+      </div>
     `}
   `;
 
@@ -1211,6 +1267,25 @@ function renderStoreWidget(slug, data, status){
       toast(`Store PIN reset for ${data.businessName || slug}`);
       document.getElementById(`storeResetPin-${cssId(slug)}`).value = '';
     } catch(ex) { toast('Failed: ' + ex.message); }
+  });
+  wrap.querySelector(`[data-seed-store-products="${cssAttr(slug)}"]`)?.addEventListener('click', async (e) => {
+    e.target.disabled = true;
+    try {
+      const count = await seedSampleStoreProducts(slug);
+      if(count === 0){ toast('Sample products already loaded (or none to add)'); }
+      else { await logAudit('store-seed-products', slug, `Loaded ${count} sample products for ${data.businessName || slug}`); toast(`Loaded ${count} sample products for ${data.businessName || slug}`); }
+    } catch(ex) { toast('Failed: ' + ex.message); }
+    finally { e.target.disabled = false; }
+  });
+  wrap.querySelector(`[data-wipe-store-products="${cssAttr(slug)}"]`)?.addEventListener('click', async (e) => {
+    if(!confirm(`Wipe all sample products for ${data.businessName || slug}? Any real products they've added themselves are untouched. Do this once the tenant is actually live.`)) return;
+    e.target.disabled = true;
+    try {
+      const count = await wipeSampleStoreProducts(slug);
+      await logAudit('store-wipe-products', slug, `Wiped ${count} sample products for ${data.businessName || slug}`);
+      toast(`Wiped ${count} sample products for ${data.businessName || slug}`);
+    } catch(ex) { toast('Failed: ' + ex.message); }
+    finally { e.target.disabled = false; }
   });
 }
 async function provisionStoreDefaults(slug, pin){
@@ -1433,6 +1508,7 @@ const AUDIT_ACTION_LABELS = {
   'create-tenant': 'Created tenant', 'register-tenant': 'Registered existing tenant',
   'store-add': 'Added Store add-on', 'store-pause': 'Paused Store add-on', 'store-resume': 'Resumed Store add-on',
   'store-remove': 'Removed Store add-on', 'store-pin-reset': 'Reset Store PIN',
+  'store-seed-products': 'Loaded sample Store products', 'store-wipe-products': 'Wiped sample Store products',
 };
 async function loadAuditLog(){
   const list = document.getElementById('auditLogList');

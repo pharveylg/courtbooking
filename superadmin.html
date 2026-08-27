@@ -375,14 +375,18 @@ function chartRow(label, thisVal, lastVal){
 }
 
 /* Base fee + per-unit overage beyond a free allowance, billed on confirmed
-   bookings only -- set baseFee/freeBookings to 0 for pure per-booking
-   metering. */
-function computeSuggestedCharge(billing, confirmedBookings){
+   bookings -- set baseFee/freeBookings to 0 for pure per-booking metering.
+   Staff-reserved hours are also billed, at half the per-booking rate per
+   hour (staff reserve blocks a court from public booking, so it's metered
+   like a discounted booking rather than left analytics-only). */
+function computeSuggestedCharge(billing, confirmedBookings, staffHours){
   const b = billing || {};
   const baseFee = Number(b.baseFee) || 0;
   const freeBookings = Number(b.freeBookings) || 0;
   const perBookingRate = Number(b.perBookingRate) || 0;
-  return baseFee + Math.max(0, confirmedBookings - freeBookings) * perBookingRate;
+  const bookingCharge = Math.max(0, confirmedBookings - freeBookings) * perBookingRate;
+  const staffReserveCharge = (Number(staffHours) || 0) * (perBookingRate / 2);
+  return baseFee + bookingCharge + staffReserveCharge;
 }
 
 /* Mirrors index.html's staffReserve shape migration + effective-hours
@@ -515,9 +519,10 @@ async function computeTenantReport(t){
     utilizationPct = availableCapacity > 0 ? (thisM.courtHours / availableCapacity * 100) : 0;
   } catch(ex) { /* leave utilization/staff at 0 if tenant config unreadable */ }
 
-  const suggestedCharge = computeSuggestedCharge(t.billing, thisM.confirmedBookings);
+  const staffReserveCharge = staffHours * ((Number((t.billing||{}).perBookingRate) || 0) / 2);
+  const suggestedCharge = computeSuggestedCharge(t.billing, thisM.confirmedBookings, staffHours);
 
-  return { ...t, thisM, lastM, cancellationRate, returningPlayers, thisViews, staffHours, availableCapacity, utilizationPct, suggestedCharge };
+  return { ...t, thisM, lastM, cancellationRate, returningPlayers, thisViews, staffHours, staffReserveCharge, availableCapacity, utilizationPct, suggestedCharge };
 }
 
 async function loadReporting(tenants){
@@ -571,10 +576,10 @@ async function loadReporting(tenants){
           </div>
           <div class="mt-2 pt-3 border-t border-[#EAE0D5] mono text-[11px] space-y-0.5">
             <div>Cancellation rate: <b>${r.cancellationRate.toFixed(1)}%</b> • Returning players: <b>${r.returningPlayers}</b> • Court utilization (MTD): <b>${r.utilizationPct.toFixed(1)}%</b> (${m.courtHours}/${r.availableCapacity} court-hrs)</div>
-            <div class="opacity-40 text-[10px] leading-tight">Staff-reserved hours (MTD, analytics only): ${r.staffHours} • Queue conversion and Open Play participants aren't tracked yet -- need a queue&harr;booking link and Open Play signup capture, respectively</div>
+            <div class="opacity-40 text-[10px] leading-tight">Staff-reserved hours (MTD, billed at half the per-booking rate): ${r.staffHours} • Queue conversion and Open Play participants aren't tracked yet -- need a queue&harr;booking link and Open Play signup capture, respectively</div>
           </div>
           <div class="mt-3 pt-3 border-t border-dashed border-[#EAE0D5] mono text-[12px]">
-            <b>Billing usage:</b> ${m.confirmedBookings} confirmed bookings billable → suggested charge <b>${fmtNum(r.suggestedCharge)}</b> • page views (${r.thisViews}) tracked but never billed
+            <b>Billing usage:</b> ${m.confirmedBookings} confirmed bookings + ${r.staffHours} staff-reserved hrs (half rate) → suggested charge <b>${fmtNum(r.suggestedCharge)}</b> (${fmtNum(r.staffReserveCharge)} of that from staff reserve) • page views (${r.thisViews}) tracked but never billed
           </div>
         </div>
       </div>
@@ -598,7 +603,7 @@ async function loadReporting(tenants){
 
 function exportReportingCsv(){
   const rows = _lastReportingRows;
-  const header = ['Tenant','Slug','Confirmed Bookings','Cancelled Bookings','Cancellation Rate %','Court-Hours','Unique Players','Returning Players','Queue Sessions','Open Play Sessions','Open Play Court-Hours','Staff-Reserved Hours (MTD)','Utilization % (MTD)','Views','Suggested Charge','Prepaid Balance'];
+  const header = ['Tenant','Slug','Confirmed Bookings','Cancelled Bookings','Cancellation Rate %','Court-Hours','Unique Players','Returning Players','Queue Sessions','Open Play Sessions','Open Play Court-Hours','Staff-Reserved Hours (MTD)','Staff Reserve Charge (Half Rate)','Utilization % (MTD)','Views','Suggested Charge','Prepaid Balance'];
   const csvEscape = v => `"${String(v).replace(/"/g,'""')}"`;
   const lines = [header.map(csvEscape).join(',')];
   rows.forEach(r => {
@@ -607,7 +612,7 @@ function exportReportingCsv(){
     lines.push([
       r.businessName, r.slug, m.confirmedBookings, m.cancelledBookings, r.cancellationRate.toFixed(1),
       m.courtHours, m.uniquePlayers.size, r.returningPlayers, m.queueSessions, m.openPlaySessions,
-      m.openPlayCourtHours, r.staffHours, r.utilizationPct.toFixed(1), r.thisViews,
+      m.openPlayCourtHours, r.staffHours, r.staffReserveCharge.toFixed(2), r.utilizationPct.toFixed(1), r.thisViews,
       r.suggestedCharge.toFixed(2), (r.creditBalance||0).toFixed(2)
     ].map(csvEscape).join(','));
   });
@@ -696,7 +701,7 @@ function renderTenantRow(slug, data){
           <input type="number" id="billRateB-${cssId(slug)}" min="0" step="0.01" value="0" class="h-9 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-3 mono text-[11px] font-[700] outline-none focus:border-[#201C19]"/>
         </label>
       </div>
-      <div class="mono text-[9px] opacity-50 mt-1.5">Billed on confirmed bookings only, per the reporting spec -- page views, queue activity, staff reserve, and Open Play are analytics-only, never billed. Set Base Fee and Free Bookings to 0 for pure per-booking metering.</div>
+      <div class="mono text-[9px] opacity-50 mt-1.5">Billed on confirmed bookings, plus staff-reserved hours at half the per-booking rate (a reserved hour blocks public booking, so it's metered like a discounted booking). Page views, queue activity, and Open Play remain analytics-only, never billed. Set Base Fee and Free Bookings to 0 for pure per-booking metering.</div>
       <button type="button" data-save-billing="${slug}" class="mt-2.5 h-9 px-4 rounded-full bg-[#201C19] text-white mono text-[10px] font-[700] cursor-pointer">Save Billing Formula</button>
 
       <div class="mt-4 pt-3 border-t border-dashed border-[#EAE0D5] flex flex-wrap items-end gap-2">

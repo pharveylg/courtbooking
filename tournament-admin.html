@@ -201,6 +201,65 @@
         </div>
       </div>
 
+      <!-- Registration -->
+      <div id="registrationWrap" class="hidden mt-5 rounded-[24px] bg-white border border-[#EAE0D5] p-5 md:p-6">
+        <div class="flex items-center justify-between flex-wrap gap-2 mb-1">
+          <h3 class="text-[16px] font-[800] tracking-[-0.02em]">Registration</h3>
+          <button id="addRegistrationBtn" class="h-9 px-3.5 rounded-full bg-white border border-[#EAE0D5] mono text-[11px] font-[700] cursor-pointer hover:border-[#201C19]">+ Register Participant</button>
+        </div>
+        <p class="mono text-[10px] opacity-50 mb-3">Players are looked up by phone number and reused across tournaments and clubs -- a player only needs one profile, ever. Full once a division hits its cap moves new registrations to a waitlist automatically.</p>
+        <form id="registrationForm" class="hidden mb-4 p-4 rounded-[16px] bg-[#FFFBF5] border border-[#EAE0D5] grid grid-cols-1 md:grid-cols-2 gap-3">
+          <label class="flex flex-col gap-1.5 md:col-span-2">
+            <span class="mono text-[10px] uppercase tracking-widest opacity-60">Division</span>
+            <select id="rfDivision" class="h-10 rounded-full border border-[#EAE0D5] bg-white px-3 mono text-[12px] font-[700] outline-none focus:border-[#201C19]"></select>
+          </label>
+          <label class="flex flex-col gap-1.5">
+            <span class="mono text-[10px] uppercase tracking-widest opacity-60">Player 1 Phone</span>
+            <input id="rf1Phone" required placeholder="e.g. 0917 123 4567" class="h-10 rounded-full border border-[#EAE0D5] bg-white px-4 mono text-[12px] outline-none focus:border-[#201C19]"/>
+          </label>
+          <label class="flex flex-col gap-1.5">
+            <span class="mono text-[10px] uppercase tracking-widest opacity-60">Player 1 Name</span>
+            <input id="rf1Name" required placeholder="Full name" class="h-10 rounded-full border border-[#EAE0D5] bg-white px-4 mono text-[12px] outline-none focus:border-[#201C19]"/>
+          </label>
+          <label class="flex flex-col gap-1.5">
+            <span class="mono text-[10px] uppercase tracking-widest opacity-60">Player 1 DUPR (optional)</span>
+            <input id="rf1Dupr" type="number" min="0" step="0.01" placeholder="e.g. 3.75" class="h-10 rounded-full border border-[#EAE0D5] bg-white px-4 mono text-[12px] outline-none focus:border-[#201C19]"/>
+          </label>
+          <div id="rfDoublesToggleWrap" class="hidden flex items-end">
+            <label class="flex items-center gap-2 mono text-[11px] font-[700] h-10">
+              <input id="rfIsDoubles" type="checkbox" class="w-4 h-4"/> Doubles (custom division)
+            </label>
+          </div>
+          <div id="rfPartnerWrap" class="hidden md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-3 p-3 rounded-[14px] bg-white border border-[#EAE0D5]">
+            <label class="flex flex-col gap-1.5">
+              <span class="mono text-[10px] uppercase tracking-widest opacity-60">Player 2 (Partner) Phone</span>
+              <input id="rf2Phone" placeholder="e.g. 0917 765 4321" class="h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-4 mono text-[12px] outline-none focus:border-[#201C19]"/>
+            </label>
+            <label class="flex flex-col gap-1.5">
+              <span class="mono text-[10px] uppercase tracking-widest opacity-60">Player 2 (Partner) Name</span>
+              <input id="rf2Name" placeholder="Full name" class="h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-4 mono text-[12px] outline-none focus:border-[#201C19]"/>
+            </label>
+            <label class="flex flex-col gap-1.5">
+              <span class="mono text-[10px] uppercase tracking-widest opacity-60">Player 2 DUPR (optional)</span>
+              <input id="rf2Dupr" type="number" min="0" step="0.01" placeholder="e.g. 3.50" class="h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-4 mono text-[12px] outline-none focus:border-[#201C19]"/>
+            </label>
+            <label class="flex flex-col gap-1.5">
+              <span class="mono text-[10px] uppercase tracking-widest opacity-60">Partner Selected By</span>
+              <select id="rfPartnerBy" class="h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-3 mono text-[12px] font-[700] outline-none focus:border-[#201C19]">
+                <option value="self">Player (brought their own partner)</option>
+                <option value="admin">Admin-assigned (on-site pairing)</option>
+              </select>
+            </label>
+          </div>
+          <div class="md:col-span-2">
+            <button type="submit" class="h-10 px-4 rounded-full bg-[#201C19] text-white mono text-[11px] font-[700] cursor-pointer">Register</button>
+          </div>
+        </form>
+        <div id="registrationsList" class="space-y-3">
+          <div class="mono text-[11px] opacity-50">No registrations yet.</div>
+        </div>
+      </div>
+
       <!-- Audit log -->
       <div id="auditWrap" class="hidden mt-5 rounded-[24px] bg-white border border-[#EAE0D5] p-5 md:p-6">
         <h3 class="text-[15px] font-[800] tracking-[-0.02em] mb-3">Activity</h3>
@@ -450,9 +509,14 @@ async function openTournament(tournamentId){
   form.reset();
   document.getElementById('tfDualWrap').classList.add('hidden');
   document.getElementById('divisionsWrap').classList.add('hidden');
+  document.getElementById('registrationWrap').classList.add('hidden');
   document.getElementById('auditWrap').classList.add('hidden');
   document.getElementById('publishBtn').classList.add('hidden');
   document.getElementById('cancelTournamentBtn').classList.add('hidden');
+  document.getElementById('divisionForm').reset();
+  document.getElementById('divisionForm').classList.add('hidden');
+  document.getElementById('registrationForm').reset();
+  document.getElementById('registrationForm').classList.add('hidden');
 
   if(!tournamentId){
     document.getElementById('detailTitle').textContent = 'New Tournament';
@@ -484,6 +548,7 @@ async function openTournament(tournamentId){
   recomputePricing();
 
   document.getElementById('divisionsWrap').classList.remove('hidden');
+  document.getElementById('registrationWrap').classList.remove('hidden');
   document.getElementById('auditWrap').classList.remove('hidden');
   if(t.status !== 'cancelled' && t.status !== 'completed'){
     document.getElementById('cancelTournamentBtn').classList.remove('hidden');
@@ -491,7 +556,8 @@ async function openTournament(tournamentId){
   if(t.status === 'draft'){
     document.getElementById('publishBtn').classList.remove('hidden');
   }
-  loadDivisions(tournamentId);
+  loadDivisions(tournamentId).then(() => populateDivisionSelect());
+  loadRegistrations(tournamentId);
   loadAuditLog(tournamentId);
 }
 
@@ -622,9 +688,225 @@ document.getElementById('divisionForm').addEventListener('submit', async (e) => 
     toast('Division added');
     document.getElementById('divisionForm').reset();
     document.getElementById('divisionForm').classList.add('hidden');
-    loadDivisions(CURRENT_TOURNAMENT_ID);
+    await loadDivisions(CURRENT_TOURNAMENT_ID);
+    populateDivisionSelect();
   } catch(ex) { toast('Failed: ' + ex.message); }
 });
+
+/* ================================================================
+   PLAYER IDENTITY (platformPlayers/{normalizedPhone} -- cross-tenant,
+   keyed by phone so the same person is one record whether they show
+   up in this club's roster, another club's, or a dual meet between
+   the two. Doc id is derived from the phone number itself (not
+   auto-generated) so a lookup is always a `get` by a known id --
+   firestore.rules denies `list` on this collection entirely, so this
+   is the only shape of read that was ever going to work here.
+   ================================================================ */
+function normalizePhone(raw){
+  let digits = String(raw || '').replace(/\D/g, '');
+  if(digits.startsWith('0')) digits = '63' + digits.slice(1);       // 0917... -> 63917...
+  else if(digits.startsWith('9') && digits.length === 10) digits = '63' + digits; // 917... -> 63917...
+  return digits;
+}
+async function findOrCreatePlayer(rawPhone, name, dupr){
+  const phone = normalizePhone(rawPhone);
+  if(!phone) throw new Error('Enter a valid phone number');
+  const ref = db.doc(`platformPlayers/${phone}`);
+  const snap = await ref.get();
+  if(snap.exists){
+    const data = snap.data();
+    const patch = { memberTenants: firebase.firestore.FieldValue.arrayUnion(currentClientId) };
+    if(name && name.trim() && name.trim() !== data.name) patch.name = name.trim();
+    if(dupr) patch.duprRating = dupr;
+    await ref.set(patch, { merge: true });
+    return { id: phone, name: patch.name || data.name, duprRating: dupr || data.duprRating || null };
+  }
+  const payload = {
+    name: name.trim(), phone,
+    duprRating: dupr || null,
+    homeTenant: currentClientId,
+    memberTenants: [currentClientId],
+    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+  };
+  await ref.set(payload);
+  return { id: phone, name: payload.name, duprRating: payload.duprRating };
+}
+
+/* ================================================================
+   REGISTRATION (clients/{id}/tournaments/{tournamentId}/registrations)
+   Singles or doubles depending on the division's category (doubles
+   for MD/WD/MX, singles for MS/WS, admin's call for a custom
+   division). Player names/DUPR are denormalized onto the
+   registration doc itself so the roster and, later, the public
+   tournament page never need to read platformPlayers directly (its
+   rules deny listing it entirely -- a registration is the only
+   record anything but a single known-id lookup can rely on).
+   ================================================================ */
+let REGISTRATIONS = [];
+const DOUBLES_CATEGORIES = ['MD', 'WD', 'MX'];
+function populateDivisionSelect(){
+  const sel = document.getElementById('rfDivision');
+  if(CURRENT_DIVISIONS.length === 0){
+    sel.innerHTML = `<option value="">Add a division first</option>`;
+    return;
+  }
+  sel.innerHTML = CURRENT_DIVISIONS.map(d => `<option value="${d.id}">${escapeHtml(d.name)} (${CATEGORY_LABELS[d.category] || d.category})</option>`).join('');
+  updateDoublesUiForDivision();
+}
+function updateDoublesUiForDivision(){
+  const divId = document.getElementById('rfDivision').value;
+  const div = CURRENT_DIVISIONS.find(d => d.id === divId);
+  const isCustom = div && div.category === 'custom';
+  document.getElementById('rfDoublesToggleWrap').classList.toggle('hidden', !isCustom);
+  const isDoubles = div && (DOUBLES_CATEGORIES.includes(div.category) || (isCustom && document.getElementById('rfIsDoubles').checked));
+  document.getElementById('rfPartnerWrap').classList.toggle('hidden', !isDoubles);
+}
+document.getElementById('rfDivision').addEventListener('change', updateDoublesUiForDivision);
+document.getElementById('rfIsDoubles').addEventListener('change', updateDoublesUiForDivision);
+document.getElementById('addRegistrationBtn').addEventListener('click', () => {
+  document.getElementById('registrationForm').classList.toggle('hidden');
+});
+
+async function loadRegistrations(tournamentId){
+  const wrap = document.getElementById('registrationsList');
+  try {
+    const snap = await db.collection(`clients/${currentClientId}/tournaments/${tournamentId}/registrations`).orderBy('registeredAt', 'asc').get();
+    REGISTRATIONS = [];
+    snap.forEach(doc => REGISTRATIONS.push({ id: doc.id, ...doc.data() }));
+    renderRegistrations();
+  } catch(ex) {
+    wrap.innerHTML = `<div class="mono text-[11px] text-[#8C2C10]">Failed to load registrations: ${escapeHtml(ex.message)}</div>`;
+  }
+}
+function regStatusBadge(status){
+  const map = {
+    approved:    { bg:'#E8F5D8', fg:'#3F7019', label:'Approved' },
+    waitlisted:  { bg:'#FFF0D6', fg:'#8A5A00', label:'Waitlisted' },
+    checked_in:  { bg:'#D6FF5F', fg:'#201C19', label:'Checked In' },
+    withdrawn:   { bg:'#F1E9DF', fg:'#201C19', label:'Withdrawn' },
+  };
+  const s = map[status] || map.approved;
+  return `<span class="mono text-[9px] uppercase tracking-widest font-[800] px-2 py-0.5 rounded-full" style="background:${s.bg};color:${s.fg}">${s.label}</span>`;
+}
+function renderRegistrations(){
+  const wrap = document.getElementById('registrationsList');
+  if(REGISTRATIONS.length === 0){
+    wrap.innerHTML = `<div class="mono text-[11px] opacity-50">No registrations yet.</div>`;
+    return;
+  }
+  const byDivision = {};
+  REGISTRATIONS.forEach(r => { (byDivision[r.divisionId] = byDivision[r.divisionId] || []).push(r); });
+  wrap.innerHTML = Object.entries(byDivision).map(([divId, regs]) => {
+    const div = CURRENT_DIVISIONS.find(d => d.id === divId);
+    const rows = regs.map(r => `
+      <div class="flex items-center justify-between gap-2 p-3 rounded-[14px] bg-[#FFFBF5] border border-[#EAE0D5] flex-wrap">
+        <div>
+          <span class="font-[700] text-[13px]">${escapeHtml((r.playerNames || []).join(' & '))}</span>
+          ${r.partnerAssignedBy === 'admin' ? '<span class="mono text-[9px] opacity-50 ml-1.5">(admin-paired)</span>' : ''}
+        </div>
+        <div class="flex items-center gap-2 flex-wrap">
+          ${regStatusBadge(r.status)}
+          ${r.status === 'approved' ? `<button data-checkin="${r.id}" class="h-7 px-2.5 rounded-full bg-white border border-[#EAE0D5] mono text-[9px] font-[700] cursor-pointer hover:border-[#201C19]">Check In</button>` : ''}
+          ${r.status === 'checked_in' ? `<button data-undo-checkin="${r.id}" class="h-7 px-2.5 rounded-full bg-white border border-[#EAE0D5] mono text-[9px] font-[700] cursor-pointer hover:border-[#201C19]">Undo Check-In</button>` : ''}
+          ${r.status !== 'withdrawn' ? `<button data-withdraw="${r.id}" class="h-7 px-2.5 rounded-full bg-[#FFE9E0] text-[#8C2C10] border border-[#FFC9B6] mono text-[9px] font-[700] cursor-pointer hover:bg-[#FFD7C7]">Withdraw</button>` : ''}
+        </div>
+      </div>
+    `).join('');
+    const activeCount = regs.filter(r => r.status === 'approved' || r.status === 'checked_in').length;
+    const waitlistCount = regs.filter(r => r.status === 'waitlisted').length;
+    return `
+      <div>
+        <div class="mono text-[10px] uppercase tracking-widest opacity-60 mb-1.5">${escapeHtml(div?.name || 'Unknown Division')} <span class="opacity-50">(${activeCount}${div?.maxParticipants ? '/' + div.maxParticipants : ''}${waitlistCount ? ' + ' + waitlistCount + ' waitlisted' : ''})</span></div>
+        <div class="space-y-1.5">${rows}</div>
+      </div>
+    `;
+  }).join('<div class="h-3"></div>');
+
+  wrap.querySelectorAll('[data-checkin]').forEach(btn => btn.addEventListener('click', () => setRegistrationStatus(btn.dataset.checkin, 'checked_in')));
+  wrap.querySelectorAll('[data-undo-checkin]').forEach(btn => btn.addEventListener('click', () => setRegistrationStatus(btn.dataset.undoCheckin, 'approved')));
+  wrap.querySelectorAll('[data-withdraw]').forEach(btn => btn.addEventListener('click', () => withdrawRegistration(btn.dataset.withdraw)));
+}
+
+document.getElementById('registrationForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const divisionId = document.getElementById('rfDivision').value;
+  if(!divisionId){ toast('Add a division first'); return; }
+  const div = CURRENT_DIVISIONS.find(d => d.id === divisionId);
+  const p1Phone = document.getElementById('rf1Phone').value.trim();
+  const p1Name = document.getElementById('rf1Name').value.trim();
+  if(!p1Phone || !p1Name){ toast('Enter player 1\'s phone and name'); return; }
+  const isDoubles = DOUBLES_CATEGORIES.includes(div.category) || (div.category === 'custom' && document.getElementById('rfIsDoubles').checked);
+  const p2Phone = document.getElementById('rf2Phone').value.trim();
+  const p2Name = document.getElementById('rf2Name').value.trim();
+  if(isDoubles && (!p2Phone || !p2Name)){ toast('Enter player 2\'s (partner\'s) phone and name'); return; }
+
+  const submitBtn = e.target.querySelector('button[type=submit]');
+  submitBtn.disabled = true;
+  try {
+    const p1 = await findOrCreatePlayer(p1Phone, p1Name, parseFloat(document.getElementById('rf1Dupr').value) || null);
+    const playerIds = [p1.id];
+    const playerNames = [p1.name];
+    if(isDoubles){
+      const p2 = await findOrCreatePlayer(p2Phone, p2Name, parseFloat(document.getElementById('rf2Dupr').value) || null);
+      if(p2.id === p1.id){ toast('Player 2 must be a different person from Player 1'); submitBtn.disabled = false; return; }
+      playerIds.push(p2.id);
+      playerNames.push(p2.name);
+    }
+    // Duplicate check: same player already registered (non-withdrawn) in this division
+    const dup = REGISTRATIONS.find(r => r.divisionId === divisionId && r.status !== 'withdrawn' && r.playerIds.some(id => playerIds.includes(id)));
+    if(dup){ toast('One of these players is already registered in this division'); submitBtn.disabled = false; return; }
+
+    const activeCount = REGISTRATIONS.filter(r => r.divisionId === divisionId && (r.status === 'approved' || r.status === 'checked_in')).length;
+    const isFull = div.maxParticipants && activeCount >= div.maxParticipants;
+
+    await db.collection(`clients/${currentClientId}/tournaments/${CURRENT_TOURNAMENT_ID}/registrations`).add({
+      divisionId, playerIds, playerNames,
+      partnerAssignedBy: isDoubles ? document.getElementById('rfPartnerBy').value : null,
+      status: isFull ? 'waitlisted' : 'approved',
+      registeredAt: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+    await logTournamentAudit(CURRENT_TOURNAMENT_ID, 'register', `Registered ${playerNames.join(' & ')} for "${div.name}"${isFull ? ' (waitlisted -- division full)' : ''}`);
+    toast(isFull ? 'Registered -- division is full, added to waitlist' : 'Registered');
+    e.target.reset();
+    document.getElementById('registrationForm').classList.add('hidden');
+    await loadRegistrations(CURRENT_TOURNAMENT_ID);
+  } catch(ex) { toast('Failed: ' + ex.message); }
+  finally { submitBtn.disabled = false; }
+});
+
+async function setRegistrationStatus(regId, status){
+  try {
+    await db.doc(`clients/${currentClientId}/tournaments/${CURRENT_TOURNAMENT_ID}/registrations/${regId}`).set({ status }, { merge: true });
+    await loadRegistrations(CURRENT_TOURNAMENT_ID);
+  } catch(ex) { toast('Failed: ' + ex.message); }
+}
+async function withdrawRegistration(regId){
+  const reg = REGISTRATIONS.find(r => r.id === regId);
+  if(!reg) return;
+  if(!confirm(`Withdraw ${(reg.playerNames || []).join(' & ')}?`)) return;
+  try {
+    await db.doc(`clients/${currentClientId}/tournaments/${CURRENT_TOURNAMENT_ID}/registrations/${regId}`).set({ status: 'withdrawn' }, { merge: true });
+    await logTournamentAudit(CURRENT_TOURNAMENT_ID, 'withdraw', `Withdrew ${(reg.playerNames || []).join(' & ')} from division`);
+
+    // Promote the earliest waitlisted registration in the same division, if
+    // withdrawing just opened a spot (only meaningful when the division has
+    // a cap -- an uncapped division never waitlists in the first place).
+    if(reg.status === 'approved' || reg.status === 'checked_in'){
+      const div = CURRENT_DIVISIONS.find(d => d.id === reg.divisionId);
+      if(div && div.maxParticipants){
+        const nextInLine = REGISTRATIONS
+          .filter(r => r.id !== regId && r.divisionId === reg.divisionId && r.status === 'waitlisted')
+          .sort((a,b) => (a.registeredAt?.seconds||0) - (b.registeredAt?.seconds||0))[0];
+        if(nextInLine){
+          await db.doc(`clients/${currentClientId}/tournaments/${CURRENT_TOURNAMENT_ID}/registrations/${nextInLine.id}`).set({ status: 'approved' }, { merge: true });
+          await logTournamentAudit(CURRENT_TOURNAMENT_ID, 'waitlist-promote', `Promoted ${(nextInLine.playerNames || []).join(' & ')} off the waitlist`);
+        }
+      }
+    }
+    toast('Withdrawn');
+    await loadRegistrations(CURRENT_TOURNAMENT_ID);
+  } catch(ex) { toast('Failed: ' + ex.message); }
+}
 
 /* ================================================================
    AUDIT LOG (clients/{id}/tournaments/{tournamentId}/auditLog/{id})

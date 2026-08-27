@@ -76,26 +76,38 @@ service cloud.firestore {
       // browser needs to check it), but only a superadmin can flip it.
       // Keeping this the same open rule as config/ would mean anyone who
       // knows a tenant's slug could pause (or un-pause) that tenant with a
-      // raw Firestore write, with no auth at all -- this is the one field
+      // raw Firestore write, with no auth at all -- these are the fields
       // in this app where "which tenant" isn't a sufficient check; "who is
-      // asking" matters too.
+      // asking" matters too. Holds bookingPaused plus storeEnabled/
+      // storePaused for the Pickle Court Store add-on -- two independent
+      // per-product entitlements in the same doc, each toggled without
+      // touching the other, by design.
       match /status/{document} {
         allow read: if isValidTenantId(clientId);
         allow write: if request.auth != null && request.auth.token.superadmin == true;
       }
-      
+
       // Courts subcollection
       match /courts/{document} {
         allow read: if isValidTenantId(clientId);
         allow write: if isValidTenantId(clientId);
       }
-      
+
       // Settings subcollection (including PIN)
       match /settings/{document} {
         allow read: if isValidTenantId(clientId);
         allow write: if isValidTenantId(clientId);
       }
-      
+
+      // Store settings (Store PIN, separate from the Booking Admin PIN in
+      // settings/ above) -- same open per-tenant trust level as every other
+      // operational doc; only the entitlement itself (status/ above) is
+      // superadmin-gated.
+      match /storeSettings/{document} {
+        allow read: if isValidTenantId(clientId);
+        allow write: if isValidTenantId(clientId);
+      }
+
       // Bookings subcollection
       match /bookings/{document} {
         allow read: if isValidTenantId(clientId);

@@ -1420,7 +1420,7 @@ const _cfgDefaults = {
   hours: { queueStart:7, queueEnd:7, bookingStart:7, close:22 },
   staff: { days:[0,2,4,6], startHour:17, endHour:22, label:'STAFF' },
   booking: { maxDaysAhead:60, maxHoursPerBooking:0 },
-  paused: false,
+  bookingPaused: false,
 };
 function _deepMerge(base, over){
   const out = {...base};
@@ -1782,13 +1782,14 @@ function normalizeClientConfig(raw) {
    ID." Always fetched fresh; caching a pause flag would let a paused
    tenant keep operating from a stale cache, which defeats the point. ---------- */
 async function loadTenantStatus(){
-  if (!currentClientId || !db) return { paused: false };
+  const fallback = { bookingPaused: false, storeEnabled: false, storePaused: false };
+  if (!currentClientId || !db) return fallback;
   try {
     const snap = await db.doc(`clients/${currentClientId}/status/state`).get();
-    return (snap.exists && snap.data().data) || { paused: false };
+    return (snap.exists && snap.data().data) || fallback;
   } catch(e) {
     console.warn('[CourtBooking] Failed to load tenant status:', e.message);
-    return { paused: false };
+    return fallback;
   }
 }
 
@@ -1846,9 +1847,9 @@ async function loadClientConfig() {
 async function refreshClientConfigFromCloud(){
   if(!currentClientId || !db) return;
   try {
-    const wasPaused = !!CLIENT.paused;
+    const wasPaused = !!CLIENT.bookingPaused;
     const status = await loadTenantStatus();
-    const nowPaused = !!status.paused;
+    const nowPaused = !!status.bookingPaused;
     if(wasPaused !== nowPaused){
       // Pausing/unpausing changes what the whole page renders (paused
       // overlay vs. the full booking app) -- simplest correct behavior is
@@ -1867,7 +1868,7 @@ async function refreshClientConfigFromCloud(){
     localStorage.setItem(LS.clientConfig, freshStr);
     window.CLIENT_CONFIG = fresh;
     CLIENT = _deepMerge(_cfgDefaults, fresh);
-    CLIENT.paused = nowPaused;
+    CLIENT.bookingPaused = nowPaused;
     applyTheme();
     computeSchedule();
     computeHours();
@@ -2748,7 +2749,7 @@ async function seedIfEmpty() {
 
 // Kick off Firebase
 seedIfEmpty().then(() => {
-  if(CLIENT.paused) return; // suspended tenant -- no listeners, view counting, or retention churn
+  if(CLIENT.bookingPaused) return; // suspended tenant -- no listeners, view counting, or retention churn
   startRealtimeListeners();
   startOpenGamesListener();
   bumpUsageCounter('views');
@@ -6391,13 +6392,13 @@ async function initializeApp() {
   // Merge client config with defaults, recompute derived state, and apply branding
   window.CLIENT_CONFIG = clientConfig;
   CLIENT = _deepMerge(_cfgDefaults, clientConfig || {});
-  CLIENT.paused = !!tenantStatus.paused;
+  CLIENT.bookingPaused = !!tenantStatus.bookingPaused;
   applyTheme();              // re-apply theme CSS with the tenant's colors
   computeSchedule();         // recompute SCHED/STAFF_DAYS from the tenant's hours
   computeHours();            // recompute HOURS/ALL_HOURS_START from SCHED
   applyBranding();           // white-label: brand, theme labels, contact, footer
 
-  if (CLIENT.paused) {
+  if (CLIENT.bookingPaused) {
     showPausedState();
     refreshClientConfigFromCloud(); // still watch for an un-pause and reload if so
     return;

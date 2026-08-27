@@ -1,98 +1,44 @@
-# White Kitchen Pickleball Court User Guide
+# Quick Guide for Players
 
-## Official Booking Portal
+Use the booking link your facility shared with you (it looks like `.../?client=yourfacility`). Everyone sees four tabs: **Book**, **Queue**, **Find a Game**, and **Payment**.
 
-Use the official link shared by White Kitchen staff. The public portal has three main tabs:
+## Book a Court
 
-| Tab | What You Can Do |
-|---|---|
-| Book | View schedule and reserve the court |
-| Queue | Create or join a queue board and track scores |
-| Payment | Scan QR codes for external payment |
+1. Open **Book**. Check Today's Schedule, or pick another date from the calendar.
+2. Tap an open time slot's **Book Now**.
+3. Fill in your name, email, group notes, and a **4-digit Booking PIN** you choose yourself — remember it, you'll need it later.
+4. Review the total and confirm.
 
-## Court Schedule
+Your reservation starts as **Pending**. Staff move it to **Reserved** once they've verified your payment — that's the only status change that happens, so don't worry if it sits as Pending for a bit right after you book.
 
-| Time | Type | Rate |
-|---|---|---|
-| 7:00 AM to 12:00 PM | Walk-in / Queue | ₱100 per head |
-| 1:00 PM to 10:00 PM | Reservation | ₱300 per hour |
+## Pay
 
-Staff reserved hours:
+1. Open **Payment**.
+2. Pick the channel your facility accepts (GCash / Maya / Bank).
+3. Scan the QR code and pay externally — the site itself doesn't process payment.
+4. Keep your reference number or a screenshot in case staff need to double-check it.
 
-| Days | Time | Status |
-|---|---|---|
-| Tuesday, Thursday, Saturday, Sunday | 5:00 PM to 10:00 PM | Not available for public booking |
+## Find a Game
 
-## How to Book the Court
+Looking for people to play with instead of booking solo?
 
-1. Open the Book tab.
-2. Check Today's Schedule or choose another date from the calendar.
-3. Pick an available start and end time.
-4. Enter your name, email, and optional group notes.
-5. Review the total amount.
-6. Click Confirm Reservation.
+- Browse **Find a Game** for open pickup games and tap in to join one.
+- Or **+ Create Game** with a date, time, skill level, format, and how many players you need.
+- Already have a Reserved booking? Open your game and enter your **Booking PIN** to link it to that reservation.
+- "My Games" on this tab shows what you've created or joined on this device.
 
-Your booking status starts as Pending.
+## Use the Queue
 
-## Booking Status
+No reservation needed — the **Queue** tab is a free walk-in rotation board:
 
-| Status | Meaning |
-|---|---|
-| Pending | Reservation submitted, payment not yet verified |
-| Reserved | Admin verified your external payment |
+- Create or join a queue (singles or doubles).
+- Matches rotate by Winner Stays or Fixed Order, whichever the queue creator picked.
+- Whoever created the queue set a PIN for it — you'll need that PIN only if you're resetting, deleting, or removing a player, not to just play.
+- Queues clear out automatically after midnight.
 
-## How to Pay
+## A Few Reminders
 
-1. Go to the Payment tab.
-2. Choose your preferred payment method: GCash, Maya, or BPI / Bank.
-3. Scan the QR code.
-4. Pay externally using your payment app.
-5. Keep your reference number or screenshot.
-6. Admin verifies the payment and changes your booking to Reserved.
-
-The app does not process payments inside the website.
-
-## How to Use the Queue Tab
-
-The Queue tab is a public utility for organizing games.
-
-You can:
-
-| Action | Description |
-|---|---|
-| Create a queue | Generate a singles or doubles rotation board |
-| Add players | Add names all at once or join an existing queue |
-| Track scores | Enter exact final scores for played matches |
-| Rotate matches | The app advances players based on the selected rotation rule |
-
-Queue formats:
-
-| Format | Players on Court |
-|---|---|
-| Singles | 2 players |
-| Doubles | 4 players |
-
-Rotation options:
-
-| Rule | Meaning |
-|---|---|
-| Winner Stays | Winner remains on court, next challenger enters |
-| Fixed Order | Everyone rotates in order |
-
-Queue PIN:
-
-The queue creator sets a PIN. This PIN is needed to reset or delete the queue and remove players.
-
-Queue cleanup:
-
-Queues expire at the end of the day and are removed after midnight.
-
-## Reminders
-
-Arrive before your reserved time.
-
-Bring your payment reference if staff asks for verification.
-
-Morning play is usually walk-in queue unless an admin enables morning booking for a specific hour.
-
-Staff-reserved hours are not bookable by the public.
+- Arrive on time for your Reserved slot, and bring your payment reference if asked.
+- Only **Pending** and **Reserved** are real statuses — there's no "Confirmed" or "Paid" label to look for.
+- Hours, rates, and which time windows are walk-in vs. reservation-only vary by facility — check your facility's **Book** tab for the specifics.
+- Don't lose your Booking PIN — it's what lets you manage your own reservation and link it to a Find a Game post later.

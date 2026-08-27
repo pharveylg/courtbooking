@@ -22,7 +22,8 @@
       "copy-to-public.sh",
       "public/**",
       "ADMIN_GUIDE.md",
-      "USER_ONE_PAGER.md"
+      "USER_ONE_PAGER.md",
+      "SUPERADMIN_GUIDE.md"
     ],
     "rewrites": [
       {

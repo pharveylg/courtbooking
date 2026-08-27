@@ -1,162 +1,169 @@
-# White Kitchen Pickleball Court Admin Guide
+# Tenant Staff / Admin Console Guide
 
-## Recommended Admin URL
+This guide is for the staff of an individual court facility ("tenant") running its own booking site on this platform — for example, the person confirming payments, setting up pricing, or blocking staff-only court time. It covers everything reachable from **your own site's Admin Console** using your Admin PIN.
 
-Use one official public link for customers. Keep the other deployment as backup or staging.
+If you manage the platform itself (creating tenants, billing, cross-tenant reporting), see `SUPERADMIN_GUIDE.md` instead — most of what's in that guide is not something you can do from here, and vice versa. If you just want the player-facing quick guide to hand out, see `USER_ONE_PAGER.md`.
 
-Recommended setup:
+---
 
-| Purpose | Platform |
-|---|---|
-| Public customer link | Vercel |
-| Backup / future database version | Firebase |
+## 1. Your Site & Multi-Tenancy
 
-Vercel is the easiest choice for the current static app because it is simple to update from Git and fast for public users. Firebase is useful if the app later needs Firestore or Realtime Database so bookings and queues sync across multiple devices.
+Your booking site is reachable at `https://<the platform's domain>/?client=<your-slug>` — the `?client=` part is what tells the app which facility's data to load. Bookmark and share the full link, including the `?client=` part; sharing just the bare domain will not point guests to your facility.
 
-Important: the current app stores data in the browser using localStorage. Admin booking data, queues, QR uploads, and PIN changes are saved on the specific device/browser being used.
+Everything you and your players do is scoped to your slug — courts, bookings, pricing, staff-reserved hours, queues, and Open Games are all independent per tenant. Nothing you do here affects any other facility on the platform.
 
-## Admin Access
+## 2. Getting Into the Admin Console
 
-1. Open the official site link.
-2. Click the Staff button in the header.
-3. Enter the admin PIN.
-4. Default PIN is 1234 unless changed.
-5. After unlocking, Admin and Bookings tabs become visible.
+1. Click **Staff / Admin Access** (top right of the header) or the lock icon.
+2. Enter your Admin PIN. The default PIN for a newly-provisioned tenant is `1234` unless whoever set up your site changed it — change it yourself under Admin → Security as your first step (Section 9).
+3. Once unlocked, two tabs that were hidden become visible in the nav: **Bookings** and **Admin**. Everyone else (players, guests) only ever sees Book, Queue, Find a Game, and Payment.
 
-## Public vs Admin Tabs
+Unlocking is per-browser: if you switch devices or clear your browser data, you'll need to enter the PIN again. There's no separate staff account/login — the PIN is the only gate.
 
-Public users see:
+## 3. Confirming Reservations (Payment Verification)
 
-| Tab | Purpose |
-|---|---|
-| Book | View schedule and submit reservations |
-| Queue | Create and manage public queue boards |
-| Payment | View payment QR codes |
+Go to **Admin → Confirm & Tag Bookings**. This app never processes payment itself — players pay you externally (GCash, Maya, bank transfer, cash, whatever you've set up) and you manually mark their reservation once you've verified it.
 
-Admins can also see:
-
-| Tab | Purpose |
-|---|---|
-| Bookings | View all reservations |
-| Admin | Manage payment verification, morning booking, open play, QR codes, security |
-
-## Confirming Reservations
-
-1. Go to Admin.
-2. Find Confirm & Tag Bookings.
-3. Review Pending bookings.
-4. Verify payment externally through GCash, Maya, BPI, or bank transfer.
-5. Change the booking status from Pending to Reserved.
-
-Status rules:
+For each booking you'll see the player's name, date/time, court, group size, and (unless it's an Open Play block) their email — plus a status dropdown and a delete (✕) button.
 
 | Status | Meaning |
 |---|---|
-| Pending | User submitted reservation, payment not yet verified |
-| Reserved | Admin verified external payment |
+| Pending | Player submitted the reservation; you have not verified their payment yet |
+| Reserved | You've verified payment — the slot is confirmed and locked in |
 
-Do not use Confirmed or Paid. The app uses only Pending and Reserved.
+Workflow:
 
-## Morning Booking Toggle
+1. A player books a slot → it appears here as **Pending**.
+2. Check your payment channel (GCash/Maya/bank) for their reference number or screenshot, matching the amount and player name.
+3. Once verified, change the dropdown from Pending to Reserved. This is also the moment it counts toward billing — see the note below.
+4. If a player never pays, or you need to remove a booking, click ✕ to delete it (this frees the slot back up immediately).
 
-Morning schedule is walk-in queue by default.
+There are only ever two statuses in this app: Pending and Reserved (plus the system-generated "Open Play" tag for admin-created blocks). Don't look for "Confirmed" or "Paid" — they don't exist here.
 
-To enable morning booking:
+> **Billing note:** if the platform bills your facility on a per-booking basis, only bookings you actually mark **Reserved** are counted — submitting a Pending reservation, or one that gets deleted/cancelled before you confirm it, is never billed.
 
-1. Go to Admin.
-2. Find Morning Booking Toggle.
-3. Turn on individual hours from 7 AM to 11 AM.
-4. Enabled hours become bookable by public users.
-5. Disabled hours remain Queue / Walk-in only.
+The separate **Bookings** nav tab (visible once unlocked) is a read-only, filterable view of the same data — filter by status or date (today/upcoming) when you just need to look something up rather than take action.
 
-## Open Play Blocks
+## 4. Court Management
 
-Use Open Play to block public reservations for a date and time range.
+Admin → **Court Management**. Each court has fully independent bookings, schedule, staff-reserved hours, and pricing.
 
-1. Go to Admin.
-2. Find Create Open Play Entry.
-3. Select date, start time, and end time.
-4. Click Add Open Play Block.
-5. The schedule shows Reserved — Open Play.
+- **+ Add Court** creates a new court (auto-numbered).
+- Each court row lets you: rename it, set its active/maintenance toggle (an inactive court disappears from the public booking flow but its history is kept), set its start hour, or delete it (only allowed if you have more than one court — you can't delete your last remaining court).
 
-Open Play blocks reservations the same way staff-reserved hours do.
+If you only ever have one court, the court tab bar stays hidden everywhere in the app to keep the UI simple — it only appears once you add a second court.
 
-## Payment QR Management
+## 5. Pricing
 
-Admins can upload QR codes for multiple payment channels.
+Admin → **Pricing**. Set rates per court:
 
-Supported channels:
+1. Pick a court from the tabs at the top (only shown if you have more than one court).
+2. **Default Rate (all hours)** sets the base hourly rate for every hour on that court that doesn't have a specific override.
+3. **Hour Overrides**: click individual hours in the grid to select them (or **Select All**), type a **Rate for Selected Hours**, and click **Apply** — e.g. to charge more for prime evening slots. **Clear** removes overrides for the currently-selected hours, reverting them to the default rate.
 
-| Channel | Public Button |
+The schedule list always shows the real effective rate per hour (default, unless a specific hour has an override). The hero banner's rate chip near the top of the Book page, however, shows a single general rate and won't reflect per-hour overrides — if you've set varied pricing, trust the per-slot rate shown in Today's Schedule, not the hero chip.
+
+## 6. Staff Reserved Hours
+
+Admin → **Staff Reserved Hours**. This blocks a court from public booking for specific hours — for staff practice, lessons, league play, maintenance, whatever you need.
+
+Two layers:
+
+- **Weekly Pattern**: a recurring template per court, per day of week (e.g. "Tuesdays and Thursdays, 5–10 PM, Court 1 is staff-only, every week"). This is your default, ongoing rule.
+- **Date Overrides**: use the calendar to punch in a specific date and adjust just that day — e.g. a one-off staff block on a date the weekly pattern wouldn't otherwise cover, or to free up an hour on a date that the weekly pattern would normally block.
+
+A blocked hour shows to players as **"STAFF RESERVED"** and cannot be booked, on the schedule and in the hero "Today's Blocked" summary.
+
+> **Billing note:** if your platform bills usage, staff-reserved hours are typically billed too (at a reduced rate relative to a normal booking) — they're not purely internal/free, since they block a court the same way a booking does. Check with whoever manages your platform account if you're unsure how your facility is billed.
+
+## 7. Open Play (Admin-Created Blocks)
+
+Admin → **Create Open Play Entry**. This is a simpler, one-off version of Staff Reserved Hours: pick a date, start, and end time (and a court, if you have more than one), and it blocks that window from public booking, shown as **"RESERVED — OPEN PLAY"**. Use this for a single community/open-play event rather than a recurring weekly pattern — for recurring blocks, Staff Reserved Hours is the right tool.
+
+This is different from **Find a Game** (Section 8 below), which is a public, player-run matchmaking feature, not something staff create.
+
+## 8. Find a Game (Open Games) — What Your Players See
+
+You don't create these — players do, from the public **Find a Game** tab. It's worth understanding so you can help players who ask about it:
+
+- Any player can create an open game: date, start time, skill level, format (singles/doubles/open), players needed, an optional court, notes, and their name + email.
+- Other players browse open games and join until it's full.
+- A player can optionally **link** their open game to a real court reservation using their **Booking PIN** (the 4-digit PIN they chose when they reserved — see Section 3 of the player guide) once that reservation is marked Reserved — this ties the pickup game to an actual paid slot on your schedule.
+- There's a soft rate limit on how many games one email can create in a short window, meant to discourage spam/abuse — a player who hits it will see a message asking them to wait, not a hard account lock.
+- Games auto-expire (marked completed/expired) once their time window has passed, and a creator can cancel their own game before then.
+
+## 9. Branding & Site Settings
+
+Admin → **Branding & Site Settings**. You can self-serve most of your site's look and business info here — no need to go through the platform owner for these:
+
+| Section | What it controls |
 |---|---|
-| GCash | GCash |
-| Maya | Maya |
-| BPI / Bank | BPI / Bank |
+| Color Theme | Primary accent, dark/header color, page background, and border colors, site-wide |
+| Logo | Square image (512×512px recommended, min 256×256, transparent PNG/SVG under ~300KB) shown in the header and footer; falls back to a two-letter monogram if removed |
+| Business & Contact | Business name, address, phone, email, Facebook/Instagram URLs — shown in the header, footer, page title, booking-confirmation email preview, and the Payment tab's contact card |
+| Hero Call-outs | The header/footer subtitle and the big headline on the Book page's hero card — auto-generated from your business info unless you override it here |
 
-To update a QR:
+Click each section's own Save button — they save independently.
 
-1. Go to Admin.
-2. Find Payment QR Code & Channels Manager.
-3. Select GCash, Maya, or BPI / Bank.
-4. Upload an image file or paste a direct image URL.
-5. Update the account label if needed.
-6. Save.
+Two things are **not** self-serve from here and need the platform owner (superadmin):
+- **Watermark image** (a faint background graphic behind your hero card) — set during your onboarding/provisioning, or updated later by the platform owner.
+- **Operating hours** (queue window, booking window, closing time) and **currency symbol** — there is currently no UI anywhere to change these yourself; they're fixed at whatever was configured when your site was set up. If yours look wrong (e.g. a queue window that doesn't make sense for your facility), ask the platform owner to fix it directly in the underlying config.
 
-Users can switch payment QR codes on the Payment tab.
+## 10. Payment QR Code & Channels Manager
 
-## Queue Module Admin Notes
+Admin → **Payment QR Code & Channels Manager**. Upload QR codes for the payment channels you accept (GCash, Maya, BPI/Bank) — either an image file or a direct image URL — and set the account label shown alongside each. Players switch between your configured channels on the public **Payment** tab; whichever channels you leave without a QR code simply won't show as an option to players.
 
-The Queue tab is public and standalone. It is not tied to reservations.
+## 11. Queue Module Notes
 
-Queue sessions allow:
+The **Queue** tab is public, self-serve, and not tied to reservations at all — players use it to organize informal walk-in rotations without any staff involvement:
 
-| Feature | Details |
-|---|---|
-| Multiple sessions | More than one queue can exist at the same time |
-| Singles and doubles | Singles uses 2 players, doubles uses 4 players |
-| Rotation styles | Winner Stays or Fixed Order |
-| Score tracking | Exact final scores can be entered |
-| Mid-queue joining | Allowed if enabled by the queue creator |
-| PIN lock | Protects reset, delete, and admin-style edits |
+- Multiple independent queue sessions can run at once.
+- Singles (2 players) or doubles (4 players) format.
+- Rotation styles: Winner Stays or Fixed Order.
+- Exact scores can be logged per match.
+- Mid-queue joining is allowed if the queue's creator enabled it.
+- Each queue has its own PIN (set by whoever created it) required to reset, delete, or remove a player — separate from your facility's Admin PIN.
 
-Queue cleanup:
+Queue sessions automatically expire and get cleared out after midnight, on whichever page load first notices the day has changed — there's no separate cleanup step for you to run.
 
-All queue sessions expire at the end of the day and are removed after midnight on the next page load.
+## 12. Security (Your Admin PIN)
 
-## Security and PINs
+Admin → **Security**. Enter a new PIN and click **Save PIN** — takes effect immediately for future unlock attempts. If you ever get locked out (forgot the PIN), you can't self-reset it — the platform owner can reset it for you from the Superadmin Console without needing your old PIN.
 
-Admin PIN:
+## 13. Data Storage & Retention — What You Should Know
 
-1. Go to Admin.
-2. Find Security.
-3. Enter a new PIN.
-4. Click Save PIN.
+Your live data (courts, bookings, staff-reserve config, pricing, queues) lives in Firestore, synced in real time across every device that opens your site — this is not a "your browser only" localStorage app (an older version of this guide said otherwise; that's no longer accurate). Your browser does keep a local cache for speed, but the source of truth is shared and centralized.
 
-Queue PIN:
+Your platform account has a **data retention window** (commonly 14 days, but set per facility by the platform owner) — periodically, all current bookings, open-play blocks, and queue sessions are cleared out and the window restarts. This is a full reset of that operational data, not selective cleanup of only old entries, and it's triggered by someone visiting the site around the time the window elapses rather than on an exact schedule. If you rely on looking up bookings from a while back, export or note anything you need before the window is up. Historical usage/billing counts are kept separately and are not affected by this reset.
 
-1. Queue creator sets a PIN while creating a queue.
-2. The PIN is required for reset, delete, and removing players.
-3. Normal users can still view queues and submit scores.
+## 14. Tenant Staff Troubleshooting FAQ
 
-## Data Storage Warning
+**A player says their booking disappeared.**
+Most likely the data retention reset ran (Section 13) — it clears all current bookings on a schedule, not just old ones. Check with the platform owner what your facility's retention window is set to.
 
-This version has no backend database.
+**The hero banner shows a weird rate range like "7:00 AM–10:00 PM" for booking and "7:00 AM–7:00 AM" for Queue.**
+A zero-width "7:00 AM–7:00 AM" queue window means your operating hours were never customized from the platform default (no separate queue window configured). This isn't something you can fix from your Admin Console — ask the platform owner to set your actual queue/booking hours.
 
-Data is stored in localStorage, which means:
+**I changed my color/logo/business name but it's not showing for a customer who says they've visited before.**
+Their browser cached your site's config before your change. The app automatically re-checks in the background on their next visit and should self-correct within moments without them needing to do anything — if it's been a while and it's still not showing, double-check your change actually saved (reopen the section and confirm the field still shows your update).
 
-| Behavior | Impact |
-|---|---|
-| Same browser/device | Data persists |
-| Different device | Data does not automatically sync |
-| Browser cache cleared | Data may be lost |
-| Incognito mode | Data may disappear after closing browser |
+**A booking's total price doesn't match what I expect.**
+Check Pricing (Section 5) for hour-specific overrides on that court — the actual charge follows the per-hour effective rate, not the general rate shown in the hero chip.
 
-Recommended admin workflow:
+**I can't delete my last remaining court.**
+By design — you always need at least one court to keep the booking flow working. Add a second court first if you actually need to retire the original one.
 
-Use one dedicated admin device/browser for managing actual reservations until a shared database is added.
+**A player asks how to link their "Find a Game" post to their real reservation.**
+They need their booking's 4-digit PIN (which they set themselves when reserving) and their reservation must already be marked **Reserved** by you — Pending reservations can't be linked yet.
 
-## Recommended Future Upgrade
+**Someone tried creating several "Find a Game" posts quickly and got blocked.**
+That's the built-in soft rate limit meant to discourage spam. It's temporary and tied to the email they used — no manual admin unlock exists for this today; they just need to wait.
 
-If White Kitchen needs shared live bookings across all users and devices, add Firebase Firestore or Realtime Database.
+**I forgot my Admin PIN.**
+You can't reset it yourself. Contact the platform owner — they can reset it from the Superadmin Console without needing the old PIN.
 
-That would make Firebase the best primary platform.
+**My site was "suspended" but I can still access everything.**
+That's expected with the current version of the platform — Suspend is a bookkeeping flag the platform owner uses for tracking, and does not currently block your site or Admin Console. If your facility is meant to be paused, that's a conversation to have directly with the platform owner rather than something enforced automatically.
+
+**Where do I see how much my facility owes / has been billed?**
+You don't — billing and usage reporting live entirely in the Superadmin Console, which only the platform owner can access. Ask them directly for your numbers.

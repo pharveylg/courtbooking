@@ -334,28 +334,53 @@ document.getElementById('ctColor').addEventListener('change', (e) => {
 });
 
 /* ---------- Tenant Directory ---------- */
-async function loadTenants(){
+const LS_TENANT_CACHE = 'sa_tenant_cache_v1';
+function renderTenantList(entries){
   const list = document.getElementById('tenantList');
   const countEl = document.getElementById('tenantCount');
-  list.innerHTML = `<div class="p-6 text-center mono text-[11px] opacity-50">Loading...</div>`;
+  countEl.textContent = entries.length;
+  if(entries.length === 0){
+    list.innerHTML = `<div class="p-8 text-center mono text-[12px] opacity-50">No tenants registered yet. Create one above.</div>`;
+    document.getElementById('reportingList').innerHTML = `<div class="p-8 text-center mono text-[12px] opacity-50">No tenants to report on yet.</div>`;
+    return;
+  }
+  list.innerHTML = '';
+  entries.forEach(({ id, data }) => renderTenantRow(id, data));
+}
+async function loadTenants(){
+  const list = document.getElementById('tenantList');
+
+  // Render instantly from the last-known list (if any) while a fresh fetch
+  // runs in the background -- same cache-then-revalidate pattern index.html
+  // uses for tenant config, so the directory doesn't sit on a blank
+  // "Loading..." placeholder on every single visit. Billing/usage Reports
+  // are NOT cached here -- those numbers should always reflect a live query.
+  let cached = null;
+  try { cached = JSON.parse(localStorage.getItem(LS_TENANT_CACHE) || 'null'); } catch(e) { cached = null; }
+  if(cached && Array.isArray(cached)){
+    renderTenantList(cached);
+  } else {
+    list.innerHTML = `<div class="p-6 text-center mono text-[11px] opacity-50">Loading...</div>`;
+  }
+
   try {
     const snap = await db.collection('platformTenants').orderBy('createdAt', 'desc').get();
-    countEl.textContent = snap.size;
-    if(snap.empty){
-      list.innerHTML = `<div class="p-8 text-center mono text-[12px] opacity-50">No tenants registered yet. Create one above.</div>`;
-      document.getElementById('reportingList').innerHTML = `<div class="p-8 text-center mono text-[12px] opacity-50">No tenants to report on yet.</div>`;
-      return;
-    }
-    list.innerHTML = '';
+    const entries = [];
     const tenants = [];
     snap.forEach(doc => {
       const d = doc.data();
-      renderTenantRow(doc.id, d);
+      entries.push({ id: doc.id, data: d });
       tenants.push({ slug: doc.id, businessName: d.businessName || doc.id, billing: d.billing || {}, creditBalance: d.creditBalance || 0 });
     });
+    try { localStorage.setItem(LS_TENANT_CACHE, JSON.stringify(entries)); } catch(e) { /* storage full/unavailable -- just skip caching */ }
+    renderTenantList(entries);
     loadReporting(tenants);
   } catch(ex) {
-    list.innerHTML = `<div class="p-6 text-center mono text-[11px] text-[#8C2C10]">Failed to load tenants: ${escapeHtml(ex.message)}</div>`;
+    if(!cached){
+      list.innerHTML = `<div class="p-6 text-center mono text-[11px] text-[#8C2C10]">Failed to load tenants: ${escapeHtml(ex.message)}</div>`;
+    } else {
+      toast('Failed to refresh tenant list: ' + ex.message);
+    }
   }
 }
 

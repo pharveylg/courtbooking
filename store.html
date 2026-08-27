@@ -350,6 +350,12 @@ function enterApp(bizName){
   document.getElementById('appScreen').classList.remove('hidden');
   document.getElementById('appBizName').textContent = bizName;
   loadCurrentShift().then(renderShiftBanner);
+  // Render instantly from the last-known catalog (if any) while a fresh
+  // fetch runs in the background, same cache-then-revalidate pattern as
+  // index.html -- otherwise POS sits blank until the first Firestore round
+  // trip completes on every single unlock.
+  const cachedProducts = loadProductsCache();
+  if(cachedProducts){ PRODUCTS = cachedProducts; renderPOS(); renderProducts(); renderInventory(); }
   loadProducts().then(() => { renderPOS(); renderProducts(); renderInventory(); });
   renderReports();
   showStoreTab('pos');
@@ -394,16 +400,28 @@ document.querySelectorAll('.store-tab-btn').forEach(btn => {
    PRODUCTS (clients/{id}/storeProducts/state -- single array doc,
    same "small collection, one doc" pattern as courts/pricing)
    ================================================================ */
+function productsCacheKey(){ return `pcs_products_${currentClientId}`; }
+function loadProductsCache(){
+  try {
+    const raw = localStorage.getItem(productsCacheKey());
+    return raw ? JSON.parse(raw) : null;
+  } catch(e) { return null; }
+}
+function saveProductsCache(){
+  try { localStorage.setItem(productsCacheKey(), JSON.stringify(PRODUCTS)); } catch(e) { /* storage full/unavailable -- just skip caching */ }
+}
 async function loadProducts(){
   try {
     const snap = await db.doc(`clients/${currentClientId}/storeProducts/state`).get();
     PRODUCTS = (snap.exists && snap.data().data) || [];
-  } catch(ex) { console.warn('[PickleStore] Failed to load products:', ex.message); PRODUCTS = []; }
+    saveProductsCache();
+  } catch(ex) { console.warn('[PickleStore] Failed to load products:', ex.message); if(!loadProductsCache()) PRODUCTS = []; }
 }
 async function saveProducts(){
   await db.doc(`clients/${currentClientId}/storeProducts/state`).set({
     data: PRODUCTS, updatedAt: firebase.firestore.FieldValue.serverTimestamp()
   });
+  saveProductsCache();
 }
 function stockStatus(p){
   if(p.stock <= 0) return { label: 'Out of Stock', cls: 'bg-[#FFE9E0] text-[#8C2C10]' };
@@ -1288,9 +1306,22 @@ function renderReports(){
 /* ================================================================
    INIT
    ================================================================ */
+function bizNameCacheKey(){ return `pcs_bizname_${currentClientId}`; }
 async function init(){
   if(!currentClientId){ renderNoTenant(); return; }
   if(!db){ renderGateState(`<p class="mt-5 mono text-[12px] text-[#8C2C10]">Firebase is not configured.</p>`); return; }
+
+  // Paint a cached business name immediately (cosmetic only -- never skips
+  // the live status fetch below, which is what actually decides whether
+  // the Store is reachable) so the loading state isn't generic on repeat
+  // visits.
+  let cachedBizName = null;
+  try { cachedBizName = localStorage.getItem(bizNameCacheKey()); } catch(e) { cachedBizName = null; }
+  if(cachedBizName){
+    document.title = `${cachedBizName} — Pickle Court Store`;
+    renderGateState(`<p class="mt-5 mono text-[12px] opacity-60">Loading ${escapeHtml(cachedBizName)}'s Store...</p>`);
+  }
+
   try {
     const [statusSnap, configSnap] = await Promise.all([
       db.doc(`clients/${currentClientId}/status/state`).get(),
@@ -1300,6 +1331,7 @@ async function init(){
     const cfg = (configSnap.exists && configSnap.data().data) || {};
     const bizName = (cfg.business && cfg.business.name) || cfg.businessName || currentClientId;
     document.title = `${bizName} — Pickle Court Store`;
+    try { localStorage.setItem(bizNameCacheKey(), bizName); } catch(e) { /* storage full/unavailable -- just skip caching */ }
 
     if(!status.storeEnabled){ renderNotAvailable(bizName); return; }
     if(status.storePaused){ renderPaused(bizName); return; }

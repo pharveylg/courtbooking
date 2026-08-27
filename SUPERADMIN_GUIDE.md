@@ -65,9 +65,9 @@ Each row shows the tenant's name, color swatch, slug, and active/suspended state
 
 - **Open Site ↗** — opens the tenant's live booking page in a new tab.
 - **Manage** — expands an in-place panel (see below).
-- **Suspend / Activate** — toggles `status` on the tenant's `platformTenants/{slug}` document.
+- **Suspend / Activate** — actually takes the tenant's site offline (see below), and updates the status flag shown in this directory and in Reports.
 
-> **Important limitation:** Suspend currently only changes the status flag shown in this directory and in Reports. **It does not block the tenant's site from loading, does not disable bookings, and does not lock out the tenant's Admin Console.** The tenant-facing app never reads this field. Use Suspend today as a bookkeeping/tracking flag (e.g. "this tenant stopped paying, follow up") rather than as an access-control switch. If you need to actually cut off a non-paying tenant's site, the current options are to reset their Admin PIN (locks staff out of their own console, not players) or to delete their Firestore documents — there's no built-in "disable this tenant" feature yet.
+Suspend sets `status` on the tenant's `platformTenants/{slug}` document (superadmin-only, for the directory/Reports display) **and** mirrors a `paused` flag onto the tenant's own `clients/{slug}/config/state` document, which the tenant-facing app actually reads. When paused, the tenant's site replaces its entire booking app with a "Booking Page Paused" screen (showing the facility's name/logo and contact info, if set) for every visitor — players and staff alike, with no PIN bypass. Realtime listeners, view counting, and the retention check are all skipped while paused, so nothing runs in the background either. A tenant that's already open in someone's browser when you suspend it will pick this up and reload within moments, the same way any other config change propagates (Section 9). Activating reverses all of this immediately.
 
 Expanding **Manage** loads a few fields lazily (data-retention days and the current watermark, if any) and gives you:
 
@@ -159,7 +159,7 @@ Because it's triggered by a visit rather than a clock, a tenant with zero traffi
 The reporting query needs Firestore composite indexes for the events ledger (used for the "returning players" lifetime lookup). If `firestore.indexes.json` hasn't been deployed (`firebase deploy --only firestore:indexes`), that specific calculation silently falls back to 0 rather than failing the whole card — check the browser console on the Superadmin page for index-related warnings. Everything else in the report doesn't need the composite index and should still populate.
 
 **I suspended a tenant but their site still works.**
-Expected today — see the callout in Section 5. Suspend is a directory/bookkeeping flag only; it does not block site access.
+Give it a moment if their browser was already open — an already-loaded tab picks up the pause via the same background revalidation that catches any other config change, and reloads itself once it does (Section 9). A fresh visit (or a reload you trigger yourself) should show the paused screen immediately. If it's been a while and it's genuinely still not paused, confirm the toggle actually shows "Activate" now (i.e. the tenant is currently suspended) — re-open Manage or refresh the Tenant Directory to check.
 
 **A tenant's color/name/watermark change isn't showing on their site.**
 Almost always a stale cache on the *visitor's* browser, not a save failure — check Section 9's second note. As of the background-revalidation fix, this should self-correct on the visitor's next load without needing a hard refresh or cache clear. If it's been a while and it still isn't showing, verify the save actually succeeded (re-open Manage and confirm the field reflects your change) before assuming it's a caching issue.
@@ -174,7 +174,7 @@ The PIN check happens against the currently-stored hash on each unlock attempt, 
 Check whether they have a wide staff-reserve pattern configured — remember every reserved hour bills at half the per-booking rate across every active court, every day it's blocked, which adds up quickly for a broad weekly pattern. The report card breaks out exactly how much of the suggested charge came from staff reserve vs. bookings, so start there.
 
 **A tenant's queue/booking rate chip shows an odd value like "7:00 AM–7:00 AM".**
-That means `hours.queueStart` equals `hours.queueEnd` — the platform-wide default (no queue window configured). There is currently no UI, in either console, to edit a tenant's operating hours (queue start/end, booking start, closing time) or currency symbol — these can only be changed by editing the `hours` field directly on `clients/{slug}/config/state` in the Firebase Console. This is a known gap, not a bug on your end.
+That means `hours.queueStart` equals `hours.queueEnd` — no separate queue window configured. This is now self-serve on the tenant's own side: point them to their Admin → Operating Hours section (with per-court overrides once they have more than one court) rather than editing Firestore for them. **Currency symbol** is still not exposed anywhere in either console — that still requires editing the `currency` field directly on `clients/{slug}/config/state` in the Firebase Console.
 
 **I want to fully delete a tenant.**
 There's no "Delete Tenant" button in this console. It would need manual removal of `clients/{slug}/*` and `platformTenants/{slug}` (and its `usage`/`events` subcollections) directly in the Firebase Console, or a one-off admin-SDK script.

@@ -104,6 +104,14 @@ service cloud.firestore {
         allow write: if isValidTenantId(clientId);
       }
 
+      // Per-court operating-hours overrides (queue/booking window, closing
+      // time). Falls back to config/state's tenant-wide "hours" for any
+      // court without an entry here.
+      match /courtHours/{document} {
+        allow read: if isValidTenantId(clientId);
+        allow write: if isValidTenantId(clientId);
+      }
+
       // Queues subcollection
       match /queues/{document} {
         allow read: if isValidTenantId(clientId);

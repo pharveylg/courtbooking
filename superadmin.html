@@ -756,6 +756,14 @@ function renderTenantRow(slug, data){
     const wasActive = e.target.dataset.current === 'true';
     try {
       await db.doc(`platformTenants/${slug}`).update({ status: wasActive ? 'suspended' : 'active' });
+      // Mirrored onto the tenant's own config doc (which the tenant-facing
+      // app can actually read -- platformTenants is superadmin-only) so
+      // suspending really takes the site down instead of just flagging it
+      // here in the directory.
+      await db.doc(`clients/${slug}/config/state`).update({
+        'data.paused': wasActive,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
       toast(`${data.businessName || slug} ${wasActive ? 'suspended' : 'activated'}`);
       loadTenants();
     } catch(ex) { toast('Failed: ' + ex.message); }

@@ -771,10 +771,11 @@ function renderTenantRow(slug, data){
   `;
   list.appendChild(row);
 
-  row.querySelector(`[data-manage="${cssAttr(slug)}"]`).addEventListener('click', async () => {
+  row.querySelector(`[data-manage="${cssAttr(slug)}"]`).addEventListener('click', async (e) => {
     const panel = document.getElementById(`manage-${cssId(slug)}`);
     const willShow = panel.classList.contains('hidden');
     panel.classList.toggle('hidden');
+    e.target.textContent = willShow ? 'Close ▴' : 'Manage';
     if(willShow && !panel.dataset.retentionLoaded){
       panel.dataset.retentionLoaded = '1';
       try {

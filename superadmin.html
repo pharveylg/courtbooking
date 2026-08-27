@@ -1193,7 +1193,7 @@ function renderFeatureIdeaCard(id, data){
       <span class="mono text-[10px] opacity-50 shrink-0">▾</span>
     </button>
     <div id="fi-body-${id}" class="hidden px-4 pb-4">
-      <div class="mono text-[12px] leading-[1.6] whitespace-pre-wrap p-3.5 rounded-[14px] bg-[#FFFBF5] border border-[#EAE0D5]">${escapeHtml(data.details || '(no details yet)')}</div>
+      <div class="mono text-[12px] leading-[1.6] whitespace-pre-wrap p-3.5 rounded-[14px] bg-[#FFFBF5] border border-[#EAE0D5] max-h-[60vh] overflow-y-auto">${escapeHtml(data.details || '(no details yet)')}</div>
       <div class="flex gap-2 mt-3">
         <button type="button" data-fi-edit="${id}" class="h-8 px-3.5 rounded-full bg-white border border-[#EAE0D5] mono text-[10px] font-[700] cursor-pointer hover:border-[#201C19]">Edit</button>
         <button type="button" data-fi-delete="${id}" class="h-8 px-3.5 rounded-full bg-[#FFE9E0] text-[#8C2C10] border border-[#FFC9B6] mono text-[10px] font-[700] cursor-pointer hover:bg-[#FFD7C7]">Delete</button>

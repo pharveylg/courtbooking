@@ -793,6 +793,11 @@ function renderTenantRow(slug, data){
         <div class="mono text-[11px] opacity-50">Loading Store status...</div>
       </div>
     </div>
+    <div class="p-4 pt-0 md:p-0 md:mt-4 md:pt-4">
+      <div id="tournamentWrap-${cssId(slug)}" class="rounded-[16px] border border-[#FFD9A8] bg-[#FFF7EA] p-4">
+        <div class="mono text-[11px] opacity-50">Loading Tournament status...</div>
+      </div>
+    </div>
   `;
   list.appendChild(row);
 
@@ -824,6 +829,7 @@ function renderTenantRow(slug, data){
       document.getElementById(`billRateB-${cssId(slug)}`).value = b.perBookingRate || 0;
       document.getElementById(`balanceDisplay-${cssId(slug)}`).textContent = (data.creditBalance || 0).toFixed(2);
       loadStoreWidget(slug, data);
+      loadTournamentWidget(slug, data);
     }
   });
   row.querySelector(`[data-toggle-status="${cssAttr(slug)}"]`).addEventListener('click', async (e) => {
@@ -1322,6 +1328,91 @@ async function provisionStoreDefaults(slug, pin){
   });
 }
 
+async function loadTournamentWidget(slug, data){
+  const wrap = document.getElementById(`tournamentWrap-${cssId(slug)}`);
+  if(!wrap) return;
+  try {
+    const snap = await db.doc(`clients/${slug}/status/state`).get();
+    const status = (snap.exists && snap.data().data) || {};
+    renderTournamentWidget(slug, data, { tournamentEnabled: !!status.tournamentEnabled, tournamentPaused: !!status.tournamentPaused });
+  } catch(ex) {
+    wrap.innerHTML = `<div class="mono text-[11px] text-[#8C2C10]">Failed to load Tournament status: ${escapeHtml(ex.message)}</div>`;
+  }
+}
+function renderTournamentWidget(slug, data, status){
+  const wrap = document.getElementById(`tournamentWrap-${cssId(slug)}`);
+  if(!wrap) return;
+  const { tournamentEnabled, tournamentPaused } = status;
+  const badge = !tournamentEnabled
+    ? `<span class="mono text-[9px] uppercase tracking-widest font-[800] px-2 py-0.5 rounded-full bg-[#F1E9DF] text-[#201C19]/60">Not Added</span>`
+    : tournamentPaused
+      ? `<span class="mono text-[9px] uppercase tracking-widest font-[800] px-2 py-0.5 rounded-full bg-[#FFF0D6] text-[#8A5A00]">Paused</span>`
+      : `<span class="mono text-[9px] uppercase tracking-widest font-[800] px-2 py-0.5 rounded-full bg-[#E8F5D8] text-[#3F7019]">Active</span>`;
+
+  wrap.innerHTML = `
+    <div class="flex items-center justify-between gap-2 flex-wrap">
+      <div>
+        <div class="mono text-[10px] uppercase tracking-widest opacity-60">Pickle Court Tournaments <span class="opacity-50 normal-case">(separate premium add-on -- independent of Booking and Store above)</span></div>
+        <div class="mt-1.5">${badge}</div>
+      </div>
+      <div class="flex flex-wrap gap-2">
+        ${!tournamentEnabled ? `<button type="button" data-tournament-add="${slug}" class="h-9 px-3.5 rounded-full bg-[#201C19] text-white mono text-[10px] font-[700] cursor-pointer">+ Add Tournaments</button>` : ''}
+        ${tournamentEnabled && !tournamentPaused ? `<button type="button" data-tournament-pause="${slug}" class="h-9 px-3.5 rounded-full bg-[#FFE9E0] text-[#8C2C10] border border-[#FFC9B6] mono text-[10px] font-[700] cursor-pointer hover:bg-[#FFD7C7]">Pause Tournaments</button>` : ''}
+        ${tournamentEnabled && tournamentPaused ? `<button type="button" data-tournament-resume="${slug}" class="h-9 px-3.5 rounded-full bg-[#E8F5D8] text-[#3F7019] border border-[#CFE8B5] mono text-[10px] font-[700] cursor-pointer">Resume Tournaments</button>` : ''}
+        ${tournamentEnabled ? `<button type="button" data-tournament-remove="${slug}" class="h-9 px-3.5 rounded-full bg-white border border-[#EAE0D5] mono text-[10px] font-[700] cursor-pointer hover:border-[#201C19]">Remove Tournaments</button>` : ''}
+      </div>
+    </div>
+    <div class="mt-2 mono text-[10px] opacity-50">${tournamentEnabled ? 'Managed from the tenant\'s own Admin Console (Tournaments tab) -- no separate PIN.' : 'Uses the tenant\'s existing Admin PIN once added -- no separate PIN to provision.'}</div>
+  `;
+
+  wrap.querySelector(`[data-tournament-add="${cssAttr(slug)}"]`)?.addEventListener('click', async (e) => {
+    e.target.disabled = true;
+    try {
+      await db.doc(`clients/${slug}/status/state`).set({
+        data: { tournamentEnabled: true, tournamentPaused: false },
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+      await logAudit('tournament-add', slug, `Tournaments added for ${data.businessName || slug}`);
+      toast(`Tournaments added for ${data.businessName || slug}`);
+      renderTournamentWidget(slug, data, { tournamentEnabled: true, tournamentPaused: false });
+    } catch(ex) { toast('Failed: ' + ex.message); e.target.disabled = false; }
+  });
+  wrap.querySelector(`[data-tournament-pause="${cssAttr(slug)}"]`)?.addEventListener('click', async () => {
+    try {
+      await db.doc(`clients/${slug}/status/state`).set({
+        data: { tournamentPaused: true },
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+      await logAudit('tournament-pause', slug, `Tournaments paused for ${data.businessName || slug} (Booking/Store unaffected; already-published tournaments stay visible)`);
+      toast(`Tournaments paused for ${data.businessName || slug}`);
+      renderTournamentWidget(slug, data, { tournamentEnabled: true, tournamentPaused: true });
+    } catch(ex) { toast('Failed: ' + ex.message); }
+  });
+  wrap.querySelector(`[data-tournament-resume="${cssAttr(slug)}"]`)?.addEventListener('click', async () => {
+    try {
+      await db.doc(`clients/${slug}/status/state`).set({
+        data: { tournamentPaused: false },
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+      await logAudit('tournament-resume', slug, `Tournaments resumed for ${data.businessName || slug}`);
+      toast(`Tournaments resumed for ${data.businessName || slug}`);
+      renderTournamentWidget(slug, data, { tournamentEnabled: true, tournamentPaused: false });
+    } catch(ex) { toast('Failed: ' + ex.message); }
+  });
+  wrap.querySelector(`[data-tournament-remove="${cssAttr(slug)}"]`)?.addEventListener('click', async () => {
+    if(!confirm(`Remove the Tournaments add-on for ${data.businessName || slug}? Existing tournament data is kept, not deleted -- this only revokes access to create/manage new ones. Re-adding later restores it.`)) return;
+    try {
+      await db.doc(`clients/${slug}/status/state`).set({
+        data: { tournamentEnabled: false, tournamentPaused: false },
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+      await logAudit('tournament-remove', slug, `Tournaments removed for ${data.businessName || slug}`);
+      toast(`Tournaments removed for ${data.businessName || slug}`);
+      renderTournamentWidget(slug, data, { tournamentEnabled: false, tournamentPaused: false });
+    } catch(ex) { toast('Failed: ' + ex.message); }
+  });
+}
+
 async function provisionTenantDefaults(slug, name, color, pin, watermarkUrl){
   const stamp = () => ({ updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
   const pinHash = await hashPin(pin);
@@ -1535,6 +1626,8 @@ const AUDIT_ACTION_LABELS = {
   'store-add': 'Added Store add-on', 'store-pause': 'Paused Store add-on', 'store-resume': 'Resumed Store add-on',
   'store-remove': 'Removed Store add-on', 'store-pin-reset': 'Reset Store PIN',
   'store-seed-products': 'Loaded sample Store products', 'store-wipe-products': 'Wiped sample Store products',
+  'tournament-add': 'Added Tournaments add-on', 'tournament-pause': 'Paused Tournaments add-on',
+  'tournament-resume': 'Resumed Tournaments add-on', 'tournament-remove': 'Removed Tournaments add-on',
 };
 async function loadAuditLog(){
   const list = document.getElementById('auditLogList');

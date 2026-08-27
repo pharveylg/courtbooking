@@ -911,6 +911,15 @@
         <div id="storeAdminActionWrap" class="shrink-0"></div>
       </div>
 
+      <!-- Pickle Court Tournaments (premium add-on entry point) -->
+      <div class="rounded-full bg-white border border-[#EAE0D5] pl-2 pr-2.5 h-12 flex items-center justify-between gap-3 mb-4 md:mb-5">
+        <div class="flex items-center gap-2 min-w-0">
+          <span class="mono text-[9px] uppercase tracking-widest font-[800] px-2.5 h-7 grid place-items-center rounded-full bg-[#201C19] text-[#D6FF5F] shrink-0">Add-on</span>
+          <span class="font-[750] text-[13px] truncate">Pickle Court Tournaments</span>
+        </div>
+        <div id="tournamentAdminActionWrap" class="shrink-0"></div>
+      </div>
+
       <div class="grid grid-cols-12 gap-4 md:gap-5">
         <!-- Left column: Bookings Manager + QR Code Upload Manager -->
         <div class="col-span-12 lg:col-span-8 flex flex-col gap-4 md:gap-5">
@@ -1432,6 +1441,8 @@ const _cfgDefaults = {
   bookingPaused: false,
   storeEnabled: false,
   storePaused: false,
+  tournamentEnabled: false,
+  tournamentPaused: false,
 };
 function _deepMerge(base, over){
   const out = {...base};
@@ -1793,7 +1804,7 @@ function normalizeClientConfig(raw) {
    ID." Always fetched fresh; caching a pause flag would let a paused
    tenant keep operating from a stale cache, which defeats the point. ---------- */
 async function loadTenantStatus(){
-  const fallback = { bookingPaused: false, storeEnabled: false, storePaused: false };
+  const fallback = { bookingPaused: false, storeEnabled: false, storePaused: false, tournamentEnabled: false, tournamentPaused: false };
   if (!currentClientId || !db) return fallback;
   try {
     const snap = await db.doc(`clients/${currentClientId}/status/state`).get();
@@ -1882,6 +1893,8 @@ async function refreshClientConfigFromCloud(){
     CLIENT.bookingPaused = nowPaused;
     CLIENT.storeEnabled = !!status.storeEnabled;
     CLIENT.storePaused = !!status.storePaused;
+    CLIENT.tournamentEnabled = !!status.tournamentEnabled;
+    CLIENT.tournamentPaused = !!status.tournamentPaused;
     applyTheme();
     computeSchedule();
     computeHours();
@@ -1889,6 +1902,7 @@ async function refreshClientConfigFromCloud(){
     renderSchedule();
     renderDateSlotPreview();
     if (typeof renderStoreAdminCard === 'function' && adminUnlocked) renderStoreAdminCard();
+    if (typeof renderTournamentAdminCard === 'function' && adminUnlocked) renderTournamentAdminCard();
     console.log('[CourtBooking] Tenant config changed since last visit -- refreshed');
   } catch(e) {
     console.warn('[CourtBooking] Background config refresh failed:', e.message);
@@ -3324,6 +3338,23 @@ function renderStoreAdminCard(){
     return;
   }
   const label = CLIENT.storePaused ? 'Paused — contact operator' : 'Not enabled — contact support';
+  actionWrap.innerHTML = `<span class="mono text-[10px] px-3 h-7 rounded-full bg-[#F1E9DF] text-[#201C19]/60 font-[700] grid place-items-center whitespace-nowrap">${label}</span>`;
+}
+
+/* ---------- Pickle Court Tournaments entry point (Admin Console) ----------
+   Same independent-entitlement pattern as Store (tournamentEnabled/
+   tournamentPaused on clients/{id}/status/state, superadmin-only writes).
+   The management dashboard itself ships in a later phase, so an enabled
+   tenant sees an active-but-not-yet-built note rather than a dead link. ---------- */
+function renderTournamentAdminCard(){
+  const actionWrap = document.getElementById('tournamentAdminActionWrap');
+  if(!actionWrap) return;
+
+  if(CLIENT.tournamentEnabled && !CLIENT.tournamentPaused){
+    actionWrap.innerHTML = `<span class="mono text-[10px] px-3 h-7 rounded-full bg-[#E8F5D8] text-[#3F7019] font-[700] grid place-items-center whitespace-nowrap">Active — dashboard coming soon</span>`;
+    return;
+  }
+  const label = CLIENT.tournamentPaused ? 'Paused — contact operator' : 'Not enabled — contact support';
   actionWrap.innerHTML = `<span class="mono text-[10px] px-3 h-7 rounded-full bg-[#F1E9DF] text-[#201C19]/60 font-[700] grid place-items-center whitespace-nowrap">${label}</span>`;
 }
 
@@ -6427,6 +6458,8 @@ async function initializeApp() {
   CLIENT.bookingPaused = !!tenantStatus.bookingPaused;
   CLIENT.storeEnabled = !!tenantStatus.storeEnabled;
   CLIENT.storePaused = !!tenantStatus.storePaused;
+  CLIENT.tournamentEnabled = !!tenantStatus.tournamentEnabled;
+  CLIENT.tournamentPaused = !!tenantStatus.tournamentPaused;
   applyTheme();              // re-apply theme CSS with the tenant's colors
   computeSchedule();         // recompute SCHED/STAFF_DAYS from the tenant's hours
   computeHours();            // recompute HOURS/ALL_HOURS_START from SCHED
@@ -6483,6 +6516,7 @@ updateAdminTabsVisibility = function() {
     if (typeof renderAdminCourts === 'function') renderAdminCourts();
     if (typeof renderAdminBranding === 'function') renderAdminBranding();
     if (typeof renderStoreAdminCard === 'function') renderStoreAdminCard();
+    if (typeof renderTournamentAdminCard === 'function') renderTournamentAdminCard();
     armProofWatcher();                    // start Firebase Storage housekeeping on first unlock
     renderPaymentProofsQueue();           // populate the Admin payment review queue
     populateCourtSelectors();             // refresh court dropdowns

@@ -199,6 +199,82 @@ service cloud.firestore {
         allow read: if isValidTenantId(clientId);
         allow write: if isValidTenantId(clientId);
       }
+
+      // Pickle Court Tournaments: entitlement flags (tournamentEnabled/
+      // tournamentPaused) live on status/state above, alongside Booking's
+      // and Store's -- independent per-product, superadmin-only writes.
+      //
+      // Tournament/division metadata, registrations, participants, gallery
+      // photos and upload tokens follow this app's existing open-per-tenant
+      // trust level (no auth system exists to gate further on, same as
+      // every collection above).
+      match /tournaments/{document} {
+        allow read: if isValidTenantId(clientId);
+        allow write: if isValidTenantId(clientId);
+      }
+      match /tournaments/{tournamentId}/divisions/{document} {
+        allow read: if isValidTenantId(clientId);
+        allow write: if isValidTenantId(clientId);
+      }
+      match /tournaments/{tournamentId}/registrations/{document} {
+        allow read: if isValidTenantId(clientId);
+        allow write: if isValidTenantId(clientId);
+      }
+      match /tournaments/{tournamentId}/participants/{document} {
+        allow read: if isValidTenantId(clientId);
+        allow write: if isValidTenantId(clientId);
+      }
+      match /tournaments/{tournamentId}/photos/{document} {
+        allow read: if isValidTenantId(clientId);
+        allow write: if isValidTenantId(clientId);
+      }
+      match /tournaments/{tournamentId}/uploadTokens/{document} {
+        allow read: if isValidTenantId(clientId);
+        allow write: if isValidTenantId(clientId);
+      }
+
+      // Matches and standings are the one place in this whole app where a
+      // direct client write is deliberately NOT allowed. A bracket's next
+      // round is literally built from the previous round's recorded
+      // winners -- two browsers racing to "advance" from stale local state
+      // can corrupt the tree's structure, not just its data, and unlike a
+      // fake booking or sale this isn't easily reversible. These are
+      // written only by trusted (Admin SDK) server code -- see the
+      // tournament engine's Cloud Functions, not shipped in this phase.
+      // Reads stay open, matching the rest of the app.
+      match /tournaments/{tournamentId}/matches/{document} {
+        allow read: if isValidTenantId(clientId);
+        allow write: if false;
+      }
+      match /tournaments/{tournamentId}/standings/{document} {
+        allow read: if isValidTenantId(clientId);
+        allow write: if false;
+      }
+
+      // Append-only audit trail for tournament actions (score corrections,
+      // withdrawals, cancellations) -- create allowed, update/delete denied,
+      // same shape as platformAuditLog above.
+      match /tournaments/{tournamentId}/auditLog/{document} {
+        allow read: if isValidTenantId(clientId);
+        allow create: if isValidTenantId(clientId);
+        allow update, delete: if false;
+      }
+    }
+
+    // Cross-tenant player identity, keyed by a phone-derived id -- reused
+    // across tenants so a dual-meet or a player with membership at two
+    // clubs is the same record, not a duplicate per tenant. This app has
+    // no per-person auth system to gate reads/writes on (same limitation
+    // as every collection above), so the one enforceable boundary rules
+    // can actually give here is used: `get` (fetch a single already-known
+    // id) is allowed, but `list` (browse/scan every player) is denied --
+    // a lookup still requires already knowing/deriving the id from a
+    // phone number, it just can't be used to enumerate the collection.
+    match /platformPlayers/{playerId} {
+      allow get: if true;
+      allow list: if false;
+      allow create, update: if true;
+      allow delete: if false;
     }
     
     // Legacy single-tenant structure (for backward compatibility during migration)

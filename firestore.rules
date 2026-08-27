@@ -108,6 +108,25 @@ service cloud.firestore {
         allow write: if isValidTenantId(clientId);
       }
 
+      // Pickle Court Store: product catalog (single array doc, same
+      // pattern as courts/pricing), sales ledger, and inventory movement
+      // log (one doc per entry, same reasoning as the platform events
+      // ledger -- append-heavy, no benefit to loading full history just
+      // to make a sale). Same open per-tenant trust level as the rest of
+      // this app; only the Store entitlement itself is superadmin-gated.
+      match /storeProducts/{document} {
+        allow read: if isValidTenantId(clientId);
+        allow write: if isValidTenantId(clientId);
+      }
+      match /storeSales/{document} {
+        allow read: if isValidTenantId(clientId);
+        allow write: if isValidTenantId(clientId);
+      }
+      match /storeInventoryLog/{document} {
+        allow read: if isValidTenantId(clientId);
+        allow write: if isValidTenantId(clientId);
+      }
+
       // Bookings subcollection
       match /bookings/{document} {
         allow read: if isValidTenantId(clientId);

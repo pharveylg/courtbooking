@@ -14,19 +14,175 @@
 <style>
 *{font-family:"Bricolage Grotesque",system-ui,sans-serif}
 .mono{font-family:"JetBrains Mono",monospace}
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-thumb{background:#e5ddd4;border-radius:999px}
 </style>
 </head>
-<body class="bg-[#FFFBF5] text-[#201C19] antialiased min-h-screen grid place-items-center p-6">
+<body class="bg-[#FFFBF5] text-[#201C19] antialiased">
 
-<div class="w-full max-w-[440px] rounded-[28px] bg-white border border-[#EAE0D5] shadow-[0_20px_60px_rgba(32,28,25,0.1)] p-7 md:p-9 text-center">
-  <div id="storeLogo" class="mx-auto w-14 h-14 rounded-full bg-[#201C19] text-white grid place-items-center font-black text-[16px] overflow-hidden">PS</div>
-  <div id="storeStateWrap">
-    <p class="mt-5 mono text-[12px] opacity-60">Loading Store...</p>
+<!-- Gate screen: not-available / paused / PIN entry -->
+<div id="gateScreen" class="min-h-screen grid place-items-center p-6">
+  <div class="w-full max-w-[440px] rounded-[28px] bg-white border border-[#EAE0D5] shadow-[0_20px_60px_rgba(32,28,25,0.1)] p-7 md:p-9 text-center">
+    <div id="storeLogo" class="mx-auto w-14 h-14 rounded-full bg-[#201C19] text-white grid place-items-center font-black text-[16px] overflow-hidden">PS</div>
+    <div id="storeStateWrap">
+      <p class="mt-5 mono text-[12px] opacity-60">Loading Store...</p>
+    </div>
+  </div>
+</div>
+
+<!-- Main app: shown once the PIN gate is passed -->
+<div id="appScreen" class="hidden">
+  <header class="sticky top-0 z-30 backdrop-blur-xl bg-[#FFFBF5]/90 border-b border-[#EAE0D5]">
+    <div class="max-w-[1200px] mx-auto px-4 h-16 flex items-center justify-between gap-3 flex-wrap">
+      <div class="flex items-center gap-2.5 shrink-0">
+        <div class="w-9 h-9 rounded-full bg-[#201C19] text-white grid place-items-center font-black text-[13px]">PS</div>
+        <div>
+          <div id="appBizName" class="font-[800] text-[14px] leading-none"></div>
+          <div class="mono text-[9px] uppercase tracking-widest opacity-50">Pickle Court Store</div>
+        </div>
+      </div>
+      <nav class="flex items-center gap-1 bg-[#F1E9DF] p-1 rounded-full overflow-x-auto no-scrollbar">
+        <button data-store-tab="pos" class="store-tab-btn shrink-0 px-3.5 h-8 rounded-full mono text-[11px] font-[700] transition cursor-pointer">POS</button>
+        <button data-store-tab="products" class="store-tab-btn shrink-0 px-3.5 h-8 rounded-full mono text-[11px] font-[700] transition cursor-pointer">Products</button>
+        <button data-store-tab="inventory" class="store-tab-btn shrink-0 px-3.5 h-8 rounded-full mono text-[11px] font-[700] transition cursor-pointer">Inventory</button>
+        <button data-store-tab="reports" class="store-tab-btn shrink-0 px-3.5 h-8 rounded-full mono text-[11px] font-[700] transition cursor-pointer">Reports</button>
+      </nav>
+      <button id="lockBtn" class="h-9 px-3.5 rounded-full bg-white border border-[#EAE0D5] mono text-[11px] font-[700] cursor-pointer hover:border-[#201C19] transition shrink-0">🔒 Lock</button>
+    </div>
+  </header>
+
+  <main class="max-w-[1200px] mx-auto px-4 py-6">
+    <!-- POS -->
+    <section id="view-pos" class="store-view grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-5">
+      <div class="rounded-[24px] bg-white border border-[#EAE0D5] p-5">
+        <input id="posSearch" placeholder="Search products..." class="w-full h-11 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-4 mono text-[13px] outline-none focus:border-[#201C19]"/>
+        <div id="posCategoryChips" class="mt-3 flex flex-wrap gap-1.5"></div>
+        <div id="posProductGrid" class="mt-4 grid grid-cols-2 md:grid-cols-3 gap-2.5"></div>
+      </div>
+      <div class="rounded-[24px] bg-white border border-[#EAE0D5] p-5 h-fit">
+        <div class="font-[800] text-[15px]">Cart</div>
+        <div id="posCart" class="mt-3 space-y-2 max-h-[360px] overflow-y-auto">
+          <div class="mono text-[11px] opacity-50 text-center py-6">Cart is empty</div>
+        </div>
+        <div class="mt-4 pt-4 border-t border-[#F1E9DF] flex items-center justify-between">
+          <span class="mono text-[11px] uppercase tracking-widest opacity-60">Total</span>
+          <span id="posTotal" class="text-[22px] font-[800]">₱0.00</span>
+        </div>
+        <label class="mt-3 flex flex-col gap-1.5">
+          <span class="mono text-[9px] uppercase tracking-widest opacity-50">Payment Method</span>
+          <select id="posPaymentMethod" class="w-full h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-3 mono text-[12px] font-[700] outline-none focus:border-[#201C19]">
+            <option>Cash</option>
+            <option>GCash</option>
+            <option>Maya</option>
+            <option>Bank Transfer</option>
+            <option>Card</option>
+            <option>Other</option>
+          </select>
+        </label>
+        <button id="posCompleteBtn" class="mt-3 w-full h-12 rounded-full bg-[#201C19] text-white font-[800] text-[13px] cursor-pointer hover:opacity-90 active:scale-[0.98] transition">Complete Sale</button>
+      </div>
+    </section>
+
+    <!-- Products -->
+    <section id="view-products" class="store-view hidden">
+      <div class="flex items-center justify-between mb-4 flex-wrap gap-2">
+        <h2 class="text-[18px] font-[800] tracking-[-0.02em]">Products</h2>
+        <button id="addProductBtn" class="h-9 px-4 rounded-full bg-[#D6FF5F] hover:bg-[#CBF052] text-[#201C19] font-[800] text-[12px] border border-[#201C19]/10 transition cursor-pointer">+ Add Product</button>
+      </div>
+      <form id="productForm" class="hidden mb-5 p-5 rounded-[20px] bg-white border border-[#EAE0D5] grid grid-cols-1 md:grid-cols-2 gap-3">
+        <input type="hidden" id="pfId"/>
+        <label class="flex flex-col gap-1.5">
+          <span class="mono text-[10px] uppercase tracking-widest opacity-60">Name</span>
+          <input id="pfName" required class="h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-4 mono text-[12px] outline-none focus:border-[#201C19]"/>
+        </label>
+        <label class="flex flex-col gap-1.5">
+          <span class="mono text-[10px] uppercase tracking-widest opacity-60">SKU</span>
+          <input id="pfSku" class="h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-4 mono text-[12px] outline-none focus:border-[#201C19]"/>
+        </label>
+        <label class="flex flex-col gap-1.5">
+          <span class="mono text-[10px] uppercase tracking-widest opacity-60">Category</span>
+          <input id="pfCategory" placeholder="e.g. Drinks" class="h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-4 mono text-[12px] outline-none focus:border-[#201C19]"/>
+        </label>
+        <label class="flex flex-col gap-1.5">
+          <span class="mono text-[10px] uppercase tracking-widest opacity-60">Unit</span>
+          <input id="pfUnit" placeholder="e.g. bottle, pack, pc" class="h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-4 mono text-[12px] outline-none focus:border-[#201C19]"/>
+        </label>
+        <label class="flex flex-col gap-1.5">
+          <span class="mono text-[10px] uppercase tracking-widest opacity-60">Selling Price (₱)</span>
+          <input type="number" id="pfPrice" min="0" step="0.01" required class="h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-4 mono text-[12px] font-[700] outline-none focus:border-[#201C19]"/>
+        </label>
+        <label class="flex flex-col gap-1.5">
+          <span class="mono text-[10px] uppercase tracking-widest opacity-60">Unit Cost (₱)</span>
+          <input type="number" id="pfCost" min="0" step="0.01" class="h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-4 mono text-[12px] font-[700] outline-none focus:border-[#201C19]"/>
+        </label>
+        <label class="flex flex-col gap-1.5">
+          <span class="mono text-[10px] uppercase tracking-widest opacity-60">Starting Stock <span id="pfStockNote" class="normal-case opacity-60"></span></span>
+          <input type="number" id="pfStock" min="0" step="1" class="h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-4 mono text-[12px] font-[700] outline-none focus:border-[#201C19]"/>
+        </label>
+        <label class="flex flex-col gap-1.5">
+          <span class="mono text-[10px] uppercase tracking-widest opacity-60">Low-Stock Threshold</span>
+          <input type="number" id="pfThreshold" min="0" step="1" value="5" class="h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-4 mono text-[12px] font-[700] outline-none focus:border-[#201C19]"/>
+        </label>
+        <label class="flex items-center gap-2 md:col-span-2">
+          <input type="checkbox" id="pfActive" checked class="w-4 h-4"/>
+          <span class="mono text-[11px]">Active (visible in POS)</span>
+        </label>
+        <label class="flex flex-col gap-1.5 md:col-span-2">
+          <span class="mono text-[10px] uppercase tracking-widest opacity-60">Description (optional)</span>
+          <input id="pfDescription" class="h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-4 mono text-[12px] outline-none focus:border-[#201C19]"/>
+        </label>
+        <div class="flex gap-2 md:col-span-2">
+          <button type="submit" class="h-10 px-4 rounded-full bg-[#201C19] text-white mono text-[11px] font-[700] cursor-pointer">Save Product</button>
+          <button type="button" id="cancelProductFormBtn" class="h-10 px-4 rounded-full bg-white border border-[#EAE0D5] mono text-[11px] font-[700] cursor-pointer">Cancel</button>
+        </div>
+      </form>
+      <div id="productList" class="rounded-[24px] bg-white border border-[#EAE0D5] divide-y divide-[#F5EDE4]"></div>
+    </section>
+
+    <!-- Inventory -->
+    <section id="view-inventory" class="store-view hidden">
+      <div class="rounded-[24px] bg-white border border-[#EAE0D5] overflow-hidden mb-5">
+        <div class="px-5 h-[56px] flex items-center border-b border-[#F1E9DF] font-[750] text-[14px]">Stock Levels</div>
+        <div id="inventoryStockList" class="divide-y divide-[#F5EDE4]"></div>
+      </div>
+      <div class="rounded-[24px] bg-white border border-[#EAE0D5] overflow-hidden">
+        <div class="px-5 h-[56px] flex items-center justify-between border-b border-[#F1E9DF]">
+          <div class="font-[750] text-[14px]">Recent Movements</div>
+          <button id="refreshInventoryLogBtn" class="h-8 px-3.5 rounded-full bg-white border border-[#EAE0D5] mono text-[10px] font-[700] cursor-pointer hover:border-[#201C19]">Refresh</button>
+        </div>
+        <div id="inventoryLogList" class="divide-y divide-[#F5EDE4] max-h-[420px] overflow-y-auto"></div>
+      </div>
+    </section>
+
+    <!-- Reports -->
+    <section id="view-reports" class="store-view hidden">
+      <div id="reportsSummary" class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5"></div>
+      <div class="rounded-[24px] bg-white border border-[#EAE0D5] overflow-hidden mb-5">
+        <div class="px-5 h-[56px] flex items-center border-b border-[#F1E9DF] font-[750] text-[14px]">Sales by Product</div>
+        <div id="salesByProductList" class="divide-y divide-[#F5EDE4]"></div>
+      </div>
+      <div class="rounded-[24px] bg-white border border-[#EAE0D5] overflow-hidden">
+        <div class="px-5 h-[56px] flex items-center justify-between border-b border-[#F1E9DF]">
+          <div class="font-[750] text-[14px]">Sales History</div>
+          <button id="refreshSalesBtn" class="h-8 px-3.5 rounded-full bg-white border border-[#EAE0D5] mono text-[10px] font-[700] cursor-pointer hover:border-[#201C19]">Refresh</button>
+        </div>
+        <div id="salesHistoryList" class="divide-y divide-[#F5EDE4] max-h-[500px] overflow-y-auto"></div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- Toast -->
+<div id="toast" class="fixed bottom-5 left-1/2 -translate-x-1/2 z-[60] hidden">
+  <div class="px-5 h-11 rounded-full bg-[#201C19] text-white shadow-[0_12px_30px_rgba(0,0,0,0.25)] mono text-[12px] font-[600] grid place-items-center">
+    <span id="toastText">Saved</span>
   </div>
 </div>
 
 <script>
-/* ---------- Tenant resolution (mirrors index.html's getCurrentTenant) ---------- */
+/* ================================================================
+   TENANT RESOLUTION + FIREBASE INIT
+   ================================================================ */
 function getCurrentTenant(){
   const urlParams = new URLSearchParams(window.location.search);
   const queryClient = urlParams.get('client');
@@ -43,41 +199,50 @@ if (FB_ENABLED) {
   catch(e) { console.warn('[PickleStore] Firebase init failed:', e.message); }
 }
 
-function escapeHtml(s){ return (s||'').replace(/[&<>"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+function escapeHtml(s){ return (s==null?'':String(s)).replace(/[&<>"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+function fmtMoney(n){ return '₱' + Number(n||0).toLocaleString('en-PH', {minimumFractionDigits:2, maximumFractionDigits:2}); }
+function genId(prefix){ return `${prefix}_${Date.now().toString(36)}${Math.random().toString(36).slice(2,7)}`; }
 async function hashPin(pin){
   const encoder = new TextEncoder();
   const data = encoder.encode(pin + 'picklecourt-salt-2024');
   const hashBuffer = await crypto.subtle.digest('SHA-256', data);
   return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
 }
+function toast(msg){
+  const t = document.getElementById('toast');
+  document.getElementById('toastText').textContent = msg;
+  t.classList.remove('hidden');
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => t.classList.add('hidden'), 2600);
+}
+const LS_UNLOCKED = () => `pcs_store_unlocked_${currentClientId}`;
 
-function renderState(html){
+/* ================================================================
+   GATE SCREEN: not-added / paused / PIN entry
+   ================================================================ */
+function renderGateState(html){
   document.getElementById('storeStateWrap').innerHTML = html;
 }
-
 function renderNoTenant(){
-  renderState(`
+  renderGateState(`
     <h1 class="mt-5 text-[20px] font-[800] tracking-[-0.02em]">No Facility Selected</h1>
     <p class="mt-2.5 mono text-[12px] leading-[1.6] opacity-70">Open this page with <code class="bg-[#F1E9DF] px-1.5 py-0.5 rounded">?client=yourfacility</code> in the URL.</p>
   `);
 }
-
 function renderNotAvailable(bizName){
-  renderState(`
+  renderGateState(`
     <h1 class="mt-5 text-[20px] font-[800] tracking-[-0.02em]">Store Not Available</h1>
     <p class="mt-2.5 mono text-[12px] leading-[1.6] opacity-70">${escapeHtml(bizName)} hasn't added Pickle Court Store yet. This is separate from their booking page, which is unaffected either way.</p>
   `);
 }
-
 function renderPaused(bizName){
-  renderState(`
+  renderGateState(`
     <h1 class="mt-5 text-[20px] font-[800] tracking-[-0.02em]">Store Paused</h1>
     <p class="mt-2.5 mono text-[12px] leading-[1.6] opacity-70">${escapeHtml(bizName)}'s Store has been temporarily paused by the platform operator. Their booking page is unaffected -- this pause is Store-only.</p>
   `);
 }
-
 function renderPinGate(bizName){
-  renderState(`
+  renderGateState(`
     <h1 class="mt-5 text-[20px] font-[800] tracking-[-0.02em]">${escapeHtml(bizName)} Store</h1>
     <p class="mt-2.5 mono text-[12px] leading-[1.6] opacity-70">Enter the Store staff PIN to continue. This is separate from the facility's Booking Admin PIN.</p>
     <form id="storePinForm" class="mt-5 space-y-3">
@@ -91,11 +256,10 @@ function renderPinGate(bizName){
     const input = document.getElementById('storePinInput');
     const err = document.getElementById('storePinError');
     try {
-      const snap = await db.doc(`clients/${currentClientId}/storeSettings/state`).get();
-      const storedHash = snap.exists && snap.data().data && snap.data().data.pin;
-      const inputHash = await hashPin(input.value.trim());
-      if(storedHash && inputHash === storedHash){
-        renderUnlocked(bizName);
+      const ok = await verifyStorePin(input.value.trim());
+      if(ok){
+        sessionStorage.setItem(LS_UNLOCKED(), 'true');
+        enterApp(bizName);
       } else {
         err.textContent = 'Incorrect PIN.';
         err.classList.remove('hidden');
@@ -106,18 +270,623 @@ function renderPinGate(bizName){
     }
   });
 }
-
-function renderUnlocked(bizName){
-  renderState(`
-    <h1 class="mt-5 text-[20px] font-[800] tracking-[-0.02em]">${escapeHtml(bizName)} Store</h1>
-    <div class="mt-3 inline-flex items-center gap-2 px-3 h-7 rounded-full bg-[#E8F5D8] border border-[#CFE8B5] mono text-[11px] font-[700] text-[#3F7019]">Access Granted</div>
-    <p class="mt-4 mono text-[12px] leading-[1.6] opacity-70">The product catalog, POS, and inventory screens aren't built yet -- this confirms the Store entitlement and PIN gate are wired up correctly. Point of sale is next.</p>
-  `);
+async function verifyStorePin(inputPin){
+  const snap = await db.doc(`clients/${currentClientId}/storeSettings/state`).get();
+  const storedHash = snap.exists && snap.data().data && snap.data().data.pin;
+  if(!storedHash) return false;
+  const inputHash = await hashPin(inputPin);
+  return inputHash === storedHash;
 }
 
+/* ================================================================
+   MAIN APP
+   ================================================================ */
+let PRODUCTS = [];
+let CART = []; // {productId, name, qty, unitPrice, unitCost, stock}
+let BIZ_NAME = '';
+
+function enterApp(bizName){
+  BIZ_NAME = bizName;
+  document.getElementById('gateScreen').classList.add('hidden');
+  document.getElementById('appScreen').classList.remove('hidden');
+  document.getElementById('appBizName').textContent = bizName;
+  loadProducts().then(() => { renderPOS(); renderProducts(); renderInventory(); });
+  renderReports();
+  showStoreTab('pos');
+}
+document.getElementById('lockBtn').addEventListener('click', () => {
+  sessionStorage.removeItem(LS_UNLOCKED());
+  location.reload();
+});
+
+/* ---------- Tabs ---------- */
+function showStoreTab(tab){
+  document.querySelectorAll('.store-view').forEach(v => v.classList.toggle('hidden', v.id !== `view-${tab}`));
+  document.querySelectorAll('.store-tab-btn').forEach(b => {
+    const active = b.dataset.storeTab === tab;
+    b.classList.toggle('bg-[#201C19]', active);
+    b.classList.toggle('text-white', active);
+    b.classList.toggle('opacity-70', !active);
+  });
+  if(tab === 'inventory') loadInventoryLog();
+  if(tab === 'reports') loadSalesAndRenderReports();
+}
+document.querySelectorAll('.store-tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => showStoreTab(btn.dataset.storeTab));
+});
+
+/* ================================================================
+   PRODUCTS (clients/{id}/storeProducts/state -- single array doc,
+   same "small collection, one doc" pattern as courts/pricing)
+   ================================================================ */
+async function loadProducts(){
+  try {
+    const snap = await db.doc(`clients/${currentClientId}/storeProducts/state`).get();
+    PRODUCTS = (snap.exists && snap.data().data) || [];
+  } catch(ex) { console.warn('[PickleStore] Failed to load products:', ex.message); PRODUCTS = []; }
+}
+async function saveProducts(){
+  await db.doc(`clients/${currentClientId}/storeProducts/state`).set({
+    data: PRODUCTS, updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  });
+}
+function stockStatus(p){
+  if(p.stock <= 0) return { label: 'Out of Stock', cls: 'bg-[#FFE9E0] text-[#8C2C10]' };
+  if(p.stock <= (p.threshold||0)) return { label: 'Low Stock', cls: 'bg-[#FFF0D6] text-[#8A5A00]' };
+  return { label: 'In Stock', cls: 'bg-[#E8F5D8] text-[#3F7019]' };
+}
+
+function renderProducts(){
+  const list = document.getElementById('productList');
+  if(PRODUCTS.length === 0){
+    list.innerHTML = `<div class="p-10 text-center mono text-[12px] opacity-50">No products yet. Add your first one above.</div>`;
+    return;
+  }
+  list.innerHTML = [...PRODUCTS].sort((a,b) => a.name.localeCompare(b.name)).map(p => {
+    const st = stockStatus(p);
+    return `
+      <div class="p-4 flex flex-wrap items-center justify-between gap-3">
+        <div class="min-w-0">
+          <div class="flex items-center gap-2 flex-wrap">
+            <span class="font-[700] text-[13px]">${escapeHtml(p.name)}</span>
+            ${p.sku ? `<span class="mono text-[9px] px-1.5 py-0.5 rounded-full bg-[#F1E9DF] text-[#201C19]/70 font-[600]">${escapeHtml(p.sku)}</span>` : ''}
+            ${p.category ? `<span class="mono text-[9px] opacity-50">${escapeHtml(p.category)}</span>` : ''}
+            <span class="mono text-[9px] px-1.5 py-0.5 rounded-full font-[700] ${st.cls}">${st.label}</span>
+            ${p.active === false ? `<span class="mono text-[9px] px-1.5 py-0.5 rounded-full bg-[#F1E9DF] text-[#201C19]/50 font-[700]">INACTIVE</span>` : ''}
+          </div>
+          <div class="mono text-[11px] opacity-60 mt-1">${fmtMoney(p.price)} sell • ${fmtMoney(p.cost)} cost • ${p.stock} ${escapeHtml(p.unit||'unit')}${p.stock===1?'':'s'} in stock</div>
+        </div>
+        <div class="flex gap-2 shrink-0">
+          <button type="button" data-edit-product="${p.id}" class="h-8 px-3.5 rounded-full bg-white border border-[#EAE0D5] mono text-[10px] font-[700] cursor-pointer hover:border-[#201C19]">Edit</button>
+          <button type="button" data-delete-product="${p.id}" class="h-8 px-3.5 rounded-full bg-[#FFE9E0] text-[#8C2C10] border border-[#FFC9B6] mono text-[10px] font-[700] cursor-pointer hover:bg-[#FFD7C7]">Delete</button>
+        </div>
+      </div>
+    `;
+  }).join('');
+  list.querySelectorAll('[data-edit-product]').forEach(btn => {
+    btn.addEventListener('click', () => openProductForm(PRODUCTS.find(p => p.id === btn.dataset.editProduct)));
+  });
+  list.querySelectorAll('[data-delete-product]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const p = PRODUCTS.find(pp => pp.id === btn.dataset.deleteProduct);
+      if(!p) return;
+      if(!confirm(`Delete "${p.name}"? This does not affect past sales history.`)) return;
+      PRODUCTS = PRODUCTS.filter(pp => pp.id !== p.id);
+      await saveProducts();
+      renderProducts(); renderPOS(); renderInventory();
+      toast('Product deleted');
+    });
+  });
+}
+function openProductForm(product){
+  const form = document.getElementById('productForm');
+  form.classList.remove('hidden');
+  document.getElementById('pfId').value = product ? product.id : '';
+  document.getElementById('pfName').value = product ? product.name : '';
+  document.getElementById('pfSku').value = product ? (product.sku||'') : '';
+  document.getElementById('pfCategory').value = product ? (product.category||'') : '';
+  document.getElementById('pfUnit').value = product ? (product.unit||'') : '';
+  document.getElementById('pfPrice').value = product ? product.price : '';
+  document.getElementById('pfCost').value = product ? product.cost : '';
+  document.getElementById('pfStock').value = product ? product.stock : 0;
+  document.getElementById('pfThreshold').value = product ? (product.threshold ?? 5) : 5;
+  document.getElementById('pfActive').checked = product ? product.active !== false : true;
+  document.getElementById('pfDescription').value = product ? (product.description||'') : '';
+  document.getElementById('pfStockNote').textContent = product ? '(edit stock via Inventory, not here)' : '';
+  document.getElementById('pfStock').disabled = !!product;
+  form.scrollIntoView({ behavior: 'smooth' });
+}
+document.getElementById('addProductBtn').addEventListener('click', () => openProductForm(null));
+document.getElementById('cancelProductFormBtn').addEventListener('click', () => {
+  document.getElementById('productForm').classList.add('hidden');
+  document.getElementById('productForm').reset();
+});
+document.getElementById('productForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const id = document.getElementById('pfId').value;
+  const price = parseFloat(document.getElementById('pfPrice').value);
+  const cost = parseFloat(document.getElementById('pfCost').value) || 0;
+  if(isNaN(price) || price < 0){ toast('Enter a valid selling price'); return; }
+  if(id){
+    const p = PRODUCTS.find(pp => pp.id === id);
+    if(!p) return;
+    p.name = document.getElementById('pfName').value.trim();
+    p.sku = document.getElementById('pfSku').value.trim();
+    p.category = document.getElementById('pfCategory').value.trim();
+    p.unit = document.getElementById('pfUnit').value.trim();
+    p.price = price;
+    p.cost = cost;
+    p.threshold = parseInt(document.getElementById('pfThreshold').value, 10) || 0;
+    p.active = document.getElementById('pfActive').checked;
+    p.description = document.getElementById('pfDescription').value.trim();
+  } else {
+    PRODUCTS.push({
+      id: genId('prod'),
+      name: document.getElementById('pfName').value.trim(),
+      sku: document.getElementById('pfSku').value.trim(),
+      category: document.getElementById('pfCategory').value.trim(),
+      unit: document.getElementById('pfUnit').value.trim(),
+      price, cost,
+      stock: parseInt(document.getElementById('pfStock').value, 10) || 0,
+      threshold: parseInt(document.getElementById('pfThreshold').value, 10) || 0,
+      active: document.getElementById('pfActive').checked,
+      description: document.getElementById('pfDescription').value.trim(),
+    });
+  }
+  await saveProducts();
+  document.getElementById('productForm').classList.add('hidden');
+  document.getElementById('productForm').reset();
+  document.getElementById('pfStock').disabled = false;
+  renderProducts(); renderPOS(); renderInventory();
+  toast('Product saved');
+});
+
+/* ================================================================
+   POS
+   ================================================================ */
+function renderPOS(){
+  const grid = document.getElementById('posProductGrid');
+  const chips = document.getElementById('posCategoryChips');
+  const search = document.getElementById('posSearch').value.trim().toLowerCase();
+  const activeCat = grid.dataset.activeCat || 'all';
+
+  const categories = ['all', ...new Set(PRODUCTS.filter(p => p.active !== false).map(p => p.category).filter(Boolean))];
+  chips.innerHTML = categories.map(c => `
+    <button type="button" data-pos-cat="${escapeHtml(c)}" class="px-3 h-7 rounded-full mono text-[10px] font-[700] transition cursor-pointer ${activeCat===c ? 'bg-[#201C19] text-white' : 'bg-white border border-[#EAE0D5] text-[#201C19] hover:border-[#201C19]'}">${c==='all'?'All':escapeHtml(c)}</button>
+  `).join('');
+  chips.querySelectorAll('[data-pos-cat]').forEach(btn => {
+    btn.addEventListener('click', () => { grid.dataset.activeCat = btn.dataset.posCat; renderPOS(); });
+  });
+
+  let visible = PRODUCTS.filter(p => p.active !== false);
+  if(activeCat !== 'all') visible = visible.filter(p => p.category === activeCat);
+  if(search) visible = visible.filter(p => p.name.toLowerCase().includes(search) || (p.sku||'').toLowerCase().includes(search));
+
+  if(visible.length === 0){
+    grid.innerHTML = `<div class="col-span-full text-center mono text-[11px] opacity-50 py-8">No products found.</div>`;
+  } else {
+    grid.innerHTML = visible.map(p => {
+      const out = p.stock <= 0;
+      return `
+      <button type="button" data-pos-add="${p.id}" ${out?'disabled':''} class="rounded-[16px] border p-3 text-left transition ${out ? 'bg-[#F1E9DF] border-[#EAE0D5] opacity-50 cursor-not-allowed' : 'bg-white border-[#EAE0D5] hover:border-[#201C19] cursor-pointer active:scale-[0.98]'}">
+        <div class="font-[700] text-[12px] truncate">${escapeHtml(p.name)}</div>
+        <div class="mono text-[11px] font-[800] mt-1">${fmtMoney(p.price)}</div>
+        <div class="mono text-[9px] opacity-50 mt-0.5">${out ? 'Out of stock' : `${p.stock} in stock`}</div>
+      </button>
+    `;
+    }).join('');
+    grid.querySelectorAll('[data-pos-add]').forEach(btn => {
+      btn.addEventListener('click', () => addToCart(btn.dataset.posAdd));
+    });
+  }
+  renderCart();
+}
+document.getElementById('posSearch').addEventListener('input', renderPOS);
+
+function addToCart(productId){
+  const p = PRODUCTS.find(pp => pp.id === productId);
+  if(!p || p.stock <= 0) return;
+  const line = CART.find(l => l.productId === productId);
+  const inCart = line ? line.qty : 0;
+  if(inCart + 1 > p.stock){ toast(`Only ${p.stock} ${p.unit||'unit'}(s) of ${p.name} in stock`); return; }
+  if(line) line.qty++;
+  else CART.push({ productId: p.id, name: p.name, unitPrice: p.price, unitCost: p.cost, qty: 1, maxStock: p.stock });
+  renderCart();
+}
+function changeCartQty(productId, delta){
+  const line = CART.find(l => l.productId === productId);
+  if(!line) return;
+  const p = PRODUCTS.find(pp => pp.id === productId);
+  const newQty = line.qty + delta;
+  if(newQty <= 0){ CART = CART.filter(l => l.productId !== productId); }
+  else if(p && newQty > p.stock){ toast(`Only ${p.stock} in stock`); return; }
+  else { line.qty = newQty; }
+  renderCart();
+}
+function renderCart(){
+  const wrap = document.getElementById('posCart');
+  if(CART.length === 0){
+    wrap.innerHTML = `<div class="mono text-[11px] opacity-50 text-center py-6">Cart is empty</div>`;
+  } else {
+    wrap.innerHTML = CART.map(l => `
+      <div class="flex items-center justify-between gap-2">
+        <div class="min-w-0">
+          <div class="font-[700] text-[12px] truncate">${escapeHtml(l.name)}</div>
+          <div class="mono text-[10px] opacity-60">${fmtMoney(l.unitPrice)} × ${l.qty} = ${fmtMoney(l.unitPrice*l.qty)}</div>
+        </div>
+        <div class="flex items-center gap-1 shrink-0">
+          <button type="button" data-cart-dec="${l.productId}" class="w-7 h-7 rounded-full bg-[#F1E9DF] hover:bg-[#E5DDD4] cursor-pointer">−</button>
+          <span class="mono text-[12px] font-[700] w-6 text-center">${l.qty}</span>
+          <button type="button" data-cart-inc="${l.productId}" class="w-7 h-7 rounded-full bg-[#F1E9DF] hover:bg-[#E5DDD4] cursor-pointer">+</button>
+        </div>
+      </div>
+    `).join('');
+    wrap.querySelectorAll('[data-cart-dec]').forEach(b => b.addEventListener('click', () => changeCartQty(b.dataset.cartDec, -1)));
+    wrap.querySelectorAll('[data-cart-inc]').forEach(b => b.addEventListener('click', () => changeCartQty(b.dataset.cartInc, 1)));
+  }
+  const total = CART.reduce((s,l) => s + l.unitPrice*l.qty, 0);
+  document.getElementById('posTotal').textContent = fmtMoney(total);
+}
+document.getElementById('posCompleteBtn').addEventListener('click', completeSale);
+
+async function completeSale(){
+  if(CART.length === 0){ toast('Cart is empty'); return; }
+  const paymentMethod = document.getElementById('posPaymentMethod').value;
+  const productsRef = db.doc(`clients/${currentClientId}/storeProducts/state`);
+  const saleRef = db.collection(`clients/${currentClientId}/storeSales`).doc();
+  const btn = document.getElementById('posCompleteBtn');
+  btn.disabled = true;
+  try {
+    await db.runTransaction(async (tx) => {
+      const snap = await tx.get(productsRef);
+      const products = (snap.exists && snap.data().data) || [];
+      // Validate stock for every line before mutating anything.
+      for(const line of CART){
+        const p = products.find(pp => pp.id === line.productId);
+        if(!p) throw new Error(`"${line.name}" no longer exists`);
+        if(p.stock < line.qty) throw new Error(`Not enough stock for "${p.name}" (have ${p.stock}, need ${line.qty})`);
+      }
+      const items = [];
+      CART.forEach(line => {
+        const p = products.find(pp => pp.id === line.productId);
+        const prevQty = p.stock;
+        p.stock -= line.qty;
+        items.push({ productId: p.id, name: p.name, qty: line.qty, unitPrice: p.price, unitCost: p.cost });
+        const logRef = db.collection(`clients/${currentClientId}/storeInventoryLog`).doc();
+        tx.set(logRef, {
+          productId: p.id, productName: p.name, type: 'sale', qtyChange: -line.qty,
+          previousQty: prevQty, newQty: p.stock, saleId: saleRef.id,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+      });
+      const subtotal = items.reduce((s,i) => s + i.qty*i.unitPrice, 0);
+      tx.set(productsRef, { data: products, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+      tx.set(saleRef, {
+        items, subtotal, total: subtotal, paymentMethod, status: 'completed',
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+    });
+    CART = [];
+    await loadProducts();
+    renderPOS(); renderProducts(); renderInventory();
+    toast('Sale completed');
+  } catch(ex) {
+    alert('Sale failed: ' + ex.message);
+  } finally { btn.disabled = false; }
+}
+
+/* ================================================================
+   INVENTORY: stock levels, receive, adjust, movement log
+   ================================================================ */
+function renderInventory(){
+  const wrap = document.getElementById('inventoryStockList');
+  if(PRODUCTS.length === 0){
+    wrap.innerHTML = `<div class="p-10 text-center mono text-[12px] opacity-50">No products yet -- add some under Products first.</div>`;
+    return;
+  }
+  wrap.innerHTML = [...PRODUCTS].sort((a,b) => a.name.localeCompare(b.name)).map(p => {
+    const st = stockStatus(p);
+    return `
+      <div class="p-4">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div class="min-w-0">
+            <div class="flex items-center gap-2 flex-wrap">
+              <span class="font-[700] text-[13px]">${escapeHtml(p.name)}</span>
+              <span class="mono text-[9px] px-1.5 py-0.5 rounded-full font-[700] ${st.cls}">${st.label}</span>
+            </div>
+            <div class="mono text-[11px] opacity-60 mt-1">${p.stock} ${escapeHtml(p.unit||'unit')}${p.stock===1?'':'s'} • ${fmtMoney(p.cost)} avg. cost • ${fmtMoney(p.stock*p.cost)} value</div>
+          </div>
+          <div class="flex gap-2 shrink-0">
+            <button type="button" data-receive="${p.id}" class="h-8 px-3.5 rounded-full bg-white border border-[#EAE0D5] mono text-[10px] font-[700] cursor-pointer hover:border-[#201C19]">Receive Stock</button>
+            <button type="button" data-adjust="${p.id}" class="h-8 px-3.5 rounded-full bg-white border border-[#EAE0D5] mono text-[10px] font-[700] cursor-pointer hover:border-[#201C19]">Adjust</button>
+          </div>
+        </div>
+        <div id="inv-inline-${p.id}" class="hidden mt-3 p-3.5 rounded-[14px] bg-[#FFFBF5] border border-[#EAE0D5]"></div>
+      </div>
+    `;
+  }).join('');
+  wrap.querySelectorAll('[data-receive]').forEach(btn => btn.addEventListener('click', () => toggleReceiveForm(btn.dataset.receive)));
+  wrap.querySelectorAll('[data-adjust]').forEach(btn => btn.addEventListener('click', () => toggleAdjustForm(btn.dataset.adjust)));
+}
+function toggleReceiveForm(productId){
+  const el = document.getElementById(`inv-inline-${productId}`);
+  const willShow = el.classList.contains('hidden');
+  document.querySelectorAll('[id^="inv-inline-"]').forEach(e => e.classList.add('hidden'));
+  if(!willShow) return;
+  el.classList.remove('hidden');
+  el.innerHTML = `
+    <div class="mono text-[10px] uppercase tracking-widest opacity-60 mb-2">Receive Stock</div>
+    <div class="flex flex-wrap gap-2 items-end">
+      <label class="flex flex-col gap-1">
+        <span class="mono text-[9px] opacity-50">Quantity Received</span>
+        <input type="number" id="recvQty-${productId}" min="1" step="1" class="h-9 w-28 rounded-full border border-[#EAE0D5] bg-white px-3 mono text-[11px] font-[700] outline-none focus:border-[#201C19]"/>
+      </label>
+      <label class="flex flex-col gap-1">
+        <span class="mono text-[9px] opacity-50">Unit Cost Paid (₱)</span>
+        <input type="number" id="recvCost-${productId}" min="0" step="0.01" class="h-9 w-28 rounded-full border border-[#EAE0D5] bg-white px-3 mono text-[11px] font-[700] outline-none focus:border-[#201C19]"/>
+      </label>
+      <button type="button" data-confirm-receive="${productId}" class="h-9 px-4 rounded-full bg-[#201C19] text-white mono text-[10px] font-[700] cursor-pointer">Confirm</button>
+    </div>
+    <div class="mono text-[9px] opacity-50 mt-2">Recomputes this product's weighted-average unit cost.</div>
+  `;
+  el.querySelector(`[data-confirm-receive="${productId}"]`).addEventListener('click', async () => {
+    const qty = parseInt(document.getElementById(`recvQty-${productId}`).value, 10);
+    const unitCost = parseFloat(document.getElementById(`recvCost-${productId}`).value);
+    if(!qty || qty <= 0){ toast('Enter a valid quantity'); return; }
+    if(isNaN(unitCost) || unitCost < 0){ toast('Enter a valid unit cost'); return; }
+    await receiveStock(productId, qty, unitCost);
+    el.classList.add('hidden');
+  });
+}
+function toggleAdjustForm(productId){
+  const el = document.getElementById(`inv-inline-${productId}`);
+  const willShow = el.classList.contains('hidden');
+  document.querySelectorAll('[id^="inv-inline-"]').forEach(e => e.classList.add('hidden'));
+  if(!willShow) return;
+  el.classList.remove('hidden');
+  el.innerHTML = `
+    <div class="mono text-[10px] uppercase tracking-widest opacity-60 mb-2">Adjust Stock</div>
+    <div class="flex flex-wrap gap-2 items-end">
+      <label class="flex flex-col gap-1">
+        <span class="mono text-[9px] opacity-50">Quantity Change (+/-)</span>
+        <input type="number" id="adjQty-${productId}" step="1" class="h-9 w-28 rounded-full border border-[#EAE0D5] bg-white px-3 mono text-[11px] font-[700] outline-none focus:border-[#201C19]"/>
+      </label>
+      <label class="flex flex-col gap-1">
+        <span class="mono text-[9px] opacity-50">Reason</span>
+        <select id="adjReason-${productId}" class="h-9 rounded-full border border-[#EAE0D5] bg-white px-3 mono text-[11px] font-[700] outline-none focus:border-[#201C19]">
+          <option>Damaged</option>
+          <option>Expired</option>
+          <option>Lost</option>
+          <option>Stock Count Correction</option>
+          <option>Other</option>
+        </select>
+      </label>
+      <button type="button" data-confirm-adjust="${productId}" class="h-9 px-4 rounded-full bg-[#201C19] text-white mono text-[10px] font-[700] cursor-pointer">Confirm</button>
+    </div>
+  `;
+  el.querySelector(`[data-confirm-adjust="${productId}"]`).addEventListener('click', async () => {
+    const delta = parseInt(document.getElementById(`adjQty-${productId}`).value, 10);
+    const reason = document.getElementById(`adjReason-${productId}`).value;
+    if(!delta){ toast('Enter a non-zero quantity change'); return; }
+    await adjustStock(productId, delta, reason);
+    el.classList.add('hidden');
+  });
+}
+async function receiveStock(productId, qtyReceived, unitCostPaid){
+  const productsRef = db.doc(`clients/${currentClientId}/storeProducts/state`);
+  try {
+    await db.runTransaction(async (tx) => {
+      const snap = await tx.get(productsRef);
+      const products = (snap.exists && snap.data().data) || [];
+      const p = products.find(pp => pp.id === productId);
+      if(!p) throw new Error('Product not found');
+      const prevQty = p.stock;
+      const prevValue = p.stock * p.cost;
+      const addedValue = qtyReceived * unitCostPaid;
+      const newQty = p.stock + qtyReceived;
+      p.cost = newQty > 0 ? (prevValue + addedValue) / newQty : unitCostPaid;
+      p.stock = newQty;
+      const logRef = db.collection(`clients/${currentClientId}/storeInventoryLog`).doc();
+      tx.set(logRef, {
+        productId: p.id, productName: p.name, type: 'receive', qtyChange: qtyReceived,
+        previousQty: prevQty, newQty: p.stock, unitCost: unitCostPaid,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      tx.set(productsRef, { data: products, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+    });
+    await loadProducts();
+    renderInventory(); renderProducts(); renderPOS();
+    toast('Stock received');
+  } catch(ex) { alert('Failed: ' + ex.message); }
+}
+async function adjustStock(productId, qtyChange, reason){
+  const productsRef = db.doc(`clients/${currentClientId}/storeProducts/state`);
+  try {
+    await db.runTransaction(async (tx) => {
+      const snap = await tx.get(productsRef);
+      const products = (snap.exists && snap.data().data) || [];
+      const p = products.find(pp => pp.id === productId);
+      if(!p) throw new Error('Product not found');
+      const prevQty = p.stock;
+      const newQty = Math.max(0, p.stock + qtyChange);
+      p.stock = newQty;
+      const logRef = db.collection(`clients/${currentClientId}/storeInventoryLog`).doc();
+      tx.set(logRef, {
+        productId: p.id, productName: p.name, type: 'adjustment', qtyChange: newQty - prevQty,
+        previousQty: prevQty, newQty, reason,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      tx.set(productsRef, { data: products, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+    });
+    await loadProducts();
+    renderInventory(); renderProducts(); renderPOS();
+    toast('Stock adjusted');
+  } catch(ex) { alert('Failed: ' + ex.message); }
+}
+const INV_LOG_LABELS = { sale: 'Sale', receive: 'Received', adjustment: 'Adjustment', void: 'Sale Voided' };
+async function loadInventoryLog(){
+  const wrap = document.getElementById('inventoryLogList');
+  wrap.innerHTML = `<div class="p-6 text-center mono text-[11px] opacity-50">Loading...</div>`;
+  try {
+    const snap = await db.collection(`clients/${currentClientId}/storeInventoryLog`).orderBy('createdAt', 'desc').limit(100).get();
+    if(snap.empty){ wrap.innerHTML = `<div class="p-10 text-center mono text-[12px] opacity-50">No movements yet.</div>`; return; }
+    wrap.innerHTML = snap.docs.map(doc => {
+      const d = doc.data();
+      const when = d.createdAt && d.createdAt.toDate ? d.createdAt.toDate().toLocaleString() : 'just now';
+      const sign = d.qtyChange > 0 ? '+' : '';
+      return `
+        <div class="p-3.5 flex items-center justify-between gap-2">
+          <div class="min-w-0">
+            <div class="font-[700] text-[12px]">${escapeHtml(d.productName)}</div>
+            <div class="mono text-[10px] opacity-60">${INV_LOG_LABELS[d.type]||d.type}${d.reason ? ` — ${escapeHtml(d.reason)}` : ''}</div>
+          </div>
+          <div class="text-right shrink-0">
+            <div class="mono text-[12px] font-[700]">${sign}${d.qtyChange}</div>
+            <div class="mono text-[9px] opacity-50">${escapeHtml(when)}</div>
+          </div>
+        </div>
+      `;
+    }).join('');
+  } catch(ex) {
+    wrap.innerHTML = `<div class="p-6 text-center mono text-[11px] text-[#8C2C10]">Failed to load: ${escapeHtml(ex.message)}</div>`;
+  }
+}
+document.getElementById('refreshInventoryLogBtn').addEventListener('click', loadInventoryLog);
+
+/* ================================================================
+   REPORTS + SALES HISTORY + VOID
+   ================================================================ */
+let SALES_CACHE = [];
+function monthStart(offset){
+  const d = new Date(); d.setMonth(d.getMonth()-offset); d.setDate(1); d.setHours(0,0,0,0);
+  return d;
+}
+async function loadSalesAndRenderReports(){
+  const wrap = document.getElementById('salesHistoryList');
+  wrap.innerHTML = `<div class="p-6 text-center mono text-[11px] opacity-50">Loading...</div>`;
+  try {
+    const since = monthStart(1); // this month + last month, same range-query pattern as superadmin reporting
+    const snap = await db.collection(`clients/${currentClientId}/storeSales`)
+      .where('createdAt', '>=', since).orderBy('createdAt', 'desc').get();
+    SALES_CACHE = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    renderReports();
+    renderSalesHistory();
+  } catch(ex) {
+    wrap.innerHTML = `<div class="p-6 text-center mono text-[11px] text-[#8C2C10]">Failed to load: ${escapeHtml(ex.message)}</div>`;
+  }
+}
+function renderSalesHistory(){
+  const wrap = document.getElementById('salesHistoryList');
+  if(SALES_CACHE.length === 0){ wrap.innerHTML = `<div class="p-10 text-center mono text-[12px] opacity-50">No sales yet this month or last.</div>`; return; }
+  wrap.innerHTML = SALES_CACHE.map(s => {
+    const when = s.createdAt && s.createdAt.toDate ? s.createdAt.toDate().toLocaleString() : 'just now';
+    const itemsLine = s.items.map(i => `${i.qty}× ${escapeHtml(i.name)}`).join(', ');
+    return `
+      <div class="p-4 flex flex-wrap items-center justify-between gap-3">
+        <div class="min-w-0">
+          <div class="flex items-center gap-2 flex-wrap">
+            <span class="font-[700] text-[13px]">${fmtMoney(s.total)}</span>
+            <span class="mono text-[9px] px-1.5 py-0.5 rounded-full font-[700] ${s.status==='voided' ? 'bg-[#FFE9E0] text-[#8C2C10]' : 'bg-[#E8F5D8] text-[#3F7019]'}">${s.status==='voided'?'VOIDED':'COMPLETED'}</span>
+            <span class="mono text-[9px] opacity-50">${escapeHtml(s.paymentMethod||'')}</span>
+          </div>
+          <div class="mono text-[11px] opacity-60 mt-1 truncate max-w-[420px]">${itemsLine}</div>
+          <div class="mono text-[9px] opacity-40 mt-0.5">${escapeHtml(when)}${s.voidReason ? ` • Void reason: ${escapeHtml(s.voidReason)}` : ''}</div>
+        </div>
+        ${s.status !== 'voided' ? `<button type="button" data-void-sale="${s.id}" class="h-8 px-3.5 rounded-full bg-white border border-[#EAE0D5] mono text-[10px] font-[700] cursor-pointer hover:border-[#201C19] shrink-0">Void</button>` : ''}
+      </div>
+    `;
+  }).join('');
+  wrap.querySelectorAll('[data-void-sale]').forEach(btn => btn.addEventListener('click', () => voidSale(btn.dataset.voidSale)));
+}
+async function voidSale(saleId){
+  const reason = prompt('Reason for voiding this sale? (required)');
+  if(!reason || !reason.trim()) return;
+  const saleRef = db.doc(`clients/${currentClientId}/storeSales/${saleId}`);
+  const productsRef = db.doc(`clients/${currentClientId}/storeProducts/state`);
+  try {
+    await db.runTransaction(async (tx) => {
+      const saleSnap = await tx.get(saleRef);
+      if(!saleSnap.exists) throw new Error('Sale not found');
+      const sale = saleSnap.data();
+      if(sale.status === 'voided') throw new Error('Already voided');
+      const prodSnap = await tx.get(productsRef);
+      const products = (prodSnap.exists && prodSnap.data().data) || [];
+      sale.items.forEach(item => {
+        const p = products.find(pp => pp.id === item.productId);
+        if(p){
+          const prevQty = p.stock;
+          p.stock += item.qty;
+          const logRef = db.collection(`clients/${currentClientId}/storeInventoryLog`).doc();
+          tx.set(logRef, {
+            productId: p.id, productName: p.name, type: 'void', qtyChange: item.qty,
+            previousQty: prevQty, newQty: p.stock, saleId, reason: reason.trim(),
+            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+          });
+        }
+      });
+      tx.set(productsRef, { data: products, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+      tx.update(saleRef, { status: 'voided', voidReason: reason.trim(), voidedAt: firebase.firestore.FieldValue.serverTimestamp() });
+    });
+    await loadProducts();
+    await loadSalesAndRenderReports();
+    renderProducts(); renderInventory(); renderPOS();
+    toast('Sale voided, stock restored');
+  } catch(ex) { alert('Void failed: ' + ex.message); }
+}
+document.getElementById('refreshSalesBtn').addEventListener('click', loadSalesAndRenderReports);
+
+function renderReports(){
+  const wrap = document.getElementById('reportsSummary');
+  const thisMonthStart = monthStart(0);
+  const completed = SALES_CACHE.filter(s => s.status !== 'voided');
+  const thisMonth = completed.filter(s => s.createdAt && s.createdAt.toDate && s.createdAt.toDate() >= thisMonthStart);
+
+  const revenue = thisMonth.reduce((sum,s) => sum + s.total, 0);
+  const unitsSold = thisMonth.reduce((sum,s) => sum + s.items.reduce((a,i)=>a+i.qty,0), 0);
+  const cogs = thisMonth.reduce((sum,s) => sum + s.items.reduce((a,i)=>a + i.qty*(i.unitCost||0), 0), 0);
+  const grossProfit = revenue - cogs;
+  const margin = revenue > 0 ? (grossProfit/revenue*100) : 0;
+  const stockValue = PRODUCTS.reduce((sum,p) => sum + p.stock*p.cost, 0);
+  const lowStockCount = PRODUCTS.filter(p => p.active !== false && p.stock > 0 && p.stock <= (p.threshold||0)).length;
+  const outOfStockCount = PRODUCTS.filter(p => p.active !== false && p.stock <= 0).length;
+
+  const card = (label, value, sub) => `
+    <div class="rounded-[18px] bg-white border border-[#EAE0D5] p-4">
+      <div class="mono text-[9px] uppercase tracking-widest opacity-50">${label}</div>
+      <div class="text-[20px] font-[800] mt-1">${value}</div>
+      ${sub ? `<div class="mono text-[10px] opacity-50 mt-0.5">${sub}</div>` : ''}
+    </div>
+  `;
+  wrap.innerHTML =
+    card('Revenue (MTD)', fmtMoney(revenue), `${thisMonth.length} sale${thisMonth.length===1?'':'s'} • ${unitsSold} units`) +
+    card('Est. Gross Profit', fmtMoney(grossProfit), `${margin.toFixed(1)}% margin • COGS ${fmtMoney(cogs)}`) +
+    card('Inventory Value', fmtMoney(stockValue), `${PRODUCTS.length} product${PRODUCTS.length===1?'':'s'} tracked`) +
+    card('Stock Alerts', `${lowStockCount + outOfStockCount}`, `${lowStockCount} low • ${outOfStockCount} out of stock`);
+
+  const byProduct = document.getElementById('salesByProductList');
+  const totals = {};
+  thisMonth.forEach(s => s.items.forEach(i => {
+    if(!totals[i.name]) totals[i.name] = { qty: 0, revenue: 0 };
+    totals[i.name].qty += i.qty;
+    totals[i.name].revenue += i.qty*i.unitPrice;
+  }));
+  const rows = Object.entries(totals).sort((a,b) => b[1].revenue - a[1].revenue);
+  byProduct.innerHTML = rows.length === 0
+    ? `<div class="p-8 text-center mono text-[12px] opacity-50">No sales this month yet.</div>`
+    : rows.map(([name, t]) => `
+      <div class="p-3.5 flex items-center justify-between">
+        <span class="font-[700] text-[12px]">${escapeHtml(name)}</span>
+        <span class="mono text-[11px] opacity-70">${t.qty} sold • ${fmtMoney(t.revenue)}</span>
+      </div>
+    `).join('');
+}
+
+/* ================================================================
+   INIT
+   ================================================================ */
 async function init(){
   if(!currentClientId){ renderNoTenant(); return; }
-  if(!db){ renderState(`<p class="mt-5 mono text-[12px] text-[#8C2C10]">Firebase is not configured.</p>`); return; }
+  if(!db){ renderGateState(`<p class="mt-5 mono text-[12px] text-[#8C2C10]">Firebase is not configured.</p>`); return; }
   try {
     const [statusSnap, configSnap] = await Promise.all([
       db.doc(`clients/${currentClientId}/status/state`).get(),
@@ -130,9 +899,10 @@ async function init(){
 
     if(!status.storeEnabled){ renderNotAvailable(bizName); return; }
     if(status.storePaused){ renderPaused(bizName); return; }
+    if(sessionStorage.getItem(LS_UNLOCKED()) === 'true'){ enterApp(bizName); return; }
     renderPinGate(bizName);
   } catch(ex) {
-    renderState(`<p class="mt-5 mono text-[12px] text-[#8C2C10]">Failed to load: ${escapeHtml(ex.message)}</p>`);
+    renderGateState(`<p class="mt-5 mono text-[12px] text-[#8C2C10]">Failed to load: ${escapeHtml(ex.message)}</p>`);
   }
 }
 init();

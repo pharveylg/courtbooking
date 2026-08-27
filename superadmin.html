@@ -1197,6 +1197,7 @@ function renderFeatureIdeaCard(id, data){
       <div class="flex gap-2 mt-3">
         <button type="button" data-fi-edit="${id}" class="h-8 px-3.5 rounded-full bg-white border border-[#EAE0D5] mono text-[10px] font-[700] cursor-pointer hover:border-[#201C19]">Edit</button>
         <button type="button" data-fi-delete="${id}" class="h-8 px-3.5 rounded-full bg-[#FFE9E0] text-[#8C2C10] border border-[#FFC9B6] mono text-[10px] font-[700] cursor-pointer hover:bg-[#FFD7C7]">Delete</button>
+        <button type="button" data-fi-copy-claude="${id}" class="h-8 px-3.5 rounded-full bg-[#201C19] text-white mono text-[10px] font-[700] cursor-pointer hover:opacity-90">Copy for Claude Code Review</button>
       </div>
     </div>
   `;
@@ -1219,6 +1220,32 @@ function renderFeatureIdeaCard(id, data){
     await db.doc(`platformFeatureIdeas/${id}`).delete();
     loadFeatureIdeas();
   });
+  card.querySelector(`[data-fi-copy-claude="${id}"]`).addEventListener('click', async () => {
+    const prompt = buildClaudeReviewPrompt(data);
+    try {
+      await navigator.clipboard.writeText(prompt);
+      toast('Copied — paste into a Claude Code session to get a review');
+    } catch(ex) {
+      toast('Copy failed: ' + ex.message);
+    }
+  });
+}
+
+/* ---------- "Copy for Claude Code Review" ----------
+   No API exists for pushing a message into a running Claude Code session
+   from a static web page -- it runs locally per-user in a terminal, not as
+   a callable service. This formats the idea into a ready-to-paste prompt
+   instead; the platform owner pastes it into whichever Claude Code session
+   they want the review to happen in. */
+function buildClaudeReviewPrompt(data){
+  return `Please review this feature idea from our platform's backlog and let me know whether it's ready to build, needs more scoping, or has concerns:
+
+Title: ${data.title || '(untitled)'}
+Status: ${data.status || 'idea'}
+Summary: ${data.summary || '(none)'}
+
+Details / Scoping Notes:
+${data.details || '(none yet)'}`;
 }
 
 /* ---------- Security tab: known risks + audit log ---------- */

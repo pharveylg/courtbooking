@@ -902,6 +902,19 @@
         </div>
       </div>
 
+      <!-- Pickle Court Store (premium add-on entry point) -->
+      <div class="rounded-[24px] bg-white border border-[#EAE0D5] p-6 shadow-xs mb-4 md:mb-5">
+        <div class="flex items-start justify-between gap-3 flex-wrap">
+          <div>
+            <div class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#201C19] text-[#D6FF5F] mono text-[10px] font-[800] uppercase tracking-widest">Premium Add-on</div>
+            <h3 class="mt-1.5 text-[18px] font-[800] tracking-[-0.02em]">Pickle Court Store</h3>
+            <p class="mono text-[11px] opacity-60 mt-0.5 max-w-[52ch]">Sell refreshments, snacks, and pickleball gear with a built-in POS, inventory, and sales reports.</p>
+          </div>
+          <div id="storeAdminActionWrap"></div>
+        </div>
+        <div id="storeAdminPreviewWrap" class="mt-4"></div>
+      </div>
+
       <div class="grid grid-cols-12 gap-4 md:gap-5">
         <!-- Left column: Bookings Manager + QR Code Upload Manager -->
         <div class="col-span-12 lg:col-span-8 flex flex-col gap-4 md:gap-5">
@@ -1421,6 +1434,8 @@ const _cfgDefaults = {
   staff: { days:[0,2,4,6], startHour:17, endHour:22, label:'STAFF' },
   booking: { maxDaysAhead:60, maxHoursPerBooking:0 },
   bookingPaused: false,
+  storeEnabled: false,
+  storePaused: false,
 };
 function _deepMerge(base, over){
   const out = {...base};
@@ -1869,12 +1884,15 @@ async function refreshClientConfigFromCloud(){
     window.CLIENT_CONFIG = fresh;
     CLIENT = _deepMerge(_cfgDefaults, fresh);
     CLIENT.bookingPaused = nowPaused;
+    CLIENT.storeEnabled = !!status.storeEnabled;
+    CLIENT.storePaused = !!status.storePaused;
     applyTheme();
     computeSchedule();
     computeHours();
     applyBranding();
     renderSchedule();
     renderDateSlotPreview();
+    if (typeof renderStoreAdminCard === 'function' && adminUnlocked) renderStoreAdminCard();
     console.log('[CourtBooking] Tenant config changed since last visit -- refreshed');
   } catch(e) {
     console.warn('[CourtBooking] Background config refresh failed:', e.message);
@@ -3293,6 +3311,50 @@ async function saveTenantConfigPatch(mutate){
     toast('Saved locally, but failed to sync to Firestore');
     return false;
   }
+}
+
+/* ---------- Pickle Court Store entry point (Admin Console) ----------
+   Store is an independently-entitled premium add-on (see clients/{id}/
+   status/state -- storeEnabled/storePaused, set only by superadmin).
+   Enabled: a real link out to store.html. Not enabled/paused: a
+   non-functional, watermarked preview so staff discover the feature
+   exists without being able to use it until the platform operator
+   turns it on. ---------- */
+function renderStoreAdminCard(){
+  const actionWrap = document.getElementById('storeAdminActionWrap');
+  const previewWrap = document.getElementById('storeAdminPreviewWrap');
+  if(!actionWrap || !previewWrap) return;
+
+  if(CLIENT.storeEnabled && !CLIENT.storePaused){
+    actionWrap.innerHTML = `<a href="store.html?client=${encodeURIComponent(currentClientId)}" target="_blank" rel="noopener" class="inline-flex items-center gap-1.5 h-10 px-4 rounded-full bg-[#D6FF5F] hover:bg-[#CBF052] border border-[#201C19]/10 mono text-[12px] font-[800] text-[#201C19] transition">🛍️ Go to Store →</a>`;
+    previewWrap.innerHTML = `<div class="mono text-[11px] px-3.5 py-2.5 rounded-full bg-[#E8F5D8] border border-[#CFE8B5] text-[#3F7019] inline-block">Store is active for this facility.</div>`;
+    return;
+  }
+
+  const message = CLIENT.storePaused
+    ? { title: 'STORE PAUSED', sub: 'Temporarily paused by your platform operator. Contact them to resume.' }
+    : { title: 'STORE NOT ENABLED FOR THIS TENANT', sub: 'Contact support to add this premium feature.' };
+  actionWrap.innerHTML = `<span class="mono text-[10px] px-3 h-8 rounded-full bg-[#F1E9DF] text-[#201C19]/60 font-[700] grid place-items-center">Not Available</span>`;
+  previewWrap.innerHTML = `
+    <div class="relative rounded-[16px] border border-[#EAE0D5] overflow-hidden select-none">
+      <div class="p-4 opacity-40 grayscale pointer-events-none">
+        <div class="h-9 rounded-full bg-[#F1E9DF] w-full max-w-[260px]"></div>
+        <div class="mt-3 grid grid-cols-3 md:grid-cols-6 gap-2">
+          ${Array.from({length:6}).map(() => `<div class="h-16 rounded-[10px] bg-[#F1E9DF]"></div>`).join('')}
+        </div>
+        <div class="mt-3 flex gap-2">
+          <div class="h-9 flex-1 rounded-full bg-[#F1E9DF]"></div>
+          <div class="h-9 w-24 rounded-full bg-[#F1E9DF]"></div>
+        </div>
+      </div>
+      <div class="absolute inset-0 grid place-items-center bg-[#FFFBF5]/80 backdrop-blur-[1px]">
+        <div class="text-center px-4">
+          <div class="mono text-[12px] md:text-[13px] font-[800] uppercase tracking-widest text-[#8C2C10]">${message.title}</div>
+          <div class="mono text-[10px] opacity-60 mt-1.5">${message.sub}</div>
+        </div>
+      </div>
+    </div>
+  `;
 }
 
 function renderAdminBranding(){
@@ -6393,6 +6455,8 @@ async function initializeApp() {
   window.CLIENT_CONFIG = clientConfig;
   CLIENT = _deepMerge(_cfgDefaults, clientConfig || {});
   CLIENT.bookingPaused = !!tenantStatus.bookingPaused;
+  CLIENT.storeEnabled = !!tenantStatus.storeEnabled;
+  CLIENT.storePaused = !!tenantStatus.storePaused;
   applyTheme();              // re-apply theme CSS with the tenant's colors
   computeSchedule();         // recompute SCHED/STAFF_DAYS from the tenant's hours
   computeHours();            // recompute HOURS/ALL_HOURS_START from SCHED
@@ -6448,6 +6512,7 @@ updateAdminTabsVisibility = function() {
     if (typeof renderOperatingHoursSection === 'function') renderOperatingHoursSection();
     if (typeof renderAdminCourts === 'function') renderAdminCourts();
     if (typeof renderAdminBranding === 'function') renderAdminBranding();
+    if (typeof renderStoreAdminCard === 'function') renderStoreAdminCard();
     armProofWatcher();                    // start Firebase Storage housekeeping on first unlock
     renderPaymentProofsQueue();           // populate the Admin payment review queue
     populateCourtSelectors();             // refresh court dropdowns

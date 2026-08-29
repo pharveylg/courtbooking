@@ -31,7 +31,8 @@
       "public/**",
       "ADMIN_GUIDE.md",
       "USER_ONE_PAGER.md",
-      "SUPERADMIN_GUIDE.md"
+      "SUPERADMIN_GUIDE.md",
+      "ARCHITECTURE_DIAGRAM.html"
     ],
     "rewrites": [
       {

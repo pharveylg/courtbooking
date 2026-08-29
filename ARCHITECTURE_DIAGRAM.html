@@ -1,0 +1,322 @@
+<title>Picklebooking Architecture</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap">
+
+<style>
+:root{
+  --bg:#FFFBF5; --surface:#FFFFFF; --surface-2:#F1E9DF; --border:#EAE0D5;
+  --ink:#201C19; --ink-soft:#5B534A; --ink-faint:#8A8072;
+  --accent:#8A9A2C; --accent-chip-bg:#201C19; --accent-chip-fg:#D6FF5F;
+  --good:#2F7A4F; --warn:#B5790A; --bad:#B23A2F;
+  --code-bg:#F6F1E7;
+  --font-display:'IBM Plex Sans',system-ui,sans-serif;
+  --font-mono:'IBM Plex Mono',ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#17140F; --surface:#201C19; --surface-2:#2A241D; --border:#3A332A;
+    --ink:#F3EEE3; --ink-soft:#C9C0B1; --ink-faint:#8F887A;
+    --accent:#D6FF5F; --accent-chip-bg:#D6FF5F; --accent-chip-fg:#201C19;
+    --good:#6FCB93; --warn:#E0A83D; --bad:#E27C6E;
+    --code-bg:#221E17;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#17140F; --surface:#201C19; --surface-2:#2A241D; --border:#3A332A;
+  --ink:#F3EEE3; --ink-soft:#C9C0B1; --ink-faint:#8F887A;
+  --accent:#D6FF5F; --accent-chip-bg:#D6FF5F; --accent-chip-fg:#201C19;
+  --good:#6FCB93; --warn:#E0A83D; --bad:#E27C6E;
+  --code-bg:#221E17;
+}
+*{box-sizing:border-box;}
+body{ background:var(--bg); color:var(--ink); font-family:var(--font-display); font-size:15px; line-height:1.6; margin:0; }
+.wrap{max-width:1180px; margin:0 auto; padding:40px 24px 100px;}
+.eyebrow{font-family:var(--font-mono); font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:var(--ink-faint); margin:0 0 10px;}
+h1{font-size:clamp(26px,4vw,34px); font-weight:700; margin:0 0 12px; letter-spacing:-.01em; text-wrap:balance;}
+.dek{color:var(--ink-soft); max-width:70ch; margin:0 0 28px; font-size:15.5px;}
+figure{margin:0 0 48px; border:1px solid var(--border); border-radius:14px; background:var(--surface); padding:22px 20px 18px;}
+figure svg{width:100%; height:auto; display:block; color:var(--ink);}
+figcaption{font-size:13px; color:var(--ink-soft); margin-top:14px; padding-top:14px; border-top:1px solid var(--border); max-width:80ch;}
+figcaption b{color:var(--ink); font-weight:600;}
+h2{font-size:19px; font-weight:700; margin:0 0 6px; letter-spacing:-.005em;}
+.section-lede{color:var(--ink-soft); font-size:14px; max-width:72ch; margin:0 0 16px;}
+.legend{display:flex; flex-wrap:wrap; gap:14px; font-family:var(--font-mono); font-size:11px; color:var(--ink-soft); margin-bottom:20px;}
+.legend span{display:inline-flex; align-items:center; gap:6px;}
+.legend .sw{width:14px; height:3px; border-radius:2px; display:inline-block;}
+</style>
+
+<div class="wrap">
+  <p class="eyebrow">Picklebooking &middot; System Architecture</p>
+  <h1>How the app is actually put together</h1>
+  <p class="dek">Two diagrams: the full request path from browser to data (frontend + backend in one flow), and the entitlement pattern that lets Booking, Store, and Tournaments be paused independently. Everything here reflects the deployed code, not an intended design.</p>
+
+  <h2>1. System map — what's running vs. what's still on the roadmap</h2>
+  <p class="section-lede">Same hub-and-spoke reading as a systems-integration map: backend systems feed a central engine, which serves a set of entry-point interfaces. <b>Solid</b> boxes and lines are deployed and verified this session; <b>dashed</b> ones are specified in the proposal but not built.</p>
+  <div class="legend">
+    <span><svg width="28" height="10"><line x1="1" y1="5" x2="27" y2="5" stroke="currentColor" stroke-width="2"/></svg> built &amp; verified live</span>
+    <span><svg width="28" height="10"><line x1="1" y1="5" x2="27" y2="5" stroke="currentColor" stroke-width="2" stroke-dasharray="4 3" opacity=".65"/></svg> designed, not built yet</span>
+  </div>
+
+  <figure>
+    <svg viewBox="0 0 2000 1010" role="img" aria-label="Hub and spoke diagram. Left column: Firebase backend systems (Firestore, Cloud Functions, entitlement flags, platform-level data), all solid/built, plus a dashed future-backend group (DUPR API, payments, notifications). Center hub: Picklebooking, with a Firestore rules gateway pillar and a Cloud Functions gateway pillar flanking six engine modules -- five solid and built (registration, bracket engine, scoring and standings, court scheduling, PHP pricing) and one dashed (photo moderation, not built), plus a solid audit log bar and a dashed public tournament page renderer bar. Bottom band under the hub: tenant registry and player identity, both solid, plus four thin rows for seeding, waitlist promotion, and phone normalization (solid) and official DUPR API sync (dashed). Right column: six entry-point pages, four solid and built (index.html, store.html, tournament-admin.html, superadmin.html) and two dashed (the public tournament page and the gallery upload link). Far right: a dashed box consolidating the public tournament page's schedule, scores, standings, brackets and gallery, feeding Players and Spectators. A dashed DUPR registry circle feeds player ratings into the hub as a future integration.">
+      <defs>
+        <marker id="arrow3" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
+        </marker>
+      </defs>
+
+      <!-- ============ LEFT: BACKEND SYSTEMS ============ -->
+      <text x="20" y="45" font-family="var(--font-mono)" font-size="12" letter-spacing="2" opacity=".55">BACKEND SYSTEMS</text>
+
+      <rect x="20" y="65" width="280" height="210" rx="10" fill="var(--surface)" stroke="currentColor" stroke-opacity=".45"/>
+      <text x="38" y="90" font-size="13" font-weight="700">Firebase Core</text>
+      <text x="38" y="112" font-family="var(--font-mono)" font-size="10.5" opacity=".65">Firestore</text>
+      <text x="38" y="131" font-family="var(--font-mono)" font-size="10.5" opacity=".65">Cloud Functions — asia-southeast1</text>
+      <text x="38" y="150" font-family="var(--font-mono)" font-size="10.5" opacity=".65">Firebase Auth (superadmin only)</text>
+      <text x="38" y="169" font-family="var(--font-mono)" font-size="10.5" opacity=".65">Firebase Storage</text>
+      <text x="38" y="196" font-family="var(--font-mono)" font-size="9.5" opacity=".5">the only compute layer in the app</text>
+      <text x="38" y="212" font-family="var(--font-mono)" font-size="9.5" opacity=".5">is the Cloud Functions row above</text>
+
+      <rect x="20" y="295" width="280" height="150" rx="10" fill="var(--surface)" stroke="currentColor" stroke-opacity=".45"/>
+      <text x="38" y="320" font-size="13" font-weight="700">Entitlement Flags</text>
+      <text x="38" y="340" font-family="var(--font-mono)" font-size="10" opacity=".65">bookingPaused</text>
+      <text x="38" y="358" font-family="var(--font-mono)" font-size="10" opacity=".65">storeEnabled / storePaused</text>
+      <text x="38" y="376" font-family="var(--font-mono)" font-size="10" opacity=".65">tournamentEnabled / Paused</text>
+      <text x="38" y="400" font-family="var(--font-mono)" font-size="9.5" opacity=".5">one doc: status/state, superadmin-</text>
+      <text x="38" y="416" font-family="var(--font-mono)" font-size="9.5" opacity=".5">write only (see figure 2)</text>
+
+      <rect x="20" y="465" width="280" height="150" rx="10" fill="var(--surface)" stroke="currentColor" stroke-opacity=".45"/>
+      <text x="38" y="490" font-size="13" font-weight="700">Platform-Level Data</text>
+      <text x="38" y="510" font-family="var(--font-mono)" font-size="10" opacity=".65">platformTenants — registry</text>
+      <text x="38" y="528" font-family="var(--font-mono)" font-size="10" opacity=".65">platformPlayers — get-only</text>
+      <text x="38" y="546" font-family="var(--font-mono)" font-size="10" opacity=".65">platformAuditLog — append-only</text>
+      <text x="38" y="570" font-family="var(--font-mono)" font-size="9.5" opacity=".5">cross-tenant, sits outside clients/*</text>
+
+      <rect x="20" y="635" width="280" height="170" rx="10" fill="none" stroke="currentColor" stroke-opacity=".45" stroke-dasharray="5 4"/>
+      <text x="38" y="660" font-size="13" font-weight="700" opacity=".8">Future Backend</text>
+      <text x="38" y="682" font-family="var(--font-mono)" font-size="10" opacity=".6">Official DUPR API sync</text>
+      <text x="38" y="700" font-family="var(--font-mono)" font-size="10" opacity=".6">Payment gateway (PSP) integration</text>
+      <text x="38" y="718" font-family="var(--font-mono)" font-size="10" opacity=".6">Outbound notifications (email/SMS)</text>
+      <text x="38" y="742" font-family="var(--font-mono)" font-size="9.5" opacity=".5">roadmap §25 — nothing wired yet</text>
+
+      <!-- arrows: left groups -> hub -->
+      <line x1="300" y1="170" x2="638" y2="220" stroke="currentColor" stroke-opacity=".55" marker-end="url(#arrow3)"/>
+      <line x1="300" y1="370" x2="638" y2="330" stroke="currentColor" stroke-opacity=".55" marker-end="url(#arrow3)"/>
+      <line x1="300" y1="540" x2="638" y2="470" stroke="currentColor" stroke-opacity=".55" marker-end="url(#arrow3)"/>
+      <line x1="300" y1="720" x2="638" y2="600" stroke="currentColor" stroke-opacity=".55" stroke-dasharray="4 3" marker-end="url(#arrow3)"/>
+
+      <!-- ============ CENTER: HUB ============ -->
+      <rect x="640" y="40" width="640" height="680" rx="18" fill="var(--surface)" stroke="currentColor" stroke-opacity=".5" stroke-width="1.3"/>
+      <text x="960" y="88" text-anchor="middle" font-size="21" font-weight="800" letter-spacing="1">PICKLEBOOKING</text>
+      <text x="960" y="108" text-anchor="middle" font-family="var(--font-mono)" font-size="10.5" opacity=".5">tournament engine · booking core</text>
+      <line x1="670" y1="122" x2="1250" y2="122" stroke="currentColor" stroke-opacity=".35"/>
+
+      <!-- left pillar -->
+      <rect x="670" y="145" width="110" height="470" rx="10" fill="var(--surface-2)" stroke="currentColor" stroke-opacity=".4"/>
+      <text x="725" y="178" text-anchor="middle" font-size="12" font-weight="700">Firestore</text>
+      <text x="725" y="196" text-anchor="middle" font-size="12" font-weight="700">Rules</text>
+      <text x="725" y="214" text-anchor="middle" font-size="12" font-weight="700">Gateway</text>
+      <text x="725" y="242" text-anchor="middle" font-family="var(--font-mono)" font-size="8.7" opacity=".6">isValidTenantId</text>
+      <text x="725" y="258" text-anchor="middle" font-family="var(--font-mono)" font-size="8.7" opacity=".6">superadmin-only</text>
+      <text x="725" y="274" text-anchor="middle" font-family="var(--font-mono)" font-size="8.7" opacity=".6">write:false paths</text>
+
+      <!-- right pillar -->
+      <rect x="1220" y="145" width="110" height="470" rx="10" fill="var(--surface-2)" stroke="currentColor" stroke-opacity=".4"/>
+      <text x="1275" y="178" text-anchor="middle" font-size="12" font-weight="700">Cloud</text>
+      <text x="1275" y="196" text-anchor="middle" font-size="12" font-weight="700">Functions</text>
+      <text x="1275" y="214" text-anchor="middle" font-size="12" font-weight="700">Gateway</text>
+      <text x="1275" y="242" text-anchor="middle" font-family="var(--font-mono)" font-size="8.7" opacity=".6">httpsCallable()</text>
+      <text x="1275" y="258" text-anchor="middle" font-family="var(--font-mono)" font-size="8.7" opacity=".6">Admin SDK writes</text>
+      <text x="1275" y="274" text-anchor="middle" font-family="var(--font-mono)" font-size="8.7" opacity=".6">bypasses rules</text>
+
+      <!-- middle stack: 6 modules -->
+      <g font-family="var(--font-display)">
+        <rect x="800" y="145" width="400" height="72" rx="9" fill="var(--surface-2)" stroke="currentColor" stroke-opacity=".4"/>
+        <text x="820" y="172" font-size="12.5" font-weight="700">Registration &amp; Player Identity</text>
+        <text x="820" y="191" font-family="var(--font-mono)" font-size="9.5" opacity=".6">phone-keyed platformPlayers lookup</text>
+        <text x="1180" y="172" text-anchor="end" font-family="var(--font-mono)" font-size="9" opacity=".5">Phase 3</text>
+
+        <rect x="800" y="225" width="400" height="72" rx="9" fill="var(--surface-2)" stroke="currentColor" stroke-opacity=".4"/>
+        <text x="820" y="252" font-size="12.5" font-weight="700">Bracket Engine — Seed &amp; Generate</text>
+        <text x="820" y="271" font-family="var(--font-mono)" font-size="9.5" opacity=".6">Round Robin / Single Elim / Group+KO</text>
+        <text x="1180" y="252" text-anchor="end" font-family="var(--font-mono)" font-size="9" opacity=".5">Phase 4</text>
+
+        <rect x="800" y="305" width="400" height="72" rx="9" fill="var(--surface-2)" stroke="currentColor" stroke-opacity=".4"/>
+        <text x="820" y="332" font-size="12.5" font-weight="700">Scoring &amp; Standings</text>
+        <text x="820" y="351" font-family="var(--font-mono)" font-size="9.5" opacity=".6">submitMatchScore, correctMatchScore</text>
+        <text x="1180" y="332" text-anchor="end" font-family="var(--font-mono)" font-size="9" opacity=".5">Phase 4</text>
+
+        <rect x="800" y="385" width="400" height="72" rx="9" fill="var(--surface-2)" stroke="currentColor" stroke-opacity=".4"/>
+        <text x="820" y="412" font-size="12.5" font-weight="700">Court Scheduling</text>
+        <text x="820" y="431" font-family="var(--font-mono)" font-size="9.5" opacity=".6">writes real rows into clients/*/bookings</text>
+        <text x="1180" y="412" text-anchor="end" font-family="var(--font-mono)" font-size="9" opacity=".5">Phase 5</text>
+
+        <rect x="800" y="465" width="400" height="72" rx="9" fill="var(--surface-2)" stroke="currentColor" stroke-opacity=".4"/>
+        <text x="820" y="492" font-size="12.5" font-weight="700">PHP Pricing Calculator</text>
+        <text x="820" y="511" font-family="var(--font-mono)" font-size="9.5" opacity=".6">base + per-participant + per-day</text>
+        <text x="1180" y="492" text-anchor="end" font-family="var(--font-mono)" font-size="9" opacity=".5">Phase 2</text>
+
+        <rect x="800" y="545" width="400" height="72" rx="9" fill="none" stroke="currentColor" stroke-opacity=".45" stroke-dasharray="5 4"/>
+        <text x="820" y="572" font-size="12.5" font-weight="700" opacity=".8">Photo Moderation Queue</text>
+        <text x="820" y="591" font-family="var(--font-mono)" font-size="9.5" opacity=".55">upload token → pending → approved</text>
+        <text x="1180" y="572" text-anchor="end" font-family="var(--font-mono)" font-size="9" opacity=".55">Phase 7</text>
+      </g>
+
+      <!-- bars under the module stack -->
+      <rect x="670" y="627" width="610" height="38" rx="8" fill="var(--surface-2)" stroke="currentColor" stroke-opacity=".4"/>
+      <text x="960" y="651" text-anchor="middle" font-family="var(--font-mono)" font-size="10.5" opacity=".7">Superadmin Audit Log — append-only, every mutating action</text>
+
+      <rect x="670" y="675" width="610" height="38" rx="8" fill="none" stroke="currentColor" stroke-opacity=".45" stroke-dasharray="5 4"/>
+      <text x="960" y="699" text-anchor="middle" font-family="var(--font-mono)" font-size="10.5" opacity=".65">Public Tournament Page Renderer — Phase 6, not built</text>
+
+      <!-- ============ BOTTOM BAND under hub ============ -->
+      <rect x="670" y="745" width="300" height="60" rx="9" fill="var(--surface)" stroke="currentColor" stroke-opacity=".45"/>
+      <text x="820" y="770" text-anchor="middle" font-size="11.5" font-weight="700">Tenant Registry</text>
+      <text x="820" y="788" text-anchor="middle" font-family="var(--font-mono)" font-size="9.5" opacity=".55">platformTenants</text>
+
+      <rect x="980" y="745" width="300" height="60" rx="9" fill="var(--surface)" stroke="currentColor" stroke-opacity=".45"/>
+      <text x="1130" y="770" text-anchor="middle" font-size="11.5" font-weight="700">Player Identity</text>
+      <text x="1130" y="788" text-anchor="middle" font-family="var(--font-mono)" font-size="9.5" opacity=".55">platformPlayers, get-only</text>
+
+      <rect x="670" y="815" width="610" height="20" fill="none"/>
+      <text x="678" y="830" font-family="var(--font-mono)" font-size="9.5" opacity=".6">Bracket Seeding — DUPR / Random / Manual</text>
+      <text x="678" y="850" font-family="var(--font-mono)" font-size="9.5" opacity=".6">Waitlist Auto-Promotion on Withdrawal</text>
+      <text x="678" y="870" font-family="var(--font-mono)" font-size="9.5" opacity=".6">Phone Normalization (PH format) for Player IDs</text>
+      <text x="678" y="890" font-family="var(--font-mono)" font-size="9.5" opacity=".6">Official DUPR API Sync (rating + result submission)</text>
+      <line x1="670" y1="880" x2="920" y2="880" stroke="none"/>
+      <!-- dashed underline only under the DUPR sync line to mark it unbuilt -->
+      <line x1="678" y1="885" x2="1080" y2="885" stroke="currentColor" stroke-opacity=".45" stroke-dasharray="4 3"/>
+
+      <line x1="820" y1="745" x2="820" y2="713" stroke="currentColor" stroke-opacity=".5" marker-end="url(#arrow3)"/>
+      <line x1="1130" y1="745" x2="1130" y2="713" stroke="currentColor" stroke-opacity=".5" marker-end="url(#arrow3)"/>
+
+      <!-- ============ RIGHT: ENTRY POINTS ============ -->
+      <text x="1420" y="45" font-family="var(--font-mono)" font-size="12" letter-spacing="2" opacity=".55">ENTRY POINTS</text>
+
+      <rect x="1420" y="65" width="280" height="85" rx="9" fill="var(--surface)" stroke="currentColor" stroke-opacity=".45"/>
+      <text x="1438" y="90" font-size="13" font-weight="700">index.html</text>
+      <text x="1438" y="108" font-family="var(--font-mono)" font-size="10" opacity=".6">Booking + Admin Console</text>
+      <text x="1438" y="124" font-family="var(--font-mono)" font-size="9.5" opacity=".5">gate: shared Admin PIN</text>
+
+      <rect x="1420" y="160" width="280" height="85" rx="9" fill="var(--surface)" stroke="currentColor" stroke-opacity=".45"/>
+      <text x="1438" y="185" font-size="13" font-weight="700">store.html</text>
+      <text x="1438" y="203" font-family="var(--font-mono)" font-size="10" opacity=".6">Store POS / inventory / reports</text>
+      <text x="1438" y="219" font-family="var(--font-mono)" font-size="9.5" opacity=".5">gate: storeEnabled + Store PIN</text>
+
+      <rect x="1420" y="255" width="280" height="85" rx="9" fill="var(--surface)" stroke="currentColor" stroke-opacity=".45"/>
+      <text x="1438" y="280" font-size="13" font-weight="700">tournament-admin.html</text>
+      <text x="1438" y="298" font-family="var(--font-mono)" font-size="10" opacity=".6">Tournament dashboard</text>
+      <text x="1438" y="314" font-family="var(--font-mono)" font-size="9.5" opacity=".5">gate: tournamentEnabled + Admin PIN</text>
+
+      <rect x="1420" y="350" width="280" height="85" rx="9" fill="var(--surface)" stroke="currentColor" stroke-opacity=".45"/>
+      <text x="1438" y="375" font-size="13" font-weight="700">superadmin.html</text>
+      <text x="1438" y="393" font-family="var(--font-mono)" font-size="10" opacity=".6">Platform console</text>
+      <text x="1438" y="409" font-family="var(--font-mono)" font-size="9.5" opacity=".5">gate: Firebase Auth + custom claim</text>
+
+      <rect x="1420" y="445" width="280" height="85" rx="9" fill="none" stroke="currentColor" stroke-opacity=".45" stroke-dasharray="5 4"/>
+      <text x="1438" y="470" font-size="13" font-weight="700" opacity=".8">tournament.html</text>
+      <text x="1438" y="488" font-family="var(--font-mono)" font-size="10" opacity=".55">Public tournament page</text>
+      <text x="1438" y="504" font-family="var(--font-mono)" font-size="9.5" opacity=".5">Phase 6 — not built</text>
+
+      <rect x="1420" y="540" width="280" height="85" rx="9" fill="none" stroke="currentColor" stroke-opacity=".45" stroke-dasharray="5 4"/>
+      <text x="1438" y="565" font-size="13" font-weight="700" opacity=".8">Gallery upload link</text>
+      <text x="1438" y="583" font-family="var(--font-mono)" font-size="10" opacity=".55">shareable token + moderation</text>
+      <text x="1438" y="599" font-family="var(--font-mono)" font-size="9.5" opacity=".5">Phase 7 — not built</text>
+
+      <!-- arrows: hub -> right panel -->
+      <line x1="1330" y1="180" x2="1418" y2="107" stroke="currentColor" stroke-opacity=".55" marker-end="url(#arrow3)"/>
+      <line x1="1330" y1="260" x2="1418" y2="202" stroke="currentColor" stroke-opacity=".55" marker-end="url(#arrow3)"/>
+      <line x1="1330" y1="340" x2="1418" y2="297" stroke="currentColor" stroke-opacity=".55" marker-end="url(#arrow3)"/>
+      <line x1="1330" y1="420" x2="1418" y2="392" stroke="currentColor" stroke-opacity=".55" marker-end="url(#arrow3)"/>
+      <line x1="1330" y1="500" x2="1418" y2="487" stroke="currentColor" stroke-opacity=".55" stroke-dasharray="4 3" marker-end="url(#arrow3)"/>
+      <line x1="1330" y1="580" x2="1418" y2="582" stroke="currentColor" stroke-opacity=".55" stroke-dasharray="4 3" marker-end="url(#arrow3)"/>
+
+      <!-- ============ FAR RIGHT: consolidated output + actors ============ -->
+      <rect x="1740" y="260" width="220" height="150" rx="10" fill="none" stroke="currentColor" stroke-opacity=".5" stroke-dasharray="5 4"/>
+      <text x="1850" y="286" text-anchor="middle" font-size="12" font-weight="700" opacity=".85">One Public Page</text>
+      <text x="1850" y="308" text-anchor="middle" font-family="var(--font-mono)" font-size="9.5" opacity=".55">schedule · live scores</text>
+      <text x="1850" y="324" text-anchor="middle" font-family="var(--font-mono)" font-size="9.5" opacity=".55">standings · brackets</text>
+      <text x="1850" y="340" text-anchor="middle" font-family="var(--font-mono)" font-size="9.5" opacity=".55">gallery</text>
+      <text x="1850" y="362" text-anchor="middle" font-family="var(--font-mono)" font-size="9" opacity=".45">not built — Phases 6+7</text>
+
+      <line x1="1700" y1="487" x2="1738" y2="340" stroke="currentColor" stroke-opacity=".5" stroke-dasharray="4 3" marker-end="url(#arrow3)"/>
+      <line x1="1700" y1="582" x2="1738" y2="360" stroke="currentColor" stroke-opacity=".5" stroke-dasharray="4 3" marker-end="url(#arrow3)"/>
+
+      <!-- simple actor glyphs: players & spectators -->
+      <g stroke="currentColor" stroke-opacity=".7" fill="none" stroke-width="1.6">
+        <circle cx="1810" cy="470" r="12"/>
+        <path d="M1788,510 a22,22 0 0 1 44,0"/>
+        <circle cx="1850" cy="478" r="12"/>
+        <path d="M1828,518 a22,22 0 0 1 44,0"/>
+        <circle cx="1890" cy="470" r="12"/>
+        <path d="M1868,510 a22,22 0 0 1 44,0"/>
+      </g>
+      <text x="1850" y="545" text-anchor="middle" font-family="var(--font-mono)" font-size="10" opacity=".6">Players &amp; Spectators</text>
+      <line x1="1850" y1="410" x2="1850" y2="450" stroke="currentColor" stroke-opacity=".5" stroke-dasharray="4 3" marker-end="url(#arrow3)"/>
+      <text x="1862" y="435" font-family="var(--font-mono)" font-size="9" opacity=".5">views</text>
+
+      <!-- DUPR registry, future external source -->
+      <circle cx="1580" cy="920" r="52" fill="none" stroke="currentColor" stroke-opacity=".5" stroke-dasharray="5 4"/>
+      <text x="1580" y="915" text-anchor="middle" font-size="11" font-weight="700" opacity=".8">DUPR</text>
+      <text x="1580" y="931" text-anchor="middle" font-size="11" font-weight="700" opacity=".8">Registry</text>
+      <line x1="1550" y1="880" x2="1290" y2="850" stroke="currentColor" stroke-opacity=".5" stroke-dasharray="4 3" marker-end="url(#arrow3)"/>
+      <text x="1420" y="855" text-anchor="middle" font-family="var(--font-mono)" font-size="9" opacity=".5">player ratings (future)</text>
+    </svg>
+    <figcaption><b>What this shows:</b> five phases of the tournament proposal are live and verified (registration/identity, the bracket engine, scoring/standings, court scheduling into real bookings, PHP pricing) alongside everything the platform already had. The public tournament page, the gallery, and any DUPR/payment/notification integration are still just the dashed boxes the original spec described -- nothing there has been built.</figcaption>
+  </figure>
+
+  <h2>2. One entitlement doc, three independent products</h2>
+  <p class="section-lede">Booking, Store, and Tournaments are separately monetized add-ons that live side by side in the <em>same</em> Firestore document -- the mechanism that makes "pausing one can't affect another" actually true, rather than just a stated intention.</p>
+
+  <figure>
+    <svg viewBox="0 0 1100 460" role="img" aria-label="Diagram showing clients slash tenantId slash status slash state as one Firestore document holding three independent flag pairs -- bookingPaused, storeEnabled and storePaused, tournamentEnabled and tournamentPaused -- each read by its own page and written only by the superadmin console, with no connection between the three flag pairs.">
+      <defs>
+        <marker id="arrow2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
+        </marker>
+      </defs>
+
+      <rect x="360" y="20" width="380" height="100" rx="12" fill="var(--code-bg)" stroke="var(--warn)" stroke-width="1.3"/>
+      <text x="550" y="50" text-anchor="middle" font-size="13.5" font-weight="700">clients/&#123;tenantId&#125;/status/state</text>
+      <text x="550" y="70" text-anchor="middle" font-family="var(--font-mono)" font-size="10.5" opacity=".65">one Firestore document</text>
+      <text x="550" y="90" text-anchor="middle" font-family="var(--font-mono)" font-size="10.5" fill="var(--warn)">write: superadmin custom claim only</text>
+      <text x="550" y="106" text-anchor="middle" font-family="var(--font-mono)" font-size="10.5" fill="var(--warn)">read: open (every visitor checks it)</text>
+
+      <!-- superadmin writes down -->
+      <rect x="470" y="150" width="160" height="46" rx="10" fill="var(--surface)" stroke="currentColor" stroke-opacity=".3"/>
+      <text x="550" y="178" text-anchor="middle" font-size="12" font-weight="700">superadmin.html</text>
+      <line x1="550" y1="150" x2="550" y2="120" stroke="currentColor" stroke-opacity=".5" marker-end="url(#arrow2)"/>
+      <text x="565" y="138" font-family="var(--font-mono)" font-size="10" opacity=".6">writes</text>
+
+      <!-- three flag pairs branching down to three pages -->
+      <line x1="450" y1="196" x2="185" y2="290" stroke="currentColor" stroke-opacity=".45"/>
+      <line x1="550" y1="196" x2="550" y2="290" stroke="currentColor" stroke-opacity=".45"/>
+      <line x1="650" y1="196" x2="915" y2="290" stroke="currentColor" stroke-opacity=".45"/>
+
+      <g font-family="var(--font-display)">
+        <rect x="45" y="290" width="280" height="150" rx="12" fill="var(--surface-2)" stroke="currentColor" stroke-opacity=".3"/>
+        <text x="185" y="316" text-anchor="middle" font-size="13" font-weight="700">bookingPaused</text>
+        <text x="185" y="336" text-anchor="middle" font-family="var(--font-mono)" font-size="10.5" opacity=".65">read by index.html</text>
+        <text x="185" y="354" text-anchor="middle" font-family="var(--font-mono)" font-size="10.5" opacity=".65">true &rarr; full-page "Paused" screen,</text>
+        <text x="185" y="370" text-anchor="middle" font-family="var(--font-mono)" font-size="10.5" opacity=".65">no PIN bypass, listeners stop</text>
+        <text x="185" y="396" text-anchor="middle" font-family="var(--font-mono)" font-size="10.5" fill="var(--ink-faint)">independent of the other two --&gt;</text>
+
+        <rect x="410" y="290" width="280" height="150" rx="12" fill="var(--surface-2)" stroke="currentColor" stroke-opacity=".3"/>
+        <text x="550" y="316" text-anchor="middle" font-size="13" font-weight="700">storeEnabled / storePaused</text>
+        <text x="550" y="336" text-anchor="middle" font-family="var(--font-mono)" font-size="10.5" opacity=".65">read by store.html AND index.html's</text>
+        <text x="550" y="352" text-anchor="middle" font-family="var(--font-mono)" font-size="10.5" opacity=".65">Admin Console pill ("Go to Store")</text>
+        <text x="550" y="378" text-anchor="middle" font-family="var(--font-mono)" font-size="10.5" opacity=".65">paused: store.html blocks new sales,</text>
+        <text x="550" y="394" text-anchor="middle" font-family="var(--font-mono)" font-size="10.5" opacity=".65">Booking keeps running unaffected</text>
+
+        <rect x="775" y="290" width="280" height="150" rx="12" fill="var(--surface-2)" stroke="currentColor" stroke-opacity=".3"/>
+        <text x="915" y="316" text-anchor="middle" font-size="13" font-weight="700">tournamentEnabled / Paused</text>
+        <text x="915" y="336" text-anchor="middle" font-family="var(--font-mono)" font-size="10.5" opacity=".65">read by tournament-admin.html AND</text>
+        <text x="915" y="352" text-anchor="middle" font-family="var(--font-mono)" font-size="10.5" opacity=".65">index.html's Admin Console pill</text>
+        <text x="915" y="378" text-anchor="middle" font-family="var(--font-mono)" font-size="10.5" opacity=".65">paused: no new tournaments, but any</text>
+        <text x="915" y="394" text-anchor="middle" font-family="var(--font-mono)" font-size="10.5" opacity=".65">already-published one stays public</text>
+      </g>
+    </svg>
+    <figcaption><b>What this shows:</b> the same superadmin action (write) always targets one specific flag pair inside the shared document -- there's no code path that reads one product's flag to decide another's behavior. That absence of a connection between the three boxes <i>is</i> the independent-lifecycle guarantee, not a comment promising it.</figcaption>
+  </figure>
+</div>

@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Tournament</title>
+<link rel="stylesheet" href="tailwind.css">
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+*{font-family:"Bricolage Grotesque",system-ui,sans-serif}
+.mono{font-family:"JetBrains Mono",monospace}
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-thumb{background:#e5ddd4;border-radius:999px}
+.no-scrollbar::-webkit-scrollbar{display:none}
+.no-scrollbar{-ms-overflow-style:none;scrollbar-width:none}
+</style>
+</head>
+<body class="bg-[#FFFBF5] text-[#201C19] antialiased">
+
+<!-- Gate screen: loading / not found / not published -->
+<div id="gateScreen" class="min-h-screen grid place-items-center p-6">
+  <div class="w-full max-w-[440px] rounded-[28px] bg-white border border-[#EAE0D5] shadow-[0_20px_60px_rgba(32,28,25,0.1)] p-7 md:p-9 text-center">
+    <div class="mx-auto w-14 h-14 rounded-full bg-[#201C19] text-[#D6FF5F] grid place-items-center font-black text-[20px]">🏆</div>
+    <div id="gateStateWrap">
+      <p class="mt-5 mono text-[12px] opacity-60">Loading tournament...</p>
+    </div>
+  </div>
+</div>
+
+<!-- Main page -->
+<div id="appScreen" class="hidden">
+  <header class="sticky top-0 z-30 backdrop-blur-xl bg-[#FFFBF5]/90 border-b border-[#EAE0D5]">
+    <div class="max-w-[860px] mx-auto px-4 py-4">
+      <div id="hostLabel" class="mono text-[10px] uppercase tracking-widest opacity-50"></div>
+      <div class="flex items-start justify-between gap-3 flex-wrap mt-0.5">
+        <h1 id="tournamentName" class="text-[22px] md:text-[26px] font-[800] tracking-[-0.02em] leading-tight"></h1>
+        <span id="tournamentStatusBadge" class="shrink-0 mt-1"></span>
+      </div>
+      <div id="tournamentMeta" class="mono text-[11px] opacity-60 mt-1.5 leading-[1.6]"></div>
+    </div>
+  </header>
+
+  <main class="max-w-[860px] mx-auto px-4 py-5">
+    <div id="cancelledBanner" class="hidden mb-4 p-3.5 rounded-[16px] bg-[#FFE9E0] border border-[#FFC9B6] text-[#8C2C10] mono text-[12px] font-[700] text-center">
+      This tournament has been cancelled.
+    </div>
+
+    <div id="announcementsSection" class="hidden mb-5 space-y-2">
+      <div class="mono text-[10px] uppercase tracking-widest opacity-50">Announcements</div>
+      <div id="announcementsList" class="space-y-1.5"></div>
+    </div>
+
+    <div id="divisionTabs" class="hidden flex flex-wrap gap-1.5 mb-4"></div>
+
+    <div id="divisionContent"></div>
+  </main>
+
+  <footer class="max-w-[860px] mx-auto px-4 py-8 text-center md:text-right">
+    <span class="mono text-[10px] opacity-40">Powered by Dulà HQ</span>
+  </footer>
+</div>
+
+<script>
+/* ================================================================
+   TENANT + TOURNAMENT RESOLUTION, FIREBASE INIT
+   (same conventions as store.html / tournament-admin.html; this page
+   has no PIN gate at all -- it's the platform's one genuinely public
+   page besides index.html itself, gated only by the tournament's own
+   status, never by the Tournaments add-on's entitlement flags. A
+   published event stays visible even if the tenant's entitlement is
+   later paused or removed -- pausing/removing only affects the
+   ability to create or manage NEW tournaments, per the independent-
+   lifecycle rule this whole feature is built around.)
+   ================================================================ */
+function getParams(){
+  const p = new URLSearchParams(window.location.search);
+  const client = p.get('client');
+  const t = p.get('t');
+  return {
+    client: (client && /^[a-z0-9-]+$/.test(client)) ? client : null,
+    tournamentId: (t && /^[a-zA-Z0-9_-]+$/.test(t)) ? t : null,
+  };
+}
+const { client: currentClientId, tournamentId: CURRENT_TOURNAMENT_ID } = getParams();
+
+const FIREBASE_CFG = (window.FIREBASE_CONFIG && window.FIREBASE_CONFIG.apiKey && !String(window.FIREBASE_CONFIG.apiKey).startsWith('PASTE')) ? window.FIREBASE_CONFIG : null;
+const FB_ENABLED = !!(FIREBASE_CFG && FIREBASE_CFG.projectId);
+let db = null;
+if (FB_ENABLED) {
+  try { firebase.initializeApp(FIREBASE_CFG); db = firebase.firestore(); }
+  catch(e) { console.warn('[PickleTournamentPublic] Firebase init failed:', e.message); }
+}
+
+function escapeHtml(s){ return (s==null?'':String(s)).replace(/[&<>"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+function fmtDate(iso){
+  if(!iso) return '';
+  try { return new Date(iso + 'T00:00:00').toLocaleDateString('en-PH', {weekday:'short', month:'short', day:'numeric', year:'numeric'}); }
+  catch(e){ return iso; }
+}
+function fmtHour(h){
+  if(h == null) return '';
+  const period = h >= 12 ? 'PM' : 'AM';
+  const hour12 = h % 12 === 0 ? 12 : h % 12;
+  return `${hour12}${period}`;
+}
+
+function renderGateState(html){
+  document.getElementById('gateStateWrap').innerHTML = html;
+}
+function showNotFound(){
+  renderGateState(`
+    <h2 class="mt-5 text-[19px] font-[800] tracking-[-0.02em]">Tournament Not Found</h2>
+    <p class="mt-2.5 mono text-[12px] leading-[1.6] opacity-70">This link may be out of date, or the tournament may have been removed.</p>
+  `);
+}
+function showNotPublished(){
+  renderGateState(`
+    <h2 class="mt-5 text-[19px] font-[800] tracking-[-0.02em]">Not Published Yet</h2>
+    <p class="mt-2.5 mono text-[12px] leading-[1.6] opacity-70">This tournament is still being set up. Check back soon.</p>
+  `);
+}
+
+/* ================================================================
+   TOURNAMENT DOC (live) -- header, status, announcements
+   ================================================================ */
+const CATEGORY_LABELS = { MS:"Men's Singles", WS:"Women's Singles", MD:"Men's Doubles", WD:"Women's Doubles", MX:'Mixed Doubles', custom:'Custom' };
+const FORMAT_LABELS = { round_robin:'Round Robin', single_elim:'Single Elimination', group_knockout:'Group Stage → Knockout' };
+function tournamentStatusBadge(status){
+  const map = {
+    published: { bg:'#E8F5D8', fg:'#3F7019', label:'Published' },
+    live:      { bg:'#D6FF5F', fg:'#201C19', label:'Live' },
+    completed: { bg:'#E4E1FF', fg:'#4A3FA0', label:'Completed' },
+    cancelled: { bg:'#FFE9E0', fg:'#8C2C10', label:'Cancelled' },
+  };
+  const s = map[status] || map.published;
+  return `<span class="mono text-[9.5px] uppercase tracking-widest font-[800] px-2.5 py-1 rounded-full" style="background:${s.bg};color:${s.fg}">${s.label}</span>`;
+}
+
+let DIVISIONS = [];
+let CURRENT_DIVISION_ID = null;
+let unsubMatches = null, unsubStandings = null;
+
+function renderHeader(t, bizName){
+  document.getElementById('hostLabel').textContent = bizName;
+  document.getElementById('tournamentName').textContent = t.name || 'Untitled Tournament';
+  document.getElementById('tournamentStatusBadge').innerHTML = tournamentStatusBadge(t.status);
+  document.title = `${t.name || 'Tournament'} — ${bizName}`;
+
+  const dateLine = t.startDate === t.endDate || !t.endDate ? fmtDate(t.startDate) : `${fmtDate(t.startDate)} – ${fmtDate(t.endDate)}`;
+  const typeLine = t.eventType === 'dual'
+    ? `Dual Meet${t.otherClubsText ? ' vs ' + escapeHtml(t.otherClubsText) : ''}`
+    : 'Intra-Club Tournament';
+  document.getElementById('tournamentMeta').innerHTML = [
+    dateLine,
+    t.venue ? escapeHtml(t.venue) : '',
+    typeLine,
+  ].filter(Boolean).join(' &middot; ');
+
+  document.getElementById('cancelledBanner').classList.toggle('hidden', t.status !== 'cancelled');
+  renderAnnouncements(t.announcements || []);
+}
+function renderAnnouncements(announcements){
+  const section = document.getElementById('announcementsSection');
+  if(!announcements || announcements.length === 0){ section.classList.add('hidden'); return; }
+  section.classList.remove('hidden');
+  const sorted = [...announcements].sort((a,b) => (b.createdAt||0) - (a.createdAt||0));
+  document.getElementById('announcementsList').innerHTML = sorted.map(a => `
+    <div class="p-2.5 rounded-[12px] bg-white border border-[#EAE0D5] mono text-[11.5px]">${escapeHtml(a.text)}</div>
+  `).join('');
+}
+
+/* ================================================================
+   DIVISIONS -- tabs + per-division content
+   ================================================================ */
+async function loadDivisionsAndRender(){
+  const snap = await db.collection(`clients/${currentClientId}/tournaments/${CURRENT_TOURNAMENT_ID}/divisions`).orderBy('createdAt', 'asc').get();
+  DIVISIONS = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  if(DIVISIONS.length === 0){
+    document.getElementById('divisionContent').innerHTML = `<div class="mono text-[12px] opacity-50 text-center py-10">Divisions haven't been added yet.</div>`;
+    return;
+  }
+  const tabsWrap = document.getElementById('divisionTabs');
+  if(DIVISIONS.length > 1){
+    tabsWrap.classList.remove('hidden');
+    tabsWrap.innerHTML = DIVISIONS.map(d => `<button data-division-tab="${d.id}" class="division-tab-btn h-9 px-3.5 rounded-full mono text-[11px] font-[700] border border-[#EAE0D5] cursor-pointer transition">${escapeHtml(d.name)}</button>`).join('');
+    tabsWrap.querySelectorAll('[data-division-tab]').forEach(btn => btn.addEventListener('click', () => selectDivision(btn.dataset.divisionTab)));
+  }
+  selectDivision(DIVISIONS[0].id);
+}
+function selectDivision(divisionId){
+  CURRENT_DIVISION_ID = divisionId;
+  document.querySelectorAll('.division-tab-btn').forEach(b => {
+    const active = b.dataset.divisionTab === divisionId;
+    b.classList.toggle('bg-[#201C19]', active);
+    b.classList.toggle('text-white', active);
+    b.classList.toggle('bg-white', !active);
+  });
+  renderDivisionShell();
+  loadRegistrationCount(divisionId);
+  subscribeToDivisionData(divisionId);
+}
+
+function renderDivisionShell(){
+  const div = DIVISIONS.find(d => d.id === CURRENT_DIVISION_ID);
+  const hasBracketView = div.format === 'single_elim' || div.format === 'group_knockout';
+  document.getElementById('divisionContent').innerHTML = `
+    <div class="rounded-[20px] bg-white border border-[#EAE0D5] p-4 md:p-5 mb-4">
+      <div class="flex items-center justify-between flex-wrap gap-2">
+        <span class="font-[800] text-[15px]">${escapeHtml(div.name)}</span>
+        <span class="mono text-[10px] opacity-50">${CATEGORY_LABELS[div.category] || div.category} &middot; ${FORMAT_LABELS[div.format] || div.format}</span>
+      </div>
+      <div id="registrationCountLine" class="mono text-[10.5px] opacity-50 mt-1"></div>
+      <div id="participantChips" class="flex flex-wrap gap-1 mt-2.5"></div>
+    </div>
+    <nav class="flex items-center gap-1 bg-[#F1E9DF] p-1 rounded-full overflow-x-auto no-scrollbar mb-4 w-fit">
+      <button data-view-tab="schedule" class="view-tab-btn shrink-0 px-3.5 h-8 rounded-full mono text-[11px] font-[700] transition cursor-pointer">Schedule</button>
+      <button data-view-tab="standings" class="view-tab-btn shrink-0 px-3.5 h-8 rounded-full mono text-[11px] font-[700] transition cursor-pointer">Standings</button>
+      ${hasBracketView ? `<button data-view-tab="bracket" class="view-tab-btn shrink-0 px-3.5 h-8 rounded-full mono text-[11px] font-[700] transition cursor-pointer">Bracket</button>` : ''}
+    </nav>
+    <div id="view-schedule" class="tournament-view"><div class="mono text-[11px] opacity-50">Loading...</div></div>
+    <div id="view-standings" class="tournament-view hidden"></div>
+    ${hasBracketView ? `<div id="view-bracket" class="tournament-view hidden"></div>` : ''}
+  `;
+  document.querySelectorAll('.view-tab-btn').forEach(btn => btn.addEventListener('click', () => showView(btn.dataset.viewTab)));
+  showView('schedule');
+}
+function showView(view){
+  document.querySelectorAll('.tournament-view').forEach(v => v.classList.toggle('hidden', v.id !== `view-${view}`));
+  document.querySelectorAll('.view-tab-btn').forEach(b => {
+    const active = b.dataset.viewTab === view;
+    b.classList.toggle('bg-[#201C19]', active);
+    b.classList.toggle('text-white', active);
+    b.classList.toggle('opacity-70', !active);
+  });
+}
+
+async function loadRegistrationCount(divisionId){
+  const div = DIVISIONS.find(d => d.id === divisionId);
+  try {
+    const snap = await db.collection(`clients/${currentClientId}/tournaments/${CURRENT_TOURNAMENT_ID}/registrations`).where('divisionId', '==', divisionId).get();
+    const regs = snap.docs.map(d => d.data());
+    const active = regs.filter(r => r.status === 'approved' || r.status === 'checked_in');
+    const waitlisted = regs.filter(r => r.status === 'waitlisted');
+    document.getElementById('registrationCountLine').textContent =
+      `${active.length}${div.maxParticipants ? '/' + div.maxParticipants : ''} registered${waitlisted.length ? ` · ${waitlisted.length} waitlisted` : ''}`;
+    document.getElementById('participantChips').innerHTML = active.map(r =>
+      `<span class="mono text-[10px] px-2.5 py-1 rounded-full bg-[#F1E9DF]">${escapeHtml((r.playerNames||[]).join(' & '))}</span>`
+    ).join('');
+  } catch(ex) { console.warn('[PickleTournamentPublic] Failed to load registrations:', ex.message); }
+}
+
+/* ================================================================
+   MATCHES + STANDINGS -- live via onSnapshot, same read-only rules
+   this page reads under everywhere else (tournaments/divisions/
+   registrations/matches/standings are all open-read). Nothing on
+   this page ever writes.
+   ================================================================ */
+function subscribeToDivisionData(divisionId){
+  if(unsubMatches) unsubMatches();
+  if(unsubStandings) unsubStandings();
+
+  unsubMatches = db.collection(`clients/${currentClientId}/tournaments/${CURRENT_TOURNAMENT_ID}/matches`)
+    .where('divisionId', '==', divisionId)
+    .onSnapshot(snap => {
+      const matches = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      renderSchedule(matches);
+      renderBracket(matches);
+    }, ex => console.warn('[PickleTournamentPublic] matches listener failed:', ex.message));
+
+  unsubStandings = db.doc(`clients/${currentClientId}/tournaments/${CURRENT_TOURNAMENT_ID}/standings/${divisionId}`)
+    .onSnapshot(snap => renderStandings(snap.exists ? snap.data() : null),
+      ex => console.warn('[PickleTournamentPublic] standings listener failed:', ex.message));
+}
+
+function matchStatusBadge(status){
+  const map = {
+    scheduled: { bg:'#F1E9DF', fg:'#201C19', label:'Scheduled' },
+    completed: { bg:'#E8F5D8', fg:'#3F7019', label:'Final' },
+    forfeit:   { bg:'#FFE9E0', fg:'#8C2C10', label:'Forfeit' },
+    walkover:  { bg:'#FFE9E0', fg:'#8C2C10', label:'Walkover' },
+    cancelled: { bg:'#F1E9DF', fg:'#201C19', label:'Cancelled' },
+  };
+  const s = map[status] || map.scheduled;
+  return `<span class="mono text-[9px] uppercase tracking-widest font-[800] px-2 py-0.5 rounded-full" style="background:${s.bg};color:${s.fg}">${s.label}</span>`;
+}
+function matchLine(m){
+  const [nameA, nameB] = m.participantNames;
+  if(m.participantIds.includes('BYE')){
+    return `<div class="p-3 rounded-[14px] bg-[#FFFBF5] border border-[#EAE0D5] opacity-60"><span class="font-[700] text-[12.5px]">${escapeHtml(nameA)}</span> <span class="mono text-[10px] ml-1">advances (bye)</span></div>`;
+  }
+  const resultLine = m.status !== 'scheduled'
+    ? `<div class="mono text-[11px] mt-1">${m.score ? `${m.score.a} - ${m.score.b}` : 'Forfeit'} · winner: <b>${escapeHtml(m.participantNames[m.participantIds.indexOf(m.winnerParticipantId)] || '')}</b></div>`
+    : (m.court || m.scheduledDate ? `<div class="mono text-[10.5px] opacity-60 mt-1">📍 ${escapeHtml(m.scheduledDate || '')}${m.scheduledHour != null ? ' · ' + fmtHour(m.scheduledHour) : ''}</div>` : '');
+  return `
+    <div class="p-3 rounded-[14px] bg-white border border-[#EAE0D5]">
+      <div class="flex items-center justify-between gap-2 flex-wrap">
+        <span class="font-[700] text-[12.5px]">${escapeHtml(nameA)} <span class="opacity-40 font-[500]">vs</span> ${escapeHtml(nameB)}</span>
+        ${matchStatusBadge(m.status)}
+      </div>
+      ${resultLine}
+    </div>`;
+}
+function renderSchedule(matches){
+  const wrap = document.getElementById('view-schedule');
+  if(!wrap) return;
+  if(matches.length === 0){ wrap.innerHTML = `<div class="mono text-[11px] opacity-50 text-center py-8">Schedule not generated yet.</div>`; return; }
+
+  const groupsPresent = [...new Set(matches.filter(m => m.groupId).map(m => m.groupId))].sort();
+  const sections = [];
+  if(groupsPresent.length){
+    groupsPresent.forEach(g => sections.push({ label: `Group ${g}`, matches: matches.filter(m => m.groupId === g) }));
+    const knockout = matches.filter(m => m.stage === 'knockout');
+    if(knockout.length) sections.push({ label: 'Knockout', matches: knockout });
+  } else {
+    sections.push({ label: null, matches });
+  }
+  wrap.innerHTML = sections.map(sec => {
+    const byRound = {};
+    sec.matches.forEach(m => { (byRound[m.round] = byRound[m.round] || []).push(m); });
+    const roundBlocks = Object.keys(byRound).sort((a,b)=>a-b).map(r => `
+      <div class="mono text-[9.5px] uppercase tracking-widest opacity-50 mt-3 mb-1.5">Round ${r}</div>
+      <div class="space-y-1.5">${byRound[r].sort((a,b)=>a.position-b.position).map(matchLine).join('')}</div>
+    `).join('');
+    return `<div>${sec.label ? `<div class="mono text-[11px] font-[700] mt-2">${escapeHtml(sec.label)}</div>` : ''}${roundBlocks}</div>`;
+  }).join('');
+}
+
+function statTable(rows, cols){
+  return `<div class="overflow-x-auto"><table class="w-full mono text-[11px]">
+    <thead><tr class="text-left opacity-50">${cols.map(c => `<th class="pr-3 pb-1.5 font-[600]">${c.label}</th>`).join('')}</tr></thead>
+    <tbody>${rows.map(r => `<tr class="border-t border-[#F1E9DF]">${cols.map(c => `<td class="py-1.5 pr-3">${c.render(r)}</td>`).join('')}</tr>`).join('')}</tbody>
+  </table></div>`;
+}
+function renderStandings(standings){
+  const wrap = document.getElementById('view-standings');
+  if(!wrap) return;
+  if(!standings){ wrap.innerHTML = `<div class="mono text-[11px] opacity-50 text-center py-8">Standings will appear once matches are scored.</div>`; return; }
+
+  if(standings.format === 'round_robin'){
+    wrap.innerHTML = `<div class="rounded-[20px] bg-white border border-[#EAE0D5] p-4">` + statTable(standings.table, [
+      { label: '#', render: r => r.rank }, { label: 'Team', render: r => escapeHtml(r.name) },
+      { label: 'W-L', render: r => `${r.wins}-${r.losses}` }, { label: '+/-', render: r => (r.pointsFor - r.pointsAgainst) },
+    ]) + `</div>`;
+  } else if(standings.format === 'single_elim'){
+    const statusLabel = { champion: '🏆 Champion', alive: 'Still In', eliminated: 'Eliminated' };
+    wrap.innerHTML = `<div class="rounded-[20px] bg-white border border-[#EAE0D5] p-4">` + statTable(standings.table, [
+      { label: '#', render: r => r.rank }, { label: 'Team', render: r => escapeHtml(r.name) },
+      { label: 'Status', render: r => statusLabel[r.status] || r.status },
+    ]) + `</div>`;
+  } else if(standings.format === 'group_knockout' && standings.stage === 'group'){
+    wrap.innerHTML = standings.groupTables.map(g => `
+      <div class="rounded-[20px] bg-white border border-[#EAE0D5] p-4 mb-3">
+        <div class="mono text-[10px] uppercase tracking-widest opacity-60 mb-2">Group ${g.groupId}</div>
+        ${statTable(g.table, [
+          { label: '#', render: r => r.rank }, { label: 'Team', render: r => escapeHtml(r.name) },
+          { label: 'W-L', render: r => `${r.wins}-${r.losses}` }, { label: '+/-', render: r => (r.pointsFor - r.pointsAgainst) },
+        ])}
+      </div>`).join('');
+  } else if(standings.format === 'group_knockout' && standings.stage === 'knockout'){
+    const statusLabel = { champion: '🏆 Champion', alive: 'Still In', eliminated: 'Eliminated' };
+    wrap.innerHTML = `<div class="rounded-[20px] bg-white border border-[#EAE0D5] p-4">
+      <div class="mono text-[10px] uppercase tracking-widest opacity-60 mb-2">Knockout Stage</div>
+      ${statTable(standings.table, [
+        { label: '#', render: r => r.rank }, { label: 'Team', render: r => escapeHtml(r.name) },
+        { label: 'Status', render: r => statusLabel[r.status] || r.status },
+      ])}</div>`;
+  }
+}
+
+function renderBracket(matches){
+  const wrap = document.getElementById('view-bracket');
+  if(!wrap) return;
+  const bracketMatches = matches.filter(m => m.stage === 'main' || m.stage === 'knockout');
+  if(bracketMatches.length === 0){ wrap.innerHTML = `<div class="mono text-[11px] opacity-50 text-center py-8">Bracket not generated yet.</div>`; return; }
+  const byRound = {};
+  bracketMatches.forEach(m => { (byRound[m.round] = byRound[m.round] || []).push(m); });
+  const roundNums = Object.keys(byRound).sort((a,b)=>a-b);
+  const maxRound = Math.max(...roundNums.map(Number));
+  wrap.innerHTML = `<div class="flex gap-3 overflow-x-auto pb-2">
+    ${roundNums.map(r => `
+      <div class="shrink-0 w-[220px]">
+        <div class="mono text-[9.5px] uppercase tracking-widest opacity-50 mb-1.5">${Number(r) === maxRound ? 'Final' : 'Round ' + r}</div>
+        <div class="space-y-2">${byRound[r].sort((a,b)=>a.position-b.position).map(matchLine).join('')}</div>
+      </div>
+    `).join('')}
+  </div>`;
+}
+
+/* ================================================================
+   INIT
+   ================================================================ */
+async function init(){
+  if(!currentClientId || !CURRENT_TOURNAMENT_ID){ showNotFound(); return; }
+  if(!db){ renderGateState(`<p class="mt-5 mono text-[12px] text-[#8C2C10]">Firebase is not configured.</p>`); return; }
+
+  try {
+    const configSnap = await db.doc(`clients/${currentClientId}/config/state`).get();
+    const cfg = (configSnap.exists && configSnap.data().data) || {};
+    const bizName = (cfg.business && cfg.business.name) || cfg.businessName || currentClientId;
+
+    db.doc(`clients/${currentClientId}/tournaments/${CURRENT_TOURNAMENT_ID}`).onSnapshot(async (snap) => {
+      if(!snap.exists){ showNotFound(); return; }
+      const t = snap.data();
+      if(t.status === 'draft'){ showNotPublished(); return; }
+
+      document.getElementById('gateScreen').classList.add('hidden');
+      document.getElementById('appScreen').classList.remove('hidden');
+      renderHeader(t, bizName);
+
+      if(!DIVISIONS.length) await loadDivisionsAndRender();
+    }, ex => {
+      renderGateState(`<p class="mt-5 mono text-[12px] text-[#8C2C10]">Failed to load: ${escapeHtml(ex.message)}</p>`);
+    });
+  } catch(ex) {
+    renderGateState(`<p class="mt-5 mono text-[12px] text-[#8C2C10]">Failed to load: ${escapeHtml(ex.message)}</p>`);
+  }
+}
+init();
+</script>
+</body>
+</html>

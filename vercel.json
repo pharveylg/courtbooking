@@ -37,6 +37,12 @@
       ]
     },
     {
+      "source": "/tournament.html",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" }
+      ]
+    },
+    {
       "source": "/tailwind.css",
       "headers": [
         { "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" }
@@ -50,6 +56,8 @@
     { "source": "/store.html", "destination": "/store.html" },
     { "source": "/tournament-admin", "destination": "/tournament-admin.html" },
     { "source": "/tournament-admin.html", "destination": "/tournament-admin.html" },
+    { "source": "/tournament", "destination": "/tournament.html" },
+    { "source": "/tournament.html", "destination": "/tournament.html" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }

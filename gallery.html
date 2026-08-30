@@ -87,7 +87,6 @@ function compressImage(file){
 }
 
 let TOKEN_DOC = null;
-let UPLOADED_THIS_SESSION = 0;
 
 function renderUploadUi(tournamentName){
   renderState(`
@@ -116,7 +115,16 @@ function renderUploadUi(tournamentName){
     const statusEl = document.getElementById('uploadStatus');
     let uploaded = 0;
     for (const file of selectedFiles) {
-      const remaining = TOKEN_DOC.maxUploads ? TOKEN_DOC.maxUploads - (TOKEN_DOC.uploadCount + UPLOADED_THIS_SESSION) : Infinity;
+      // Re-check the token fresh before every file, not just once at page
+      // load -- an organizer revoking a link mid-batch (or someone else's
+      // uploads pushing it over the cap) should stop this session cold,
+      // not just the next time the page happens to reload.
+      let liveToken;
+      try { liveToken = (await db.doc(`clients/${currentClientId}/tournaments/${CURRENT_TOURNAMENT_ID}/uploadTokens/${TOKEN}`).get()).data(); }
+      catch(ex) { statusEl.textContent = 'Could not verify the upload link -- check your connection and try again.'; break; }
+      const nowExpired = liveToken.expiresAt && Date.now() > liveToken.expiresAt;
+      if(liveToken.revoked || nowExpired){ statusEl.textContent = `This link has been ${liveToken.revoked ? 'revoked' : 'expired'} since you started uploading.`; break; }
+      const remaining = liveToken.maxUploads ? liveToken.maxUploads - liveToken.uploadCount : Infinity;
       if(remaining <= 0){ statusEl.textContent = 'Upload limit reached for this link.'; break; }
       try {
         statusEl.textContent = `Uploading ${uploaded + 1} of ${selectedFiles.length}...`;
@@ -130,14 +138,15 @@ function renderUploadUi(tournamentName){
           uploadTokenId: TOKEN, storagePath: path, downloadUrl, status: 'pending',
           uploadedAt: firebase.firestore.FieldValue.serverTimestamp(),
         });
-        UPLOADED_THIS_SESSION++;
+        // Incremented immediately (not batched at the end) so the fresh
+        // re-check at the top of the next loop iteration -- and anyone
+        // else uploading against this same shared link at the same time
+        // -- both see an accurate count, not last-known-at-page-load.
+        await db.doc(`clients/${currentClientId}/tournaments/${CURRENT_TOURNAMENT_ID}/uploadTokens/${TOKEN}`)
+          .set({ uploadCount: firebase.firestore.FieldValue.increment(1) }, { merge: true });
         uploaded++;
       } catch(ex) { statusEl.textContent = `Failed on photo ${uploaded + 1}: ${ex.message}`; break; }
     }
-    try {
-      await db.doc(`clients/${currentClientId}/tournaments/${CURRENT_TOURNAMENT_ID}/uploadTokens/${TOKEN}`)
-        .set({ uploadCount: firebase.firestore.FieldValue.increment(uploaded) }, { merge: true });
-    } catch(ex) { /* photos already saved; the count is a soft display limit, not a hard gate */ }
     if(uploaded === selectedFiles.length){
       statusEl.textContent = '';
       renderState(`

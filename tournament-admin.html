@@ -708,10 +708,20 @@ document.getElementById('publishBtn').addEventListener('click', async () => {
 document.getElementById('cancelTournamentBtn').addEventListener('click', async () => {
   if(!CURRENT_TOURNAMENT_ID) return;
   const t = TOURNAMENTS.find(x => x.id === CURRENT_TOURNAMENT_ID);
-  if(!confirm(`Cancel "${t?.name || 'this tournament'}"? Registrations and data are kept, not deleted.`)) return;
+  if(!confirm(`Cancel "${t?.name || 'this tournament'}"? Registrations and data are kept, not deleted. Any scheduled matches will be pulled off the booking calendar.`)) return;
   try {
+    // Release every scheduled match's real booking-calendar slot BEFORE
+    // marking the tournament cancelled -- scheduleMatch refuses to touch
+    // a cancelled tournament's matches, so this has to happen first, or
+    // those courts would stay falsely occupied indefinitely.
+    const matchesSnap = await db.collection(`clients/${currentClientId}/tournaments/${CURRENT_TOURNAMENT_ID}/matches`).get();
+    const scheduled = matchesSnap.docs.filter(d => d.data().court);
+    for (const m of scheduled) {
+      try { await callEngine('scheduleMatch', { clientId: currentClientId, tournamentId: CURRENT_TOURNAMENT_ID, matchId: m.id, court: null }); }
+      catch(ex) { console.warn('[PickleTournaments] Failed to release a match\'s booking slot:', ex.message); }
+    }
     await db.doc(`clients/${currentClientId}/tournaments/${CURRENT_TOURNAMENT_ID}`).set({ status: 'cancelled' }, { merge: true });
-    await logTournamentAudit(CURRENT_TOURNAMENT_ID, 'cancel', `Cancelled "${t?.name || CURRENT_TOURNAMENT_ID}"`);
+    await logTournamentAudit(CURRENT_TOURNAMENT_ID, 'cancel', `Cancelled "${t?.name || CURRENT_TOURNAMENT_ID}"${scheduled.length ? ` -- released ${scheduled.length} scheduled match(es) from the booking calendar` : ''}`);
     toast('Tournament cancelled');
     await loadTournaments();
     openTournament(CURRENT_TOURNAMENT_ID);
@@ -899,6 +909,7 @@ function renderRegistrations(){
           ${regStatusBadge(r.status)}
           ${r.status === 'approved' ? `<button data-checkin="${r.id}" class="h-7 px-2.5 rounded-full bg-white border border-[#EAE0D5] mono text-[9px] font-[700] cursor-pointer hover:border-[#201C19]">Check In</button>` : ''}
           ${r.status === 'checked_in' ? `<button data-undo-checkin="${r.id}" class="h-7 px-2.5 rounded-full bg-white border border-[#EAE0D5] mono text-[9px] font-[700] cursor-pointer hover:border-[#201C19]">Undo Check-In</button>` : ''}
+          ${(r.playerIds || []).length === 2 && r.status !== 'checked_in' && r.status !== 'withdrawn' ? `<button data-replace-partner="${r.id}" class="h-7 px-2.5 rounded-full bg-white border border-[#EAE0D5] mono text-[9px] font-[700] cursor-pointer hover:border-[#201C19]">Replace Partner</button>` : ''}
           ${r.status !== 'withdrawn' ? `<button data-withdraw="${r.id}" class="h-7 px-2.5 rounded-full bg-[#FFE9E0] text-[#8C2C10] border border-[#FFC9B6] mono text-[9px] font-[700] cursor-pointer hover:bg-[#FFD7C7]">Withdraw</button>` : ''}
         </div>
       </div>
@@ -916,6 +927,36 @@ function renderRegistrations(){
   wrap.querySelectorAll('[data-checkin]').forEach(btn => btn.addEventListener('click', () => setRegistrationStatus(btn.dataset.checkin, 'checked_in')));
   wrap.querySelectorAll('[data-undo-checkin]').forEach(btn => btn.addEventListener('click', () => setRegistrationStatus(btn.dataset.undoCheckin, 'approved')));
   wrap.querySelectorAll('[data-withdraw]').forEach(btn => btn.addEventListener('click', () => withdrawRegistration(btn.dataset.withdraw)));
+  wrap.querySelectorAll('[data-replace-partner]').forEach(btn => btn.addEventListener('click', () => replacePartner(btn.dataset.replacePartner)));
+}
+
+/* A doubles player's partner backing out is common enough to need a
+   direct fix -- the remaining player keeps their spot, only the second
+   slot changes. Blocked once checked_in (per the brief: replacement is
+   allowed up to check-in, after that the team withdraws together) and
+   once withdrawn. This updates the registration only; if a bracket was
+   already generated before this runs, the match's own denormalized
+   name doesn't retroactively change -- a cosmetic gap, not a scoring
+   one, since the participantId itself never changes. */
+async function replacePartner(regId){
+  const reg = REGISTRATIONS.find(r => r.id === regId);
+  if(!reg || (reg.playerIds || []).length !== 2) return;
+  const phone = prompt(`New partner's phone number (replacing ${reg.playerNames[1]}):`);
+  if(!phone || !phone.trim()) return;
+  const name = prompt("New partner's full name:");
+  if(!name || !name.trim()) return;
+  try {
+    const partner = await findOrCreatePlayer(phone.trim(), name.trim(), null);
+    if(partner.id === reg.playerIds[0]){ toast('That\'s the same person as player 1'); return; }
+    const playerIds = [reg.playerIds[0], partner.id];
+    const playerNames = [reg.playerNames[0], partner.name];
+    const playerDuprs = [reg.playerDuprs?.[0] ?? null, partner.duprRating ?? null];
+    await db.doc(`clients/${currentClientId}/tournaments/${CURRENT_TOURNAMENT_ID}/registrations/${regId}`)
+      .set({ playerIds, playerNames, playerDuprs, partnerAssignedBy: 'admin' }, { merge: true });
+    await logTournamentAudit(CURRENT_TOURNAMENT_ID, 'partner-replaced', `${reg.playerNames[1]} replaced by ${partner.name} (partnering ${reg.playerNames[0]})`);
+    toast('Partner replaced');
+    await loadRegistrations(CURRENT_TOURNAMENT_ID);
+  } catch(ex) { toast('Failed: ' + ex.message); }
 }
 
 document.getElementById('registrationForm').addEventListener('submit', async (e) => {
@@ -923,6 +964,14 @@ document.getElementById('registrationForm').addEventListener('submit', async (e)
   const divisionId = document.getElementById('rfDivision').value;
   if(!divisionId){ toast('Add a division first'); return; }
   const div = CURRENT_DIVISIONS.find(d => d.id === divisionId);
+  // Late registration is fine right up until the bracket exists -- once
+  // matches are generated, a new entrant would never actually appear
+  // anywhere in the schedule, so this blocks outright rather than
+  // silently accepting a registration nothing will ever use.
+  try {
+    const existingMatch = await db.collection(`clients/${currentClientId}/tournaments/${CURRENT_TOURNAMENT_ID}/matches`).where('divisionId', '==', divisionId).limit(1).get();
+    if(!existingMatch.empty){ toast('Registration is closed -- the bracket for this division has already been generated'); return; }
+  } catch(ex) { toast('Failed to check division status: ' + ex.message); return; }
   const p1Phone = document.getElementById('rf1Phone').value.trim();
   const p1Name = document.getElementById('rf1Name').value.trim();
   if(!p1Phone || !p1Name){ toast('Enter player 1\'s phone and name'); return; }
@@ -981,6 +1030,23 @@ async function withdrawRegistration(regId){
     await db.doc(`clients/${currentClientId}/tournaments/${CURRENT_TOURNAMENT_ID}/registrations/${regId}`).set({ status: 'withdrawn' }, { merge: true });
     await logTournamentAudit(CURRENT_TOURNAMENT_ID, 'withdraw', `Withdrew ${(reg.playerNames || []).join(' & ')} from division`);
 
+    // Withdrawing after the bracket exists means this participant may
+    // already be sitting in a not-yet-played match -- rather than leave
+    // a phantom opponent staring at an empty slot, auto-walkover any
+    // active match they're still in so the bracket keeps moving.
+    try {
+      const matchesSnap = await db.collection(`clients/${currentClientId}/tournaments/${CURRENT_TOURNAMENT_ID}/matches`)
+        .where('divisionId', '==', reg.divisionId).where('participantIds', 'array-contains', regId).get();
+      const stillActive = matchesSnap.docs.filter(d => d.data().status === 'scheduled');
+      for (const m of stillActive) {
+        const match = m.data();
+        const opponentId = match.participantIds.find(id => id !== regId && id !== 'BYE');
+        if (!opponentId) continue;
+        await callEngine('submitMatchScore', { clientId: currentClientId, tournamentId: CURRENT_TOURNAMENT_ID, matchId: m.id, forfeitWinnerParticipantId: opponentId });
+        await logTournamentAudit(CURRENT_TOURNAMENT_ID, 'auto-walkover', `${match.participantNames.join(' vs ')} auto-walked over -- ${(reg.playerNames || []).join(' & ')} withdrew`);
+      }
+    } catch(ex) { console.warn('[PickleTournaments] auto-walkover failed, continuing withdrawal:', ex.message); }
+
     // Promote the earliest waitlisted registration in the same division, if
     // withdrawing just opened a spot (only meaningful when the division has
     // a cap -- an uncapped division never waitlists in the first place).
@@ -998,6 +1064,7 @@ async function withdrawRegistration(regId){
     }
     toast('Withdrawn');
     await loadRegistrations(CURRENT_TOURNAMENT_ID);
+    if(CURRENT_MATCHES_DIVISION_ID === reg.divisionId) await loadMatchesForDivision(reg.divisionId);
   } catch(ex) { toast('Failed: ' + ex.message); }
 }
 

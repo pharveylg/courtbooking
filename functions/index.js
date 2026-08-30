@@ -58,6 +58,33 @@ async function logAudit(tRef, action, detail) {
   });
 }
 
+/* A cancelled or completed tournament is a terminal state -- nothing
+   about its bracket, schedule, or scores should still be mutable, even
+   if a staff member still has the dashboard open from before it was
+   cancelled. Every callable that changes tournament state checks this
+   first, rather than relying on the client to have hidden the button. */
+async function assertTournamentIsActive(tRef) {
+  const snap = await tRef.get();
+  if (!snap.exists) throw new HttpsError('not-found', 'Tournament not found.');
+  const status = snap.data().status;
+  if (status === 'cancelled' || status === 'completed') {
+    throw new HttpsError('failed-precondition', `This tournament is ${status} -- nothing about it can be changed anymore.`);
+  }
+  return snap.data();
+}
+/* Score corrections are the one exception: fixing a historical record
+   after a tournament wraps up ('completed') is a normal, expected need
+   -- only 'cancelled' blocks a correction, since there's no record left
+   worth correcting once the whole event was called off. */
+async function assertTournamentNotCancelled(tRef) {
+  const snap = await tRef.get();
+  if (!snap.exists) throw new HttpsError('not-found', 'Tournament not found.');
+  if (snap.data().status === 'cancelled') {
+    throw new HttpsError('failed-precondition', 'This tournament was cancelled -- nothing about it can be changed anymore.');
+  }
+  return snap.data();
+}
+
 /* Active registrations (approved or checked_in) for a division, shaped
    for the seeding/format engines. */
 async function loadActiveParticipants(tRef, divisionId) {
@@ -89,6 +116,7 @@ exports.generateBracket = onCall({ region: REGION }, async (request) => {
   requireString(divisionId, 'divisionId');
 
   const tRef = tournamentRef(clientId, tournamentId);
+  await assertTournamentIsActive(tRef);
   const divRef = tRef.collection('divisions').doc(divisionId);
   const divSnap = await divRef.get();
   if (!divSnap.exists) throw new HttpsError('not-found', 'Division not found.');
@@ -152,6 +180,7 @@ exports.advanceToKnockout = onCall({ region: REGION }, async (request) => {
   requireString(divisionId, 'divisionId');
 
   const tRef = tournamentRef(clientId, tournamentId);
+  await assertTournamentIsActive(tRef);
   const divRef = tRef.collection('divisions').doc(divisionId);
   const divSnap = await divRef.get();
   if (!divSnap.exists) throw new HttpsError('not-found', 'Division not found.');
@@ -202,6 +231,7 @@ exports.submitMatchScore = onCall({ region: REGION }, async (request) => {
   requireString(matchId, 'matchId');
 
   const tRef = tournamentRef(clientId, tournamentId);
+  await assertTournamentIsActive(tRef);
   const matchRef = tRef.collection('matches').doc(matchId);
   const matchSnap = await matchRef.get();
   if (!matchSnap.exists) throw new HttpsError('not-found', 'Match not found.');
@@ -256,6 +286,7 @@ exports.correctMatchScore = onCall({ region: REGION }, async (request) => {
   requireString(reason, 'reason');
 
   const tRef = tournamentRef(clientId, tournamentId);
+  await assertTournamentNotCancelled(tRef);
   const matchRef = tRef.collection('matches').doc(matchId);
   const matchSnap = await matchRef.get();
   if (!matchSnap.exists) throw new HttpsError('not-found', 'Match not found.');
@@ -318,6 +349,7 @@ exports.scheduleMatch = onCall({ region: REGION }, async (request) => {
   requireString(matchId, 'matchId');
 
   const tRef = tournamentRef(clientId, tournamentId);
+  await assertTournamentIsActive(tRef);
   const matchRef = tRef.collection('matches').doc(matchId);
   const matchSnap = await matchRef.get();
   if (!matchSnap.exists) throw new HttpsError('not-found', 'Match not found.');

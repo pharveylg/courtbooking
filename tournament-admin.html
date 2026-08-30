@@ -290,6 +290,30 @@
         </div>
       </div>
 
+      <!-- Gallery -->
+      <div id="galleryWrap" class="hidden mt-5 rounded-[24px] bg-white border border-[#EAE0D5] p-5 md:p-6">
+        <h3 class="text-[16px] font-[800] tracking-[-0.02em] mb-1">Gallery</h3>
+        <p class="mono text-[10px] opacity-50 mb-3">Anyone with an upload link can submit photos -- nothing reaches the public gallery until you approve it below.</p>
+
+        <div class="flex items-center justify-between flex-wrap gap-2 mb-2">
+          <span class="mono text-[10px] uppercase tracking-widest opacity-60">Upload Links</span>
+          <button id="generateUploadLinkBtn" class="h-8 px-3 rounded-full bg-white border border-[#EAE0D5] mono text-[10px] font-[700] cursor-pointer hover:border-[#201C19]">+ Generate Link</button>
+        </div>
+        <form id="uploadLinkForm" class="hidden mb-3 p-3 rounded-[14px] bg-[#FFFBF5] border border-[#EAE0D5] flex flex-wrap items-end gap-2">
+          <label class="flex flex-col gap-1"><span class="mono text-[9px] opacity-50">Expires in (days, optional)</span><input type="number" min="1" id="tokenExpiresDays" class="w-28 h-9 rounded-full border border-[#EAE0D5] bg-white px-3 mono text-[11px] outline-none focus:border-[#201C19]"/></label>
+          <label class="flex flex-col gap-1"><span class="mono text-[9px] opacity-50">Max uploads (optional)</span><input type="number" min="1" id="tokenMaxUploads" class="w-28 h-9 rounded-full border border-[#EAE0D5] bg-white px-3 mono text-[11px] outline-none focus:border-[#201C19]"/></label>
+          <button type="submit" class="h-9 px-3.5 rounded-full bg-[#201C19] text-white mono text-[10px] font-[700] cursor-pointer">Create</button>
+        </form>
+        <div id="uploadLinksList" class="space-y-1.5 mb-4">
+          <div class="mono text-[11px] opacity-50">No upload links yet.</div>
+        </div>
+
+        <div class="mono text-[10px] uppercase tracking-widest opacity-60 mb-2 pt-3 border-t border-dashed border-[#EAE0D5]">Moderation Queue</div>
+        <div id="photosGrid" class="grid grid-cols-2 md:grid-cols-4 gap-2.5">
+          <div class="mono text-[11px] opacity-50 col-span-full">No photos yet.</div>
+        </div>
+      </div>
+
       <!-- Audit log -->
       <div id="auditWrap" class="hidden mt-5 rounded-[24px] bg-white border border-[#EAE0D5] p-5 md:p-6">
         <h3 class="text-[15px] font-[800] tracking-[-0.02em] mb-3">Activity</h3>
@@ -561,6 +585,8 @@ async function openTournament(tournamentId){
   document.getElementById('registrationWrap').classList.add('hidden');
   document.getElementById('matchesWrap').classList.add('hidden');
   document.getElementById('announcementsWrap').classList.add('hidden');
+  document.getElementById('galleryWrap').classList.add('hidden');
+  document.getElementById('uploadLinkForm').classList.add('hidden');
   document.getElementById('auditWrap').classList.add('hidden');
   document.getElementById('publishBtn').classList.add('hidden');
   document.getElementById('cancelTournamentBtn').classList.add('hidden');
@@ -602,7 +628,10 @@ async function openTournament(tournamentId){
   document.getElementById('registrationWrap').classList.remove('hidden');
   document.getElementById('matchesWrap').classList.remove('hidden');
   document.getElementById('announcementsWrap').classList.remove('hidden');
+  document.getElementById('galleryWrap').classList.remove('hidden');
   document.getElementById('auditWrap').classList.remove('hidden');
+  loadUploadLinks();
+  loadPhotos();
   if(t.status !== 'cancelled' && t.status !== 'completed'){
     document.getElementById('cancelTournamentBtn').classList.remove('hidden');
   }
@@ -1299,6 +1328,129 @@ async function removeAnnouncement(index){
     await db.doc(`clients/${currentClientId}/tournaments/${CURRENT_TOURNAMENT_ID}`).set({ announcements: next }, { merge: true });
     t.announcements = next;
     renderAnnouncements(next);
+  } catch(ex) { toast('Failed: ' + ex.message); }
+}
+
+/* ================================================================
+   GALLERY -- shareable upload-token links + moderation queue.
+   uploadTokens/{token} uses the random token itself as the doc id, so
+   gallery.html (the anonymous upload page) only ever needs a `get()`
+   by the id it was handed in the link -- no query, no auth, matching
+   how platformPlayers already resolves lookups without ever needing
+   to list a collection. Photos land as status:'pending' and are never
+   deleted outright here (Remove is a status, not a delete) -- the
+   Storage object itself is left alone, matching how the rest of this
+   app treats "removal" as a status flip, not data destruction.
+   ================================================================ */
+function genToken(){
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+document.getElementById('generateUploadLinkBtn').addEventListener('click', () => {
+  document.getElementById('uploadLinkForm').classList.toggle('hidden');
+});
+document.getElementById('uploadLinkForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const days = parseInt(document.getElementById('tokenExpiresDays').value) || null;
+  const maxUploads = parseInt(document.getElementById('tokenMaxUploads').value) || null;
+  const token = genToken();
+  try {
+    await db.doc(`clients/${currentClientId}/tournaments/${CURRENT_TOURNAMENT_ID}/uploadTokens/${token}`).set({
+      token,
+      expiresAt: days ? Date.now() + days * 86400000 : null,
+      maxUploads,
+      uploadCount: 0,
+      revoked: false,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+    await logTournamentAudit(CURRENT_TOURNAMENT_ID, 'upload-link-create', `Generated a gallery upload link${days ? ` (expires in ${days}d)` : ''}${maxUploads ? `, max ${maxUploads} uploads` : ''}`);
+    toast('Upload link created');
+    e.target.reset();
+    document.getElementById('uploadLinkForm').classList.add('hidden');
+    loadUploadLinks();
+  } catch(ex) { toast('Failed: ' + ex.message); }
+});
+async function loadUploadLinks(){
+  const wrap = document.getElementById('uploadLinksList');
+  try {
+    const snap = await db.collection(`clients/${currentClientId}/tournaments/${CURRENT_TOURNAMENT_ID}/uploadTokens`).orderBy('createdAt', 'desc').get();
+    if(snap.empty){ wrap.innerHTML = `<div class="mono text-[11px] opacity-50">No upload links yet.</div>`; return; }
+    wrap.innerHTML = snap.docs.map(doc => {
+      const d = doc.data();
+      const url = `${location.origin}/gallery.html?client=${encodeURIComponent(currentClientId)}&t=${encodeURIComponent(CURRENT_TOURNAMENT_ID)}&token=${d.token}`;
+      const expired = d.expiresAt && Date.now() > d.expiresAt;
+      const full = d.maxUploads && d.uploadCount >= d.maxUploads;
+      const statusLabel = d.revoked ? 'Revoked' : expired ? 'Expired' : full ? 'Limit reached' : 'Active';
+      const statusColor = d.revoked || expired || full ? 'opacity-50' : 'text-[#3F7019]';
+      return `
+        <div class="flex items-center justify-between gap-2 p-2.5 rounded-[12px] bg-[#FFFBF5] border border-[#EAE0D5] flex-wrap">
+          <div class="min-w-0">
+            <div class="mono text-[10px] font-[700] ${statusColor}">${statusLabel} &middot; ${d.uploadCount || 0}${d.maxUploads ? '/' + d.maxUploads : ''} uploaded${d.expiresAt ? ' &middot; expires ' + new Date(d.expiresAt).toLocaleDateString('en-PH') : ''}</div>
+            <div class="mono text-[9.5px] opacity-40 truncate max-w-[360px]">${escapeHtml(url)}</div>
+          </div>
+          <div class="flex gap-1.5 shrink-0">
+            <button data-copy-link="${escapeHtml(url)}" class="h-7 px-2.5 rounded-full bg-white border border-[#EAE0D5] mono text-[9px] font-[700] cursor-pointer hover:border-[#201C19]">Copy Link</button>
+            ${!d.revoked ? `<button data-revoke-token="${doc.id}" class="h-7 px-2.5 rounded-full bg-[#FFE9E0] text-[#8C2C10] border border-[#FFC9B6] mono text-[9px] font-[700] cursor-pointer">Revoke</button>` : ''}
+          </div>
+        </div>`;
+    }).join('');
+    wrap.querySelectorAll('[data-copy-link]').forEach(btn => btn.addEventListener('click', () => {
+      navigator.clipboard.writeText(btn.dataset.copyLink).then(() => toast('Link copied'));
+    }));
+    wrap.querySelectorAll('[data-revoke-token]').forEach(btn => btn.addEventListener('click', async () => {
+      if(!confirm('Revoke this upload link? It will stop accepting new photos immediately.')) return;
+      try {
+        await db.doc(`clients/${currentClientId}/tournaments/${CURRENT_TOURNAMENT_ID}/uploadTokens/${btn.dataset.revokeToken}`).set({ revoked: true }, { merge: true });
+        await logTournamentAudit(CURRENT_TOURNAMENT_ID, 'upload-link-revoke', 'Revoked a gallery upload link');
+        toast('Link revoked');
+        loadUploadLinks();
+      } catch(ex) { toast('Failed: ' + ex.message); }
+    }));
+  } catch(ex) { wrap.innerHTML = `<div class="mono text-[11px] text-[#8C2C10]">Failed to load upload links: ${escapeHtml(ex.message)}</div>`; }
+}
+
+const PHOTO_STATUS_ORDER = { pending: 0, approved: 1, rejected: 2, removed: 3 };
+function photoStatusBadge(status){
+  const map = {
+    pending:  { bg:'#FFF0D6', fg:'#8A5A00', label:'Pending' },
+    approved: { bg:'#E8F5D8', fg:'#3F7019', label:'Approved' },
+    rejected: { bg:'#FFE9E0', fg:'#8C2C10', label:'Rejected' },
+    removed:  { bg:'#F1E9DF', fg:'#201C19', label:'Removed' },
+  };
+  const s = map[status] || map.pending;
+  return `<span class="mono text-[8.5px] uppercase tracking-widest font-[800] px-1.5 py-0.5 rounded-full" style="background:${s.bg};color:${s.fg}">${s.label}</span>`;
+}
+async function loadPhotos(){
+  const wrap = document.getElementById('photosGrid');
+  try {
+    const snap = await db.collection(`clients/${currentClientId}/tournaments/${CURRENT_TOURNAMENT_ID}/photos`).orderBy('uploadedAt', 'desc').get();
+    if(snap.empty){ wrap.innerHTML = `<div class="mono text-[11px] opacity-50 col-span-full">No photos yet.</div>`; return; }
+    const photos = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+      .sort((a,b) => (PHOTO_STATUS_ORDER[a.status] ?? 9) - (PHOTO_STATUS_ORDER[b.status] ?? 9));
+    wrap.innerHTML = photos.map(p => `
+      <div class="rounded-[14px] overflow-hidden border border-[#EAE0D5] bg-[#FFFBF5]">
+        <div class="aspect-square bg-[#F1E9DF]"><img src="${escapeHtml(p.downloadUrl)}" class="w-full h-full object-cover" loading="lazy"/></div>
+        <div class="p-2 flex flex-col gap-1.5">
+          ${photoStatusBadge(p.status)}
+          <div class="flex gap-1">
+            ${p.status !== 'approved' ? `<button data-photo-approve="${p.id}" class="flex-1 h-7 rounded-full bg-[#201C19] text-white mono text-[8.5px] font-[700] cursor-pointer">Approve</button>` : ''}
+            ${p.status !== 'rejected' ? `<button data-photo-reject="${p.id}" class="flex-1 h-7 rounded-full bg-white border border-[#EAE0D5] mono text-[8.5px] font-[700] cursor-pointer">Reject</button>` : ''}
+          </div>
+          ${p.status !== 'removed' ? `<button data-photo-remove="${p.id}" class="h-7 rounded-full bg-[#FFE9E0] text-[#8C2C10] border border-[#FFC9B6] mono text-[8.5px] font-[700] cursor-pointer">Remove</button>` : ''}
+        </div>
+      </div>
+    `).join('');
+    wrap.querySelectorAll('[data-photo-approve]').forEach(btn => btn.addEventListener('click', () => setPhotoStatus(btn.dataset.photoApprove, 'approved')));
+    wrap.querySelectorAll('[data-photo-reject]').forEach(btn => btn.addEventListener('click', () => setPhotoStatus(btn.dataset.photoReject, 'rejected')));
+    wrap.querySelectorAll('[data-photo-remove]').forEach(btn => btn.addEventListener('click', () => setPhotoStatus(btn.dataset.photoRemove, 'removed')));
+  } catch(ex) { wrap.innerHTML = `<div class="mono text-[11px] text-[#8C2C10] col-span-full">Failed to load photos: ${escapeHtml(ex.message)}</div>`; }
+}
+async function setPhotoStatus(photoId, status){
+  try {
+    await db.doc(`clients/${currentClientId}/tournaments/${CURRENT_TOURNAMENT_ID}/photos/${photoId}`).set({ status }, { merge: true });
+    await logTournamentAudit(CURRENT_TOURNAMENT_ID, 'photo-' + status, `Marked a gallery photo as ${status}`);
+    loadPhotos();
   } catch(ex) { toast('Failed: ' + ex.message); }
 }
 

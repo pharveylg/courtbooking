@@ -17,5 +17,20 @@ service firebase.storage {
       allow read: if true;
       allow write: if true;
     }
+
+    // Tournament gallery photos -- uploaded anonymously via a shareable
+    // token link (gallery.html), with no PIN and no auth at all, since a
+    // visitor sharing a courtside photo was never going to sign in for
+    // it. That makes this the one truly open-to-the-internet upload
+    // surface in the app, so unlike every other Storage path here, size
+    // and content-type are enforced even without any identity check --
+    // the moderation queue in tournament-admin.html is the real safety
+    // net (nothing reaches the public gallery unapproved), this just
+    // keeps a malformed or oversized upload from landing at all.
+    match /clients/{clientId}/tournaments/{tournamentId}/gallery/{fileName} {
+      allow read: if true;
+      allow write: if request.resource.size < 8 * 1024 * 1024
+                   && request.resource.contentType.matches('image/.*');
+    }
   }
 }

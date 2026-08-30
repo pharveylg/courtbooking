@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Tournament Photos</title>
+<link rel="stylesheet" href="tailwind.css">
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-storage-compat.js"></script>
+<script src="firebase-config.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+*{font-family:"Bricolage Grotesque",system-ui,sans-serif}
+.mono{font-family:"JetBrains Mono",monospace}
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-thumb{background:#e5ddd4;border-radius:999px}
+</style>
+</head>
+<body class="bg-[#FFFBF5] text-[#201C19] antialiased">
+
+<div class="min-h-screen grid place-items-center p-6">
+  <div class="w-full max-w-[480px] rounded-[28px] bg-white border border-[#EAE0D5] shadow-[0_20px_60px_rgba(32,28,25,0.1)] p-7 md:p-9">
+    <div id="stateWrap" class="text-center">
+      <div class="mx-auto w-14 h-14 rounded-full bg-[#201C19] text-[#D6FF5F] grid place-items-center font-black text-[20px]">📷</div>
+      <p class="mt-5 mono text-[12px] opacity-60">Loading...</p>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ================================================================
+   Anonymous photo upload -- no PIN, no account, no login of any
+   kind, because a visitor sharing a courtside photo was never going
+   to sign in for it. The one thing standing between "anyone with the
+   link" and the public gallery is the moderation queue in
+   tournament-admin.html: every photo lands here as status:'pending'
+   and never appears anywhere else until an admin approves it.
+   ================================================================ */
+function getParams(){
+  const p = new URLSearchParams(window.location.search);
+  const client = p.get('client');
+  const t = p.get('t');
+  const token = p.get('token');
+  return {
+    client: (client && /^[a-z0-9-]+$/.test(client)) ? client : null,
+    tournamentId: (t && /^[a-zA-Z0-9_-]+$/.test(t)) ? t : null,
+    token: (token && /^[a-f0-9]{32}$/.test(token)) ? token : null,
+  };
+}
+const { client: currentClientId, tournamentId: CURRENT_TOURNAMENT_ID, token: TOKEN } = getParams();
+
+const FIREBASE_CFG = (window.FIREBASE_CONFIG && window.FIREBASE_CONFIG.apiKey && !String(window.FIREBASE_CONFIG.apiKey).startsWith('PASTE')) ? window.FIREBASE_CONFIG : null;
+const FB_ENABLED = !!(FIREBASE_CFG && FIREBASE_CFG.projectId);
+let db = null, fbStorage = null;
+if (FB_ENABLED) {
+  try { firebase.initializeApp(FIREBASE_CFG); db = firebase.firestore(); fbStorage = firebase.storage(); }
+  catch(e) { console.warn('[PickleGallery] Firebase init failed:', e.message); }
+}
+function escapeHtml(s){ return (s==null?'':String(s)).replace(/[&<>"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+function renderState(html){ document.getElementById('stateWrap').innerHTML = html; }
+
+/* Resize to a max 1600px edge and re-encode as JPEG ~82% quality --
+   phone camera photos are routinely 3-8MB; nobody courtside needs
+   full resolution in a shared tournament gallery, and this keeps
+   Storage usage (and the 8MB rule cap) comfortably out of the way. */
+function compressImage(file){
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const reader = new FileReader();
+    reader.onload = () => { img.src = reader.result; };
+    reader.onerror = reject;
+    img.onload = () => {
+      const maxEdge = 1600;
+      const scale = Math.min(1, maxEdge / Math.max(img.width, img.height));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(img.width * scale);
+      canvas.height = Math.round(img.height * scale);
+      canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+      canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('Could not process image')), 'image/jpeg', 0.82);
+    };
+    img.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+let TOKEN_DOC = null;
+let UPLOADED_THIS_SESSION = 0;
+
+function renderUploadUi(tournamentName){
+  renderState(`
+    <div class="mx-auto w-14 h-14 rounded-full bg-[#201C19] text-[#D6FF5F] grid place-items-center font-black text-[20px]">📷</div>
+    <h1 class="mt-5 text-[19px] font-[800] tracking-[-0.02em]">${escapeHtml(tournamentName)}</h1>
+    <p class="mt-2 mono text-[12px] opacity-60">Share your photos from the tournament. An organizer reviews everything before it appears in the public gallery.</p>
+    <label class="mt-5 block w-full h-32 rounded-[20px] border-2 border-dashed border-[#D6FF5F] bg-[#FBFFEF] grid place-items-center cursor-pointer">
+      <span class="mono text-[12px] font-[700]">Tap to choose or take photos</span>
+      <input id="fileInput" type="file" accept="image/*" capture="environment" multiple class="hidden"/>
+    </label>
+    <div id="previewGrid" class="grid grid-cols-3 gap-2 mt-4"></div>
+    <button id="uploadBtn" disabled class="mt-4 w-full h-12 rounded-full bg-[#201C19] text-white font-[800] text-[14px] disabled:opacity-30 cursor-pointer hover:opacity-90 active:scale-[0.98] transition">Upload</button>
+    <div id="uploadStatus" class="mt-3 mono text-[11px] opacity-60"></div>
+  `);
+  let selectedFiles = [];
+  const fileInput = document.getElementById('fileInput');
+  const previewGrid = document.getElementById('previewGrid');
+  const uploadBtn = document.getElementById('uploadBtn');
+  fileInput.addEventListener('change', () => {
+    selectedFiles = [...fileInput.files];
+    previewGrid.innerHTML = selectedFiles.map(f => `<div class="aspect-square rounded-[10px] overflow-hidden bg-[#F1E9DF]"><img src="${URL.createObjectURL(f)}" class="w-full h-full object-cover"/></div>`).join('');
+    uploadBtn.disabled = selectedFiles.length === 0;
+  });
+  uploadBtn.addEventListener('click', async () => {
+    uploadBtn.disabled = true;
+    const statusEl = document.getElementById('uploadStatus');
+    let uploaded = 0;
+    for (const file of selectedFiles) {
+      const remaining = TOKEN_DOC.maxUploads ? TOKEN_DOC.maxUploads - (TOKEN_DOC.uploadCount + UPLOADED_THIS_SESSION) : Infinity;
+      if(remaining <= 0){ statusEl.textContent = 'Upload limit reached for this link.'; break; }
+      try {
+        statusEl.textContent = `Uploading ${uploaded + 1} of ${selectedFiles.length}...`;
+        const blob = await compressImage(file);
+        const photoId = `${Date.now().toString(36)}${Math.random().toString(36).slice(2,8)}`;
+        const path = `clients/${currentClientId}/tournaments/${CURRENT_TOURNAMENT_ID}/gallery/${photoId}.jpg`;
+        const ref = fbStorage.ref(path);
+        await ref.put(blob, { contentType: 'image/jpeg' });
+        const downloadUrl = await ref.getDownloadURL();
+        await db.collection(`clients/${currentClientId}/tournaments/${CURRENT_TOURNAMENT_ID}/photos`).add({
+          uploadTokenId: TOKEN, storagePath: path, downloadUrl, status: 'pending',
+          uploadedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        });
+        UPLOADED_THIS_SESSION++;
+        uploaded++;
+      } catch(ex) { statusEl.textContent = `Failed on photo ${uploaded + 1}: ${ex.message}`; break; }
+    }
+    try {
+      await db.doc(`clients/${currentClientId}/tournaments/${CURRENT_TOURNAMENT_ID}/uploadTokens/${TOKEN}`)
+        .set({ uploadCount: firebase.firestore.FieldValue.increment(uploaded) }, { merge: true });
+    } catch(ex) { /* photos already saved; the count is a soft display limit, not a hard gate */ }
+    if(uploaded === selectedFiles.length){
+      statusEl.textContent = '';
+      renderState(`
+        <div class="mx-auto w-14 h-14 rounded-full bg-[#E8F5D8] text-[#3F7019] grid place-items-center font-black text-[24px]">✓</div>
+        <h1 class="mt-5 text-[19px] font-[800] tracking-[-0.02em]">Thanks!</h1>
+        <p class="mt-2 mono text-[12px] opacity-60">${uploaded} photo${uploaded===1?'':'s'} submitted for review.</p>
+      `);
+    } else {
+      uploadBtn.disabled = false;
+    }
+  });
+}
+
+async function init(){
+  if(!currentClientId || !CURRENT_TOURNAMENT_ID || !TOKEN){
+    renderState(`<h1 class="mt-5 text-[18px] font-[800]">Invalid Link</h1><p class="mt-2 mono text-[12px] opacity-60">This upload link is missing information.</p>`);
+    return;
+  }
+  if(!db){ renderState(`<p class="mt-5 mono text-[12px] text-[#8C2C10]">Firebase is not configured.</p>`); return; }
+  try {
+    const [tokenSnap, tournamentSnap] = await Promise.all([
+      db.doc(`clients/${currentClientId}/tournaments/${CURRENT_TOURNAMENT_ID}/uploadTokens/${TOKEN}`).get(),
+      db.doc(`clients/${currentClientId}/tournaments/${CURRENT_TOURNAMENT_ID}`).get(),
+    ]);
+    if(!tokenSnap.exists || !tournamentSnap.exists){
+      renderState(`<h1 class="mt-5 text-[18px] font-[800]">Link Not Found</h1><p class="mt-2 mono text-[12px] opacity-60">This upload link doesn't exist.</p>`);
+      return;
+    }
+    TOKEN_DOC = tokenSnap.data();
+    const t = tournamentSnap.data();
+    const expired = TOKEN_DOC.expiresAt && Date.now() > TOKEN_DOC.expiresAt;
+    const full = TOKEN_DOC.maxUploads && TOKEN_DOC.uploadCount >= TOKEN_DOC.maxUploads;
+    if(TOKEN_DOC.revoked || expired || full){
+      renderState(`<h1 class="mt-5 text-[18px] font-[800]">Link No Longer Active</h1><p class="mt-2 mono text-[12px] opacity-60">This upload link has ${TOKEN_DOC.revoked ? 'been revoked' : expired ? 'expired' : 'reached its upload limit'}. Ask the organizer for a new one.</p>`);
+      return;
+    }
+    renderUploadUi(t.name || 'Tournament');
+  } catch(ex) {
+    renderState(`<p class="mt-5 mono text-[12px] text-[#8C2C10]">Failed to load: ${escapeHtml(ex.message)}</p>`);
+  }
+}
+init();
+</script>
+</body>
+</html>

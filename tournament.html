@@ -58,6 +58,11 @@
     <div id="divisionTabs" class="hidden flex flex-wrap gap-1.5 mb-4"></div>
 
     <div id="divisionContent"></div>
+
+    <div id="gallerySection" class="hidden mt-6">
+      <div class="mono text-[10px] uppercase tracking-widest opacity-50 mb-2">Gallery</div>
+      <div id="galleryGrid" class="grid grid-cols-3 gap-2"></div>
+    </div>
   </main>
 
   <footer class="max-w-[860px] mx-auto px-4 py-8 text-center md:text-right">
@@ -392,6 +397,30 @@ function renderBracket(matches){
 }
 
 /* ================================================================
+   GALLERY -- approved photos only. Live via onSnapshot so a freshly
+   approved photo shows up without a refresh, same as scores/standings.
+   Uploading happens on a separate page (gallery.html); this page only
+   ever reads photos whose status is already 'approved'.
+   ================================================================ */
+let unsubGallery = null;
+function subscribeToGallery(){
+  if(unsubGallery) return;
+  unsubGallery = db.collection(`clients/${currentClientId}/tournaments/${CURRENT_TOURNAMENT_ID}/photos`)
+    .where('status', '==', 'approved')
+    .onSnapshot(snap => {
+      const section = document.getElementById('gallerySection');
+      if(snap.empty){ section.classList.add('hidden'); return; }
+      section.classList.remove('hidden');
+      const photos = snap.docs.map(d => d.data()).sort((a,b) => (b.uploadedAt?.seconds||0) - (a.uploadedAt?.seconds||0));
+      document.getElementById('galleryGrid').innerHTML = photos.map(p => `
+        <a href="${escapeHtml(p.downloadUrl)}" target="_blank" rel="noopener" class="aspect-square rounded-[10px] overflow-hidden bg-[#F1E9DF] block">
+          <img src="${escapeHtml(p.downloadUrl)}" class="w-full h-full object-cover" loading="lazy"/>
+        </a>
+      `).join('');
+    }, ex => console.warn('[PickleTournamentPublic] gallery listener failed:', ex.message));
+}
+
+/* ================================================================
    INIT
    ================================================================ */
 async function init(){
@@ -413,6 +442,7 @@ async function init(){
       renderHeader(t, bizName);
 
       if(!DIVISIONS.length) await loadDivisionsAndRender();
+      subscribeToGallery();
     }, ex => {
       renderGateState(`<p class="mt-5 mono text-[12px] text-[#8C2C10]">Failed to load: ${escapeHtml(ex.message)}</p>`);
     });

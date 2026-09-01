@@ -136,21 +136,10 @@ body{background:#FFFBF5;color:#201C19}
             <div class="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <div class="font-[750] text-[15px]">Reporting &amp; Billing Center</div>
-                <div class="mono text-[10px] opacity-50 max-w-[62ch]">Booking, Tournament, and Store are the tenant's own revenue from their players -- separate from Platform Billing at the bottom, which is what the tenant owes the platform.</div>
+                <div class="mono text-[10px] opacity-50 max-w-[62ch]">This month. Booking, Tournament, and Store are the tenant's own revenue from their players -- separate from Platform Billing at the bottom, which is what the tenant owes the platform.</div>
               </div>
               <div class="flex flex-wrap items-center gap-2">
                 <select id="rbcTenantSelect" class="h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-3 mono text-[11px] font-[700] outline-none focus:border-[#201C19] min-w-[180px]"><option value="">Select tenant...</option></select>
-                <div class="flex items-center gap-1 bg-[#F1E9DF] p-1 rounded-full">
-                  <button type="button" data-rbc-range="mtd" class="rbc-range-btn h-8 px-3 rounded-full mono text-[10px] font-[700] cursor-pointer transition">MTD</button>
-                  <button type="button" data-rbc-range="ytd" class="rbc-range-btn h-8 px-3 rounded-full mono text-[10px] font-[700] cursor-pointer transition">YTD</button>
-                  <button type="button" data-rbc-range="custom" class="rbc-range-btn h-8 px-3 rounded-full mono text-[10px] font-[700] cursor-pointer transition">Custom</button>
-                </div>
-                <div id="rbcCustomRange" class="hidden flex items-center gap-1.5">
-                  <input type="date" id="rbcCustomStart" class="h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-2.5 mono text-[10.5px] outline-none focus:border-[#201C19]"/>
-                  <span class="mono text-[10px] opacity-40">to</span>
-                  <input type="date" id="rbcCustomEnd" class="h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-2.5 mono text-[10.5px] outline-none focus:border-[#201C19]"/>
-                  <button type="button" id="rbcCustomApply" class="h-10 px-3 rounded-full bg-[#201C19] text-white mono text-[10px] font-[700] cursor-pointer">Go</button>
-                </div>
                 <button type="button" id="rbcPrintBtn" class="h-10 px-3.5 rounded-full bg-white border border-[#EAE0D5] mono text-[11px] font-[700] cursor-pointer hover:border-[#201C19]">Print</button>
               </div>
             </div>
@@ -759,7 +748,6 @@ function exportReportingCsv(){
    numerically separate.
    ================================================================ */
 let RBC_TENANTS = [];
-let RBC_RANGE = 'mtd';
 
 function populateRbcTenantSelect(tenants){
   RBC_TENANTS = tenants;
@@ -769,41 +757,16 @@ function populateRbcTenantSelect(tenants){
   if(tenants.some(t => t.slug === prevValue)) sel.value = prevValue;
 }
 document.getElementById('rbcTenantSelect').addEventListener('change', () => loadDeepDive());
-document.querySelectorAll('.rbc-range-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    RBC_RANGE = btn.dataset.rbcRange;
-    document.querySelectorAll('.rbc-range-btn').forEach(b => {
-      const active = b === btn;
-      b.classList.toggle('bg-[#201C19]', active);
-      b.classList.toggle('text-white', active);
-    });
-    document.getElementById('rbcCustomRange').classList.toggle('hidden', RBC_RANGE !== 'custom');
-    if(RBC_RANGE !== 'custom') loadDeepDive();
-  });
-});
-document.getElementById('rbcCustomApply').addEventListener('click', () => loadDeepDive());
 document.getElementById('rbcPrintBtn').addEventListener('click', () => window.print());
-// Default the two custom-range date inputs to this month, so switching to
-// Custom starts somewhere sane instead of two empty pickers.
-(function initRbcDefaults(){
-  const now = new Date();
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-  document.getElementById('rbcCustomStart').value = monthStart.toISOString().slice(0,10);
-  document.getElementById('rbcCustomEnd').value = now.toISOString().slice(0,10);
-  document.querySelector('[data-rbc-range="mtd"]').classList.add('bg-[#201C19]', 'text-white');
-})();
 
+// Current month only -- this is also what Platform Billing's existing
+// suggested-charge formula is anchored to, so keeping the whole page on
+// the same window means every number on it lines up with every other,
+// instead of a wider Booking/Tournament/Store range sitting next to a
+// Platform Billing figure that's quietly still MTD.
 function getRbcDateRange(){
   const now = new Date();
-  if(RBC_RANGE === 'ytd'){
-    return { start: new Date(now.getFullYear(), 0, 1), end: now };
-  }
-  if(RBC_RANGE === 'custom'){
-    const s = document.getElementById('rbcCustomStart').value;
-    const e = document.getElementById('rbcCustomEnd').value;
-    return { start: s ? new Date(s+'T00:00:00') : new Date(now.getFullYear(), now.getMonth(), 1), end: e ? new Date(e+'T23:59:59') : now };
-  }
-  return { start: new Date(now.getFullYear(), now.getMonth(), 1), end: now }; // mtd
+  return { start: new Date(now.getFullYear(), now.getMonth(), 1), end: now };
 }
 function dateInRange(d, range){ return d >= range.start && d <= range.end; }
 function isoDatesInRange(range){
@@ -998,7 +961,7 @@ const CHART_PALETTE = ['#201C19', '#8A9A2C', '#B5790A', '#4A3FA0', '#8C2C10', '#
 
 function renderDeepDive(d){
   const body = document.getElementById('rbcBody');
-  const rangeLabel = `${d.range.start.toLocaleDateString('en-PH',{month:'short',day:'numeric'})} - ${d.range.end.toLocaleDateString('en-PH',{month:'short',day:'numeric',year:'numeric'})}`;
+  const rangeLabel = `${d.range.start.toLocaleDateString('en-PH',{month:'long',year:'numeric'})} to date`;
 
   // KPI strip
   const kpiHtml = `<div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
@@ -1116,7 +1079,7 @@ function renderDeepDive(d){
       <span class="mono text-[11px] uppercase tracking-widest opacity-70">Net Amount Payable</span>
       <span class="text-[20px] font-[800]">${fmtMoneySA(Math.max(0,netPayable))}</span>
     </div>
-    <div class="mono text-[9.5px] opacity-45 mt-1">Booking Charge always reflects the current month (the existing billing formula's own definition), regardless of the date range selected above. This settles through the tenant's existing prepaid balance / manual charge in the Manage panel -- there's no live payment processing in this app to "Pay Now" with.</div>
+    <div class="mono text-[9.5px] opacity-45 mt-1">This settles through the tenant's existing prepaid balance / manual charge in the Manage panel -- there's no live payment processing in this app to "Pay Now" with.</div>
   </div>`;
 
   body.innerHTML = `

@@ -335,7 +335,7 @@ document.getElementById('ctColor').addEventListener('change', (e) => {
 
 /* ---------- Tenant Directory ---------- */
 const LS_TENANT_CACHE = 'sa_tenant_cache_v1';
-function renderTenantList(entries){
+function renderTenantList(entries, statusMap){
   const list = document.getElementById('tenantList');
   const countEl = document.getElementById('tenantCount');
   countEl.textContent = entries.length;
@@ -345,7 +345,7 @@ function renderTenantList(entries){
     return;
   }
   list.innerHTML = '';
-  entries.forEach(({ id, data }) => renderTenantRow(id, data));
+  entries.forEach(({ id, data }) => renderTenantRow(id, data, statusMap ? (statusMap[id] || {}) : null));
 }
 async function loadTenants(){
   const list = document.getElementById('tenantList');
@@ -373,7 +373,21 @@ async function loadTenants(){
       tenants.push({ slug: doc.id, businessName: d.businessName || doc.id, billing: d.billing || {}, creditBalance: d.creditBalance || 0 });
     });
     try { localStorage.setItem(LS_TENANT_CACHE, JSON.stringify(entries)); } catch(e) { /* storage full/unavailable -- just skip caching */ }
-    renderTenantList(entries);
+
+    // Entitlement status per tenant (Store/Tournament Active-Paused-Not
+    // enabled) fetched up front, in parallel, so every row's compact
+    // summary card is real the moment the list paints instead of sitting
+    // on a placeholder until someone happens to click Manage on that one
+    // row. Not cached like the tenant list itself -- entitlement state is
+    // exactly the kind of thing that should always read live.
+    const statusSnaps = await Promise.all(entries.map(e => db.doc(`clients/${e.id}/status/state`).get().catch(() => null)));
+    const statusMap = {};
+    entries.forEach((e, i) => {
+      const s = statusSnaps[i];
+      statusMap[e.id] = (s && s.exists && s.data().data) || {};
+    });
+
+    renderTenantList(entries, statusMap);
     loadReporting(tenants);
   } catch(ex) {
     if(!cached){
@@ -692,9 +706,32 @@ function exportReportingCsv(){
   URL.revokeObjectURL(url);
 }
 
-function renderTenantRow(slug, data){
+/* Compact color-coded summary shown on every row without needing to
+   expand Manage -- Active (green) / Paused (amber) / Not enabled (grey),
+   matching the same badge colors renderStoreWidget/renderTournamentWidget
+   already use once Manage is open. `status` is null while it hasn't been
+   fetched yet (the very first paint, before loadTenants' status fetch
+   resolves); everything else is a real, known state. */
+function compactStatusPill(label, status){
+  if(status == null){
+    return `<div class="mono text-[10px] uppercase tracking-widest opacity-60 mb-1.5">${label}</div><span class="mono text-[10px] font-[700] px-2.5 py-1 rounded-full bg-[#F1E9DF] text-[#201C19]/50">Checking...</span>`;
+  }
+  const state = !status.enabled
+    ? { bg:'#F1E9DF', fg:'#201C19', op:'opacity-60', text:'Not enabled' }
+    : status.paused
+      ? { bg:'#FFF0D6', fg:'#8A5A00', op:'', text:'Paused' }
+      : { bg:'#E8F5D8', fg:'#3F7019', op:'', text:'Active' };
+  return `
+    <div class="mono text-[10px] uppercase tracking-widest opacity-60 mb-1.5">${label}</div>
+    <span class="mono text-[10px] font-[700] px-2.5 py-1 rounded-full ${state.op}" style="background:${state.bg};color:${state.fg}">${state.text} — click Manage to view</span>
+  `;
+}
+
+function renderTenantRow(slug, data, status){
   const list = document.getElementById('tenantList');
   const isActive = data.status !== 'suspended';
+  const storeStatus = status ? { enabled: !!status.storeEnabled, paused: !!status.storePaused } : null;
+  const tournamentStatus = status ? { enabled: !!status.tournamentEnabled, paused: !!status.tournamentPaused } : null;
   const row = document.createElement('div');
   row.className = 'p-4';
   row.innerHTML = `
@@ -790,12 +827,12 @@ function renderTenantRow(slug, data){
     </div>
     <div class="p-4 pt-0 md:p-0 md:mt-4 md:pt-4">
       <div id="storeWrap-${cssId(slug)}" class="rounded-[16px] border border-[#D8D0FF] bg-[#F5F3FF] p-4">
-        <div class="mono text-[11px] opacity-50">Loading Store status...</div>
+        ${compactStatusPill('Pickle Court Store', storeStatus)}
       </div>
     </div>
     <div class="p-4 pt-0 md:p-0 md:mt-4 md:pt-4">
       <div id="tournamentWrap-${cssId(slug)}" class="rounded-[16px] border border-[#FFD9A8] bg-[#FFF7EA] p-4">
-        <div class="mono text-[11px] opacity-50">Loading Tournament status...</div>
+        ${compactStatusPill('Pickle Court Tournaments', tournamentStatus)}
       </div>
     </div>
   `;

@@ -138,7 +138,7 @@
         <div class="rounded-[24px] md:rounded-[28px] bg-white border border-[#EAE0D5] shadow-[0_8px_30px_rgba(32,28,25,0.04)] overflow-hidden">
           <div class="px-5 md:px-7 h-[64px] flex items-center justify-between border-b border-[#F1E9DF]">
             <div class="flex items-center gap-3">
-              <h2 class="text-[18px] font-[800] tracking-[-0.02em]">Today's Schedule</h2>
+              <h2 id="scheduleHeading" class="text-[18px] font-[800] tracking-[-0.02em]">Today's Schedule</h2>
               <span id="todayLabel" class="mono text-[11px] px-2.5 h-6 grid place-items-center rounded-full bg-[#F1E9DF]"></span>
             </div>
             <div class="hidden md:flex items-center gap-3 mono text-[10px] uppercase tracking-widest">
@@ -3486,7 +3486,15 @@ document.getElementById('saveHeroBtn')?.addEventListener('click', async () => {
 function renderSchedule(){
   const list = document.getElementById('scheduleList');
   list.innerHTML='';
-  const dateISO = todayISO(); // Today's schedule always today per spec
+  // Follows the calendar picker's selected date (defaults to today, same
+  // as selectedDate itself) -- this used to always show today regardless
+  // of what was picked, which made the calendar look broken for any other
+  // date. todayLabel/scheduleHeading below track whichever date this is.
+  const dateISO = selectedDate || todayISO();
+  const today = todayISO();
+  document.getElementById('todayLabel').textContent = fmtDateLabel(dateISO);
+  const headingEl = document.getElementById('scheduleHeading');
+  if(headingEl) headingEl.textContent = dateISO === today ? "Today's Schedule" : "Selected Day's Schedule";
   
   // Determine if we should show multi-column layout (desktop with multiple courts)
   const isDesktop = window.innerWidth >= 1024;
@@ -3608,7 +3616,10 @@ function renderScheduleSlots(container, dateISO, courtFilter){
   container.querySelectorAll('.book-now-btn').forEach(btn=>{
     btn.addEventListener('click', ()=>{
       const start = parseInt(btn.dataset.book,10);
-      selectedDate = todayISO(); // ensure today
+      // selectedDate already matches whatever date this schedule row is
+      // showing (the schedule follows the calendar picker now) -- no need
+      // to force it back to today, that would silently move the booking
+      // to a different day than the row the visitor actually clicked.
       renderCalendar();
       document.getElementById('fStart').value = String(start);
       document.getElementById('fEnd').value = String(start+1);
@@ -3758,6 +3769,7 @@ function renderCalendar(){
       recalcTotal();
       validateForm();
       renderDateSlotPreview();
+      renderSchedule(); // the main schedule grid follows the picked date too, not just the hour-strip preview
     });
     grid.appendChild(btn);
   }
@@ -4868,7 +4880,7 @@ async function ogCheckCreationRate(email){
 }
 
 function ogGameStartsAt(game){ return new Date(game.date+'T00:00:00').getTime() + game.startHour * 3600000; }
-function ogGameEndsAt(game){ return new Date(game.date+'T00:00:00').getTime() + (game.startHour+1) * 3600000; }
+function ogGameEndsAt(game){ return new Date(game.date+'T00:00:00').getTime() + (game.endHour != null ? game.endHour : game.startHour+1) * 3600000; }
 /* Derived, not persisted -- EXPIRED/COMPLETED are computed from the
    stored status + current time rather than written back on every render. */
 function ogEffectiveStatus(game){
@@ -4938,15 +4950,19 @@ function renderOpenGames(){
   } else {
     discoverEl.innerHTML = discoverable.map(g => {
       const needed = g.playersNeeded - g.players.length;
+      const isFacility = g.source === 'facility';
+      const timeLabel = (isFacility && g.endHour != null) ? to12Range(g.startHour, g.endHour) : fmtTime(g.startHour);
       return `
       <button type="button" data-og-view="${g.id}" class="w-full text-left px-5 md:px-7 py-4 flex flex-wrap items-center justify-between gap-3 hover:bg-[#FFFBF5] transition cursor-pointer">
         <div class="min-w-0">
           <div class="flex items-center gap-2 flex-wrap">
-            <span class="mono text-[10px] px-2 py-0.5 rounded-full bg-[#EDE8FF] text-[#3B2A9E] font-[700] uppercase">${escapeHtml(g.skillLevel)}</span>
-            <span class="mono text-[10px] px-2 py-0.5 rounded-full bg-[#F1E9DF] font-[700]">${escapeHtml(g.format)}</span>
-            <span class="font-[700] text-[14px]">${fmtDateLabel(g.date)} · ${fmtTime(g.startHour)}</span>
+            ${isFacility
+              ? `<span class="mono text-[10px] px-2 py-0.5 rounded-full bg-[#D6FF5F] text-[#201C19] font-[800] uppercase">Open Play</span>`
+              : `<span class="mono text-[10px] px-2 py-0.5 rounded-full bg-[#EDE8FF] text-[#3B2A9E] font-[700] uppercase">${escapeHtml(g.skillLevel)}</span>
+                 <span class="mono text-[10px] px-2 py-0.5 rounded-full bg-[#F1E9DF] font-[700]">${escapeHtml(g.format)}</span>`}
+            <span class="font-[700] text-[14px]">${fmtDateLabel(g.date)} · ${timeLabel}</span>
           </div>
-          <div class="mono text-[11px] opacity-60 mt-1">${g.players.length} / ${g.playersNeeded} players • ${needed} needed${g.notes ? ' · '+escapeHtml(g.notes) : ''}</div>
+          <div class="mono text-[11px] opacity-60 mt-1">${isFacility ? `${g.players.length} joined so far` : `${g.players.length} / ${g.playersNeeded} players • ${needed} needed`}${g.notes ? ' · '+escapeHtml(g.notes) : ''}</div>
         </div>
         <span class="h-8 px-4 rounded-full bg-[#D6FF5F] border border-[#201C19]/10 mono text-[11px] font-[800] grid place-items-center shrink-0">View →</span>
       </button>`;
@@ -5185,9 +5201,10 @@ function renderOgDetailModal(gameId){
   const alreadyJoined = game.players.some(p => p.email.toLowerCase() === myEmail) || !!(mine && mine.role);
   const isCreator = !!(mine && mine.role === 'creator' && mine.token === game.creatorToken);
 
-  document.getElementById('ogDetailTitle').textContent = `${game.skillLevel} Game`;
+  const isFacility = game.source === 'facility';
+  document.getElementById('ogDetailTitle').textContent = isFacility ? 'Open Play' : `${game.skillLevel} Game`;
   const playersHtml = game.players.map(p => `<div class="flex items-center gap-2 mono text-[12px]"><span class="text-[#3F7019]">✓</span>${escapeHtml(p.name)}</div>`).join('')
-    + Array.from({length: Math.max(0, game.playersNeeded - game.players.length)}).map(() => `<div class="flex items-center gap-2 mono text-[12px] opacity-50"><span>○</span>spot available</div>`).join('');
+    + (isFacility ? '' : Array.from({length: Math.max(0, game.playersNeeded - game.players.length)}).map(() => `<div class="flex items-center gap-2 mono text-[12px] opacity-50"><span>○</span>spot available</div>`).join(''));
 
   let reservationHtml;
   if(game.reservationId){
@@ -5216,10 +5233,10 @@ function renderOgDetailModal(gameId){
   }
 
   body.innerHTML = `
-    <div class="mono text-[13px] font-[700]">${fmtDateLabel(game.date)}<br/>${fmtTime(game.startHour)}</div>
+    <div class="mono text-[13px] font-[700]">${fmtDateLabel(game.date)}<br/>${isFacility && game.endHour != null ? to12Range(game.startHour, game.endHour) : fmtTime(game.startHour)}</div>
     <div class="flex items-center gap-2 flex-wrap">
       <span class="mono text-[10px] px-2 py-0.5 rounded-full bg-[#F1E9DF] font-[700]">${escapeHtml(game.format)}</span>
-      <span class="mono text-[10px] px-2.5 py-1 rounded-full font-[800] uppercase ${status==='OPEN'?'bg-[#D6FF5F] text-[#201C19]':status==='FULL'?'bg-[#201C19] text-white':status==='RESERVED'?'bg-[#E8F5D8] text-[#3F7019]':'bg-[#F1E9DF] text-[#201C19]/50'}">${game.players.length} / ${game.playersNeeded} Players · ${status}</span>
+      <span class="mono text-[10px] px-2.5 py-1 rounded-full font-[800] uppercase ${status==='OPEN'?'bg-[#D6FF5F] text-[#201C19]':status==='FULL'?'bg-[#201C19] text-white':status==='RESERVED'?'bg-[#E8F5D8] text-[#3F7019]':'bg-[#F1E9DF] text-[#201C19]/50'}">${isFacility ? `${game.players.length} joined` : `${game.players.length} / ${game.playersNeeded} Players`} · ${status}</span>
     </div>
     ${game.notes ? `<div class="mono text-[12px] opacity-70">${escapeHtml(game.notes)}</div>` : ''}
     <div>
@@ -5267,7 +5284,16 @@ function renderOgDetailModal(gameId){
 function renderOpenPlayList(){
   const list = document.getElementById('openPlayList');
   list.innerHTML='';
-  const allOps = [...openPlays, ...bookings.filter(b=>b.status==='OpenPlay').map(b=>({id:b.id, date:b.date, start:b.start, end:b.end, court:b.court, fromBooking:true}))];
+  // openPlays and the bookings array both hold a row per block (same id --
+  // the booking row exists only so the slot shows as blocked on the
+  // calendar), so this used to render every block twice. Dedupe by id,
+  // preferring the openPlays copy since it's the source of truth.
+  const byId = new Map();
+  openPlays.forEach(op => byId.set(op.id, op));
+  bookings.filter(b=>b.status==='OpenPlay').forEach(b => {
+    if(!byId.has(b.id)) byId.set(b.id, { id:b.id, date:b.date, start:b.start, end:b.end, court:b.court, fromBooking:true });
+  });
+  const allOps = [...byId.values()];
   if(allOps.length===0){ list.innerHTML=`<div class="mono text-[11px] opacity-50">No open play blocks yet</div>`; return; }
   allOps.sort((a,b)=> a.date.localeCompare(b.date));
   allOps.forEach(op=>{
@@ -5281,18 +5307,23 @@ function renderOpenPlayList(){
     list.appendChild(div);
   });
   list.querySelectorAll('button[data-opdel]').forEach(btn=>{
-    btn.addEventListener('click', ()=>{
+    btn.addEventListener('click', async ()=>{
       const id=btn.dataset.opdel;
+      const removed = openPlays.find(x=>x.id===id);
       openPlays = openPlays.filter(x=>x.id!==id);
       bookings = bookings.filter(x=>x.id!==id);
       saveOpenPlay(openPlays); saveBookings(bookings);
+      if(removed && removed.openGameId && db && currentClientId){
+        try { await db.doc(`clients/${currentClientId}/openGames/${removed.openGameId}`).delete(); }
+        catch(ex) { console.warn('Failed to remove linked open game:', ex.message); }
+      }
       renderOpenPlayList(); renderAdminBookings(); renderSchedule(); renderBookingsList();
       toast('Open play removed');
     });
   });
 }
 
-document.getElementById('openPlayForm').addEventListener('submit', e=>{
+document.getElementById('openPlayForm').addEventListener('submit', async e=>{
   e.preventDefault();
   const date = document.getElementById('opDate').value;
   const start = parseInt(document.getElementById('opStart').value,10);
@@ -5311,6 +5342,27 @@ document.getElementById('openPlayForm').addEventListener('submit', e=>{
     err.classList.remove('hidden'); return;
   }
   const entry = {id:'op_'+Date.now(), date, start, end, court: opCourtId};
+
+  // Also publish this block to Find a Game so both online players and
+  // walk-ins (advised to open the site and join like everyone else) can
+  // signal they're coming -- a facility-hosted drop-in session, not a
+  // specific player's matchmaking request, so it has no fixed roster size
+  // and no real organizer identity to manage it (source:'facility' is what
+  // the Find a Game UI uses to tell the two apart).
+  if(db && currentClientId){
+    try {
+      const gameRef = db.collection(`clients/${currentClientId}/openGames`).doc();
+      await gameRef.set({
+        creatorName: CLIENT.business?.name || 'Facility', creatorEmail: `facility_${entry.id}@${currentClientId}.local`, creatorToken: null,
+        status: 'OPEN', date, startHour: start, endHour: end, skillLevel: 'All Levels', format: 'Open Play',
+        playersNeeded: 40, court: opCourtId, notes: 'Facility-hosted open play — drop in and join!',
+        players: [], reservationId: null, source: 'facility', linkedOpenPlayId: entry.id,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(), updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      });
+      entry.openGameId = gameRef.id;
+    } catch(ex) { console.warn('Failed to publish open play to Find a Game:', ex.message); }
+  }
+
   openPlays.push(entry);
   saveOpenPlay(openPlays);
   // also add as booking with OpenPlay status for bookings list visibility
@@ -5318,7 +5370,7 @@ document.getElementById('openPlayForm').addEventListener('submit', e=>{
   saveBookings(bookings);
   logUsageEvent('open_play_created', { court: opCourtId, durationHours: end - start }); // analytics only, never billed
   renderOpenPlayList(); renderAdminBookings(); renderSchedule(); renderBookingsList();
-  toast('Open play block added');
+  toast('Open play block added — also posted to Find a Game');
 });
 
 document.getElementById('addCourtBtn').addEventListener('click', ()=>{

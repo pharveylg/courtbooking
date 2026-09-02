@@ -280,14 +280,6 @@ async function hashPin(pin){
   return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
-function getCurrentWeekId(){
-  const now = new Date();
-  const day = now.getDay();
-  const diff = day === 0 ? -6 : 1 - day;
-  const mon = new Date(now.getFullYear(), now.getMonth(), now.getDate() + diff);
-  return mon.toISOString().slice(0,10);
-}
-
 /* ---------- Screens ---------- */
 function showScreen(id){
   ['signInScreen','notAuthorizedScreen','dashboard'].forEach(s => {
@@ -1863,8 +1855,11 @@ async function provisionTenantDefaults(slug, name, color, pin, watermarkUrl){
   await db.doc(`clients/${slug}/bookings/state`).set({ data: [], ...stamp() });
   await db.doc(`clients/${slug}/openPlay/state`).set({ data: [], ...stamp() });
   await db.doc(`clients/${slug}/morning/state`).set({ data: {"7":false,"8":false,"9":false,"10":false,"11":false}, ...stamp() });
+  // Off by default -- the tenant's own admin turns on whichever days/hours
+  // they actually want blocked for staff, rather than inheriting a
+  // pre-picked Sun/Tue/Thu/Sat 5-9pm schedule that blocks real court time.
   await db.doc(`clients/${slug}/staffReserve/state`).set({
-    data: { weekId: getCurrentWeekId(), days: {"0":true,"2":true,"4":true,"6":true} },
+    data: {},
     ...stamp()
   });
   await db.doc(`clients/${slug}/queues/state`).set({ data: [], ...stamp() });

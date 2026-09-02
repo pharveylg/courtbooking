@@ -2721,11 +2721,13 @@ async function seedIfEmpty() {
     localStorage.setItem(LS.openPlay, JSON.stringify(openPlays));
 
     // --- Staff Reserve (weekly template + calendar overrides) ---
+    // Off by default -- staff-reserved hours block real court time from
+    // public booking, so a tenant should only get that once its own admin
+    // turns it on for the days/hours they actually want, not find several
+    // evenings a week already blocked the first time they open the app.
     const srSnap = await db.doc(fbDocPath('staffReserve')).get();
     if (!srSnap.exists) {
-      const template = {};
-      COURTS.forEach(c => { template[c.id] = {"0":{...LEGACY_STAFF_HOURS},"2":{...LEGACY_STAFF_HOURS},"4":{...LEGACY_STAFF_HOURS},"6":{...LEGACY_STAFF_HOURS}}; });
-      const def = { template, overrides: {} };
+      const def = { template: {}, overrides: {} };
       await db.doc(fbDocPath('staffReserve')).set({ data: def, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
       staffReserveEnabled = def;
     } else {

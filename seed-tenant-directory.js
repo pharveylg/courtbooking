@@ -2,16 +2,16 @@
 /**
  * seed-tenant-directory.js
  * ────────────────────────
- * Seeds the Firestore `tenantDirectory` collection with public tenant info.
+ * Seeds the Firestore `platformTenants` collection with public tenant info.
  *
  * Usage:
  *   1. Run: gcloud auth application-default login
  *   2. Run: node seed-tenant-directory.js
  *
  * If you don't have gcloud CLI, add tenants manually in Firebase Console:
- *   Firestore Database → + Start collection → tenantDirectory
+ *   Firestore Database → + Start collection → platformTenants
  *   Document ID: your-tenant-slug
- *   Fields: clientId (string), name (string), sub (string), active (boolean true)
+ *   Fields: businessName (string), status (string 'active'), logoUrl (string), sub (string), location (string)
  */
 
 const admin = require('firebase-admin');
@@ -50,57 +50,58 @@ const db = admin.firestore();
 // ── Tenant Directory Entries ──────────────────────────────
 const tenants = [
   {
-    clientId: 'demo',
-    name: 'Demo Facility',
+    slug: 'demo',
+    businessName: 'Demo Facility',
     sub: 'Pickleball • Single Court',
     location: 'Sample City',
     logoUrl: '/icons/tenant-demo.png',
-    active: true,
+    status: 'active',
   },
   {
-    clientId: 'smash-court',
-    name: 'Smash Court Pickleball',
+    slug: 'smash-court',
+    businessName: 'Smash Court Pickleball',
     sub: 'Pickleball • 4 Courts',
     location: 'Cagayan de Oro, PH',
     logoUrl: '/icons/tenant-smash.png',
-    active: true,
+    status: 'active',
   },
   {
-    clientId: 'the-kitchen',
-    name: 'The Kitchen Pickleball',
+    slug: 'the-kitchen',
+    businessName: 'The Kitchen Pickleball',
     sub: 'Pickleball + Dining • 3 Courts',
     location: 'Manila, PH',
     logoUrl: '/icons/tenant-kitchen.png',
-    active: true,
+    status: 'active',
   },
   {
-    clientId: 'ace-pickle',
-    name: 'Ace Pickle Club',
+    slug: 'ace-pickle',
+    businessName: 'Ace Pickle Club',
     sub: 'Pickleball • 2 Courts',
     location: 'Cebu, PH',
     logoUrl: '/icons/tenant-ace.png',
-    active: true,
+    status: 'active',
   },
 ];
 
 async function seed() {
-  console.log(`🌱 Seeding ${tenants.length} tenant(s) into tenantDirectory...\n`);
+  console.log(`🌱 Seeding ${tenants.length} tenant(s) into platformTenants...\n`);
 
   const batch = db.batch();
 
   for (const tenant of tenants) {
-    const ref = db.collection('tenantDirectory').doc(tenant.clientId);
+    const ref = db.collection('platformTenants').doc(tenant.slug);
+    const { slug, ...data } = tenant;
     batch.set(ref, {
-      ...tenant,
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      ...data,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
     }, { merge: true });
 
-    console.log(`  ${tenant.active ? '✅' : '⬜'} ${tenant.clientId.padEnd(20)} → ${tenant.name}`);
+    console.log(`  ${tenant.status === 'active' ? '✅' : '⬜'} ${tenant.slug.padEnd(20)} → ${tenant.businessName}`);
   }
 
   await batch.commit();
 
-  console.log(`\n✅ Done! ${tenants.length} tenant(s) written to tenantDirectory.\n`);
+  console.log(`\n✅ Done! ${tenants.length} tenant(s) written to platformTenants.\n`);
 }
 
 seed().catch(err => {

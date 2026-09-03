@@ -515,8 +515,20 @@ body{
   async function loadTenants() {
     showState('loading');
     try {
-      const snap = await db.collection('tenantDirectory').where('active', '==', true).get();
-      allTenants = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      const snap = await db.collection('platformTenants').where('status', '==', 'active').get();
+      allTenants = snap.docs.map(d => {
+        const data = d.data();
+        return {
+          id: d.id,
+          clientId: d.id,
+          name: data.businessName || d.id,
+          sub: data.sub || '',
+          location: data.location || '',
+          logoUrl: data.logoUrl || '',
+          active: true,
+          ...data
+        };
+      });
 
       if (allTenants.length === 0) {
         showState('empty');

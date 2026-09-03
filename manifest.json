@@ -1,13 +1,13 @@
 {
-  "name": "Court Booking — Pickleball Reservations",
-  "short_name": "CourtBook",
-  "description": "Book courts, manage queues, and track match stats",
+  "name": "COURT BOOKING — Court Booking",
+  "short_name": "COURT BOOKIN",
+  "description": "Book courts, manage queues, and track stats — Pickleball • Single Court",
   "start_url": "/?source=pwa",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#FFFBF5",
-  "theme_color": "#201C19",
+  "background_color": "#FAFAFA",
+  "theme_color": "#18181B",
   "icons": [
     {
       "src": "/icons/icon-192.png",
@@ -28,7 +28,10 @@
       "purpose": "maskable"
     }
   ],
-  "categories": ["sports", "productivity"],
+  "categories": [
+    "sports",
+    "productivity"
+  ],
   "shortcuts": [
     {
       "name": "Book Court",

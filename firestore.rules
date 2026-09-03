@@ -261,6 +261,14 @@ service cloud.firestore {
       }
     }
 
+    // Public tenant directory -- used by the tenant picker on first launch.
+    // Anyone can read (to show the list of available facilities), but only
+    // superadmin can write (add/remove/update tenants in the directory).
+    match /tenantDirectory/{tenantId} {
+      allow read: if true;
+      allow write: if request.auth != null && request.auth.token.superadmin == true;
+    }
+
     // Cross-tenant player identity, keyed by a phone-derived id -- reused
     // across tenants so a dual-meet or a player with membership at two
     // clubs is the same record, not a duplicate per tenant. This app has

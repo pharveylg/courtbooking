@@ -539,7 +539,7 @@ body{
 
     showState('grid');
     tenantGrid.innerHTML = tenants.map((t, i) => `
-      <button class="tenant-tile" data-client-id="${esc(t.clientId)}" style="animation:fadeUp 0.5s cubic-bezier(0.16,1,0.3,1) ${0.05 + i * 0.07}s forwards;opacity:0">
+      <button class="tenant-tile" data-client-id="${esc(t.clientId || t.id)}" style="animation:fadeUp 0.5s cubic-bezier(0.16,1,0.3,1) ${0.05 + i * 0.07}s forwards;opacity:0">
         <div class="tenant-logo">
           ${t.logoUrl
             ? `<img src="${esc(t.logoUrl)}" alt="" loading="lazy"/>`
@@ -581,7 +581,7 @@ body{
     const filtered = allTenants.filter(t =>
       (t.name || '').toLowerCase().includes(q) ||
       (t.sub || '').toLowerCase().includes(q) ||
-      (t.clientId || '').toLowerCase().includes(q) ||
+      (t.clientId || t.id || '').toLowerCase().includes(q) ||
       (t.location || '').toLowerCase().includes(q)
     );
     renderTenants(filtered);

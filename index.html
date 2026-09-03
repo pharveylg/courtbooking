@@ -430,7 +430,7 @@
         <div class="rounded-[24px] bg-white border border-[#EAE0D5] p-5 shadow-xs flex-1">
           <div class="flex items-center justify-between mb-3.5">
             <h3 class="text-[15px] font-[800] tracking-[-0.01em]">Active Sessions Today</h3>
-            <span id="activeSessionsCount" class="mono text-[10px] px-2 py-0.5 rounded-full bg-[#F1E9DF] font-[700]">0</span>
+            <span id="activeSessionsCount" class="mono text-[10px] px-2.5 py-1 rounded-full bg-[#F1E9DF] text-[#201C19] font-[700]">0</span>
           </div>
           <div id="queueSessionsList" class="space-y-2.5 max-h-[300px] overflow-auto pr-1"></div>
         </div>
@@ -2630,7 +2630,7 @@ function renderPaymentProofsQueue() {
         <div class="min-w-0">
           <div class="flex items-center gap-2 flex-wrap">
             <span class="font-[750] text-[14px] truncate">${escapeHtml(b.name)}</span>
-            <span class="mono text-[10px] px-2 py-0.5 rounded-full bg-[#F1E9DF] font-[700]">${b.date === todayISO() ? 'Today' : b.date}</span>
+            <span class="mono text-[10px] px-2.5 py-1 rounded-full bg-[#F1E9DF] text-[#201C19] font-[700]">${b.date === todayISO() ? 'Today' : b.date}</span>
             <span class="mono text-[11px] opacity-60">${to12Range(b.start, b.end)}</span>
           </div>
           <div class="mono text-[11px] opacity-50 mt-0.5 truncate">${escapeHtml(b.email || '')}${b.group ? ' · ' + escapeHtml(b.group) : ''}</div>
@@ -3798,30 +3798,30 @@ function renderScheduleSlots(container, dateISO, courtFilter){
 
     let statusChip='', actionHtml='', leftDot='';
     if(staffBlocked){
-      statusChip=`<span class="inline-flex items-center gap-1.5 px-2.5 h-7 rounded-full bg-[#FFE0D1] border border-[#FFC9B6] mono text-[11px] font-[700]">STAFF RESERVED</span>`;
+      statusChip=`<span class="inline-flex items-center gap-1.5 px-3.5 h-8 rounded-full bg-[#FFE0D1] border border-[#FFC9B6] text-[#9A3412] mono text-[11px] font-[700]">STAFF RESERVED</span>`;
       leftDot=`<span class="w-2 h-2 rounded-full bg-[#FF8A5B]"></span>`;
-      actionHtml=`<span class="mono text-[11px] opacity-50 px-3 h-8 grid place-items-center rounded-full bg-[#F1E9DF] border border-[#E9DDD0]">Not bookable</span>`;
+      actionHtml=`<span class="mono text-[11px] text-[#201C19]/60 px-3.5 h-8 grid place-items-center rounded-full bg-[#F1E9DF] border border-[#E9DDD0]">Not bookable</span>`;
     } else if(opMatch){
-      statusChip=`<span class="inline-flex items-center gap-1.5 px-2.5 h-7 rounded-full bg-[#EDE8FF] border border-[#D8D0FF] mono text-[11px] font-[700]">RESERVED — OPEN PLAY</span>`;
+      statusChip=`<span class="inline-flex items-center gap-1.5 px-3.5 h-8 rounded-full bg-[#EDE8FF] border border-[#D8D0FF] text-[#5B21B6] mono text-[11px] font-[700]">RESERVED — OPEN PLAY</span>`;
       leftDot=`<span class="w-2 h-2 rounded-full bg-[#9B8EFF]"></span>`;
-      actionHtml=`<span class="mono text-[11px] opacity-50 px-3 h-8 grid place-items-center rounded-full bg-[#F1E9DF] border border-[#E9DDD0]">Blocked</span>`;
+      actionHtml=`<span class="mono text-[11px] text-[#201C19]/60 px-3.5 h-8 grid place-items-center rounded-full bg-[#F1E9DF] border border-[#E9DDD0]">Blocked</span>`;
     } else if(bookingMatch){
       const isPending = bookingMatch.status==='Pending';
       statusChip = isPending
-        ? `<span class="inline-flex items-center gap-1.5 px-2.5 h-7 rounded-full bg-[#FFF0D6] border border-[#FFE0A3] mono text-[11px] font-[700]">PENDING — ${escapeHtml(bookingMatch.name)}</span>`
-        : `<span class="inline-flex items-center gap-1.5 px-2.5 h-7 rounded-full bg-[#201C19] text-white mono text-[11px] font-[700]">RESERVED — ${escapeHtml(bookingMatch.name)}</span>`;
+        ? `<span class="inline-flex items-center gap-1.5 px-3.5 h-8 rounded-full bg-[#FFF0D6] border border-[#FFE0A3] text-[#92400E] mono text-[11px] font-[700]">PENDING — ${escapeHtml(bookingMatch.name)}</span>`
+        : `<span class="inline-flex items-center gap-1.5 px-3.5 h-8 rounded-full bg-[#201C19] text-white mono text-[11px] font-[700]">RESERVED — ${escapeHtml(bookingMatch.name)}</span>`;
       leftDot = isPending ? `<span class="w-2 h-2 rounded-full bg-[#FDBA74]"></span>` : `<span class="w-2 h-2 rounded-full bg-[#201C19]"></span>`;
       actionHtml = isPending
-        ? `<div class="flex items-center gap-2"><button data-pay-pending="${bookingMatch.id}" class="pay-pending-btn h-8 px-3.5 rounded-full bg-[#201C19] text-[#D6FF5F] mono text-[11px] font-[700] hover:opacity-90 cursor-pointer active:scale-[0.97] transition flex items-center gap-1"><span>Pay Now</span><span>→</span></button><button data-cancel-booking="${bookingMatch.id}" class="cancel-booking-btn h-8 px-3.5 rounded-full bg-white border border-[#FFC9B6] text-[#8C2C10] mono text-[11px] font-[700] hover:bg-[#FFE9E0] cursor-pointer active:scale-[0.97] transition">Cancel</button></div>`
-        : `<span class="mono text-[11px] px-3 h-8 grid place-items-center rounded-full bg-white border border-[#EAE0D5]">Booked • ${bookingMatch.start===bookingMatch.end-1? `${fmtTime(bookingMatch.start)}–${fmtTime(bookingMatch.end)}` : `${bookingMatch.start}-${bookingMatch.end}h`}</span>`;
+        ? `<div class="flex items-center gap-2"><button data-pay-pending="${bookingMatch.id}" class="pay-pending-btn h-8 px-4 rounded-full bg-[#201C19] text-[#D6FF5F] mono text-[11px] font-[700] hover:opacity-90 cursor-pointer active:scale-[0.97] transition flex items-center gap-1"><span>Pay Now</span><span>→</span></button><button data-cancel-booking="${bookingMatch.id}" class="cancel-booking-btn h-8 px-4 rounded-full bg-white border border-[#FFC9B6] text-[#8C2C10] mono text-[11px] font-[700] hover:bg-[#FFE9E0] cursor-pointer active:scale-[0.97] transition">Cancel</button></div>`
+        : `<span class="mono text-[11px] text-[#201C19] px-4 h-8 grid place-items-center rounded-full bg-white border border-[#EAE0D5]">Booked • ${bookingMatch.start===bookingMatch.end-1? `${fmtTime(bookingMatch.start)}–${fmtTime(bookingMatch.end)}` : `${bookingMatch.start}-${bookingMatch.end}h`}</span>`;
     } else {
       // open
       if(slot.type==='morning'){
-        statusChip=`<span class="inline-flex items-center gap-1.5 px-2.5 h-7 rounded-full bg-[#E8F5D8] border border-[#CFE8B5] mono text-[11px] font-[700]">QUEUE — WALK-IN • ${fmtMoney(CLIENT.rates.queuePerHead)}/head</span>`;
+        statusChip=`<span class="inline-flex items-center gap-1.5 px-3.5 h-8 rounded-full bg-[#E8F5D8] border border-[#CFE8B5] text-[#166534] mono text-[11px] font-[700]">QUEUE — WALK-IN • ${fmtMoney(CLIENT.rates.queuePerHead)}/head</span>`;
         leftDot=`<span class="w-2 h-2 rounded-full bg-[#4ADE80]"></span>`;
-        actionHtml=`<span class="mono text-[11px] opacity-60 px-3 h-8 grid place-items-center rounded-full bg-[#FFFBF5] border border-[#E9DDD0]">Unlimited play all day</span>`;
+        actionHtml=`<span class="mono text-[11px] text-[#201C19]/70 px-3.5 h-8 grid place-items-center rounded-full bg-[#FFFBF5] border border-[#E9DDD0]">Unlimited play all day</span>`;
       } else {
-        statusChip=`<span class="inline-flex items-center gap-1.5 px-2.5 h-7 rounded-full bg-[#D6FF5F] border border-[#201C19]/10 mono text-[11px] font-[800]">OPEN • ${fmtMoney(getCourtRate(courtFilter, slot.s))}/hr</span>`;
+        statusChip=`<span class="inline-flex items-center gap-1.5 px-3.5 h-8 rounded-full bg-[#D6FF5F] border border-[#201C19]/10 text-[#201C19] mono text-[11px] font-[800]">OPEN • ${fmtMoney(getCourtRate(courtFilter, slot.s))}/hr</span>`;
         leftDot=`<span class="w-2 h-2 rounded-full bg-[#4ADE80]"></span>`;
         actionHtml=`<button data-book="${slot.s}" class="book-now-btn h-8 px-4 rounded-full bg-[#201C19] text-white mono text-[11px] font-[700] hover:opacity-90 active:scale-[0.97] transition">Book Now →</button>`;
       }
@@ -4266,9 +4266,9 @@ function renderBookingsList(){
 
   filtered.forEach(b=>{
     const isOpenPlay = b.status==='OpenPlay';
-    const chip = isOpenPlay ? `<span class="px-2.5 h-6 rounded-full bg-[#EDE8FF] border border-[#D8D0FF] mono text-[10px] font-[700] inline-flex items-center">OPEN PLAY</span>`
-               : b.status==='Pending' ? `<span class="px-2.5 h-6 rounded-full bg-[#FFF0D6] border border-[#FFE0A3] mono text-[10px] font-[700] inline-flex items-center">PENDING</span>`
-               : `<span class="px-2.5 h-6 rounded-full bg-[#201C19] text-white mono text-[10px] font-[700] inline-flex items-center">RESERVED</span>`;
+    const chip = isOpenPlay ? `<span class="px-3 h-7 rounded-full bg-[#EDE8FF] border border-[#D8D0FF] text-[#5B21B6] mono text-[10px] font-[700] inline-flex items-center">OPEN PLAY</span>`
+               : b.status==='Pending' ? `<span class="px-3 h-7 rounded-full bg-[#FFF0D6] border border-[#FFE0A3] text-[#92400E] mono text-[10px] font-[700] inline-flex items-center">PENDING</span>`
+               : `<span class="px-3 h-7 rounded-full bg-[#201C19] text-white mono text-[10px] font-[700] inline-flex items-center">RESERVED</span>`;
 
     const row = document.createElement('div');
     row.className='px-6 md:px-8 py-4 flex flex-col md:flex-row md:items-center gap-3 hover:bg-[#FFFBF5] transition';
@@ -5191,12 +5191,12 @@ function renderOpenGames(){
         <div class="min-w-0">
           <div class="flex items-center gap-2 flex-wrap">
             ${isFacility
-              ? `<span class="mono text-[10px] px-2 py-0.5 rounded-full bg-[#D6FF5F] text-[#201C19] font-[800] uppercase">Open Play</span>
-                 <span class="mono text-[10px] px-2 py-0.5 rounded-full bg-[#F1E9DF] font-[700]">${gameModeLabel(g.gameMode)}</span>
-                 <span class="mono text-[10px] px-2 py-0.5 rounded-full bg-[#F1E9DF] font-[700]">${rotationRuleLabel(g.rotationRule)}</span>
-                 <span class="mono text-[10px] px-2 py-0.5 rounded-full font-[700] ${g.allowJoin===false ? 'bg-[#F1E9DF] opacity-70' : 'bg-[#E8F5D8] text-[#3F7019]'}">${g.allowJoin===false ? 'Walk-ins only' : 'Public Joining'}</span>`
-              : `<span class="mono text-[10px] px-2 py-0.5 rounded-full bg-[#EDE8FF] text-[#3B2A9E] font-[700] uppercase">${escapeHtml(g.skillLevel)}</span>
-                 <span class="mono text-[10px] px-2 py-0.5 rounded-full bg-[#F1E9DF] font-[700]">${escapeHtml(g.format)}</span>`}
+              ? `<span class="mono text-[10px] px-3 py-1 rounded-full bg-[#D6FF5F] text-[#201C19] font-[800] uppercase">Open Play</span>
+                 <span class="mono text-[10px] px-3 py-1 rounded-full bg-[#F1E9DF] text-[#201C19] font-[700]">${gameModeLabel(g.gameMode)}</span>
+                 <span class="mono text-[10px] px-3 py-1 rounded-full bg-[#F1E9DF] text-[#201C19] font-[700]">${rotationRuleLabel(g.rotationRule)}</span>
+                 <span class="mono text-[10px] px-3 py-1 rounded-full font-[700] ${g.allowJoin===false ? 'bg-[#F1E9DF] text-[#201C19]/80' : 'bg-[#E8F5D8] text-[#3F7019]'}">${g.allowJoin===false ? 'Walk-ins only' : 'Public Joining'}</span>`
+              : `<span class="mono text-[10px] px-3 py-1 rounded-full bg-[#EDE8FF] text-[#3B2A9E] font-[700] uppercase">${escapeHtml(g.skillLevel)}</span>
+                 <span class="mono text-[10px] px-3 py-1 rounded-full bg-[#F1E9DF] text-[#201C19] font-[700]">${escapeHtml(g.format)}</span>`}
             <span class="font-[700] text-[14px]">${fmtDateLabel(g.date)} · ${timeLabel}</span>
           </div>
           <div class="mono text-[11px] opacity-60 mt-1">${isFacility ? `${g.players.length} joined so far${g.allowJoin!==false && g.perPersonRate ? ` · ${fmtMoney(g.perPersonRate)}/head` : ''}` : `${g.players.length} / ${g.playersNeeded} players • ${needed} needed`}${g.notes ? ' · '+escapeHtml(g.notes) : ''}</div>
@@ -5223,7 +5223,7 @@ function renderOpenGames(){
       <button type="button" data-og-view="${g.id}" class="w-full text-left p-3 rounded-[14px] border border-[#F1E9DF] bg-[#FFFBF5] hover:border-[#201C19] transition cursor-pointer">
         <div class="flex items-center justify-between gap-2">
           <span class="mono text-[11px] font-[700] truncate">${fmtDateLabel(g.date)} · ${fmtTime(g.startHour)}</span>
-          <span class="mono text-[9px] px-2 py-0.5 rounded-full font-[700] uppercase ${badgeColor}">${status}</span>
+          <span class="mono text-[9px] px-2.5 py-1 rounded-full font-[700] uppercase ${badgeColor}">${status}</span>
         </div>
         <div class="mono text-[10px] opacity-60 mt-1">${g.players.length} / ${g.playersNeeded} players • ${mine[g.id].role === 'creator' ? 'You organized this' : 'You joined'}</div>
       </button>`;
@@ -5521,11 +5521,11 @@ function renderOgDetailModal(gameId){
     <div class="mono text-[13px] font-[700]">${fmtDateLabel(game.date)}<br/>${isFacility && game.endHour != null ? to12Range(game.startHour, game.endHour) : fmtTime(game.startHour)}</div>
     <div class="flex items-center gap-2 flex-wrap">
       ${isFacility
-        ? `<span class="mono text-[10px] px-2 py-0.5 rounded-full bg-[#F1E9DF] font-[700]">${gameModeLabel(game.gameMode)}</span>
-           <span class="mono text-[10px] px-2 py-0.5 rounded-full bg-[#F1E9DF] font-[700]">${rotationRuleLabel(game.rotationRule)}</span>`
-        : `<span class="mono text-[10px] px-2 py-0.5 rounded-full bg-[#F1E9DF] font-[700]">${escapeHtml(game.format)}</span>`}
-      ${isFacility ? `<span class="mono text-[10px] px-2 py-0.5 rounded-full font-[700] ${game.allowJoin===false ? 'bg-[#F1E9DF] opacity-70' : 'bg-[#E8F5D8] text-[#3F7019]'}">${game.allowJoin===false ? 'Walk-ins only' : 'Public Joining'}</span>` : ''}
-      <span class="mono text-[10px] px-2.5 py-1 rounded-full font-[800] uppercase ${status==='OPEN'?'bg-[#D6FF5F] text-[#201C19]':status==='FULL'?'bg-[#201C19] text-white':status==='RESERVED'?'bg-[#E8F5D8] text-[#3F7019]':'bg-[#F1E9DF] text-[#201C19]/50'}">${isFacility ? `${game.players.length} joined` : `${game.players.length} / ${game.playersNeeded} Players`} · ${status}</span>
+        ? `<span class="mono text-[10px] px-3 py-1 rounded-full bg-[#F1E9DF] text-[#201C19] font-[700]">${gameModeLabel(game.gameMode)}</span>
+           <span class="mono text-[10px] px-3 py-1 rounded-full bg-[#F1E9DF] text-[#201C19] font-[700]">${rotationRuleLabel(game.rotationRule)}</span>`
+        : `<span class="mono text-[10px] px-3 py-1 rounded-full bg-[#F1E9DF] text-[#201C19] font-[700]">${escapeHtml(game.format)}</span>`}
+      ${isFacility ? `<span class="mono text-[10px] px-3 py-1 rounded-full font-[700] ${game.allowJoin===false ? 'bg-[#F1E9DF] text-[#201C19]/80' : 'bg-[#E8F5D8] text-[#3F7019]'}">${game.allowJoin===false ? 'Walk-ins only' : 'Public Joining'}</span>` : ''}
+      <span class="mono text-[10px] px-3 py-1 rounded-full font-[800] uppercase ${status==='OPEN'?'bg-[#D6FF5F] text-[#201C19]':status==='FULL'?'bg-[#201C19] text-white':status==='RESERVED'?'bg-[#E8F5D8] text-[#3F7019]':'bg-[#F1E9DF] text-[#201C19]'}">${isFacility ? `${game.players.length} joined` : `${game.players.length} / ${game.playersNeeded} Players`} · ${status}</span>
     </div>
     ${isFacility && game.allowJoin !== false && game.perPersonRate ? `<div class="mono text-[12px] font-[700]">${fmtMoney(game.perPersonRate)} / person</div>` : ''}
     ${game.notes ? `<div class="mono text-[12px] opacity-70">${escapeHtml(game.notes)}</div>` : ''}
@@ -5598,10 +5598,10 @@ function renderOpenPlayList(){
       <div class="mono text-[11px]">
         <b>${fmtDateLabel(op.date)}</b><br/>${to12Range(op.start,op.end)}${courtName ? ` <span class="opacity-60">• ${escapeHtml(courtName)}</span>` : ''}
         ${op.gameMode || op.rotationRule || op.perPersonRate != null || op.allowJoin != null ? `<div class="flex items-center gap-1.5 mt-1 flex-wrap">
-          ${op.gameMode ? `<span class="px-1.5 py-0.5 rounded-full bg-white/15 text-[9px] font-[700]">${gameModeLabel(op.gameMode)}</span>` : ''}
-          ${op.rotationRule ? `<span class="px-1.5 py-0.5 rounded-full bg-white/15 text-[9px] font-[700]">${rotationRuleLabel(op.rotationRule)}</span>` : ''}
-          ${op.perPersonRate != null ? `<span class="px-1.5 py-0.5 rounded-full bg-white/15 text-[9px] font-[700]">${fmtMoney(op.perPersonRate)}/head</span>` : ''}
-          <span class="px-1.5 py-0.5 rounded-full text-[9px] font-[700] ${op.allowJoin===false ? 'bg-white/15 opacity-70' : 'bg-[#D6FF5F] text-[#201C19]'}">${op.allowJoin===false ? 'Walk-ins only' : 'Public Joining'}</span>
+          ${op.gameMode ? `<span class="px-2.5 py-1 rounded-full bg-white/15 text-[9px] font-[700]">${gameModeLabel(op.gameMode)}</span>` : ''}
+          ${op.rotationRule ? `<span class="px-2.5 py-1 rounded-full bg-white/15 text-[9px] font-[700]">${rotationRuleLabel(op.rotationRule)}</span>` : ''}
+          ${op.perPersonRate != null ? `<span class="px-2.5 py-1 rounded-full bg-white/15 text-[9px] font-[700]">${fmtMoney(op.perPersonRate)}/head</span>` : ''}
+          <span class="px-2.5 py-1 rounded-full text-[9px] font-[700] ${op.allowJoin===false ? 'bg-white/15 text-white/80' : 'bg-[#D6FF5F] text-[#201C19]'}">${op.allowJoin===false ? 'Walk-ins only' : 'Public Joining'}</span>
         </div>` : ''}
       </div>
       <button data-opdel="${op.id}" class="w-7 h-7 rounded-full bg-white/20 grid place-items-center text-[12px] shrink-0">✕</button>
@@ -5866,9 +5866,9 @@ function renderQueueModule() {
           <div class="min-w-0">
             <div class="font-[800] text-[14px] leading-tight truncate">${escapeHtml(s.name)}</div>
             <div class="flex items-center gap-1.5 mt-1.5 flex-wrap">
-              <span class="mono text-[9px] px-2 py-0.5 rounded-full ${isSelected ? 'bg-white/10 text-[#D6FF5F]' : 'bg-[#201C19]/5 text-[#201C19]'} font-[800] uppercase">${s.mode}</span>
-              <span class="mono text-[9px] px-2 py-0.5 rounded-full ${isSelected ? 'bg-white/10 text-white/75' : 'bg-[#F1E9DF] text-[#201C19]/70'}">${s.rule === 'winner_stays' ? 'Winner Stays' : s.rule === 'fixed_pairs' ? 'Fixed Pairs' : s.rule === 'partner_rotation' ? 'Partner Rot.' : s.rule === 'timed_rotation' ? 'Timed Rot.' : s.rule === 'fixed_rotation' ? 'Fixed Rot.' : 'Four On/Off'}</span>
-              ${courtName ? `<span class="mono text-[9px] px-2 py-0.5 rounded-full ${isSelected ? 'bg-white/10 text-white/75' : 'bg-[#EAE0D5] text-[#201C19]/70'}">${escapeHtml(courtName)}</span>` : ''}
+              <span class="mono text-[9px] px-2.5 py-1 rounded-full ${isSelected ? 'bg-white/10 text-[#D6FF5F]' : 'bg-[#201C19]/5 text-[#201C19]'} font-[800] uppercase">${s.mode}</span>
+              <span class="mono text-[9px] px-2.5 py-1 rounded-full ${isSelected ? 'bg-white/10 text-white/80' : 'bg-[#F1E9DF] text-[#201C19]'}">${s.rule === 'winner_stays' ? 'Winner Stays' : s.rule === 'fixed_pairs' ? 'Fixed Pairs' : s.rule === 'partner_rotation' ? 'Partner Rot.' : s.rule === 'timed_rotation' ? 'Timed Rot.' : s.rule === 'fixed_rotation' ? 'Fixed Rot.' : 'Four On/Off'}</span>
+              ${courtName ? `<span class="mono text-[9px] px-2.5 py-1 rounded-full ${isSelected ? 'bg-white/10 text-white/80' : 'bg-[#EAE0D5] text-[#201C19]'}">${escapeHtml(courtName)}</span>` : ''}
 
             </div>
           </div>

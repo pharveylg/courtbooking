@@ -16,6 +16,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="motion.css">
 <style>
 *{font-family:"Bricolage Grotesque",system-ui,sans-serif}
 .mono{font-family:"JetBrains Mono",monospace}
@@ -59,12 +60,12 @@
 
       <!-- Desktop nav (hidden on mobile) -->
       <div class="hidden md:flex items-center gap-2">
-        <nav class="flex items-center gap-1 p-1 rounded-full bg-[#F1E9DF] border border-[#E9DDD0]">
-          <button data-nav="book" class="nav-btn active px-5 h-8 rounded-full text-[13px] font-[650] tracking-[-0.01em] bg-[#201C19] text-white shadow-sm transition">Book</button>
-          <button data-nav="queue" class="nav-btn px-5 h-8 rounded-full text-[13px] font-[550] opacity-70 hover:opacity-100 transition">Queue</button>
-          <button data-nav="stats" class="nav-btn px-5 h-8 rounded-full text-[13px] font-[550] opacity-70 hover:opacity-100 transition">Match Stats</button>
-          <button data-nav="opengames" class="nav-btn px-5 h-8 rounded-full text-[13px] font-[550] opacity-70 hover:opacity-100 transition">Find a Game</button>
-          <button data-nav="payment" class="nav-btn px-5 h-8 rounded-full text-[13px] font-[550] opacity-70 hover:opacity-100 transition">Payment</button>
+        <nav class="flex items-center gap-1 p-1 rounded-full bg-[#F1E9DF] border border-[#E9DDD0] mp-in-view-scale">
+          <button data-nav="book" class="nav-btn active px-5 h-8 rounded-full text-[13px] font-[650] tracking-[-0.01em] bg-[#201C19] text-white shadow-sm transition mp-magnetic" data-magnetic-strength="0.15">Book</button>
+          <button data-nav="queue" class="nav-btn px-5 h-8 rounded-full text-[13px] font-[550] opacity-70 hover:opacity-100 transition mp-magnetic" data-magnetic-strength="0.15">Queue</button>
+          <button data-nav="stats" class="nav-btn px-5 h-8 rounded-full text-[13px] font-[550] opacity-70 hover:opacity-100 transition mp-magnetic" data-magnetic-strength="0.15">Match Stats</button>
+          <button data-nav="opengames" class="nav-btn px-5 h-8 rounded-full text-[13px] font-[550] opacity-70 hover:opacity-100 transition mp-magnetic" data-magnetic-strength="0.15">Find a Game</button>
+          <button data-nav="payment" class="nav-btn px-5 h-8 rounded-full text-[13px] font-[550] opacity-70 hover:opacity-100 transition mp-magnetic" data-magnetic-strength="0.15">Payment</button>
           <button data-nav="bookings" class="nav-btn admin-only-tab hidden px-5 h-8 rounded-full text-[13px] font-[550] opacity-70 hover:opacity-100 transition">
             Bookings <span id="hdrBookingsBadge" class="ml-1 px-1.5 py-0.5 rounded-full bg-[#201C19]/10 text-[10px]">0</span>
           </button>
@@ -100,7 +101,7 @@
 <main class="max-w-[1320px] mx-auto px-3.5 md:px-6 py-4 md:py-8">
 
   <!-- VIEW: BOOK -->
-  <section id="view-book" class="view">
+  <section id="view-book" class="view" data-mp-panel="book">
     <!-- Mobile Segment Switcher (< lg breakpoint only) -->
     <div class="lg:hidden flex p-1.5 rounded-full bg-[#F1E9DF] border border-[#EAE0D5] mb-4">
       <button id="mobTabSchedule" class="flex-1 py-2 rounded-full text-[13px] font-[700] bg-[#201C19] text-white shadow-xs transition">Today's Schedule</button>
@@ -112,21 +113,21 @@
       <!-- Left: schedule + info -->
       <div id="colSchedule" class="col-span-12 lg:col-span-7 flex flex-col gap-4">
         <!-- Hero strip -->
-        <div class="rounded-[24px] md:rounded-[28px] bg-[#201C19] text-[#FFFBF5] p-5 md:p-7 relative overflow-hidden">
+        <div class="rounded-[24px] md:rounded-[28px] bg-[#201C19] text-[#FFFBF5] p-5 md:p-7 relative overflow-hidden mp-mesh-bg mp-tilt" data-tilt-max="5">
           <img id="heroWatermark" src="" alt="" class="hidden absolute inset-0 w-full h-full object-cover opacity-[0.14] pointer-events-none select-none"/>
           <div class="absolute -right-12 -top-12 w-[280px] h-[280px] rounded-full bg-[#D6FF5F] opacity-[0.18] blur-[2px]"></div>
           <div class="absolute right-[-20px] bottom-[-30px] rotate-[-10deg] mono text-[96px] leading-none font-[800] tracking-[-0.08em] text-white/[0.06]">PICKLE</div>
           <div class="relative z-10 flex flex-wrap items-start justify-between gap-6">
             <div>
-              <div id="heroLocation" class="inline-flex items-center gap-2 px-3 h-7 rounded-full bg-white/10 border border-white/10 mono text-[11px] tracking-widest uppercase">Single Court</div>
-              <h1 id="heroTitle" class="mt-4 text-[32px] md:text-[44px] font-[800] leading-[0.92] tracking-[-0.04em] max-w-[16ch]">Book the court.<br/>Run the queue.</h1>
-              <div class="mt-4 flex flex-wrap gap-2">
-                <div id="chipHourly" class="px-3 py-1.5 rounded-full bg-[#D6FF5F] text-[#201C19] mono text-[11px] font-[700]">₱300 / hour • Reservations</div>
-                <div id="chipQueue" class="px-3 py-1.5 rounded-full bg-white/10 border border-white/15 mono text-[11px]">₱100 / head • Queue</div>
-                <div id="chipOpenPlay" class="px-3 py-1.5 rounded-full bg-[#EDE8FF] border border-[#D8D0FF] mono text-[11px] font-[700] text-[#5B4FA8]">₱120 / head • Open Play</div>
+              <div id="heroLocation" class="inline-flex items-center gap-2 px-3 h-7 rounded-full bg-white/10 border border-white/10 mono text-[11px] tracking-widest uppercase mp-in-view">Single Court</div>
+              <h1 id="heroTitle" class="mt-4 text-[32px] md:text-[44px] font-[800] leading-[0.92] tracking-[-0.04em] max-w-[16ch] mp-in-view-scale">Book the court.<br/>Run the queue.</h1>
+              <div class="mt-4 flex flex-wrap gap-2 mp-stagger">
+                <div id="chipHourly" class="mp-in-view px-3 py-1.5 rounded-full bg-[#D6FF5F] text-[#201C19] mono text-[11px] font-[700] mp-hover-lift">₱300 / hour • Reservations</div>
+                <div id="chipQueue" class="mp-in-view px-3 py-1.5 rounded-full bg-white/10 border border-white/15 mono text-[11px] mp-hover-lift">₱100 / head • Queue</div>
+                <div id="chipOpenPlay" class="mp-in-view px-3 py-1.5 rounded-full bg-[#EDE8FF] border border-[#D8D0FF] mono text-[11px] font-[700] text-[#5B4FA8] mp-hover-lift">₱120 / head • Open Play</div>
               </div>
             </div>
-            <div class="bg-white/5 border border-white/10 rounded-[16px] p-3 w-full md:w-[240px]">
+            <div class="mp-glass-dark rounded-[16px] p-3 w-full md:w-[240px] mp-in-view-right mp-spotlight">
               <div class="mono text-[10px] tracking-widest uppercase opacity-60">Today's Blocked</div>
               <div id="staffNote" class="mt-2 text-[13px] leading-[1.35] font-[500]"></div>
               <div class="mt-3 flex gap-1.5">
@@ -186,7 +187,7 @@
           </button>
         </div>
 
-        <div class="rounded-[24px] md:rounded-[28px] bg-white border border-[#EAE0D5] shadow-[0_8px_30px_rgba(32,28,25,0.04)] overflow-hidden sticky top-[84px]">
+        <div class="rounded-[24px] md:rounded-[28px] bg-white border border-[#EAE0D5] shadow-[0_8px_30px_rgba(32,28,25,0.04)] overflow-hidden sticky top-[84px] mp-in-view-right mp-spotlight">
           <div class="px-6 md:px-7 pt-6 pb-4">
             <div class="flex items-start justify-between">
               <div>
@@ -239,17 +240,17 @@
             <div class="grid grid-cols-2 gap-3">
               <label class="col-span-2 md:col-span-1 flex flex-col gap-1.5">
                 <span class="mono text-[11px] uppercase tracking-widest font-[600]">Full Name</span>
-                <input required id="fName" placeholder="Juan Dela Cruz" class="h-[44px] rounded-[12px] border border-[#EAE0D5] bg-[#FFFBF5] px-4 text-[14px] font-[500] outline-none focus:border-[#201C19] focus:bg-white transition"/>
+                <input required id="fName" placeholder="Juan Dela Cruz" class="h-[44px] rounded-[12px] border border-[#EAE0D5] bg-[#FFFBF5] px-4 text-[14px] font-[500] outline-none focus:border-[#201C19] focus:bg-white transition mp-focus-glow"/>
               </label>
               <label class="col-span-2 md:col-span-1 flex flex-col gap-1.5">
                 <span class="mono text-[11px] uppercase tracking-widest font-[600]">Email</span>
-                <input required type="email" id="fEmail" placeholder="you@email.com" class="h-[44px] rounded-[12px] border border-[#EAE0D5] bg-[#FFFBF5] px-4 text-[14px] font-[500] outline-none focus:border-[#201C19] focus:bg-white transition"/>
+                <input required type="email" id="fEmail" placeholder="you@email.com" class="h-[44px] rounded-[12px] border border-[#EAE0D5] bg-[#FFFBF5] px-4 text-[14px] font-[500] outline-none focus:border-[#201C19] focus:bg-white transition mp-focus-glow"/>
               </label>
             </div>
 
             <label class="flex flex-col gap-1.5">
               <span class="mono text-[11px] uppercase tracking-widest font-[600]">Group / Notes (optional)</span>
-              <input id="fGroup" placeholder="e.g., 4 players, birthday game" class="h-[44px] rounded-[12px] border border-[#EAE0D5] bg-[#FFFBF5] px-4 text-[14px] font-[500] outline-none focus:border-[#201C19] focus:bg-white transition"/>
+              <input id="fGroup" placeholder="e.g., 4 players, birthday game" class="h-[44px] rounded-[12px] border border-[#EAE0D5] bg-[#FFFBF5] px-4 text-[14px] font-[500] outline-none focus:border-[#201C19] focus:bg-white transition mp-focus-glow"/>
             </label>
 
             <label id="fCourtLabel" class="hidden flex flex-col gap-1.5">
@@ -270,7 +271,7 @@
 
             <label class="flex flex-col gap-1.5">
               <span class="mono text-[11px] uppercase tracking-widest font-[600]">Booking PIN (4 digits)</span>
-              <input required type="password" inputmode="numeric" maxlength="4" id="fPin" placeholder="e.g. 1234 (to pay or verify later)" class="h-[44px] rounded-[12px] border border-[#EAE0D5] bg-[#FFFBF5] px-4 text-[14px] font-[700] text-[#201C19] tracking-widest outline-none focus:border-[#201C19] focus:bg-white transition"/>
+              <input required type="password" inputmode="numeric" maxlength="4" id="fPin" placeholder="e.g. 1234 (to pay or verify later)" class="h-[44px] rounded-[12px] border border-[#EAE0D5] bg-[#FFFBF5] px-4 text-[14px] font-[700] text-[#201C19] tracking-widest outline-none focus:border-[#201C19] focus:bg-white transition mp-focus-glow"/>
             </label>
 
             <div class="rounded-[14px] bg-[#201C19] text-white p-4 flex items-center justify-between">
@@ -287,7 +288,7 @@
 
             <div id="formError" class="hidden rounded-[12px] bg-[#FFE9E0] border border-[#FFC9B6] px-4 py-3 mono text-[12px] leading-[1.4] text-[#7A2E1A]"></div>
 
-            <button type="submit" class="h-[50px] rounded-full bg-[#D6FF5F] hover:bg-[#CBF052] active:scale-[0.98] text-[#201C19] font-[800] text-[14px] tracking-[-0.01em] border border-[#201C19]/10 shadow-[0_8px_24px_rgba(214,255,95,0.5)] transition flex items-center justify-center gap-2">
+            <button type="submit" class="h-[50px] rounded-full bg-[#D6FF5F] hover:bg-[#CBF052] active:scale-[0.98] text-[#201C19] font-[800] text-[14px] tracking-[-0.01em] border border-[#201C19]/10 shadow-[0_8px_24px_rgba(214,255,95,0.5)] transition flex items-center justify-center gap-2 mp-magnetic mp-hover-lift" data-magnetic-strength="0.1">
               <span>Confirm Reservation</span>
               <span class="w-6 h-6 rounded-full bg-[#201C19] text-[#D6FF5F] grid place-items-center text-[12px]">→</span>
             </button>
@@ -300,7 +301,7 @@
   </section>
 
   <!-- VIEW: BOOKINGS -->
-  <section id="view-bookings" class="view hidden">
+  <section id="view-bookings" class="view hidden" data-mp-panel="bookings">
     <div class="rounded-[26px] bg-white border border-[#EAE0D5] overflow-hidden">
       <div class="px-6 md:px-8 h-[72px] flex items-center justify-between border-b border-[#F1E9DF] gap-4">
         <div class="flex items-center gap-4">
@@ -333,7 +334,7 @@
   </section>
 
   <!-- VIEW: QUEUE (QUEUEING & ROTATION TOOL) -->
-  <section id="view-queue" class="view hidden">
+  <section id="view-queue" class="view hidden" data-mp-panel="queue">
     <!-- Queue Hero header -->
     <div class="rounded-[24px] md:rounded-[28px] bg-white border border-[#EAE0D5] p-5 md:p-6 mb-5 shadow-xs relative overflow-hidden">
       <div class="absolute -right-20 -top-20 w-[240px] h-[240px] rounded-full bg-[#D6FF5F]/15 blur-[2px]"></div>
@@ -370,7 +371,7 @@
           <form id="createQueueForm" class="space-y-3.5">
             <div>
               <label class="block mono text-[10px] uppercase tracking-widest font-[700] mb-1">Session Name / Group</label>
-              <input required id="qName" placeholder="e.g., Morning Smashers, Friday Singles" class="w-full h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-4 text-[13px] font-[600] outline-none focus:border-[#201C19] focus:bg-white transition"/>
+              <input required id="qName" placeholder="e.g., Morning Smashers, Friday Singles" class="w-full h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-4 text-[13px] font-[600] outline-none focus:border-[#201C19] focus:bg-white transition mp-focus-glow"/>
             </div>
 
             <div id="qCourtWrapper" class="hidden">
@@ -415,7 +416,7 @@
 
             <div>
               <label class="block mono text-[10px] uppercase tracking-widest font-[700] mb-1">Initial Players (one per line)</label>
-              <textarea id="qInitialPlayers" rows="3" placeholder="Player 1&#10;Player 2&#10;Player 3&#10;Player 4" class="w-full rounded-[14px] border border-[#EAE0D5] bg-[#FFFBF5] p-3 text-[12px] font-[600] leading-tight outline-none focus:border-[#201C19] focus:bg-white transition resize-none"></textarea>
+              <textarea id="qInitialPlayers" rows="3" placeholder="Player 1&#10;Player 2&#10;Player 3&#10;Player 4" class="w-full rounded-[14px] border border-[#EAE0D5] bg-[#FFFBF5] p-3 text-[12px] font-[600] leading-tight outline-none focus:border-[#201C19] focus:bg-white transition mp-focus-glow resize-none"></textarea>
               <span class="mono text-[9px] opacity-50 block mt-0.5">Separate player names by hitting Enter. Minimum 2 (singles) or 4 (doubles) to auto-start.</span>
             </div>
 
@@ -547,12 +548,12 @@
               <form id="joinQueueForm" class="space-y-3.5">
                 <div>
                   <label class="block mono text-[10px] uppercase tracking-widest font-[700] mb-1">Player 1 Name</label>
-                  <input required id="jPlayer1" placeholder="e.g. John Doe" class="w-full h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-4 text-[13px] font-[600] outline-none focus:border-[#201C19] focus:bg-white transition"/>
+                  <input required id="jPlayer1" placeholder="e.g. John Doe" class="w-full h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-4 text-[13px] font-[600] outline-none focus:border-[#201C19] focus:bg-white transition mp-focus-glow"/>
                 </div>
 
                 <div id="jPlayer2Wrapper">
                   <label id="jPlayer2Label" class="block mono text-[10px] uppercase tracking-widest font-[700] mb-1">Player 2 Name (Optional Partner)</label>
-                  <input id="jPlayer2" placeholder="e.g. Jane Doe (or leave blank to queue alone)" class="w-full h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-4 text-[13px] font-[600] outline-none focus:border-[#201C19] focus:bg-white transition"/>
+                  <input id="jPlayer2" placeholder="e.g. Jane Doe (or leave blank to queue alone)" class="w-full h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-4 text-[13px] font-[600] outline-none focus:border-[#201C19] focus:bg-white transition mp-focus-glow"/>
                   <span id="jPlayer2Hint" class="mono text-[9px] opacity-50 block mt-0.5">For doubles, queueing with a partner keeps you grouped together!</span>
                 </div>
 
@@ -628,7 +629,7 @@
   </section>
 
   <!-- VIEW: MATCH STATS (per-session player statistics derived from queue match history) -->
-  <section id="view-stats" class="view hidden">
+  <section id="view-stats" class="view hidden" data-mp-panel="stats">
     <!-- Stats Hero header -->
     <div class="rounded-[24px] md:rounded-[28px] bg-white border border-[#EAE0D5] p-5 md:p-6 mb-5 shadow-xs relative overflow-hidden">
       <div class="absolute -right-20 -top-20 w-[240px] h-[240px] rounded-full bg-[#D6FF5F]/15 blur-[2px]"></div>
@@ -791,7 +792,7 @@
   </section>
 
   <!-- VIEW: OPEN GAMES (public matchmaking, separate from the admin Queue Manager above) -->
-  <section id="view-opengames" class="view hidden">
+  <section id="view-opengames" class="view hidden" data-mp-panel="opengames">
     <div class="grid grid-cols-12 gap-4 md:gap-6">
       <div class="col-span-12 lg:col-span-8 flex flex-col gap-4">
         <div class="rounded-[24px] bg-white border border-[#EAE0D5] shadow-[0_8px_30px_rgba(32,28,25,0.04)] overflow-hidden">
@@ -906,7 +907,7 @@
   </div>
 
   <!-- VIEW: PAYMENT -->
-  <section id="view-payment" class="view hidden">
+  <section id="view-payment" class="view hidden" data-mp-panel="payment">
     <div class="grid grid-cols-12 gap-4 md:gap-6">
       <!-- Left Column: Scannable QR & Channel Switcher Buttons -->
       <div class="col-span-12 lg:col-span-6">
@@ -1037,7 +1038,7 @@
   </section>
 
   <!-- VIEW: ADMIN -->
-  <section id="view-admin" class="view hidden">
+  <section id="view-admin" class="view hidden" data-mp-panel="admin">
     <!-- Admin Lock -->
     <div id="adminLock" class="max-w-[440px] mx-auto">
       <div class="rounded-[26px] bg-white border border-[#EAE0D5] p-7 md:p-8 shadow-[0_10px_40px_rgba(32,28,25,0.06)]">
@@ -3084,12 +3085,18 @@ document.querySelectorAll('.nav-btn').forEach(btn=>{
       setTimeout(()=> document.getElementById('modalPinInput').focus(), 50);
       return;
     }
-    Object.values(views).forEach(v=>v.classList.add('hidden'));
+    Object.values(views).forEach(v=>{
+      v.classList.add('hidden');
+      v.classList.remove('mp-panel-enter');
+    });
     views[id].classList.remove('hidden');
+    views[id].classList.add('mp-panel-enter');
     document.querySelectorAll('.nav-btn').forEach(b=>{
       b.classList.remove('active','bg-[#201C19]','text-white','shadow-sm'); b.classList.add('opacity-70');
       if(b.dataset.nav===id){ b.classList.add('active','bg-[#201C19]','text-white','shadow-sm'); b.classList.remove('opacity-70'); }
     });
+    // Re-initialize motion primitives for the new view
+    if(typeof MP !== 'undefined') MP.observeNew();
     if(id==='bookings') renderBookingsList();
     if(id==='book') renderSchedule();
     if(id==='queue') renderQueueModule();
@@ -3821,7 +3828,7 @@ function renderScheduleSlots(container, dateISO, courtFilter){
     }
 
     const row = document.createElement('div');
-    row.className = 'px-5 md:px-7 py-3.5 flex flex-col md:flex-row md:items-center gap-2.5 md:gap-4 group hover:bg-[#FFFBF5] transition';
+    row.className = 'mp-in-view mp-spotlight px-5 md:px-7 py-3.5 flex flex-col md:flex-row md:items-center gap-2.5 md:gap-4 group hover:bg-[#FFFBF5] transition';
     row.innerHTML = `
       <div class="flex items-center gap-3 md:w-[200px] shrink-0">
         ${leftDot}
@@ -7467,5 +7474,6 @@ document.getElementById('modalGoUpload')?.addEventListener('click', () => {
   openProofPicker(null); // resolves to the most recent Pending booking
 });
 </script>
+<script src="motion.js"></script>
 </body>
 </html>

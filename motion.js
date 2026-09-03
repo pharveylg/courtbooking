@@ -242,6 +242,18 @@ const MP = (() => {
     initMagnetic();
     initCounters();
     initTabTransitions();
+
+    // Auto-observe dynamically added elements
+    if (typeof MutationObserver !== 'undefined') {
+      const mo = new MutationObserver((mutations) => {
+        let hasNew = false;
+        for (const m of mutations) {
+          if (m.addedNodes.length > 0) { hasNew = true; break; }
+        }
+        if (hasNew) observeNew();
+      });
+      mo.observe(document.body, { childList: true, subtree: true });
+    }
   }
 
   // Auto-init on DOMContentLoaded

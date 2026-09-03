@@ -56,6 +56,9 @@
     }
   ],
   "rewrites": [
+    { "source": "/sw.js", "destination": "/sw.js" },
+    { "source": "/manifest.json", "destination": "/manifest.json" },
+    { "source": "/icons/(.*)", "destination": "/icons/$1" },
     { "source": "/superadmin", "destination": "/superadmin.html" },
     { "source": "/superadmin.html", "destination": "/superadmin.html" },
     { "source": "/store", "destination": "/store.html" },

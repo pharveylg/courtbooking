@@ -3,6 +3,12 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<meta name="theme-color" content="#201C19"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta name="apple-mobile-web-app-title" content="CourtBook"/>
+<link rel="manifest" href="/manifest.json"/>
+<link rel="apple-touch-icon" href="/icons/icon-192.png"/>
 <title>Court Booking — Pickleball Reservations</title>
 <!-- Client white-label config (edit per deployment branch) -->
 <script src="client-config.js"></script>
@@ -40,6 +46,24 @@
 </style>
 </head>
 <body class="bg-[#FFFBF5] text-[#201C19] antialiased selection:bg-[#D6FF5F]">
+
+<!-- PWA Offline Indicator -->
+<div id="pwa-offline-bar" class="hidden fixed top-0 left-0 right-0 z-[9999] bg-[#FF8A5B] text-white text-center py-2 px-4 mono text-[11px] font-[700] tracking-wide" style="display:none">
+  ⚡ You're offline — changes will sync when reconnected
+</div>
+
+<!-- PWA Install Banner -->
+<div id="pwa-install-banner" class="hidden fixed bottom-4 left-4 right-4 md:left-auto md:right-4 md:w-[380px] z-[9998] rounded-[20px] bg-[#201C19] text-white border border-white/10 p-4 shadow-[0_8px_32px_rgba(0,0,0,0.3)]" style="display:none">
+  <div class="flex items-center gap-3">
+    <img src="/icons/icon-192.png" alt="" class="w-12 h-12 rounded-xl shrink-0"/>
+    <div class="flex-1 min-w-0">
+      <div class="font-[800] text-[14px]">Install Court Booking</div>
+      <div class="mono text-[11px] opacity-60">Book courts from your home screen</div>
+    </div>
+    <button id="pwa-install-btn" class="px-4 h-9 rounded-full bg-[#D6FF5F] text-[#201C19] mono text-[11px] font-[800] shrink-0 cursor-pointer">Install</button>
+    <button id="pwa-install-dismiss" class="w-8 h-8 rounded-full grid place-items-center text-white/50 hover:text-white cursor-pointer shrink-0">✕</button>
+  </div>
+</div>
 
 <!-- Header -->
 <header class="sticky top-0 z-30 backdrop-blur-xl bg-[#FFFBF5]/90 border-b border-[#EAE0D5] shadow-xs">
@@ -1898,6 +1922,15 @@ if (FB_ENABLED) {
   try {
     fbApp = firebase.initializeApp(FIREBASE_CFG);
     db = firebase.firestore();
+    // Enable offline persistence — reads from local cache when offline,
+    // writes are queued and synced when back online
+    db.enablePersistence({ synchronizeTabs: true }).catch(err => {
+      if (err.code === 'failed-precondition') {
+        console.warn('[PWA] Persistence: multiple tabs, only one can enable it');
+      } else if (err.code === 'unimplemented') {
+        console.warn('[PWA] Persistence: browser does not support it');
+      }
+    });
     fbStorage = firebase.storage();
     fbAuth = firebase.auth();
     console.log('[CourtBooking] Firebase connected:', FIREBASE_CFG.projectId);
@@ -7475,5 +7508,133 @@ document.getElementById('modalGoUpload')?.addEventListener('click', () => {
 });
 </script>
 <script src="motion.js"></script>
+
+<!-- PWA: Service Worker + Offline + Install -->
+<script>
+(function() {
+  'use strict';
+
+  // ── Service Worker Registration ───────────────────────
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/sw.js', { scope: '/' })
+        .then(reg => {
+          console.log('[PWA] Service Worker registered, scope:', reg.scope);
+        })
+        .catch(err => {
+          console.warn('[PWA] Service Worker registration failed:', err.message);
+        });
+    });
+  }
+
+  // ── Offline / Online Detection ────────────────────────
+  const offlineBar = document.getElementById('pwa-offline-bar');
+
+  function updateOnlineStatus() {
+    if (!offlineBar) return;
+    if (!navigator.onLine) {
+      offlineBar.style.display = '';
+      offlineBar.classList.remove('hidden');
+    } else {
+      offlineBar.style.display = 'none';
+      offlineBar.classList.add('hidden');
+    }
+  }
+
+  window.addEventListener('online', () => {
+    updateOnlineStatus();
+    // Show brief "back online" message
+    if (offlineBar) {
+      offlineBar.textContent = '✓ Back online — syncing changes...';
+      offlineBar.style.background = '#4ADE80';
+      offlineBar.style.color = '#201C19';
+      offlineBar.style.display = '';
+      offlineBar.classList.remove('hidden');
+      setTimeout(() => {
+        offlineBar.style.display = 'none';
+        offlineBar.classList.add('hidden');
+        offlineBar.style.background = '';
+        offlineBar.style.color = '';
+        offlineBar.textContent = '⚡ You\'re offline — changes will sync when reconnected';
+      }, 2500);
+    }
+  });
+
+  window.addEventListener('offline', updateOnlineStatus);
+
+  // Check on load
+  if (!navigator.onLine) updateOnlineStatus();
+
+  // ── Install Prompt ────────────────────────────────────
+  let deferredPrompt = null;
+  const installBanner = document.getElementById('pwa-install-banner');
+  const installBtn = document.getElementById('pwa-install-btn');
+  const dismissBtn = document.getElementById('pwa-install-dismiss');
+
+  // Don't show if already installed or previously dismissed
+  const isStandalone = window.matchMedia('(display-mode: standalone)').matches ||
+                       window.navigator.standalone === true;
+  const wasDismissed = localStorage.getItem('pwa_install_dismissed');
+
+  if (!isStandalone && !wasDismissed) {
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+      if (installBanner) {
+        installBanner.style.display = '';
+        installBanner.classList.remove('hidden');
+      }
+    });
+  }
+
+  if (installBtn) {
+    installBtn.addEventListener('click', async () => {
+      if (!deferredPrompt) return;
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      if (outcome === 'accepted') {
+        if (installBanner) {
+          installBanner.style.display = 'none';
+          installBanner.classList.add('hidden');
+        }
+      }
+      deferredPrompt = null;
+    });
+  }
+
+  if (dismissBtn) {
+    dismissBtn.addEventListener('click', () => {
+      if (installBanner) {
+        installBanner.style.display = 'none';
+        installBanner.classList.add('hidden');
+      }
+      localStorage.setItem('pwa_install_dismissed', '1');
+    });
+  }
+
+  // Hide install banner after successful install
+  window.addEventListener('appinstalled', () => {
+    if (installBanner) {
+      installBanner.style.display = 'none';
+      installBanner.classList.add('hidden');
+    }
+    deferredPrompt = null;
+  });
+
+  // ── Deep link from shortcuts ──────────────────────────
+  const params = new URLSearchParams(location.search);
+  const tabParam = params.get('tab');
+  if (tabParam) {
+    // Wait for nav to be ready, then click the right tab
+    const tryClick = () => {
+      const btn = document.querySelector(`.nav-btn[data-nav="${tabParam}"]`);
+      if (btn) btn.click();
+      else setTimeout(tryClick, 200);
+    };
+    setTimeout(tryClick, 500);
+  }
+
+})();
+</script>
 </body>
 </html>

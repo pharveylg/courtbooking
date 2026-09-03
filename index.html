@@ -62,6 +62,7 @@
         <nav class="flex items-center gap-1 p-1 rounded-full bg-[#F1E9DF] border border-[#E9DDD0]">
           <button data-nav="book" class="nav-btn active px-5 h-8 rounded-full text-[13px] font-[650] tracking-[-0.01em] bg-[#201C19] text-white shadow-sm transition">Book</button>
           <button data-nav="queue" class="nav-btn px-5 h-8 rounded-full text-[13px] font-[550] opacity-70 hover:opacity-100 transition">Queue</button>
+          <button data-nav="stats" class="nav-btn px-5 h-8 rounded-full text-[13px] font-[550] opacity-70 hover:opacity-100 transition">Match Stats</button>
           <button data-nav="opengames" class="nav-btn px-5 h-8 rounded-full text-[13px] font-[550] opacity-70 hover:opacity-100 transition">Find a Game</button>
           <button data-nav="payment" class="nav-btn px-5 h-8 rounded-full text-[13px] font-[550] opacity-70 hover:opacity-100 transition">Payment</button>
           <button data-nav="bookings" class="nav-btn admin-only-tab hidden px-5 h-8 rounded-full text-[13px] font-[550] opacity-70 hover:opacity-100 transition">
@@ -86,6 +87,7 @@
       <nav class="flex items-center gap-1 p-1 rounded-full bg-[#F1E9DF] border border-[#E9DDD0] flex-1 min-w-0">
         <button data-nav="book" class="nav-btn active flex-1 h-8 rounded-full text-[12px] font-[650] tracking-[-0.01em] bg-[#201C19] text-white shadow-sm transition whitespace-nowrap">Book</button>
         <button data-nav="queue" class="nav-btn flex-1 h-8 rounded-full text-[12px] font-[550] opacity-70 hover:opacity-100 transition whitespace-nowrap">Queue</button>
+        <button data-nav="stats" class="nav-btn flex-1 h-8 rounded-full text-[12px] font-[550] opacity-70 hover:opacity-100 transition whitespace-nowrap">Stats</button>
         <button data-nav="opengames" class="nav-btn flex-1 h-8 rounded-full text-[12px] font-[550] opacity-70 hover:opacity-100 transition whitespace-nowrap">Find a Game</button>
         <button data-nav="payment" class="nav-btn flex-1 h-8 rounded-full text-[12px] font-[550] opacity-70 hover:opacity-100 transition whitespace-nowrap">Payment</button>
         <button data-nav="bookings" class="nav-btn admin-only-tab hidden flex-1 h-8 rounded-full text-[12px] font-[550] opacity-70 hover:opacity-100 transition whitespace-nowrap">Bookings</button>
@@ -619,6 +621,169 @@
             </div>
           </div>
 
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- VIEW: MATCH STATS (per-session player statistics derived from queue match history) -->
+  <section id="view-stats" class="view hidden">
+    <!-- Stats Hero header -->
+    <div class="rounded-[24px] md:rounded-[28px] bg-white border border-[#EAE0D5] p-5 md:p-6 mb-5 shadow-xs relative overflow-hidden">
+      <div class="absolute -right-20 -top-20 w-[240px] h-[240px] rounded-full bg-[#D6FF5F]/15 blur-[2px]"></div>
+      <div class="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#201C19] text-[#D6FF5F] mono text-[10px] font-[800] uppercase tracking-wider">Live Analytics</div>
+          <h2 class="text-[26px] md:text-[32px] font-[850] tracking-[-0.03em] leading-none mt-2">Match Stats & Leaderboard</h2>
+          <p class="mono text-[12px] opacity-65 mt-1.5 max-w-[56ch]">Individual and team performance derived from completed matches in your queue session. Stats reset each session.</p>
+        </div>
+        <div class="flex items-center gap-2 shrink-0">
+          <!-- Session selector -->
+          <select id="statsSessionSelect" class="h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-4 mono text-[12px] font-[650] outline-none focus:border-[#201C19] min-w-[180px]">
+            <option value="">Select a session...</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- No session selected placeholder -->
+    <div id="statsNoSession" class="rounded-[28px] border-2 border-dashed border-[#EAE0D5] bg-white p-12 text-center min-h-[360px] flex flex-col items-center justify-center">
+      <div class="w-14 h-14 rounded-full bg-[#FFFBF5] border border-[#EAE0D5] grid place-items-center text-xl mb-4">📊</div>
+      <h4 class="font-[800] text-[18px] tracking-[-0.02em] text-[#201C19]">No session selected</h4>
+      <p class="mono text-[12px] opacity-60 max-w-[40ch] mt-1.5 mx-auto">Select an active queue session above to view match statistics and player leaderboard. Stats are computed from completed matches.</p>
+    </div>
+
+    <!-- Stats Dashboard (hidden until session selected) -->
+    <div id="statsDashboard" class="hidden">
+      <!-- Controls bar: Mode toggle + filter -->
+      <div class="flex flex-wrap items-center gap-3 mb-5">
+        <div class="flex p-1 rounded-full bg-[#F1E9DF] border border-[#E9DDD0]">
+          <button type="button" data-stats-mode="all" class="stats-mode-btn px-4 h-8 rounded-full text-[12px] font-[700] bg-[#201C19] text-white shadow-xs transition cursor-pointer">All</button>
+          <button type="button" data-stats-mode="singles" class="stats-mode-btn px-4 h-8 rounded-full text-[12px] font-[600] opacity-70 hover:opacity-100 transition cursor-pointer">Singles</button>
+          <button type="button" data-stats-mode="doubles" class="stats-mode-btn px-4 h-8 rounded-full text-[12px] font-[600] opacity-70 hover:opacity-100 transition cursor-pointer">Doubles</button>
+        </div>
+        <div class="flex p-1 rounded-full bg-[#F1E9DF] border border-[#E9DDD0]">
+          <button type="button" data-stats-view="players" class="stats-view-btn px-4 h-8 rounded-full text-[12px] font-[700] bg-[#201C19] text-white shadow-xs transition cursor-pointer">Players</button>
+          <button type="button" data-stats-view="teams" class="stats-view-btn px-4 h-8 rounded-full text-[12px] font-[600] opacity-70 hover:opacity-100 transition cursor-pointer">Teams</button>
+          <button type="button" data-stats-view="matches" class="stats-view-btn px-4 h-8 rounded-full text-[12px] font-[600] opacity-70 hover:opacity-100 transition cursor-pointer">Matches</button>
+        </div>
+        <span id="statsMatchCount" class="mono text-[11px] px-3 h-7 rounded-full bg-[#F1E9DF] font-[700] grid place-items-center ml-auto">0 matches</span>
+      </div>
+
+      <div class="grid grid-cols-12 gap-5 lg:gap-6">
+        <!-- Left column: Leaderboard -->
+        <div class="col-span-12 lg:col-span-8">
+          <!-- Players Leaderboard -->
+          <div id="statsPlayersCard" class="rounded-[24px] bg-white border border-[#EAE0D5] p-5 shadow-xs overflow-hidden">
+            <div class="flex flex-wrap items-center justify-between gap-2 border-b border-[#F1E9DF] pb-2.5 mb-3">
+              <div>
+                <h4 class="font-[800] text-[15px] tracking-[-0.01em]">Player Leaderboard</h4>
+                <p class="mono text-[10px] opacity-55 mt-0.5">Rank: Win% → Point Diff → Points For</p>
+              </div>
+              <span id="statsPlayerCount" class="mono text-[9px] px-2.5 py-1 rounded-full bg-[#201C19] text-white font-[700] uppercase tracking-wider">0 Players</span>
+            </div>
+            <div class="overflow-x-auto no-scrollbar">
+              <table class="w-full mono text-[11px] whitespace-nowrap">
+                <thead>
+                  <tr class="text-left text-[9px] uppercase tracking-wider opacity-50 border-b border-[#F1E9DF]">
+                    <th class="py-2 pr-2 font-[700]">#</th>
+                    <th class="py-2 pr-3 font-[700]">Player</th>
+                    <th class="py-2 px-2 text-center font-[700]" title="Games Played">GP</th>
+                    <th class="py-2 px-2 text-center font-[700]" title="Wins">W</th>
+                    <th class="py-2 px-2 text-center font-[700]" title="Losses">L</th>
+                    <th class="py-2 px-2 text-right font-[700]" title="Points For">PF</th>
+                    <th class="py-2 px-2 text-right font-[700]" title="Points Against">PA</th>
+                    <th class="py-2 px-2 text-right font-[700]" title="Point Differential">+/−</th>
+                    <th class="py-2 pl-3 font-[700]" title="Winning Percentage">Win%</th>
+                  </tr>
+                </thead>
+                <tbody id="statsPlayersBody" class="divide-y divide-[#F5EDE4]"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Teams Leaderboard (hidden by default) -->
+          <div id="statsTeamsCard" class="hidden rounded-[24px] bg-white border border-[#EAE0D5] p-5 shadow-xs overflow-hidden">
+            <div class="flex flex-wrap items-center justify-between gap-2 border-b border-[#F1E9DF] pb-2.5 mb-3">
+              <div>
+                <h4 class="font-[800] text-[15px] tracking-[-0.01em]">Team Leaderboard</h4>
+                <p class="mono text-[10px] opacity-55 mt-0.5">Exact team pairings across matches</p>
+              </div>
+            </div>
+            <div class="overflow-x-auto no-scrollbar">
+              <table class="w-full mono text-[11px] whitespace-nowrap">
+                <thead>
+                  <tr class="text-left text-[9px] uppercase tracking-wider opacity-50 border-b border-[#F1E9DF]">
+                    <th class="py-2 pr-2 font-[700]">#</th>
+                    <th class="py-2 pr-3 font-[700]">Team</th>
+                    <th class="py-2 px-2 text-center font-[700]">GP</th>
+                    <th class="py-2 px-2 text-center font-[700]">W</th>
+                    <th class="py-2 px-2 text-center font-[700]">L</th>
+                    <th class="py-2 px-2 text-right font-[700]">PF</th>
+                    <th class="py-2 px-2 text-right font-[700]">PA</th>
+                    <th class="py-2 px-2 text-right font-[700]">+/−</th>
+                    <th class="py-2 pl-3 font-[700]">Win%</th>
+                  </tr>
+                </thead>
+                <tbody id="statsTeamsBody" class="divide-y divide-[#F5EDE4]"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Matches List (hidden by default) -->
+          <div id="statsMatchesCard" class="hidden rounded-[24px] bg-white border border-[#EAE0D5] p-5 shadow-xs overflow-hidden">
+            <div class="flex flex-wrap items-center justify-between gap-2 border-b border-[#F1E9DF] pb-2.5 mb-3">
+              <div>
+                <h4 class="font-[800] text-[15px] tracking-[-0.01em]">Match History</h4>
+                <p class="mono text-[10px] opacity-55 mt-0.5">All completed matches in this session</p>
+              </div>
+            </div>
+            <div id="statsMatchesList" class="space-y-2 max-h-[480px] overflow-auto pr-1"></div>
+          </div>
+        </div>
+
+        <!-- Right column: Session Summary -->
+        <div class="col-span-12 lg:col-span-4 flex flex-col gap-4">
+          <!-- Summary Card -->
+          <div class="rounded-[24px] bg-[#201C19] text-white p-5 shadow-sm relative overflow-hidden">
+            <div class="absolute -right-10 -top-10 w-[120px] h-[120px] rounded-full bg-[#D6FF5F]/10 blur-[2px]"></div>
+            <div class="relative">
+              <h4 class="font-[800] text-[15px] tracking-[-0.01em]">Session Summary</h4>
+              <p id="statsSessionLabel" class="mono text-[10px] opacity-50 mt-0.5 uppercase">—</p>
+            </div>
+            <div class="relative mt-4 grid grid-cols-2 gap-3">
+              <div class="rounded-[14px] bg-white/5 border border-white/10 p-3 text-center">
+                <div id="statsSummaryMatches" class="font-[800] text-[24px] text-[#D6FF5F]">0</div>
+                <div class="mono text-[9px] uppercase opacity-60 mt-0.5">Matches</div>
+              </div>
+              <div class="rounded-[14px] bg-white/5 border border-white/10 p-3 text-center">
+                <div id="statsSummaryPlayers" class="font-[800] text-[24px] text-[#D6FF5F]">0</div>
+                <div class="mono text-[9px] uppercase opacity-60 mt-0.5">Players</div>
+              </div>
+              <div class="rounded-[14px] bg-white/5 border border-white/10 p-3 text-center">
+                <div id="statsSummaryAvgScore" class="font-[800] text-[18px]">—</div>
+                <div class="mono text-[9px] uppercase opacity-60 mt-0.5">Avg Score</div>
+              </div>
+              <div class="rounded-[14px] bg-white/5 border border-white/10 p-3 text-center">
+                <div id="statsSummaryHighDiff" class="font-[800] text-[18px]">—</div>
+                <div class="mono text-[9px] uppercase opacity-60 mt-0.5">Biggest Blowout</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Win/Loss Ratio Visualization -->
+          <div class="rounded-[24px] bg-white border border-[#EAE0D5] p-5 shadow-xs">
+            <h4 class="font-[800] text-[14px] tracking-[-0.01em] mb-3">Win Distribution</h4>
+            <div id="statsWinBars" class="space-y-2.5 max-h-[320px] overflow-auto pr-1"></div>
+            <div id="statsWinBarsEmpty" class="hidden p-4 text-center mono text-[11px] opacity-55">No match data yet</div>
+          </div>
+
+          <!-- Top performers mini cards -->
+          <div class="rounded-[24px] bg-white border border-[#EAE0D5] p-5 shadow-xs">
+            <h4 class="font-[800] text-[14px] tracking-[-0.01em] mb-3">Top Performers</h4>
+            <div id="statsTopPerformers" class="space-y-2.5"></div>
+            <div id="statsTopEmpty" class="hidden p-4 text-center mono text-[11px] opacity-55">Play some matches first</div>
+          </div>
         </div>
       </div>
     </div>
@@ -2858,7 +3023,7 @@ function updateStaffNote(){
 updateStaffNote();
 
 /* ---------- Nav & Public Portal vs Admin Access ---------- */
-const views = {book:document.getElementById('view-book'), queue:document.getElementById('view-queue'), opengames:document.getElementById('view-opengames'), bookings:document.getElementById('view-bookings'), payment:document.getElementById('view-payment'), admin:document.getElementById('view-admin')};
+const views = {book:document.getElementById('view-book'), queue:document.getElementById('view-queue'), stats:document.getElementById('view-stats'), opengames:document.getElementById('view-opengames'), bookings:document.getElementById('view-bookings'), payment:document.getElementById('view-payment'), admin:document.getElementById('view-admin')};
 let adminUnlocked = sessionStorage.getItem(LS.adminUnlocked) === 'true';
 
 function updateAdminTabsVisibility(){
@@ -2924,6 +3089,7 @@ document.querySelectorAll('.nav-btn').forEach(btn=>{
     if(id==='bookings') renderBookingsList();
     if(id==='book') renderSchedule();
     if(id==='queue') renderQueueModule();
+    if(id==='stats') renderStatsView();
     if(id==='opengames') renderOpenGames();
     if(id==='admin' && adminUnlocked){
       renderAdminBookings();
@@ -6381,6 +6547,84 @@ document.getElementById('createQueueForm')?.addEventListener('submit', (e) => {
   toast('New rotation board generated!');
 });
 
+/* ---------- Player Name Conflict Detection ----------
+   Checks if a new player name is suspiciously similar to an existing
+   name in the session (from matches history + waiting list). Uses a
+   simple normalized comparison + Levenshtein-based similarity threshold
+   to catch typos and near-duplicates without being overly aggressive. */
+function _normalizeName(name) {
+  return name.toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim();
+}
+function _levenshtein(a, b) {
+  const m = a.length, n = b.length;
+  if (m === 0) return n;
+  if (n === 0) return m;
+  const dp = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
+  for (let i = 0; i <= m; i++) dp[i][0] = i;
+  for (let j = 0; j <= n; j++) dp[0][j] = j;
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      dp[i][j] = a[i-1] === b[j-1]
+        ? dp[i-1][j-1]
+        : 1 + Math.min(dp[i-1][j], dp[i][j-1], dp[i-1][j-1]);
+    }
+  }
+  return dp[m][n];
+}
+function _nameSimilarity(a, b) {
+  const na = _normalizeName(a), nb = _normalizeName(b);
+  if (na === nb) return 1.0;
+  if (na.includes(nb) || nb.includes(na)) return 0.85;
+  const dist = _levenshtein(na, nb);
+  const maxLen = Math.max(na.length, nb.length);
+  return maxLen === 0 ? 0 : 1 - (dist / maxLen);
+}
+function getAllPlayerNamesInSession(session) {
+  const names = new Set();
+  // From waiting list
+  (session.waiting || []).forEach(w => w.names.forEach(n => names.add(n)));
+  // From active match
+  if (session.activeMatch) {
+    (session.activeMatch.teamA || []).forEach(n => names.add(n));
+    (session.activeMatch.teamB || []).forEach(n => names.add(n));
+  }
+  // From match history
+  (session.matches || []).forEach(m => {
+    (m.teamA || []).forEach(n => names.add(n));
+    (m.teamB || []).forEach(n => names.add(n));
+  });
+  return [...names];
+}
+function findSimilarNames(existingNames, newName, threshold = 0.7) {
+  const matches = [];
+  existingNames.forEach(existing => {
+    const sim = _nameSimilarity(existing, newName);
+    if (sim >= threshold && _normalizeName(existing) !== _normalizeName(newName)) {
+      matches.push({ name: existing, similarity: sim });
+    }
+  });
+  return matches.sort((a, b) => b.similarity - a.similarity);
+}
+/**
+ * Prompts the user if a similar name is found. Returns the (possibly updated) name,
+ * or null if the user cancelled.
+ */
+function promptNameConflict(session, newName) {
+  const existing = getAllPlayerNamesInSession(session);
+  const exactMatch = existing.find(n => _normalizeName(n) === _normalizeName(newName));
+  if (exactMatch) {
+    const useExisting = confirm(`"${newName}" looks like it matches existing player "${exactMatch}".\n\nClick OK to use the existing name "${exactMatch}", or Cancel to keep "${newName}" as a separate player.`);
+    return useExisting ? exactMatch : newName;
+  }
+  const similar = findSimilarNames(existing, newName);
+  if (similar.length > 0) {
+    const top = similar[0];
+    const useExisting = confirm(`"${newName}" is similar to existing player "${top.name}".\n\nIs this the same person?\n\nClick OK to use "${top.name}", or Cancel to add "${newName}" as a new player.`);
+    return useExisting ? top.name : newName;
+  }
+  return newName;
+}
+
 // JOIN QUEUE waiting room
 document.getElementById('joinQueueForm')?.addEventListener('submit', (e) => {
   e.preventDefault();
@@ -6395,14 +6639,25 @@ document.getElementById('joinQueueForm')?.addEventListener('submit', (e) => {
     return;
   }
 
-  const p1 = document.getElementById('jPlayer1').value.trim();
-  const p2 = document.getElementById('jPlayer2')?.value.trim();
+  let p1 = document.getElementById('jPlayer1').value.trim();
+  let p2 = document.getElementById('jPlayer2')?.value.trim();
 
   if (!p1) return;
 
   if (session.rule === 'fixed_pairs' && !p2) {
     alert('Fixed Pairs League: please enter your partner name too.');
     return;
+  }
+
+  // Check for name conflicts
+  const resolved1 = promptNameConflict(session, p1);
+  if (resolved1 === null) return;
+  p1 = resolved1;
+
+  if (p2) {
+    const resolved2 = promptNameConflict(session, p2);
+    if (resolved2 === null) return;
+    p2 = resolved2;
   }
 
   const teamId = 'T' + Date.now().toString(36) + Math.random().toString(36).substr(2, 4);
@@ -6617,6 +6872,499 @@ document.getElementById('qDeleteSessionBtn')?.addEventListener('click', () => {
     renderQueueModule();
     toast('Session deleted.');
   }
+});
+
+/* ---------- Match Stats Engine & Rendering ---------- */
+let statsCurrentMode = 'all'; // 'all', 'singles', 'doubles'
+let statsCurrentView = 'players'; // 'players', 'teams', 'matches'
+
+/**
+ * Compute individual player statistics from session matches.
+ * Stats are computed on-the-fly from session.matches[] array.
+ * Returns an object keyed by player name with stats.
+ */
+function computePlayerStats(session) {
+  const stats = {};
+  
+  if (!session || !session.matches || session.matches.length === 0) {
+    return stats;
+  }
+  
+  session.matches.forEach(match => {
+    const { teamA, teamB, scoreA, scoreB, winner } = match;
+    const winnerTeam = winner === 'teamA' ? teamA : teamB;
+    
+    // Process all players in this match
+    [...teamA, ...teamB].forEach(player => {
+      if (!stats[player]) {
+        stats[player] = {
+          matches: 0,
+          wins: 0,
+          losses: 0,
+          pointsFor: 0,
+          pointsAgainst: 0
+        };
+      }
+      
+      stats[player].matches++;
+      
+      // Check if player was on winning team
+      if (winnerTeam.includes(player)) {
+        stats[player].wins++;
+      } else {
+        stats[player].losses++;
+      }
+      
+      // Add points scored and against
+      const playerScore = teamA.includes(player) ? scoreA : scoreB;
+      const opponentScore = teamA.includes(player) ? scoreB : scoreA;
+      stats[player].pointsFor += playerScore;
+      stats[player].pointsAgainst += opponentScore;
+    });
+  });
+  
+  return stats;
+}
+
+/**
+ * Compute team statistics from session matches.
+ * Returns an array of team objects with stats.
+ */
+function computeTeamStats(session) {
+  const teams = {};
+  
+  if (!session || !session.matches || session.matches.length === 0) {
+    return [];
+  }
+  
+  session.matches.forEach(match => {
+    const { teamA, teamB, scoreA, scoreB, winner } = match;
+    
+    // Create canonical team key (sorted player names)
+    const teamAKey = [...teamA].sort().join(' & ');
+    const teamBKey = [...teamB].sort().join(' & ');
+    
+    // Initialize team stats if needed
+    if (!teams[teamAKey]) {
+      teams[teamAKey] = {
+        names: teamA,
+        matches: 0,
+        wins: 0,
+        losses: 0,
+        pointsFor: 0,
+        pointsAgainst: 0
+      };
+    }
+    if (!teams[teamBKey]) {
+      teams[teamBKey] = {
+        names: teamB,
+        matches: 0,
+        wins: 0,
+        losses: 0,
+        pointsFor: 0,
+        pointsAgainst: 0
+      };
+    }
+    
+    // Update stats
+    teams[teamAKey].matches++;
+    teams[teamBKey].matches++;
+    teams[teamAKey].pointsFor += scoreA;
+    teams[teamAKey].pointsAgainst += scoreB;
+    teams[teamBKey].pointsFor += scoreB;
+    teams[teamBKey].pointsAgainst += scoreA;
+    
+    if (winner === 'teamA') {
+      teams[teamAKey].wins++;
+      teams[teamBKey].losses++;
+    } else {
+      teams[teamBKey].wins++;
+      teams[teamAKey].losses++;
+    }
+  });
+  
+  return Object.values(teams);
+}
+
+/**
+ * Render the Match Stats view.
+ * Populates session selector, computes stats, and renders leaderboard.
+ */
+function renderStatsView() {
+  const sessions = loadQueues();
+  const selectEl = document.getElementById('statsSessionSelect');
+  const noSessionEl = document.getElementById('statsNoSession');
+  const dashboardEl = document.getElementById('statsDashboard');
+  
+  if (!selectEl || !noSessionEl || !dashboardEl) return;
+  
+  // Populate session selector
+  const currentValue = selectEl.value;
+  selectEl.innerHTML = '<option value="">Select a session...</option>' +
+    sessions.map(s => {
+      const matchCount = s.matches ? s.matches.length : 0;
+      return `<option value="${s.id}">${escapeHtml(s.name)} (${matchCount} matches)</option>`;
+    }).join('');
+  
+  // Restore selection if still valid
+  if (currentValue && sessions.find(s => s.id === currentValue)) {
+    selectEl.value = currentValue;
+  } else if (selectedQueueSessionId && sessions.find(s => s.id === selectedQueueSessionId)) {
+    selectEl.value = selectedQueueSessionId;
+  }
+  
+  const selectedId = selectEl.value;
+  
+  if (!selectedId) {
+    noSessionEl.classList.remove('hidden');
+    dashboardEl.classList.add('hidden');
+    return;
+  }
+  
+  const session = sessions.find(s => s.id === selectedId);
+  if (!session) {
+    noSessionEl.classList.remove('hidden');
+    dashboardEl.classList.add('hidden');
+    return;
+  }
+  
+  noSessionEl.classList.add('hidden');
+  dashboardEl.classList.remove('hidden');
+  
+  // Compute stats
+  const playerStats = computePlayerStats(session);
+  const teamStats = computeTeamStats(session);
+  const matches = session.matches || [];
+  
+  // Update match count badge
+  const matchCountEl = document.getElementById('statsMatchCount');
+  if (matchCountEl) matchCountEl.textContent = `${matches.length} match${matches.length !== 1 ? 'es' : ''}`;
+  
+  // Render based on current view
+  if (statsCurrentView === 'players') {
+    renderStatsPlayers(playerStats, session.mode);
+  } else if (statsCurrentView === 'teams') {
+    renderStatsTeams(teamStats);
+  } else if (statsCurrentView === 'matches') {
+    renderStatsMatches(matches);
+  }
+  
+  // Render summary sidebar
+  renderStatsSummary(session, playerStats, matches);
+}
+
+/**
+ * Render players leaderboard table.
+ */
+function renderStatsPlayers(playerStats, sessionMode) {
+  const tbody = document.getElementById('statsPlayersBody');
+  const countEl = document.getElementById('statsPlayerCount');
+  if (!tbody) return;
+  
+  // Convert to array and sort
+  let players = Object.entries(playerStats).map(([name, stats]) => ({
+    name,
+    ...stats,
+    winPct: stats.matches > 0 ? (stats.wins / stats.matches) * 100 : 0,
+    pointDiff: stats.pointsFor - stats.pointsAgainst
+  }));
+  
+  // Filter by mode if needed
+  if (statsCurrentMode !== 'all') {
+    // For now, show all players (mode filtering would require tracking which matches were singles/doubles)
+    // This is a placeholder for future enhancement
+  }
+  
+  // Sort: Win% → Point Diff → Points For
+  players.sort((a, b) => {
+    if (b.winPct !== a.winPct) return b.winPct - a.winPct;
+    if (b.pointDiff !== a.pointDiff) return b.pointDiff - a.pointDiff;
+    return b.pointsFor - a.pointsFor;
+  });
+  
+  if (countEl) countEl.textContent = `${players.length} Player${players.length !== 1 ? 's' : ''}`;
+  
+  if (players.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="9" class="py-6 text-center mono text-[11px] opacity-55">No player stats yet — complete some matches!</td></tr>`;
+    return;
+  }
+  
+  tbody.innerHTML = players.map((p, i) => {
+    const diffStr = p.pointDiff > 0 ? `+${p.pointDiff}` : `${p.pointDiff}`;
+    const diffCls = p.pointDiff > 0 ? 'text-[#15803D]' : p.pointDiff < 0 ? 'text-[#B91C1C]' : 'opacity-50';
+    const isLeader = i === 0 && p.matches > 0;
+    return `
+      <tr class="transition hover:bg-[#FFFBF5] ${isLeader ? 'bg-[#D6FF5F]/15' : ''}">
+        <td class="py-2.5 pr-2">
+          <span class="inline-grid place-items-center w-6 h-6 rounded-full text-[10px] font-[800] ${isLeader ? 'bg-[#201C19] text-[#D6FF5F]' : 'bg-[#F1E9DF] text-[#201C19]/70'}">${i + 1}</span>
+        </td>
+        <td class="py-2.5 pr-3">
+          <div class="font-[800] text-[12px] tracking-[-0.01em] max-w-[180px] truncate" style="font-family:'Bricolage Grotesque',sans-serif">${escapeHtml(p.name)}</div>
+          <div class="mt-1 h-1 w-24 rounded-full bg-[#F1E9DF] overflow-hidden"><div class="h-full rounded-full bg-[#201C19] transition-all duration-500" style="width:${p.winPct}%"></div></div>
+        </td>
+        <td class="py-2.5 px-2 text-center font-[600]">${p.matches}</td>
+        <td class="py-2.5 px-2 text-center font-[800] text-[#15803D]">${p.wins}</td>
+        <td class="py-2.5 px-2 text-center font-[800] text-[#B91C1C]">${p.losses}</td>
+        <td class="py-2.5 px-2 text-right font-[600]">${p.pointsFor}</td>
+        <td class="py-2.5 px-2 text-right font-[600] opacity-70">${p.pointsAgainst}</td>
+        <td class="py-2.5 px-2 text-right font-[800] ${diffCls}">${diffStr}</td>
+        <td class="py-2.5 pl-3 font-[800]">${Math.round(p.winPct)}<span class="opacity-40 text-[9px]">%</span></td>
+      </tr>
+    `;
+  }).join('');
+}
+
+/**
+ * Render teams leaderboard table.
+ */
+function renderStatsTeams(teamStats) {
+  const tbody = document.getElementById('statsTeamsBody');
+  if (!tbody) return;
+  
+  // Sort teams
+  let teams = teamStats.map(t => ({
+    ...t,
+    winPct: t.matches > 0 ? (t.wins / t.matches) * 100 : 0,
+    pointDiff: t.pointsFor - t.pointsAgainst
+  }));
+  
+  teams.sort((a, b) => {
+    if (b.winPct !== a.winPct) return b.winPct - a.winPct;
+    if (b.pointDiff !== a.pointDiff) return b.pointDiff - a.pointDiff;
+    return b.pointsFor - a.pointsFor;
+  });
+  
+  if (teams.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="9" class="py-6 text-center mono text-[11px] opacity-55">No team stats yet — complete some matches!</td></tr>`;
+    return;
+  }
+  
+  tbody.innerHTML = teams.map((t, i) => {
+    const diffStr = t.pointDiff > 0 ? `+${t.pointDiff}` : `${t.pointDiff}`;
+    const diffCls = t.pointDiff > 0 ? 'text-[#15803D]' : t.pointDiff < 0 ? 'text-[#B91C1C]' : 'opacity-50';
+    const isLeader = i === 0 && t.matches > 0;
+    return `
+      <tr class="transition hover:bg-[#FFFBF5] ${isLeader ? 'bg-[#D6FF5F]/15' : ''}">
+        <td class="py-2.5 pr-2">
+          <span class="inline-grid place-items-center w-6 h-6 rounded-full text-[10px] font-[800] ${isLeader ? 'bg-[#201C19] text-[#D6FF5F]' : 'bg-[#F1E9DF] text-[#201C19]/70'}">${i + 1}</span>
+        </td>
+        <td class="py-2.5 pr-3">
+          <div class="font-[800] text-[12px] tracking-[-0.01em] max-w-[220px] truncate" style="font-family:'Bricolage Grotesque',sans-serif">${escapeHtml(t.names.join(' & '))}</div>
+          <div class="mt-1 h-1 w-24 rounded-full bg-[#F1E9DF] overflow-hidden"><div class="h-full rounded-full bg-[#201C19] transition-all duration-500" style="width:${t.winPct}%"></div></div>
+        </td>
+        <td class="py-2.5 px-2 text-center font-[600]">${t.matches}</td>
+        <td class="py-2.5 px-2 text-center font-[800] text-[#15803D]">${t.wins}</td>
+        <td class="py-2.5 px-2 text-center font-[800] text-[#B91C1C]">${t.losses}</td>
+        <td class="py-2.5 px-2 text-right font-[600]">${t.pointsFor}</td>
+        <td class="py-2.5 px-2 text-right font-[600] opacity-70">${t.pointsAgainst}</td>
+        <td class="py-2.5 px-2 text-right font-[800] ${diffCls}">${diffStr}</td>
+        <td class="py-2.5 pl-3 font-[800]">${Math.round(t.winPct)}<span class="opacity-40 text-[9px]">%</span></td>
+      </tr>
+    `;
+  }).join('');
+}
+
+/**
+ * Render match history list.
+ */
+function renderStatsMatches(matches) {
+  const listEl = document.getElementById('statsMatchesList');
+  if (!listEl) return;
+  
+  if (matches.length === 0) {
+    listEl.innerHTML = `<div class="p-6 text-center mono text-[11px] opacity-55">No matches completed yet.</div>`;
+    return;
+  }
+  
+  const reversed = [...matches].reverse();
+  listEl.innerHTML = reversed.map((m, idx) => {
+    const isWinnerA = m.winner === 'teamA';
+    const isWinnerB = m.winner === 'teamB';
+    const diff = Math.abs(m.scoreA - m.scoreB);
+    return `
+      <div class="p-3 rounded-[16px] bg-[#FFFBF5] border border-[#F1E9DF] flex items-center justify-between gap-4">
+        <div class="min-w-0 flex-1">
+          <div class="flex items-center gap-2">
+            <span class="mono text-[10px] opacity-50 font-[700]">MATCH ${matches.length - idx}</span>
+            <span class="mono text-[10px] opacity-40">•</span>
+            <span class="mono text-[10px] opacity-50">${new Date(m.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+          </div>
+          <div class="grid grid-cols-2 gap-2 mt-1">
+            <div class="truncate ${isWinnerA ? 'font-[800]' : 'opacity-65'} text-[12px] flex items-center gap-1">
+              ${isWinnerA ? '🏆 ' : ''}${escapeHtml(m.teamA.join(' & '))}
+            </div>
+            <div class="truncate ${isWinnerB ? 'font-[800]' : 'opacity-65'} text-[12px] flex items-center gap-1">
+              ${isWinnerB ? '🏆 ' : ''}${escapeHtml(m.teamB.join(' & '))}
+            </div>
+          </div>
+        </div>
+        <div class="flex items-center gap-1.5 shrink-0">
+          <span class="mono text-[14px] font-black ${isWinnerA ? 'text-[#201C19]' : 'opacity-40'}">${m.scoreA}</span>
+          <span class="mono opacity-30 text-[11px] font-black">:</span>
+          <span class="mono text-[14px] font-black ${isWinnerB ? 'text-[#201C19]' : 'opacity-40'}">${m.scoreB}</span>
+          <span class="mono text-[9px] opacity-50 ml-1">(${diff}pt diff)</span>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+/**
+ * Render session summary sidebar.
+ */
+function renderStatsSummary(session, playerStats, matches) {
+  const sessionLabelEl = document.getElementById('statsSessionLabel');
+  const matchesEl = document.getElementById('statsSummaryMatches');
+  const playersEl = document.getElementById('statsSummaryPlayers');
+  const avgScoreEl = document.getElementById('statsSummaryAvgScore');
+  const highDiffEl = document.getElementById('statsSummaryHighDiff');
+  const winBarsEl = document.getElementById('statsWinBars');
+  const winBarsEmptyEl = document.getElementById('statsWinBarsEmpty');
+  const topPerformersEl = document.getElementById('statsTopPerformers');
+  const topEmptyEl = document.getElementById('statsTopEmpty');
+  
+  if (sessionLabelEl) {
+    sessionLabelEl.textContent = `${session.name} • ${session.mode} • ${session.rule.replace('_', ' ')}`;
+  }
+  
+  if (matchesEl) matchesEl.textContent = matches.length;
+  if (playersEl) playersEl.textContent = Object.keys(playerStats).length;
+  
+  // Average score
+  if (avgScoreEl) {
+    if (matches.length > 0) {
+      const totalScore = matches.reduce((sum, m) => sum + m.scoreA + m.scoreB, 0);
+      const avg = Math.round(totalScore / (matches.length * 2));
+      avgScoreEl.textContent = avg;
+    } else {
+      avgScoreEl.textContent = '—';
+    }
+  }
+  
+  // Highest point differential (biggest blowout)
+  if (highDiffEl) {
+    if (matches.length > 0) {
+      const maxDiff = Math.max(...matches.map(m => Math.abs(m.scoreA - m.scoreB)));
+      highDiffEl.textContent = `+${maxDiff}`;
+    } else {
+      highDiffEl.textContent = '—';
+    }
+  }
+  
+  // Win distribution bars (top 8 players by matches)
+  if (winBarsEl && winBarsEmptyEl) {
+    const players = Object.entries(playerStats)
+      .map(([name, stats]) => ({ name, ...stats, winPct: stats.matches > 0 ? (stats.wins / stats.matches) * 100 : 0 }))
+      .sort((a, b) => b.matches - a.matches)
+      .slice(0, 8);
+    
+    if (players.length === 0) {
+      winBarsEl.classList.add('hidden');
+      winBarsEmptyEl.classList.remove('hidden');
+    } else {
+      winBarsEl.classList.remove('hidden');
+      winBarsEmptyEl.classList.add('hidden');
+      winBarsEl.innerHTML = players.map(p => {
+        const winWidth = p.winPct;
+        const lossWidth = 100 - p.winPct;
+        return `
+          <div>
+            <div class="flex items-center justify-between mb-1">
+              <span class="font-[700] text-[12px] truncate max-w-[140px]">${escapeHtml(p.name)}</span>
+              <span class="mono text-[10px] opacity-60">${p.wins}W-${p.losses}L</span>
+            </div>
+            <div class="h-2 rounded-full bg-[#F1E9DF] overflow-hidden flex">
+              <div class="h-full bg-[#4ADE80] transition-all duration-500" style="width:${winWidth}%"></div>
+              <div class="h-full bg-[#F87171] transition-all duration-500" style="width:${lossWidth}%"></div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+  }
+  
+  // Top performers (best win%, most wins, highest point diff)
+  if (topPerformersEl && topEmptyEl) {
+    const players = Object.entries(playerStats).map(([name, stats]) => ({
+      name,
+      ...stats,
+      winPct: stats.matches > 0 ? (stats.wins / stats.matches) * 100 : 0,
+      pointDiff: stats.pointsFor - stats.pointsAgainst
+    }));
+    
+    if (players.length === 0) {
+      topPerformersEl.classList.add('hidden');
+      topEmptyEl.classList.remove('hidden');
+    } else {
+      topPerformersEl.classList.remove('hidden');
+      topEmptyEl.classList.add('hidden');
+      
+      const bestWinPct = [...players].filter(p => p.matches >= 2).sort((a, b) => b.winPct - a.winPct)[0];
+      const mostWins = [...players].sort((a, b) => b.wins - a.wins)[0];
+      const bestDiff = [...players].sort((a, b) => b.pointDiff - a.pointDiff)[0];
+      
+      const cards = [];
+      if (bestWinPct && bestWinPct.matches >= 2) {
+        cards.push({ label: 'Best Win%', value: `${Math.round(bestWinPct.winPct)}%`, name: bestWinPct.name, icon: '🎯' });
+      }
+      if (mostWins && mostWins.wins > 0) {
+        cards.push({ label: 'Most Wins', value: `${mostWins.wins}W`, name: mostWins.name, icon: '🏆' });
+      }
+      if (bestDiff && bestDiff.pointDiff > 0) {
+        cards.push({ label: 'Best +/−', value: `+${bestDiff.pointDiff}`, name: bestDiff.name, icon: '📈' });
+      }
+      
+      topPerformersEl.innerHTML = cards.map(c => `
+        <div class="p-3 rounded-[14px] bg-[#FFFBF5] border border-[#F1E9DF] flex items-center gap-3">
+          <div class="text-[20px]">${c.icon}</div>
+          <div class="flex-1 min-w-0">
+            <div class="mono text-[9px] uppercase opacity-60 font-[700]">${c.label}</div>
+            <div class="font-[800] text-[13px] truncate">${escapeHtml(c.name)}</div>
+          </div>
+          <div class="font-[800] text-[16px] text-[#201C19]">${c.value}</div>
+        </div>
+      `).join('');
+    }
+  }
+}
+
+// Stats session selector change handler
+document.getElementById('statsSessionSelect')?.addEventListener('change', () => {
+  renderStatsView();
+});
+
+// Stats mode toggle buttons
+document.querySelectorAll('.stats-mode-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    statsCurrentMode = btn.dataset.statsMode;
+    document.querySelectorAll('.stats-mode-btn').forEach(b => {
+      b.classList.remove('bg-[#201C19]', 'text-white', 'shadow-xs', 'font-[700]');
+      b.classList.add('opacity-70', 'font-[600]');
+    });
+    btn.classList.add('bg-[#201C19]', 'text-white', 'shadow-xs', 'font-[700]');
+    btn.classList.remove('opacity-70', 'font-[600]');
+    renderStatsView();
+  });
+});
+
+// Stats view toggle buttons
+document.querySelectorAll('.stats-view-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    statsCurrentView = btn.dataset.statsView;
+    document.querySelectorAll('.stats-view-btn').forEach(b => {
+      b.classList.remove('bg-[#201C19]', 'text-white', 'shadow-xs', 'font-[700]');
+      b.classList.add('opacity-70', 'font-[600]');
+    });
+    btn.classList.add('bg-[#201C19]', 'text-white', 'shadow-xs', 'font-[700]');
+    btn.classList.remove('opacity-70', 'font-[600]');
+    
+    // Show/hide cards
+    document.getElementById('statsPlayersCard').classList.toggle('hidden', statsCurrentView !== 'players');
+    document.getElementById('statsTeamsCard').classList.toggle('hidden', statsCurrentView !== 'teams');
+    document.getElementById('statsMatchesCard').classList.toggle('hidden', statsCurrentView !== 'matches');
+    
+    renderStatsView();
+  });
 });
 
 /* ---------- Toast ---------- */

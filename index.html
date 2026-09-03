@@ -600,17 +600,16 @@
             </div>
           </div>
 
-          <!-- Session Destruction / Security (Locks behind the session PIN) -->
+          <!-- Session Destruction / Security (PIN already verified at the door to open this queue) -->
           <div class="rounded-[24px] bg-[#FFFBF5] border border-[#FFE0A3] p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
             <div class="flex items-center gap-3">
               <div class="w-9 h-9 rounded-full bg-[#FFF0D6] text-[#8A5A00] grid place-items-center"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div>
               <div>
-                <h5 class="text-[14px] font-[800] text-[#201C19] tracking-[-0.01em]">Admin Pin Required</h5>
-                <p class="mono text-[11px] opacity-60 leading-snug">Lock PIN set by creator is required for destructive admin modifications.</p>
+                <h5 class="text-[14px] font-[800] text-[#201C19] tracking-[-0.01em]">Destructive Actions</h5>
+                <p class="mono text-[11px] opacity-60 leading-snug">You unlocked this session with its owner PIN — these still ask you to confirm.</p>
               </div>
             </div>
             <div class="flex items-center gap-2">
-              <input type="password" inputmode="numeric" maxlength="4" id="qAdminActionPin" placeholder="PIN" class="w-16 h-9 rounded-xl border border-[#EAE0D5] bg-white text-center mono text-[12px] font-[800] tracking-widest outline-none focus:border-[#201C19]"/>
               <button type="button" id="qResetSessionBtn" class="h-9 px-3 rounded-full bg-[#FFE9E0] text-[#8C2C10] border border-[#FFC9B6] mono text-[11px] font-[700] hover:bg-[#FFD7C7] transition cursor-pointer">
                 Reset Queue
               </button>
@@ -1269,6 +1268,26 @@
                   <select id="opEnd" class="h-11 rounded-[12px] bg-white/10 border border-white/15 px-3 mono text-[13px] outline-none focus:bg-white focus:text-[#201C19]"></select>
                 </label>
               </div>
+              <div class="grid grid-cols-2 gap-2">
+                <label class="flex flex-col gap-1.5">
+                  <span class="mono text-[10px] uppercase tracking-widest opacity-60">Format</span>
+                  <select id="opFormat" class="h-11 rounded-[12px] bg-white/10 border border-white/15 px-3 mono text-[13px] outline-none focus:bg-white focus:text-[#201C19]">
+                    <option value="Doubles">Doubles (4 Players)</option>
+                    <option value="Singles">Singles (2 Players)</option>
+                  </select>
+                </label>
+                <label class="flex flex-col gap-1.5">
+                  <span class="mono text-[10px] uppercase tracking-widest opacity-60">Rate / person</span>
+                  <input type="number" id="opRate" min="0" step="1" class="h-11 rounded-[12px] bg-white/10 border border-white/15 px-4 mono text-[13px] outline-none focus:bg-white focus:text-[#201C19]"/>
+                </label>
+              </div>
+              <label class="flex flex-col gap-1.5">
+                <span class="mono text-[10px] uppercase tracking-widest opacity-60">Public Joining</span>
+                <select id="opAllowJoin" class="h-11 rounded-[12px] bg-white/10 border border-white/15 px-3 mono text-[13px] outline-none focus:bg-white focus:text-[#201C19]">
+                  <option value="true">Allowed — visitors can Join &amp; pay online</option>
+                  <option value="false">Restricted — walk-ins only</option>
+                </select>
+              </label>
               <div id="opError" class="hidden rounded-[10px] bg-[#FF8A5B]/20 border border-[#FF8A5B]/30 px-3 py-2 mono text-[11px]"></div>
               <button class="w-full h-11 rounded-full bg-[#D6FF5F] text-[#201C19] font-[800] mono text-[12px] tracking-wide">Add Open Play Block</button>
             </form>
@@ -2001,6 +2020,15 @@ function setBookingStatus(bookingId, newStatus){
       durationHours: b.end - b.start,
       playerEmail: b.email || null
     });
+    if(b.source === 'openplay-join' && b.linkedOpenGameId && db && currentClientId){
+      const gameRef = db.doc(`clients/${currentClientId}/openGames/${b.linkedOpenGameId}`);
+      gameRef.get().then(snap => {
+        if(!snap.exists) return;
+        const g = snap.data();
+        const players = (g.players || []).map(p => p.email.toLowerCase() === (b.email||'').toLowerCase() ? { ...p, paymentStatus: 'paid' } : p);
+        return gameRef.update({ players });
+      }).catch(ex => console.warn('Failed to mark open play joiner as paid:', ex.message));
+    }
   }
   saveBookings(bookings);
   renderSchedule(); renderBookingsList();
@@ -2412,7 +2440,7 @@ function renderPaymentProofsQueue() {
           <div class="mono text-[11px] opacity-50 mt-0.5 truncate">${escapeHtml(b.email || '')}${b.group ? ' · ' + escapeHtml(b.group) : ''}</div>
         </div>
         <div class="flex items-center gap-2 shrink-0">
-          <span class="mono text-[11px] font-[700] opacity-75">${fmtMoney(sumCourtRate(b.court, b.start, b.end))}</span>
+          <span class="mono text-[11px] font-[700] opacity-75">${fmtMoney(b.amountDue != null ? b.amountDue : sumCourtRate(b.court, b.start, b.end))}</span>
           <select data-verify="${b.id}" class="h-9 rounded-full border border-[#EAE0D5] bg-white pl-3 pr-2 mono text-[11px] font-[800] cursor-pointer">
             <option value="Pending" selected>Pending</option>
             <option value="Reserved">Reserved ✓</option>
@@ -3840,6 +3868,8 @@ function populateTimeOptions(){
     }
     opStart.value=String(Math.min(minH+8, SCHED.close-3));
     opEnd.value=String(Math.min(minH+11, SCHED.close));
+    const opRate = document.getElementById('opRate');
+    if(opRate && !opRate.value) opRate.value = String(CLIENT.rates.queuePerHead);
   }
 }
 
@@ -4430,7 +4460,8 @@ function renderAdminBookings(){
           <span class="font-[700] text-[13px]">${escapeHtml(b.name||'Open Play')}</span>
           <span class="mono text-[11px] opacity-60">${fmtDateLabel(b.date)} • ${to12Range(b.start,b.end)}</span>
           ${courtLabel}
-          ${b.status!=='OpenPlay'? `<span class="mono text-[10px] opacity-50">${b.email}</span>`:''} 
+          ${b.amountDue != null ? `<span class="mono text-[9px] px-1.5 py-0.5 rounded-full bg-[#D6FF5F] text-[#201C19] font-[700]">${fmtMoney(b.amountDue)} due</span>` : ''}
+          ${b.status!=='OpenPlay'? `<span class="mono text-[10px] opacity-50">${b.email}</span>`:''}
         </div>
         <div class="mono text-[11px] opacity-60 mt-1 truncate">${b.group||''}</div>
       </div>
@@ -4957,12 +4988,14 @@ function renderOpenGames(){
         <div class="min-w-0">
           <div class="flex items-center gap-2 flex-wrap">
             ${isFacility
-              ? `<span class="mono text-[10px] px-2 py-0.5 rounded-full bg-[#D6FF5F] text-[#201C19] font-[800] uppercase">Open Play</span>`
+              ? `<span class="mono text-[10px] px-2 py-0.5 rounded-full bg-[#D6FF5F] text-[#201C19] font-[800] uppercase">Open Play</span>
+                 <span class="mono text-[10px] px-2 py-0.5 rounded-full bg-[#F1E9DF] font-[700]">${escapeHtml(g.format)}</span>
+                 <span class="mono text-[10px] px-2 py-0.5 rounded-full font-[700] ${g.allowJoin===false ? 'bg-[#F1E9DF] opacity-70' : 'bg-[#E8F5D8] text-[#3F7019]'}">${g.allowJoin===false ? 'Walk-ins only' : 'Public Joining'}</span>`
               : `<span class="mono text-[10px] px-2 py-0.5 rounded-full bg-[#EDE8FF] text-[#3B2A9E] font-[700] uppercase">${escapeHtml(g.skillLevel)}</span>
                  <span class="mono text-[10px] px-2 py-0.5 rounded-full bg-[#F1E9DF] font-[700]">${escapeHtml(g.format)}</span>`}
             <span class="font-[700] text-[14px]">${fmtDateLabel(g.date)} · ${timeLabel}</span>
           </div>
-          <div class="mono text-[11px] opacity-60 mt-1">${isFacility ? `${g.players.length} joined so far` : `${g.players.length} / ${g.playersNeeded} players • ${needed} needed`}${g.notes ? ' · '+escapeHtml(g.notes) : ''}</div>
+          <div class="mono text-[11px] opacity-60 mt-1">${isFacility ? `${g.players.length} joined so far${g.allowJoin!==false && g.perPersonRate ? ` · ${fmtMoney(g.perPersonRate)}/head` : ''}` : `${g.players.length} / ${g.playersNeeded} players • ${needed} needed`}${g.notes ? ' · '+escapeHtml(g.notes) : ''}</div>
         </div>
         <span class="h-8 px-4 rounded-full bg-[#D6FF5F] border border-[#201C19]/10 mono text-[11px] font-[800] grid place-items-center shrink-0">View →</span>
       </button>`;
@@ -5130,6 +5163,51 @@ async function ogJoinGame(gameId, name, email){
     toast(ex.message || 'Could not join this game.');
   }
 }
+/* ---------- Join a facility-hosted Open Play block. Unlike ogJoinGame
+   (player-vs-player matchmaking, free to join), a facility block is priced
+   per head -- joining creates a real Pending booking for the admin to
+   confirm, same as any other reservation, then sends the visitor straight
+   to the Payment tab to upload proof. The booking deliberately bypasses
+   hasOverlap: many people share one Open Play slot by design, unlike an
+   exclusive court reservation. ---------- */
+async function ogJoinFacilityOpenPlay(gameId, name, email){
+  const ref = db.doc(`clients/${currentClientId}/openGames/${gameId}`);
+  let game;
+  try {
+    await db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if(!snap.exists) throw new Error('This Open Play block no longer exists.');
+      game = snap.data();
+      if(ogEffectiveStatus(game) !== 'OPEN') throw new Error('This Open Play block is no longer open.');
+      if(game.allowJoin === false) throw new Error('Public joining is restricted for this block — join in person.');
+      if(game.players.some(p => p.email.toLowerCase() === email.toLowerCase())) throw new Error("You've already joined this block.");
+      const players = [...game.players, { name, email, joinedAt: Date.now(), paymentStatus: 'pending' }];
+      tx.update(ref, { players, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+    });
+  } catch(ex){
+    toast(ex.message || 'Could not join this Open Play block.');
+    return;
+  }
+  ogSaveIdentity(name, email);
+  ogTrackMyGame(gameId, 'player', null);
+
+  const amountDue = game.perPersonRate != null ? game.perPersonRate : CLIENT.rates.queuePerHead;
+  const booking = {
+    id: 'opj_' + Date.now().toString(36) + Math.random().toString(36).slice(2,6),
+    name, email, court: game.court, date: game.date,
+    start: game.startHour, end: game.endHour != null ? game.endHour : game.startHour + 1,
+    status: 'Pending', group: 'Open Play join', source: 'openplay-join',
+    linkedOpenGameId: gameId, amountDue, createdAt: Date.now()
+  };
+  bookings.unshift(booking);
+  saveBookings(bookings);
+  logUsageEvent('open_play_join_pending', { court: game.court || null, amountDue }); // analytics only, billed on admin confirm
+
+  document.getElementById('ogDetailModal').classList.add('hidden');
+  _currentProofBookingId = booking.id;
+  document.querySelector('[data-nav="payment"]').click();
+  toast(`Joined! Head to Payment to upload proof of ${fmtMoney(amountDue)} — admin will confirm your spot.`);
+}
 async function ogLeaveGame(gameId, email){
   const ref = db.doc(`clients/${currentClientId}/openGames/${gameId}`);
   try {
@@ -5222,8 +5300,11 @@ function renderOgDetailModal(gameId){
   }
 
   const actions = [];
-  if(status === 'OPEN' && !alreadyJoined){
-    actions.push(`<button type="button" id="ogActionJoin" class="flex-1 h-11 rounded-full bg-[#D6FF5F] hover:bg-[#CBF052] text-[#201C19] font-[800] text-[13px] border border-[#201C19]/10 transition cursor-pointer">Join Game</button>`);
+  if(status === 'OPEN' && !alreadyJoined && !(isFacility && game.allowJoin === false)){
+    actions.push(`<button type="button" id="ogActionJoin" class="flex-1 h-11 rounded-full bg-[#D6FF5F] hover:bg-[#CBF052] text-[#201C19] font-[800] text-[13px] border border-[#201C19]/10 transition cursor-pointer">${isFacility ? 'Join & Pay' : 'Join Game'}</button>`);
+  }
+  if(status === 'OPEN' && !alreadyJoined && isFacility && game.allowJoin === false){
+    actions.push(`<div class="flex-1 h-11 rounded-full bg-[#F1E9DF] grid place-items-center mono text-[11px] font-[700] opacity-70">Walk-ins only — join in person</div>`);
   }
   if(alreadyJoined && !isCreator && (status === 'OPEN' || status === 'FULL')){
     actions.push(`<button type="button" id="ogActionLeave" class="flex-1 h-11 rounded-full bg-white border border-[#EAE0D5] mono text-[12px] font-[700] cursor-pointer hover:border-[#201C19]">Leave Game</button>`);
@@ -5236,8 +5317,10 @@ function renderOgDetailModal(gameId){
     <div class="mono text-[13px] font-[700]">${fmtDateLabel(game.date)}<br/>${isFacility && game.endHour != null ? to12Range(game.startHour, game.endHour) : fmtTime(game.startHour)}</div>
     <div class="flex items-center gap-2 flex-wrap">
       <span class="mono text-[10px] px-2 py-0.5 rounded-full bg-[#F1E9DF] font-[700]">${escapeHtml(game.format)}</span>
+      ${isFacility ? `<span class="mono text-[10px] px-2 py-0.5 rounded-full font-[700] ${game.allowJoin===false ? 'bg-[#F1E9DF] opacity-70' : 'bg-[#E8F5D8] text-[#3F7019]'}">${game.allowJoin===false ? 'Walk-ins only' : 'Public Joining'}</span>` : ''}
       <span class="mono text-[10px] px-2.5 py-1 rounded-full font-[800] uppercase ${status==='OPEN'?'bg-[#D6FF5F] text-[#201C19]':status==='FULL'?'bg-[#201C19] text-white':status==='RESERVED'?'bg-[#E8F5D8] text-[#3F7019]':'bg-[#F1E9DF] text-[#201C19]/50'}">${isFacility ? `${game.players.length} joined` : `${game.players.length} / ${game.playersNeeded} Players`} · ${status}</span>
     </div>
+    ${isFacility && game.allowJoin !== false && game.perPersonRate ? `<div class="mono text-[12px] font-[700]">${fmtMoney(game.perPersonRate)} / person</div>` : ''}
     ${game.notes ? `<div class="mono text-[12px] opacity-70">${escapeHtml(game.notes)}</div>` : ''}
     <div>
       <div class="mono text-[10px] uppercase tracking-widest opacity-60 mb-1.5">Players</div>
@@ -5256,6 +5339,10 @@ function renderOgDetailModal(gameId){
       const name = prompt('Your name?'); if(!name) return;
       const email = prompt('Your email?'); if(!email) return;
       id = { name, email };
+    }
+    if(isFacility){
+      await ogJoinFacilityOpenPlay(game.id, id.name, id.email);
+      return;
     }
     await ogJoinGame(game.id, id.name, id.email);
     renderOgDetailModal(game.id);
@@ -5301,8 +5388,15 @@ function renderOpenPlayList(){
     const div=document.createElement('div');
     div.className='flex items-center justify-between p-2.5 rounded-[12px] bg-white/10 border border-white/10';
     div.innerHTML=`
-      <div class="mono text-[11px]"><b>${fmtDateLabel(op.date)}</b><br/>${to12Range(op.start,op.end)}${courtName ? ` <span class="opacity-60">• ${escapeHtml(courtName)}</span>` : ''}</div>
-      <button data-opdel="${op.id}" class="w-7 h-7 rounded-full bg-white/20 grid place-items-center text-[12px]">✕</button>
+      <div class="mono text-[11px]">
+        <b>${fmtDateLabel(op.date)}</b><br/>${to12Range(op.start,op.end)}${courtName ? ` <span class="opacity-60">• ${escapeHtml(courtName)}</span>` : ''}
+        ${op.format || op.perPersonRate != null || op.allowJoin != null ? `<div class="flex items-center gap-1.5 mt-1 flex-wrap">
+          ${op.format ? `<span class="px-1.5 py-0.5 rounded-full bg-white/15 text-[9px] font-[700]">${escapeHtml(op.format)}</span>` : ''}
+          ${op.perPersonRate != null ? `<span class="px-1.5 py-0.5 rounded-full bg-white/15 text-[9px] font-[700]">${fmtMoney(op.perPersonRate)}/head</span>` : ''}
+          <span class="px-1.5 py-0.5 rounded-full text-[9px] font-[700] ${op.allowJoin===false ? 'bg-white/15 opacity-70' : 'bg-[#D6FF5F] text-[#201C19]'}">${op.allowJoin===false ? 'Walk-ins only' : 'Public Joining'}</span>
+        </div>` : ''}
+      </div>
+      <button data-opdel="${op.id}" class="w-7 h-7 rounded-full bg-white/20 grid place-items-center text-[12px] shrink-0">✕</button>
     `;
     list.appendChild(div);
   });
@@ -5341,7 +5435,10 @@ document.getElementById('openPlayForm').addEventListener('submit', async e=>{
     err.textContent=`Overlaps with ${overlap.type}: ${overlap.data? to12Range(overlap.data.start,overlap.data.end):''}`;
     err.classList.remove('hidden'); return;
   }
-  const entry = {id:'op_'+Date.now(), date, start, end, court: opCourtId};
+  const format = document.getElementById('opFormat').value;
+  const perPersonRate = Math.max(0, parseFloat(document.getElementById('opRate').value) || 0);
+  const allowJoin = document.getElementById('opAllowJoin').value === 'true';
+  const entry = {id:'op_'+Date.now(), date, start, end, court: opCourtId, format, perPersonRate, allowJoin};
 
   // Also publish this block to Find a Game so both online players and
   // walk-ins (advised to open the site and join like everyone else) can
@@ -5354,9 +5451,10 @@ document.getElementById('openPlayForm').addEventListener('submit', async e=>{
       const gameRef = db.collection(`clients/${currentClientId}/openGames`).doc();
       await gameRef.set({
         creatorName: CLIENT.business?.name || 'Facility', creatorEmail: `facility_${entry.id}@${currentClientId}.local`, creatorToken: null,
-        status: 'OPEN', date, startHour: start, endHour: end, skillLevel: 'All Levels', format: 'Open Play',
+        status: 'OPEN', date, startHour: start, endHour: end, skillLevel: 'All Levels', format,
         playersNeeded: 40, court: opCourtId, notes: 'Facility-hosted open play — drop in and join!',
         players: [], reservationId: null, source: 'facility', linkedOpenPlayId: entry.id,
+        allowJoin, perPersonRate,
         createdAt: firebase.firestore.FieldValue.serverTimestamp(), updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
       });
       entry.openGameId = gameRef.id;
@@ -5580,7 +5678,19 @@ function renderQueueModule() {
   renderActiveQueueDashboard();
 }
 
+/* PIN-gate at the door: entering a queue's manage/dashboard view requires
+   its owner PIN (set at creation), checked once per session per browser
+   tab -- rather than re-prompting on every Reset/Delete/Score action once
+   inside, which was the old per-action model. */
+let _queueUnlockedIds = new Set();
 function selectQueueSession(id) {
+  if(_queueUnlockedIds.has(id)){ selectedQueueSessionId = id; renderQueueModule(); return; }
+  const session = loadQueues().find(s => s.id === id);
+  if(!session){ selectedQueueSessionId = id; renderQueueModule(); return; }
+  const inputPin = prompt(`Enter PIN for "${session.name}" to manage this queue:`);
+  if(inputPin === null) return;
+  if(inputPin !== session.pin){ toast('Incorrect PIN'); return; }
+  _queueUnlockedIds.add(id);
   selectedQueueSessionId = id;
   renderQueueModule();
 }
@@ -5871,7 +5981,7 @@ function renderActiveQueueDashboard() {
               ${sub}
             </div>
           </div>
-          <button type="button" data-remove-wait="${w.id}" class="w-7 h-7 rounded-full hover:bg-[#FFE9E0] hover:text-[#8C2C10] border border-transparent hover:border-[#FFC9B6] grid place-items-center text-[11px] transition shrink-0 cursor-pointer" title="Remove Player (PIN required)">
+          <button type="button" data-remove-wait="${w.id}" class="w-7 h-7 rounded-full hover:bg-[#FFE9E0] hover:text-[#8C2C10] border border-transparent hover:border-[#FFC9B6] grid place-items-center text-[11px] transition shrink-0 cursor-pointer" title="Remove Player">
             ✕
           </button>
         `;
@@ -5890,18 +6000,13 @@ function renderActiveQueueDashboard() {
     waitingList.querySelectorAll('button[data-remove-wait]').forEach(btn => {
       btn.addEventListener('click', () => {
         const waitId = btn.dataset.removeWait;
-        const pin = prompt('Enter Lock PIN for this session to remove player:');
-        if (pin === null) return;
-        if (pin === session.pin) {
-          session.waiting = session.waiting.filter(x => x.id !== waitId);
-          // Try to auto-start if match empty
-          checkAndFillActiveMatch(session);
-          saveQueues(sessions);
-          renderActiveQueueDashboard();
-          toast('Player removed from queue');
-        } else {
-          alert('Incorrect PIN!');
-        }
+        if (!confirm('Remove this player from the queue?')) return;
+        session.waiting = session.waiting.filter(x => x.id !== waitId);
+        // Try to auto-start if match empty
+        checkAndFillActiveMatch(session);
+        saveQueues(sessions);
+        renderActiveQueueDashboard();
+        toast('Player removed from queue');
       });
     });
   }
@@ -6235,6 +6340,7 @@ document.getElementById('createQueueForm')?.addEventListener('submit', (e) => {
   saveQueues(list);
   logUsageEvent('queue_session_created', { court: session.court || null }); // analytics only, never billed
 
+  _queueUnlockedIds.add(session.id); // creator just set this PIN themselves -- no need to re-prompt
   selectedQueueSessionId = session.id;
   renderQueueModule();
 
@@ -6448,48 +6554,36 @@ document.getElementById('submitScoreBtn')?.addEventListener('click', () => {
   toast(`Match completed! Winners: ${winnerNames.join(' & ')}`);
 });
 
-// Reset Session
+// Reset Session -- PIN already verified when this queue's manage view was opened
 document.getElementById('qResetSessionBtn')?.addEventListener('click', () => {
   if (!selectedQueueSessionId) return;
   const sessions = loadQueues();
   const session = sessions.find(s => s.id === selectedQueueSessionId);
   if (!session) return;
 
-  const pin = document.getElementById('qAdminActionPin').value.trim();
-  if (pin === session.pin) {
-    if (confirm('Are you sure you want to reset this queue session? This will wipe the scoreboard and clear court rotation.')) {
-      session.waiting = [];
-      session.activeMatch = null;
-      session.matches = [];
-      saveQueues(sessions);
-      renderActiveQueueDashboard();
-      document.getElementById('qAdminActionPin').value = '';
-      toast('Queue rotation reset successfully!');
-    }
-  } else {
-    alert('Incorrect Lock PIN!');
+  if (confirm('Are you sure you want to reset this queue session? This will wipe the scoreboard and clear court rotation.')) {
+    session.waiting = [];
+    session.activeMatch = null;
+    session.matches = [];
+    saveQueues(sessions);
+    renderActiveQueueDashboard();
+    toast('Queue rotation reset successfully!');
   }
 });
 
-// Delete Session
+// Delete Session -- PIN already verified when this queue's manage view was opened
 document.getElementById('qDeleteSessionBtn')?.addEventListener('click', () => {
   if (!selectedQueueSessionId) return;
   const sessions = loadQueues();
   const session = sessions.find(s => s.id === selectedQueueSessionId);
   if (!session) return;
 
-  const pin = document.getElementById('qAdminActionPin').value.trim();
-  if (pin === session.pin) {
-    if (confirm('Permanently delete this entire queue session?')) {
-      const filtered = sessions.filter(s => s.id !== selectedQueueSessionId);
-      saveQueues(filtered);
-      selectedQueueSessionId = null;
-      renderQueueModule();
-      document.getElementById('qAdminActionPin').value = '';
-      toast('Session deleted.');
-    }
-  } else {
-    alert('Incorrect Lock PIN!');
+  if (confirm('Permanently delete this entire queue session?')) {
+    const filtered = sessions.filter(s => s.id !== selectedQueueSessionId);
+    saveQueues(filtered);
+    selectedQueueSessionId = null;
+    renderQueueModule();
+    toast('Session deleted.');
   }
 });
 

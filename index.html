@@ -2204,6 +2204,9 @@ if (FB_ENABLED) {
     });
     fbStorage = firebase.storage();
     fbAuth = firebase.auth();
+    // Expose for tenant picker and other modules
+    window.db = db;
+    window.fbAuth = fbAuth;
     console.log('[CourtBooking] Firebase connected:', FIREBASE_CFG.projectId);
   } catch(e) {
     console.warn('[CourtBooking] Firebase init failed:', e.message);

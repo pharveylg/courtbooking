@@ -44,16 +44,16 @@
         "destination": "/manifest.json"
       },
       {
-        "source": "/picker",
-        "destination": "/picker.html"
+        "source": "/app",
+        "destination": "/index.html"
       },
       {
-        "source": "/picker.html",
-        "destination": "/picker.html"
+        "source": "/app/**",
+        "destination": "/index.html"
       },
       {
         "source": "**",
-        "destination": "/index.html"
+        "destination": "/picker.html"
       }
     ],
     "headers": [

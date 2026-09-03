@@ -54,18 +54,33 @@ const tenants = [
     name: 'Demo Facility',
     sub: 'Pickleball • Single Court',
     location: 'Sample City',
-    logoUrl: '',
+    logoUrl: '/icons/tenant-demo.png',
     active: true,
   },
-  // Add more tenants below:
-  // {
-  //   clientId: 'white-kitchen',
-  //   name: 'White Kitchen Pickleball',
-  //   sub: 'Pickleball • 4 Courts',
-  //   location: 'Manila, PH',
-  //   logoUrl: '',
-  //   active: true,
-  // },
+  {
+    clientId: 'smash-court',
+    name: 'Smash Court Pickleball',
+    sub: 'Pickleball • 4 Courts',
+    location: 'Cagayan de Oro, PH',
+    logoUrl: '/icons/tenant-smash.png',
+    active: true,
+  },
+  {
+    clientId: 'the-kitchen',
+    name: 'The Kitchen Pickleball',
+    sub: 'Pickleball + Dining • 3 Courts',
+    location: 'Manila, PH',
+    logoUrl: '/icons/tenant-kitchen.png',
+    active: true,
+  },
+  {
+    clientId: 'ace-pickle',
+    name: 'Ace Pickle Club',
+    sub: 'Pickleball • 2 Courts',
+    location: 'Cebu, PH',
+    logoUrl: '/icons/tenant-ace.png',
+    active: true,
+  },
 ];
 
 async function seed() {

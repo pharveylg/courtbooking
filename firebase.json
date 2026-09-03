@@ -34,7 +34,12 @@
       "SUPERADMIN_GUIDE.md",
       "ARCHITECTURE_DIAGRAM.html"
     ],
+    "cleanUrls": false,
     "rewrites": [
+      {
+        "source": "/",
+        "destination": "/picker.html"
+      },
       {
         "source": "/sw.js",
         "destination": "/sw.js"
@@ -76,6 +81,15 @@
       },
       {
         "source": "index.html",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "public, max-age=0, must-revalidate"
+          }
+        ]
+      },
+      {
+        "source": "picker.html",
         "headers": [
           {
             "key": "Cache-Control",

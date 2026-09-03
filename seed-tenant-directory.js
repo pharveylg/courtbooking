@@ -3,39 +3,51 @@
  * seed-tenant-directory.js
  * ────────────────────────
  * Seeds the Firestore `tenantDirectory` collection with public tenant info.
- * This is the list that appears in the tenant picker on first launch.
  *
  * Usage:
- *   node seed-tenant-directory.js
+ *   1. Run: gcloud auth application-default login
+ *   2. Run: node seed-tenant-directory.js
  *
- * Prerequisites:
- *   - Firebase Admin SDK credentials (set GOOGLE_APPLICATION_CREDENTIALS)
- *   - Or run from a machine with firebase-tools logged in
- *
- * Each tenant entry needs:
- *   - clientId (the slug used in ?client=xxx)
- *   - name (display name)
- *   - sub (subtitle, optional)
- *   - location (optional)
- *   - logoUrl (optional, URL to logo image)
- *   - active (boolean, set to true to show in picker)
+ * If you don't have gcloud CLI, add tenants manually in Firebase Console:
+ *   Firestore Database → + Start collection → tenantDirectory
+ *   Document ID: your-tenant-slug
+ *   Fields: clientId (string), name (string), sub (string), active (boolean true)
  */
 
 const admin = require('firebase-admin');
+const fs = require('fs');
+const path = require('path');
 
-// Initialize Admin SDK
-// If running locally with firebase-tools, use the emulator or default credentials
+// Read project ID from .firebaserc
+let projectId;
 try {
-  admin.initializeApp();
+  const rc = JSON.parse(fs.readFileSync(path.join(__dirname, '.firebaserc'), 'utf8'));
+  projectId = rc.projects.default;
 } catch (e) {
-  // Already initialized
+  console.error('❌ Could not read .firebaserc. Make sure you are in the project root.');
+  process.exit(1);
+}
+
+console.log(`\n📋 Project: ${projectId}\n`);
+
+// Initialize Admin SDK with Application Default Credentials
+try {
+  admin.initializeApp({
+    credential: admin.credential.applicationDefault(),
+    projectId: projectId,
+  });
+} catch (e) {
+  console.error('❌ Failed to initialize Firebase Admin SDK:', e.message);
+  console.error('\nTo fix this, run:');
+  console.error('  gcloud auth application-default login');
+  console.error('\nOr add tenants manually in Firebase Console:');
+  console.error('  Firestore → + Start collection → tenantDirectory');
+  process.exit(1);
 }
 
 const db = admin.firestore();
 
 // ── Tenant Directory Entries ──────────────────────────────
-// Add your tenants here. The clientId must match the tenant ID
-// used in the clients/{clientId}/... Firestore paths.
 const tenants = [
   {
     clientId: 'demo',
@@ -51,21 +63,13 @@ const tenants = [
   //   name: 'White Kitchen Pickleball',
   //   sub: 'Pickleball • 4 Courts',
   //   location: 'Manila, PH',
-  //   logoUrl: 'https://example.com/logo.png',
-  //   active: true,
-  // },
-  // {
-  //   clientId: 'ace-pickle',
-  //   name: 'Ace Pickle Club',
-  //   sub: 'Pickleball • 2 Courts',
-  //   location: 'Cebu, PH',
   //   logoUrl: '',
   //   active: true,
   // },
 ];
 
 async function seed() {
-  console.log(`\n🌱 Seeding ${tenants.length} tenant(s) into tenantDirectory...\n`);
+  console.log(`🌱 Seeding ${tenants.length} tenant(s) into tenantDirectory...\n`);
 
   const batch = db.batch();
 
@@ -82,11 +86,9 @@ async function seed() {
   await batch.commit();
 
   console.log(`\n✅ Done! ${tenants.length} tenant(s) written to tenantDirectory.\n`);
-  console.log('The tenant picker will now show these facilities on first launch.');
-  console.log('Set active: false to hide a facility without deleting it.\n');
 }
 
 seed().catch(err => {
-  console.error('❌ Failed to seed tenant directory:', err.message);
+  console.error('❌ Failed:', err.message);
   process.exit(1);
 });

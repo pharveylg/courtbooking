@@ -360,12 +360,21 @@
           <span id="headerAdminIcon" class="grid place-items-center"><svg id="headerAdminSvg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span>
           <span id="headerAdminText" class="hidden sm:inline">Staff</span>
         </button>
+        <button id="headerSwitchFacility" title="Switch Facility" class="flex items-center justify-center gap-1.5 px-3.5 h-8 rounded-full bg-white border border-[#EAE0D5] hover:border-[#201C19] text-[12px] font-[700] transition shrink-0 cursor-pointer shadow-xs">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M16 3h5v5M4 20L21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/></svg>
+          <span class="hidden sm:inline">Switch</span>
+        </button>
       </div>
 
-      <!-- Mobile: just the admin lock icon (tabs move below) -->
-      <button id="headerAdminToggleMobile" title="Staff / Admin Access" class="md:hidden flex items-center justify-center w-9 h-9 rounded-full bg-white border border-[#EAE0D5] hover:border-[#201C19] transition shrink-0 cursor-pointer shadow-xs">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-      </button>
+      <!-- Mobile: just the admin lock icon + switch facility (tabs move below) -->
+      <div class="flex items-center gap-1.5 md:hidden">
+        <button id="headerSwitchFacilityMobile" title="Switch Facility" class="flex items-center justify-center w-9 h-9 rounded-full bg-white border border-[#EAE0D5] hover:border-[#201C19] transition shrink-0 cursor-pointer shadow-xs">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M16 3h5v5M4 20L21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/></svg>
+        </button>
+        <button id="headerAdminToggleMobile" title="Staff / Admin Access" class="flex items-center justify-center w-9 h-9 rounded-full bg-white border border-[#EAE0D5] hover:border-[#201C19] transition shrink-0 cursor-pointer shadow-xs">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        </button>
+      </div>
     </div>
 
     <!-- Mobile tab bar (below brand, full width, scrollable) -->
@@ -3432,6 +3441,19 @@ if(headerAdminToggle) headerAdminToggle.addEventListener('click', handleAdminTog
 const headerAdminToggleMobile = document.getElementById('headerAdminToggleMobile');
 if(headerAdminToggleMobile) headerAdminToggleMobile.addEventListener('click', handleAdminToggleClick);
 
+// Switch Facility buttons (header — available to everyone)
+function handleSwitchFacility() {
+  localStorage.removeItem('cb_selected_tenant');
+  const url = new URL(window.location.href);
+  url.searchParams.delete('client');
+  url.searchParams.delete('source');
+  window.location.href = url.toString();
+}
+const headerSwitchFacility = document.getElementById('headerSwitchFacility');
+if(headerSwitchFacility) headerSwitchFacility.addEventListener('click', handleSwitchFacility);
+const headerSwitchFacilityMobile = document.getElementById('headerSwitchFacilityMobile');
+if(headerSwitchFacilityMobile) headerSwitchFacilityMobile.addEventListener('click', handleSwitchFacility);
+
 const adminModalForm = document.getElementById('adminModalForm');
 if(adminModalForm){
   adminModalForm.addEventListener('submit', async (e)=>{
@@ -4937,18 +4959,7 @@ document.getElementById('adminLockBtn').addEventListener('click', ()=>{
   document.getElementById('adminLock').classList.remove('hidden');
   document.getElementById('adminPanel').classList.add('hidden');
 });
-document.getElementById('switchFacilityBtn').addEventListener('click', ()=>{
-  if(confirm('Switch to a different facility? You will be taken to the facility picker.')){
-    if(typeof window.switchTenant === 'function') {
-      window.switchTenant();
-    } else {
-      localStorage.removeItem('cb_selected_tenant');
-      const url = new URL(window.location.href);
-      url.searchParams.delete('client');
-      window.location.href = url.toString();
-    }
-  }
-});
+document.getElementById('switchFacilityBtn').addEventListener('click', handleSwitchFacility);
 document.getElementById('adminPinInput').addEventListener('keydown', e=>{ if(e.key==='Enter') document.getElementById('adminUnlockBtn').click(); });
 
 function renderAdminBookings(){

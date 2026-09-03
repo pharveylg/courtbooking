@@ -123,6 +123,7 @@
               <div class="mt-4 flex flex-wrap gap-2">
                 <div id="chipHourly" class="px-3 py-1.5 rounded-full bg-[#D6FF5F] text-[#201C19] mono text-[11px] font-[700]">₱300 / hour • 1PM–10PM</div>
                 <div id="chipQueue" class="px-3 py-1.5 rounded-full bg-white/10 border border-white/15 mono text-[11px]">₱100 / head • 7AM–12PM Queue</div>
+                <div id="chipOpenPlay" class="hidden px-3 py-1.5 rounded-full bg-[#EDE8FF] border border-[#D8D0FF] mono text-[11px] font-[700] text-[#5B4FA8]">🏓 Open Play Today</div>
               </div>
             </div>
             <div class="bg-white/5 border border-white/10 rounded-[16px] p-3 w-full md:w-[240px]">
@@ -1435,16 +1436,6 @@
               </div>
               <div class="grid grid-cols-2 gap-2">
                 <label class="flex flex-col gap-1.5">
-                  <span class="mono text-[10px] uppercase tracking-widest opacity-60">Queue Start</span>
-                  <select id="opQueueStart" class="h-11 rounded-[12px] bg-white/10 border border-white/15 px-3 mono text-[13px] outline-none focus:bg-white focus:text-[#201C19]"></select>
-                </label>
-                <label class="flex flex-col gap-1.5">
-                  <span class="mono text-[10px] uppercase tracking-widest opacity-60">Queue End</span>
-                  <select id="opQueueEnd" class="h-11 rounded-[12px] bg-white/10 border border-white/15 px-3 mono text-[13px] outline-none focus:bg-white focus:text-[#201C19]"></select>
-                </label>
-              </div>
-              <div class="grid grid-cols-2 gap-2">
-                <label class="flex flex-col gap-1.5">
                   <span class="mono text-[10px] uppercase tracking-widest opacity-60">Game Mode</span>
                   <select id="opGameMode" class="h-11 rounded-[12px] bg-white/10 border border-white/15 px-3 mono text-[13px] outline-none focus:bg-white focus:text-[#201C19]">
                     <option value="doubles">Doubles (4 Players)</option>
@@ -1761,6 +1752,8 @@ function applyBranding(){
   // Rates + hours labels
   setText('chipHourly', `${fmtMoney(CLIENT.rates.hourly)} / hour • ${_hh12(SCHED.bookStart)}–${_hh12(SCHED.close)}`);
   setText('chipQueue', `${fmtMoney(CLIENT.rates.queuePerHead)} / head • ${_hh12(SCHED.queueStart)}–${_hh12(SCHED.queueEnd)} Queue`);
+  // Open Play indicator: show if Open Play is set up for today
+  updateOpenPlayChip();
   setText('payRateHourly', `${fmtMoney(CLIENT.rates.hourly)} / hour`);
   setText('payRateHourlyLabel', `Reservation (${_hh12(SCHED.bookStart)}–${_hh12(SCHED.close)})`);
   setText('payRateQueue', `${fmtMoney(CLIENT.rates.queuePerHead)} / head`);
@@ -4058,8 +4051,6 @@ function populateTimeOptions(){
   // Populate Open Play selects once
   const opStart = document.getElementById('opStart');
   const opEnd = document.getElementById('opEnd');
-  const opQueueStart = document.getElementById('opQueueStart');
-  const opQueueEnd = document.getElementById('opQueueEnd');
   if(opStart && opEnd && opStart.options.length===0){
     const minH = Math.min(SCHED.queueStart, SCHED.bookStart);
     for(let h = minH; h < SCHED.close; h++){
@@ -4074,19 +4065,6 @@ function populateTimeOptions(){
     opEnd.value=String(Math.min(minH+11, SCHED.close));
     const opRate = document.getElementById('opRate');
     if(opRate && !opRate.value) opRate.value = String(CLIENT.rates.queuePerHead);
-  }
-  if(opQueueStart && opQueueEnd && opQueueStart.options.length===0){
-    const minH = Math.min(SCHED.queueStart, SCHED.bookStart);
-    for(let h = minH; h < SCHED.close; h++){
-      const o=document.createElement('option'); o.value=String(h); o.textContent=fmtTime(h);
-      opQueueStart.appendChild(o);
-    }
-    for(let h = minH + 1; h <= SCHED.close; h++){
-      const o=document.createElement('option'); o.value=String(h); o.textContent=fmtTime(h);
-      opQueueEnd.appendChild(o);
-    }
-    opQueueStart.value=String(SCHED.queueStart);
-    opQueueEnd.value=String(SCHED.queueEnd);
   }
 }
 
@@ -5611,13 +5589,11 @@ function renderOpenPlayList(){
     div.innerHTML=`
       <div class="mono text-[11px]">
         <b>${fmtDateLabel(op.date)}</b><br/>${to12Range(op.start,op.end)}${courtName ? ` <span class="opacity-60">• ${escapeHtml(courtName)}</span>` : ''}
-        ${op.queueStart != null && op.queueEnd != null && (op.queueStart !== op.start || op.queueEnd !== op.end) ? `<br/><span class="opacity-60">Queue: ${to12Range(op.queueStart, op.queueEnd)}</span>` : ''}
-        ${op.gameMode || op.rotationRule || op.perPersonRate != null || op.allowJoin != null || op.queuePin ? `<div class="flex items-center gap-1.5 mt-1 flex-wrap">
+        ${op.gameMode || op.rotationRule || op.perPersonRate != null || op.allowJoin != null ? `<div class="flex items-center gap-1.5 mt-1 flex-wrap">
           ${op.gameMode ? `<span class="px-1.5 py-0.5 rounded-full bg-white/15 text-[9px] font-[700]">${gameModeLabel(op.gameMode)}</span>` : ''}
           ${op.rotationRule ? `<span class="px-1.5 py-0.5 rounded-full bg-white/15 text-[9px] font-[700]">${rotationRuleLabel(op.rotationRule)}</span>` : ''}
           ${op.perPersonRate != null ? `<span class="px-1.5 py-0.5 rounded-full bg-white/15 text-[9px] font-[700]">${fmtMoney(op.perPersonRate)}/head</span>` : ''}
           <span class="px-1.5 py-0.5 rounded-full text-[9px] font-[700] ${op.allowJoin===false ? 'bg-white/15 opacity-70' : 'bg-[#D6FF5F] text-[#201C19]'}">${op.allowJoin===false ? 'Walk-ins only' : 'Public Joining'}</span>
-          ${op.queuePin ? `<span class="px-1.5 py-0.5 rounded-full bg-[#D6FF5F] text-[#201C19] text-[9px] font-[800]" title="Queue session PIN for score tracking">🏓 PIN: ${op.queuePin}</span>` : ''}
         </div>` : ''}
       </div>
       <button data-opdel="${op.id}" class="w-7 h-7 rounded-full bg-white/20 grid place-items-center text-[12px] shrink-0">✕</button>
@@ -5635,16 +5611,25 @@ function renderOpenPlayList(){
         try { await db.doc(`clients/${currentClientId}/openGames/${removed.openGameId}`).delete(); }
         catch(ex) { console.warn('Failed to remove linked open game:', ex.message); }
       }
-      // Also delete the linked Queue session (score tracking)
-      if(removed && removed.queueSessionId){
-        const qAll = loadQueues();
-        const filtered = qAll.filter(q => q.id !== removed.queueSessionId && q.linkedOpenPlayId !== id);
-        saveQueues(filtered);
-      }
-      renderOpenPlayList(); renderAdminBookings(); renderSchedule(); renderBookingsList(); renderQueueModule();
+      renderOpenPlayList(); renderAdminBookings(); renderSchedule(); renderBookingsList();
       toast('Open play removed');
     });
   });
+  // Update Open Play chip in header
+  updateOpenPlayChip();
+}
+
+function updateOpenPlayChip(){
+  const chipOpenPlay = document.getElementById('chipOpenPlay');
+  if(!chipOpenPlay) return;
+  const todayStr = fmtISO(new Date());
+  const todayOpenPlays = openPlays.filter(op => op.date === todayStr);
+  if(todayOpenPlays.length > 0){
+    chipOpenPlay.textContent = `🏓 Open Play Today (${todayOpenPlays.length} block${todayOpenPlays.length > 1 ? 's' : ''})`;
+    chipOpenPlay.classList.remove('hidden');
+  } else {
+    chipOpenPlay.classList.add('hidden');
+  }
 }
 
 document.getElementById('openPlayForm').addEventListener('submit', async e=>{
@@ -5652,13 +5637,10 @@ document.getElementById('openPlayForm').addEventListener('submit', async e=>{
   const date = document.getElementById('opDate').value;
   const start = parseInt(document.getElementById('opStart').value,10);
   const end = parseInt(document.getElementById('opEnd').value,10);
-  const queueStart = parseInt(document.getElementById('opQueueStart').value,10);
-  const queueEnd = parseInt(document.getElementById('opQueueEnd').value,10);
   const err = document.getElementById('opError');
   err.classList.add('hidden');
   if(!date){ err.textContent='Select date'; err.classList.remove('hidden'); return; }
   if(end<=start){ err.textContent='End must be after start'; err.classList.remove('hidden'); return; }
-  if(queueEnd<=queueStart){ err.textContent='Queue end must be after queue start'; err.classList.remove('hidden'); return; }
   if(start >= SCHED.queueEnd && start < SCHED.bookStart){ err.textContent=`${_hh12(SCHED.queueEnd)} break not allowed`; err.classList.remove('hidden'); return; }
   if(_crossesGap(start,end)){ err.textContent=`Cannot cross ${_hh12(SCHED.queueEnd)}–${_hh12(SCHED.bookStart)} break`; err.classList.remove('hidden'); return; }
   const opCourtId = (document.getElementById('opCourt') && document.getElementById('opCourtLabel') && !document.getElementById('opCourtLabel').classList.contains('hidden'))
@@ -5672,7 +5654,7 @@ document.getElementById('openPlayForm').addEventListener('submit', async e=>{
   const rotationRule = document.getElementById('opRotationRule').value;
   const perPersonRate = Math.max(0, parseFloat(document.getElementById('opRate').value) || 0);
   const allowJoin = document.getElementById('opAllowJoin').value === 'true';
-  const entry = {id:'op_'+Date.now(), date, start, end, queueStart, queueEnd, court: opCourtId, gameMode, rotationRule, perPersonRate, allowJoin};
+  const entry = {id:'op_'+Date.now(), date, start, end, court: opCourtId, gameMode, rotationRule, perPersonRate, allowJoin};
 
   // Also publish this block to Find a Game so both online players and
   // walk-ins (advised to open the site and join like everyone else) can
@@ -5701,48 +5683,9 @@ document.getElementById('openPlayForm').addEventListener('submit', async e=>{
   bookings.unshift({id:entry.id, name:'Open Play', email:'', group:'Open Play block', court: opCourtId, date, start, end, status:'OpenPlay', createdAt:Date.now()});
   saveBookings(bookings);
 
-  /* ---------- Auto-create linked Queue session for score capture ----------
-     Every Open Play block gets its own Queue session so staff can use the
-     Queue scoring UI to record match results, which then feed into the
-     Match Stats leaderboard. The session uses a random PIN (shown in the
-     Open Play list) and expires when the Open Play block ends. */
-  const queuePin = String(Math.floor(1000 + Math.random() * 9000));
-  const courtLabel = opCourtId ? getCourtName(opCourtId) : '';
-  const queueSessionName = `Open Play: ${fmtDateLabel(date)} ${fmtTime(queueStart)}–${fmtTime(queueEnd)}${courtLabel ? ' • ' + courtLabel : ''}`;
-  // Queue session expires at the Queue end time (not midnight)
-  const endTimestamp = new Date(date + 'T00:00:00').getTime() + queueEnd * 3600000;
-  // Queue session becomes active at the Queue start time
-  const startTimestamp = new Date(date + 'T00:00:00').getTime() + queueStart * 3600000;
-  const queueSession = {
-    id: 'q_op_' + entry.id,
-    name: queueSessionName,
-    mode: gameMode,
-    rule: rotationRule,
-    pin: queuePin,
-    allowJoin: allowJoin,
-    court: opCourtId,
-    perPersonRate: perPersonRate,
-    waiting: [],
-    teams: {},
-    activeMatch: null,
-    matches: [],
-    linkedOpenPlayId: entry.id,
-    source: 'open_play',
-    startsAt: startTimestamp,
-    createdAt: Date.now(),
-    expiresAt: endTimestamp
-  };
-  entry.queueSessionId = queueSession.id;
-  entry.queuePin = queuePin;
-  // Re-save openPlays with the queueSessionId and queuePin added
-  saveOpenPlay(openPlays);
-  const qList = loadQueues();
-  qList.push(queueSession);
-  saveQueues(qList);
-
   logUsageEvent('open_play_created', { court: opCourtId, durationHours: end - start }); // analytics only, never billed
-  renderOpenPlayList(); renderAdminBookings(); renderSchedule(); renderBookingsList(); renderQueueModule();
-  toast(`Open play block added — Queue PIN: ${queuePin}`);
+  renderOpenPlayList(); renderAdminBookings(); renderSchedule(); renderBookingsList();
+  toast('Open play block added');
 });
 
 document.getElementById('addCourtBtn').addEventListener('click', ()=>{
@@ -5894,18 +5837,13 @@ seedQueueSessionIfEmpty();
 
 function renderQueueModule() {
   let sessions = loadQueues();
-  const now = Date.now();
-  
-  // Filter out future Open Play sessions (those with startsAt in the future)
-  // These are kept in storage but hidden from the display until they start
-  sessions = sessions.filter(s => !s.startsAt || s.startsAt <= now);
   
   // Court-aware filtering: if a specific court is selected, filter to that court
   if(activeQueueCourtTab && activeQueueCourtTab !== 'all'){
     sessions = sessions.filter(s => !s.court || s.court === activeQueueCourtTab);
   }
   
-  const allSessions = loadQueues().filter(s => !s.startsAt || s.startsAt <= now);
+  const allSessions = loadQueues();
   const countBadge = document.getElementById('activeQueueCountBadge');
   const sessionCount = document.getElementById('activeSessionsCount');
   const sessionsList = document.getElementById('queueSessionsList');
@@ -5931,7 +5869,6 @@ function renderQueueModule() {
         const totalP = (s.activeMatch ? (s.mode === 'doubles' ? 4 : 2) : 0) + s.waiting.reduce((sum, w) => sum + w.names.length, 0);
 
         const courtName = s.court ? getCourtName(s.court) : '';
-        const isOpenPlay = s.source === 'open_play';
         div.innerHTML = `
           <div class="min-w-0">
             <div class="font-[800] text-[14px] leading-tight truncate">${escapeHtml(s.name)}</div>
@@ -5939,8 +5876,7 @@ function renderQueueModule() {
               <span class="mono text-[9px] px-2 py-0.5 rounded-full ${isSelected ? 'bg-white/10 text-[#D6FF5F]' : 'bg-[#201C19]/5 text-[#201C19]'} font-[800] uppercase">${s.mode}</span>
               <span class="mono text-[9px] px-2 py-0.5 rounded-full ${isSelected ? 'bg-white/10 text-white/75' : 'bg-[#F1E9DF] text-[#201C19]/70'}">${s.rule === 'winner_stays' ? 'Winner Stays' : s.rule === 'fixed_pairs' ? 'Fixed Pairs' : s.rule === 'partner_rotation' ? 'Partner Rot.' : s.rule === 'timed_rotation' ? 'Timed Rot.' : s.rule === 'fixed_rotation' ? 'Fixed Rot.' : 'Four On/Off'}</span>
               ${courtName ? `<span class="mono text-[9px] px-2 py-0.5 rounded-full ${isSelected ? 'bg-white/10 text-white/75' : 'bg-[#EAE0D5] text-[#201C19]/70'}">${escapeHtml(courtName)}</span>` : ''}
-              ${isOpenPlay ? `<span class="mono text-[9px] px-2 py-0.5 rounded-full bg-[#D6FF5F] text-[#201C19] font-[700]">🏓 Open Play</span>` : ''}
-              ${isOpenPlay && s.perPersonRate ? `<span class="mono text-[9px] px-2 py-0.5 rounded-full ${isSelected ? 'bg-white/10 text-[#D6FF5F]' : 'bg-[#E8F5D8] text-[#3F7019]'} font-[700]">${fmtMoney(s.perPersonRate)}/head</span>` : ''}
+
             </div>
           </div>
           <div class="text-right shrink-0">
@@ -7076,8 +7012,7 @@ function computeTeamStats(session) {
  * Populates session selector, computes stats, and renders leaderboard.
  */
 function renderStatsView() {
-  const now = Date.now();
-  const sessions = loadQueues().filter(s => !s.startsAt || s.startsAt <= now);
+  const sessions = loadQueues();
   const selectEl = document.getElementById('statsSessionSelect');
   const noSessionEl = document.getElementById('statsNoSession');
   const dashboardEl = document.getElementById('statsDashboard');

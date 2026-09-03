@@ -21,6 +21,7 @@ const APP_SHELL = [
 
 // Secondary pages (cached on first visit)
 const SECONDARY_PAGES = [
+  '/picker.html',
   '/tournament.html',
   '/tournament-admin.html',
   '/gallery.html',

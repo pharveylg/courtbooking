@@ -2064,70 +2064,9 @@ let clientConfigCache = new Map(); // Cache for client configs
 
 console.log('[CourtBooking] Tenant ID:', currentClientId || '(none - demo mode)');
 
-// Show tenant picker if no tenant is selected
+// Redirect to facility picker if no tenant is selected
 if (!currentClientId && FB_ENABLED) {
-  const pickerOverlay = document.getElementById('tenantPickerOverlay');
-  if (pickerOverlay) {
-    pickerOverlay.style.display = '';
-    document.body.style.overflow = 'hidden';
-    // Load tenant list
-    (async () => {
-      const loadingEl = document.getElementById('tenantPickerLoading');
-      const errorEl = document.getElementById('tenantPickerError');
-      const emptyEl = document.getElementById('tenantPickerEmpty');
-      const listEl = document.getElementById('tenantPickerList');
-      const searchInput = document.getElementById('tenantSearchInput');
-      try {
-        const snap = await db.collection('tenantDirectory').where('active', '==', true).get();
-        const tenants = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-        if (loadingEl) loadingEl.classList.add('hidden');
-        if (tenants.length === 0) {
-          if (emptyEl) emptyEl.classList.remove('hidden');
-          return;
-        }
-        if (listEl) {
-          listEl.classList.remove('hidden');
-          listEl.innerHTML = tenants.map(t => `
-            <button class="tenant-card w-full text-left p-4 rounded-[16px] bg-white/5 border border-white/10 hover:bg-white/10 hover:border-[#D6FF5F] transition group" data-client-id="${t.clientId}">
-              <div class="flex items-start gap-3">
-                ${t.logoUrl ? `<img src="${t.logoUrl}" alt="" class="w-12 h-12 rounded-[10px] object-cover shrink-0"/>` : `<div class="w-12 h-12 rounded-[10px] bg-[#D6FF5F] grid place-items-center shrink-0"><span class="text-[#201C19] font-[800] text-[16px]">${(t.name || t.clientId).charAt(0).toUpperCase()}</span></div>`}
-                <div class="flex-1 min-w-0">
-                  <div class="font-[800] text-[15px] text-white group-hover:text-[#D6FF5F] transition truncate">${t.name || t.clientId}</div>
-                  ${t.sub ? `<div class="mono text-[11px] text-white/60 mt-0.5 truncate">${t.sub}</div>` : ''}
-                  ${t.location ? `<div class="mono text-[10px] text-white/40 mt-1 truncate">📍 ${t.location}</div>` : ''}
-                </div>
-                <svg class="w-5 h-5 text-white/30 group-hover:text-[#D6FF5F] transition shrink-0 mt-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
-              </div>
-            </button>
-          `).join('');
-          // Bind clicks
-          listEl.querySelectorAll('.tenant-card').forEach(card => {
-            card.addEventListener('click', () => {
-              const cid = card.dataset.clientId;
-              localStorage.setItem('cb_selected_tenant', cid);
-              const url = new URL(window.location.href);
-              url.searchParams.set('client', cid);
-              window.location.href = url.toString();
-            });
-          });
-          // Search
-          if (searchInput) {
-            searchInput.addEventListener('input', (e) => {
-              const q = e.target.value.toLowerCase().trim();
-              const filtered = q ? tenants.filter(t => (t.name||'').toLowerCase().includes(q) || (t.sub||'').toLowerCase().includes(q) || (t.clientId||'').toLowerCase().includes(q) || (t.location||'').toLowerCase().includes(q)) : tenants;
-              if (filtered.length === 0) { listEl.classList.add('hidden'); if(emptyEl) emptyEl.classList.remove('hidden'); }
-              else { if(emptyEl) emptyEl.classList.add('hidden'); listEl.classList.remove('hidden'); listEl.querySelectorAll('.tenant-card').forEach((card, i) => { card.style.display = filtered.some(f => f.clientId === card.dataset.clientId) ? '' : 'none'; }); }
-            });
-            searchInput.focus();
-          }
-        }
-      } catch (err) {
-        console.error('[TenantPicker] Failed:', err);
-        if (loadingEl) loadingEl.classList.add('hidden');
-        if (errorEl) { errorEl.classList.remove('hidden'); document.getElementById('tenantPickerErrorMsg').textContent = err.message; }
-      }
-    })();
-  }
+  window.location.replace('/picker.html');
 }
 
 /* ---------- Normalize tenant config: adapt the flat schema written by the
@@ -3311,10 +3250,7 @@ if(headerAdminToggleMobile) headerAdminToggleMobile.addEventListener('click', ha
 // Switch Facility buttons (header — available to everyone)
 function handleSwitchFacility() {
   localStorage.removeItem('cb_selected_tenant');
-  const url = new URL(window.location.href);
-  url.searchParams.delete('client');
-  url.searchParams.delete('source');
-  window.location.href = url.toString();
+  window.location.href = '/picker.html';
 }
 const headerSwitchFacility = document.getElementById('headerSwitchFacility');
 if(headerSwitchFacility) headerSwitchFacility.addEventListener('click', handleSwitchFacility);

@@ -44,6 +44,14 @@
         "destination": "/manifest.json"
       },
       {
+        "source": "/picker",
+        "destination": "/picker.html"
+      },
+      {
+        "source": "/picker.html",
+        "destination": "/picker.html"
+      },
+      {
         "source": "**",
         "destination": "/index.html"
       }

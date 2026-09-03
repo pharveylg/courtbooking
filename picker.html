@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<meta name="theme-color" content="#201C19"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta name="apple-mobile-web-app-title" content="CourtBook"/>
+<link rel="manifest" href="/manifest.json"/>
+<link rel="apple-touch-icon" href="/icons/icon-192.png"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet"/>
+<title>Court Booking — Choose Your Facility</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:"Bricolage Grotesque",system-ui,sans-serif;background:#201C19;color:#FFFBF5;min-height:100vh;min-height:100dvh;-webkit-font-smoothing:antialiased}
+.mono{font-family:"JetBrains Mono",monospace}
+
+/* Animated background */
+.bg-mesh{
+  background:
+    radial-gradient(ellipse at 20% 0%, rgba(214,255,95,0.08) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 100%, rgba(214,255,95,0.04) 0%, transparent 50%),
+    #201C19;
+}
+
+/* Hero */
+.hero{padding:48px 24px 32px;text-align:center;max-width:600px;margin:0 auto}
+.hero-icon{width:64px;height:64px;border-radius:16px;background:#D6FF5F;display:grid;place-items:center;margin:0 auto 24px;box-shadow:0 8px 32px rgba(214,255,95,0.2)}
+.hero-icon svg{width:32px;height:32px;color:#201C19}
+.hero h1{font-size:28px;font-weight:800;letter-spacing:-0.03em;line-height:1.1;margin-bottom:12px}
+.hero h1 span{color:#D6FF5F}
+.hero p{font-size:14px;opacity:0.6;line-height:1.5;max-width:400px;margin:0 auto}
+
+/* Features */
+.features{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-top:24px}
+.feature{display:flex;align-items:center;gap:6px;padding:6px 14px;border-radius:999px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.08);font-size:12px;font-weight:600;opacity:0.7}
+.feature-dot{width:6px;height:6px;border-radius:50%;background:#D6FF5F}
+
+/* Search */
+.search-wrap{max-width:600px;margin:0 auto;padding:0 24px}
+.search-input{width:100%;height:52px;border-radius:14px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);padding:0 16px 0 48px;font-size:15px;color:#FFFBF5;outline:none;font-family:inherit;transition:border-color 0.2s, background 0.2s}
+.search-input::placeholder{color:rgba(255,255,255,0.35)}
+.search-input:focus{border-color:#D6FF5F;background:rgba(255,255,255,0.1)}
+.search-icon{position:absolute;left:40px;top:50%;transform:translateY(-50%);width:18px;height:18px;color:rgba(255,255,255,0.35);pointer-events:none}
+
+/* List */
+.list-wrap{max-width:600px;margin:0 auto;padding:20px 24px 48px}
+.tenant-card{width:100%;text-align:left;padding:16px;border-radius:16px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);cursor:pointer;transition:all 0.2s;display:flex;align-items:center;gap:14px;margin-bottom:10px;font-family:inherit;color:inherit;outline:none}
+.tenant-card:hover,.tenant-card:focus{background:rgba(255,255,255,0.08);border-color:rgba(214,255,95,0.4);transform:translateY(-1px);box-shadow:0 4px 16px rgba(0,0,0,0.2)}
+.tenant-card:active{transform:scale(0.98)}
+.tenant-avatar{width:48px;height:48px;border-radius:12px;background:#D6FF5F;display:grid;place-items:center;flex-shrink:0;font-weight:800;font-size:18px;color:#201C19}
+.tenant-avatar img{width:100%;height:100%;border-radius:12px;object-fit:cover}
+.tenant-info{flex:1;min-width:0}
+.tenant-name{font-weight:800;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tenant-sub{font-size:11px;opacity:0.5;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tenant-arrow{width:20px;height:20px;color:rgba(255,255,255,0.2);flex-shrink:0;transition:color 0.2s}
+.tenant-card:hover .tenant-arrow{color:#D6FF5F}
+
+/* States */
+.state{display:none;text-align:center;padding:48px 24px}
+.state.visible{display:block}
+.state-icon{font-size:48px;margin-bottom:16px}
+.state-title{font-weight:700;font-size:16px;margin-bottom:8px}
+.state-msg{font-size:12px;opacity:0.5;margin-bottom:20px}
+.retry-btn{display:inline-flex;align-items:center;gap:6px;padding:10px 24px;border-radius:999px;background:#D6FF5F;color:#201C19;font-weight:700;font-size:13px;border:none;cursor:pointer;font-family:inherit}
+.retry-btn:active{transform:scale(0.97)}
+
+/* Spinner */
+.spinner{width:32px;height:32px;border:3px solid rgba(214,255,95,0.2);border-top-color:#D6FF5F;border-radius:50%;animation:spin 0.8s linear infinite;margin:0 auto 16px}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* Footer */
+.footer{text-align:center;padding:24px;font-size:10px;opacity:0.3}
+
+/* Responsive */
+@media(min-width:640px){
+  .hero{padding:64px 24px 40px}
+  .hero h1{font-size:36px}
+}
+
+/* Fade in animation */
+@keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+.fade-up{animation:fadeUp 0.5s ease forwards}
+.delay-1{animation-delay:0.1s;opacity:0}
+.delay-2{animation-delay:0.2s;opacity:0}
+.delay-3{animation-delay:0.3s;opacity:0}
+</style>
+</head>
+<body class="bg-mesh">
+
+<!-- Hero -->
+<div class="hero fade-up">
+  <div class="hero-icon">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="10"/>
+      <circle cx="12" cy="12" r="3"/>
+      <line x1="12" y1="2" x2="12" y2="5"/>
+      <line x1="12" y1="19" x2="12" y2="22"/>
+      <line x1="2" y1="12" x2="5" y2="12"/>
+      <line x1="19" y1="12" x2="22" y2="12"/>
+    </svg>
+  </div>
+  <h1 class="delay-1">Book courts.<br/>Run the queue.<br/><span>Track every match.</span></h1>
+  <p class="mono delay-2">Select your facility to get started</p>
+  <div class="features delay-3">
+    <div class="feature"><span class="feature-dot"></span>Court Reservations</div>
+    <div class="feature"><span class="feature-dot"></span>Walk-in Queue</div>
+    <div class="feature"><span class="feature-dot"></span>Match Stats</div>
+  </div>
+</div>
+
+<!-- Search -->
+<div class="search-wrap fade-up delay-2" style="position:relative">
+  <svg class="search-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+  </svg>
+  <input type="text" id="searchInput" class="search-input" placeholder="Search facilities..." autocomplete="off"/>
+</div>
+
+<!-- Loading -->
+<div id="stateLoading" class="state visible">
+  <div class="spinner"></div>
+  <div class="mono" style="font-size:12px;opacity:0.5">Loading facilities...</div>
+</div>
+
+<!-- Error -->
+<div id="stateError" class="state">
+  <div class="state-icon">⚠️</div>
+  <div class="state-title">Could not load facilities</div>
+  <div class="state-msg mono" id="errorMsg"></div>
+  <button class="retry-btn" onclick="loadTenants()">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1 4v6h6M23 20v-6h-6"/><path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15"/></svg>
+    Try Again
+  </button>
+</div>
+
+<!-- Empty -->
+<div id="stateEmpty" class="state">
+  <div class="state-icon">🔍</div>
+  <div class="state-title">No facilities found</div>
+  <div class="state-msg mono">Try a different search term</div>
+</div>
+
+<!-- Tenant List -->
+<div class="list-wrap" id="listWrap" style="display:none"></div>
+
+<!-- Footer -->
+<div class="footer mono">Court Booking — Multi-Tenant PWA</div>
+
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script src="/firebase-config.js"></script>
+
+<script>
+(function() {
+  'use strict';
+
+  // DOM refs
+  const searchInput = document.getElementById('searchInput');
+  const stateLoading = document.getElementById('stateLoading');
+  const stateError = document.getElementById('stateError');
+  const stateEmpty = document.getElementById('stateEmpty');
+  const errorMsg = document.getElementById('errorMsg');
+  const listWrap = document.getElementById('listWrap');
+
+  let allTenants = [];
+
+  // Check if tenant already selected — redirect to app immediately
+  const urlParams = new URLSearchParams(window.location.search);
+  const queryClient = urlParams.get('client');
+  const storedClient = localStorage.getItem('cb_selected_tenant');
+  const activeClient = queryClient || storedClient;
+
+  if (activeClient) {
+    // Tenant already selected, go to main app
+    window.location.replace('/?client=' + encodeURIComponent(activeClient));
+    return;
+  }
+
+  // Initialize Firebase
+  const FIREBASE_CFG = (window.FIREBASE_CONFIG && window.FIREBASE_CONFIG.apiKey && !String(window.FIREBASE_CONFIG.apiKey).startsWith('PASTE')) ? window.FIREBASE_CONFIG : null;
+
+  if (!FIREBASE_CFG) {
+    showError('Firebase not configured. Check firebase-config.js.');
+    return;
+  }
+
+  firebase.initializeApp(FIREBASE_CFG);
+  const db = firebase.firestore();
+
+  // Load tenants
+  window.loadTenants = loadTenants;
+  loadTenants();
+
+  async function loadTenants() {
+    showState('loading');
+    try {
+      const snap = await db.collection('tenantDirectory').where('active', '==', true).get();
+      allTenants = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      
+      if (allTenants.length === 0) {
+        showState('empty');
+        return;
+      }
+
+      renderTenants(allTenants);
+    } catch (err) {
+      console.error('[Picker] Failed:', err);
+      showError(err.message);
+    }
+  }
+
+  function renderTenants(tenants) {
+    if (tenants.length === 0) {
+      listWrap.style.display = 'none';
+      showState('empty');
+      return;
+    }
+
+    showState('list');
+    listWrap.innerHTML = tenants.map((t, i) => `
+      <button class="tenant-card" data-client-id="${escapeHtml(t.clientId)}" style="animation:fadeUp 0.4s ease ${i * 0.06}s forwards;opacity:0">
+        ${t.logoUrl 
+          ? `<div class="tenant-avatar"><img src="${escapeHtml(t.logoUrl)}" alt=""/></div>` 
+          : `<div class="tenant-avatar">${(t.name || t.clientId).charAt(0).toUpperCase()}</div>`}
+        <div class="tenant-info">
+          <div class="tenant-name">${escapeHtml(t.name || t.clientId)}</div>
+          ${t.sub ? `<div class="tenant-sub mono">${escapeHtml(t.sub)}</div>` : ''}
+          ${t.location ? `<div class="tenant-sub mono">📍 ${escapeHtml(t.location)}</div>` : ''}
+        </div>
+        <svg class="tenant-arrow" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+      </button>
+    `).join('');
+
+    // Bind clicks
+    listWrap.querySelectorAll('.tenant-card').forEach(card => {
+      card.addEventListener('click', () => selectTenant(card.dataset.clientId));
+    });
+
+    // Focus search
+    searchInput.focus();
+  }
+
+  function selectTenant(clientId) {
+    localStorage.setItem('cb_selected_tenant', clientId);
+    // Redirect to main app with tenant
+    window.location.href = '/?client=' + encodeURIComponent(clientId);
+  }
+
+  // Search
+  searchInput.addEventListener('input', (e) => {
+    const q = e.target.value.toLowerCase().trim();
+    if (!q) { renderTenants(allTenants); return; }
+    const filtered = allTenants.filter(t =>
+      (t.name || '').toLowerCase().includes(q) ||
+      (t.sub || '').toLowerCase().includes(q) ||
+      (t.clientId || '').toLowerCase().includes(q) ||
+      (t.location || '').toLowerCase().includes(q)
+    );
+    renderTenants(filtered);
+  });
+
+  // State management
+  function showState(state) {
+    stateLoading.classList.toggle('visible', state === 'loading');
+    stateError.classList.toggle('visible', state === 'error');
+    stateEmpty.classList.toggle('visible', state === 'empty');
+    listWrap.style.display = state === 'list' ? '' : 'none';
+  }
+
+  function showError(msg) {
+    errorMsg.textContent = msg;
+    showState('error');
+  }
+
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str || '';
+    return div.innerHTML;
+  }
+
+  // Register service worker
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(() => {});
+  }
+})();
+</script>
+</body>
+</html>

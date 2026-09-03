@@ -5682,6 +5682,8 @@ document.getElementById('openPlayForm').addEventListener('submit', async e=>{
   const queueSessionName = `Open Play: ${fmtDateLabel(date)} ${fmtTime(start)}–${fmtTime(end)}${courtLabel ? ' • ' + courtLabel : ''}`;
   // Queue session expires at the Open Play block's end time (not midnight)
   const endTimestamp = new Date(date + 'T00:00:00').getTime() + end * 3600000;
+  // Queue session becomes active at the Open Play block's start time
+  const startTimestamp = new Date(date + 'T00:00:00').getTime() + start * 3600000;
   const queueSession = {
     id: 'q_op_' + entry.id,
     name: queueSessionName,
@@ -5696,6 +5698,7 @@ document.getElementById('openPlayForm').addEventListener('submit', async e=>{
     matches: [],
     linkedOpenPlayId: entry.id,
     source: 'open_play',
+    startsAt: startTimestamp,
     createdAt: Date.now(),
     expiresAt: endTimestamp
   };
@@ -5770,7 +5773,8 @@ function loadQueues() {
     const raw = localStorage.getItem(LS.queues) || '[]';
     let arr = JSON.parse(raw);
     const now = Date.now();
-    // Midnight cleanup filter: auto-delete expired queues
+    // Midnight cleanup filter: auto-delete expired queues only
+    // (future Open Play sessions with startsAt are kept — they're filtered at display time)
     const valid = arr.filter(q => q.expiresAt > now);
     if (valid.length !== arr.length) {
       localStorage.setItem(LS.queues, JSON.stringify(valid));
@@ -5860,13 +5864,18 @@ seedQueueSessionIfEmpty();
 
 function renderQueueModule() {
   let sessions = loadQueues();
+  const now = Date.now();
+  
+  // Filter out future Open Play sessions (those with startsAt in the future)
+  // These are kept in storage but hidden from the display until they start
+  sessions = sessions.filter(s => !s.startsAt || s.startsAt <= now);
   
   // Court-aware filtering: if a specific court is selected, filter to that court
   if(activeQueueCourtTab && activeQueueCourtTab !== 'all'){
     sessions = sessions.filter(s => !s.court || s.court === activeQueueCourtTab);
   }
   
-  const allSessions = loadQueues();
+  const allSessions = loadQueues().filter(s => !s.startsAt || s.startsAt <= now);
   const countBadge = document.getElementById('activeQueueCountBadge');
   const sessionCount = document.getElementById('activeSessionsCount');
   const sessionsList = document.getElementById('queueSessionsList');
@@ -5892,6 +5901,7 @@ function renderQueueModule() {
         const totalP = (s.activeMatch ? (s.mode === 'doubles' ? 4 : 2) : 0) + s.waiting.reduce((sum, w) => sum + w.names.length, 0);
 
         const courtName = s.court ? getCourtName(s.court) : '';
+        const isOpenPlay = s.source === 'open_play';
         div.innerHTML = `
           <div class="min-w-0">
             <div class="font-[800] text-[14px] leading-tight truncate">${escapeHtml(s.name)}</div>
@@ -5899,6 +5909,7 @@ function renderQueueModule() {
               <span class="mono text-[9px] px-2 py-0.5 rounded-full ${isSelected ? 'bg-white/10 text-[#D6FF5F]' : 'bg-[#201C19]/5 text-[#201C19]'} font-[800] uppercase">${s.mode}</span>
               <span class="mono text-[9px] px-2 py-0.5 rounded-full ${isSelected ? 'bg-white/10 text-white/75' : 'bg-[#F1E9DF] text-[#201C19]/70'}">${s.rule === 'winner_stays' ? 'Winner Stays' : s.rule === 'fixed_pairs' ? 'Fixed Pairs' : s.rule === 'partner_rotation' ? 'Partner Rot.' : s.rule === 'timed_rotation' ? 'Timed Rot.' : s.rule === 'fixed_rotation' ? 'Fixed Rot.' : 'Four On/Off'}</span>
               ${courtName ? `<span class="mono text-[9px] px-2 py-0.5 rounded-full ${isSelected ? 'bg-white/10 text-white/75' : 'bg-[#EAE0D5] text-[#201C19]/70'}">${escapeHtml(courtName)}</span>` : ''}
+              ${isOpenPlay ? `<span class="mono text-[9px] px-2 py-0.5 rounded-full bg-[#D6FF5F] text-[#201C19] font-[700]">🏓 Open Play</span>` : ''}
             </div>
           </div>
           <div class="text-right shrink-0">
@@ -7034,7 +7045,8 @@ function computeTeamStats(session) {
  * Populates session selector, computes stats, and renders leaderboard.
  */
 function renderStatsView() {
-  const sessions = loadQueues();
+  const now = Date.now();
+  const sessions = loadQueues().filter(s => !s.startsAt || s.startsAt <= now);
   const selectEl = document.getElementById('statsSessionSelect');
   const noSessionEl = document.getElementById('statsNoSession');
   const dashboardEl = document.getElementById('statsDashboard');

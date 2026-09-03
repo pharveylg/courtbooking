@@ -105,208 +105,6 @@
   </div>
 </div>
 
-<script>
-// Tenant Picker Module
-(function() {
-  'use strict';
-
-  const LS_TENANT_KEY = 'cb_selected_tenant';
-  const TENANT_DIRECTORY_COLLECTION = 'tenantDirectory';
-
-  // DOM refs
-  const overlay = document.getElementById('tenantPickerOverlay');
-  const searchInput = document.getElementById('tenantSearchInput');
-  const loadingEl = document.getElementById('tenantPickerLoading');
-  const errorEl = document.getElementById('tenantPickerError');
-  const errorMsg = document.getElementById('tenantPickerErrorMsg');
-  const retryBtn = document.getElementById('tenantPickerRetryBtn');
-  const emptyEl = document.getElementById('tenantPickerEmpty');
-  const listEl = document.getElementById('tenantPickerList');
-
-  let allTenants = [];
-
-  // Check if we already have a tenant selected
-  function getStoredTenant() {
-    return localStorage.getItem(LS_TENANT_KEY);
-  }
-
-  function storeTenant(clientId) {
-    localStorage.setItem(LS_TENANT_KEY, clientId);
-  }
-
-  function clearTenant() {
-    localStorage.removeItem(LS_TENANT_KEY);
-  }
-
-  // Fetch tenant directory from Firestore
-  async function fetchTenants() {
-    if (!window.db) {
-      throw new Error('Firestore not initialized');
-    }
-
-    const snapshot = await window.db.collection(TENANT_DIRECTORY_COLLECTION)
-      .where('active', '==', true)
-      .orderBy('name')
-      .get();
-
-    return snapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    }));
-  }
-
-  // Render tenant cards
-  function renderTenants(tenants) {
-    if (tenants.length === 0) {
-      listEl.classList.add('hidden');
-      emptyEl.classList.remove('hidden');
-      return;
-    }
-
-    emptyEl.classList.add('hidden');
-    listEl.classList.remove('hidden');
-
-    listEl.innerHTML = tenants.map(t => `
-      <button 
-        class="tenant-card w-full text-left p-4 rounded-[16px] bg-white/5 border border-white/10 hover:bg-white/10 hover:border-[#D6FF5F] transition group"
-        data-client-id="${t.clientId}"
-      >
-        <div class="flex items-start gap-3">
-          ${t.logoUrl ? `
-            <img src="${t.logoUrl}" alt="" class="w-12 h-12 rounded-[10px] object-cover shrink-0"/>
-          ` : `
-            <div class="w-12 h-12 rounded-[10px] bg-[#D6FF5F] grid place-items-center shrink-0">
-              <span class="text-[#201C19] font-[800] text-[16px]">${(t.name || t.clientId).charAt(0).toUpperCase()}</span>
-            </div>
-          `}
-          <div class="flex-1 min-w-0">
-            <div class="font-[800] text-[15px] text-white group-hover:text-[#D6FF5F] transition truncate">${t.name || t.clientId}</div>
-            ${t.sub ? `<div class="mono text-[11px] text-white/60 mt-0.5 truncate">${t.sub}</div>` : ''}
-            ${t.location ? `<div class="mono text-[10px] text-white/40 mt-1 truncate">📍 ${t.location}</div>` : ''}
-          </div>
-          <svg class="w-5 h-5 text-white/30 group-hover:text-[#D6FF5F] transition shrink-0 mt-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-          </svg>
-        </div>
-      </button>
-    `).join('');
-
-    // Bind click handlers
-    listEl.querySelectorAll('.tenant-card').forEach(card => {
-      card.addEventListener('click', () => {
-        const clientId = card.dataset.clientId;
-        selectTenant(clientId);
-      });
-    });
-  }
-
-  // Filter tenants by search query
-  function filterTenants(query) {
-    const q = query.toLowerCase().trim();
-    if (!q) return allTenants;
-
-    return allTenants.filter(t => 
-      (t.name || '').toLowerCase().includes(q) ||
-      (t.sub || '').toLowerCase().includes(q) ||
-      (t.clientId || '').toLowerCase().includes(q) ||
-      (t.location || '').toLowerCase().includes(q)
-    );
-  }
-
-  // Select a tenant and redirect
-  function selectTenant(clientId) {
-    storeTenant(clientId);
-    
-    // Build URL with client param
-    const url = new URL(window.location.href);
-    url.searchParams.set('client', clientId);
-    
-    // Reload with tenant context
-    window.location.href = url.toString();
-  }
-
-  // Show the picker
-  function showPicker() {
-    overlay.style.display = '';
-    document.body.style.overflow = 'hidden';
-    loadTenants();
-  }
-
-  // Hide the picker
-  function hidePicker() {
-    overlay.style.display = 'none';
-    document.body.style.overflow = '';
-  }
-
-  // Load tenants from Firestore
-  async function loadTenants() {
-    loadingEl.classList.remove('hidden');
-    errorEl.classList.add('hidden');
-    emptyEl.classList.add('hidden');
-    listEl.classList.add('hidden');
-
-    try {
-      allTenants = await fetchTenants();
-      loadingEl.classList.add('hidden');
-      renderTenants(allTenants);
-      searchInput.focus();
-    } catch (err) {
-      console.error('[TenantPicker] Failed to load tenants:', err);
-      loadingEl.classList.add('hidden');
-      errorEl.classList.remove('hidden');
-      errorMsg.textContent = err.message;
-    }
-  }
-
-  // Search handler
-  searchInput.addEventListener('input', (e) => {
-    const filtered = filterTenants(e.target.value);
-    renderTenants(filtered);
-  });
-
-  // Retry handler
-  retryBtn.addEventListener('click', loadTenants);
-
-  // Expose switch function globally
-  window.switchTenant = function() {
-    clearTenant();
-    const url = new URL(window.location.href);
-    url.searchParams.delete('client');
-    window.location.href = url.toString();
-  };
-
-  // Check on load if we need to show the picker
-  // Wait for Firebase to be ready
-  function checkAndShowPicker() {
-    // If tenant already selected via URL or localStorage, don't show
-    const urlParams = new URLSearchParams(window.location.search);
-    const queryClient = urlParams.get('client');
-    const storedClient = getStoredTenant();
-
-    if (queryClient || storedClient) {
-      // Tenant already selected, don't show picker
-      return;
-    }
-
-    // No tenant selected, show picker
-    // But wait for Firebase to be ready
-    if (window.db) {
-      showPicker();
-    } else {
-      // Retry after a short delay
-      setTimeout(checkAndShowPicker, 500);
-    }
-  }
-
-  // Start checking after DOM is ready
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => setTimeout(checkAndShowPicker, 100));
-  } else {
-    setTimeout(checkAndShowPicker, 100);
-  }
-
-})();
-</script>
 
 <!-- PWA Offline Indicator -->
 <div id="pwa-offline-bar" class="hidden fixed top-0 left-0 right-0 z-[9999] bg-[#FF8A5B] text-white text-center py-2 px-4 mono text-[11px] font-[700] tracking-wide" style="display:none">
@@ -314,7 +112,7 @@
 </div>
 
 <!-- PWA Install Banner -->
-<div id="pwa-install-banner" class="hidden fixed bottom-4 left-4 right-4 md:left-auto md:right-4 md:w-[380px] z-[9998] rounded-[20px] bg-[#201C19] text-white border border-white/10 p-4 shadow-[0_8px_32px_rgba(0,0,0,0.3)]" style="display:none">
+<div id="pwa-install-banner" class="hidden fixed bottom-20 left-4 right-4 md:left-auto md:right-4 md:bottom-4 md:w-[380px] z-[10001] rounded-[20px] bg-[#201C19] text-white border border-white/10 p-4 shadow-[0_8px_32px_rgba(0,0,0,0.3)]" style="display:none">
   <div class="flex items-center gap-3">
     <img src="/icons/icon-192.png" alt="" class="w-12 h-12 rounded-xl shrink-0"/>
     <div class="flex-1 min-w-0">
@@ -2265,6 +2063,72 @@ let currentClientConfig = null;
 let clientConfigCache = new Map(); // Cache for client configs
 
 console.log('[CourtBooking] Tenant ID:', currentClientId || '(none - demo mode)');
+
+// Show tenant picker if no tenant is selected
+if (!currentClientId && FB_ENABLED) {
+  const pickerOverlay = document.getElementById('tenantPickerOverlay');
+  if (pickerOverlay) {
+    pickerOverlay.style.display = '';
+    document.body.style.overflow = 'hidden';
+    // Load tenant list
+    (async () => {
+      const loadingEl = document.getElementById('tenantPickerLoading');
+      const errorEl = document.getElementById('tenantPickerError');
+      const emptyEl = document.getElementById('tenantPickerEmpty');
+      const listEl = document.getElementById('tenantPickerList');
+      const searchInput = document.getElementById('tenantSearchInput');
+      try {
+        const snap = await db.collection('tenantDirectory').where('active', '==', true).get();
+        const tenants = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        if (loadingEl) loadingEl.classList.add('hidden');
+        if (tenants.length === 0) {
+          if (emptyEl) emptyEl.classList.remove('hidden');
+          return;
+        }
+        if (listEl) {
+          listEl.classList.remove('hidden');
+          listEl.innerHTML = tenants.map(t => `
+            <button class="tenant-card w-full text-left p-4 rounded-[16px] bg-white/5 border border-white/10 hover:bg-white/10 hover:border-[#D6FF5F] transition group" data-client-id="${t.clientId}">
+              <div class="flex items-start gap-3">
+                ${t.logoUrl ? `<img src="${t.logoUrl}" alt="" class="w-12 h-12 rounded-[10px] object-cover shrink-0"/>` : `<div class="w-12 h-12 rounded-[10px] bg-[#D6FF5F] grid place-items-center shrink-0"><span class="text-[#201C19] font-[800] text-[16px]">${(t.name || t.clientId).charAt(0).toUpperCase()}</span></div>`}
+                <div class="flex-1 min-w-0">
+                  <div class="font-[800] text-[15px] text-white group-hover:text-[#D6FF5F] transition truncate">${t.name || t.clientId}</div>
+                  ${t.sub ? `<div class="mono text-[11px] text-white/60 mt-0.5 truncate">${t.sub}</div>` : ''}
+                  ${t.location ? `<div class="mono text-[10px] text-white/40 mt-1 truncate">📍 ${t.location}</div>` : ''}
+                </div>
+                <svg class="w-5 h-5 text-white/30 group-hover:text-[#D6FF5F] transition shrink-0 mt-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+              </div>
+            </button>
+          `).join('');
+          // Bind clicks
+          listEl.querySelectorAll('.tenant-card').forEach(card => {
+            card.addEventListener('click', () => {
+              const cid = card.dataset.clientId;
+              localStorage.setItem('cb_selected_tenant', cid);
+              const url = new URL(window.location.href);
+              url.searchParams.set('client', cid);
+              window.location.href = url.toString();
+            });
+          });
+          // Search
+          if (searchInput) {
+            searchInput.addEventListener('input', (e) => {
+              const q = e.target.value.toLowerCase().trim();
+              const filtered = q ? tenants.filter(t => (t.name||'').toLowerCase().includes(q) || (t.sub||'').toLowerCase().includes(q) || (t.clientId||'').toLowerCase().includes(q) || (t.location||'').toLowerCase().includes(q)) : tenants;
+              if (filtered.length === 0) { listEl.classList.add('hidden'); if(emptyEl) emptyEl.classList.remove('hidden'); }
+              else { if(emptyEl) emptyEl.classList.add('hidden'); listEl.classList.remove('hidden'); listEl.querySelectorAll('.tenant-card').forEach((card, i) => { card.style.display = filtered.some(f => f.clientId === card.dataset.clientId) ? '' : 'none'; }); }
+            });
+            searchInput.focus();
+          }
+        }
+      } catch (err) {
+        console.error('[TenantPicker] Failed:', err);
+        if (loadingEl) loadingEl.classList.add('hidden');
+        if (errorEl) { errorEl.classList.remove('hidden'); document.getElementById('tenantPickerErrorMsg').textContent = err.message; }
+      }
+    })();
+  }
+}
 
 /* ---------- Normalize tenant config: adapt the flat schema written by the
    setup-sample-tenants scripts (businessName, contactPhone, theme.primaryColor, ...)

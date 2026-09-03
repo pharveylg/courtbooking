@@ -1270,24 +1270,37 @@
               </div>
               <div class="grid grid-cols-2 gap-2">
                 <label class="flex flex-col gap-1.5">
-                  <span class="mono text-[10px] uppercase tracking-widest opacity-60">Format</span>
-                  <select id="opFormat" class="h-11 rounded-[12px] bg-white/10 border border-white/15 px-3 mono text-[13px] outline-none focus:bg-white focus:text-[#201C19]">
-                    <option value="Doubles">Doubles (4 Players)</option>
-                    <option value="Singles">Singles (2 Players)</option>
+                  <span class="mono text-[10px] uppercase tracking-widest opacity-60">Game Mode</span>
+                  <select id="opGameMode" class="h-11 rounded-[12px] bg-white/10 border border-white/15 px-3 mono text-[13px] outline-none focus:bg-white focus:text-[#201C19]">
+                    <option value="doubles">Doubles (4 Players)</option>
+                    <option value="singles">Singles (2 Players)</option>
                   </select>
                 </label>
+                <label class="flex flex-col gap-1.5">
+                  <span class="mono text-[10px] uppercase tracking-widest opacity-60">Rotation Rule</span>
+                  <select id="opRotationRule" class="h-11 rounded-[12px] bg-white/10 border border-white/15 px-3 mono text-[13px] outline-none focus:bg-white focus:text-[#201C19]">
+                    <option value="winner_stays">Winner Stays</option>
+                    <option value="four_off_four_on">Four Off, Four On</option>
+                    <option value="fixed_rotation">Fixed Rotation (fifo sequence)</option>
+                    <option value="timed_rotation">Timed Rotation</option>
+                    <option value="partner_rotation">Partner Rotation (Doubles only)</option>
+                    <option value="fixed_pairs">Fixed Pairs League (partners never change)</option>
+                  </select>
+                </label>
+              </div>
+              <div class="grid grid-cols-2 gap-2">
                 <label class="flex flex-col gap-1.5">
                   <span class="mono text-[10px] uppercase tracking-widest opacity-60">Rate / person</span>
                   <input type="number" id="opRate" min="0" step="1" class="h-11 rounded-[12px] bg-white/10 border border-white/15 px-4 mono text-[13px] outline-none focus:bg-white focus:text-[#201C19]"/>
                 </label>
+                <label class="flex flex-col gap-1.5">
+                  <span class="mono text-[10px] uppercase tracking-widest opacity-60">Public Joining</span>
+                  <select id="opAllowJoin" class="h-11 rounded-[12px] bg-white/10 border border-white/15 px-3 mono text-[13px] outline-none focus:bg-white focus:text-[#201C19]">
+                    <option value="true">Allowed</option>
+                    <option value="false">Restricted</option>
+                  </select>
+                </label>
               </div>
-              <label class="flex flex-col gap-1.5">
-                <span class="mono text-[10px] uppercase tracking-widest opacity-60">Public Joining</span>
-                <select id="opAllowJoin" class="h-11 rounded-[12px] bg-white/10 border border-white/15 px-3 mono text-[13px] outline-none focus:bg-white focus:text-[#201C19]">
-                  <option value="true">Allowed — visitors can Join &amp; pay online</option>
-                  <option value="false">Restricted — walk-ins only</option>
-                </select>
-              </label>
               <div id="opError" class="hidden rounded-[10px] bg-[#FF8A5B]/20 border border-[#FF8A5B]/30 px-3 py-2 mono text-[11px]"></div>
               <button class="w-full h-11 rounded-full bg-[#D6FF5F] text-[#201C19] font-[800] mono text-[12px] tracking-wide">Add Open Play Block</button>
             </form>
@@ -1990,6 +2003,19 @@ function fmtTime(h){
   return `${hh}:00 ${ap}`;
 }
 function to12Range(s,e){ return `${fmtTime(s)} – ${fmtTime(e)}`; }
+
+/* Short badge labels for the Queue tab's Game Mode / Rotation Rule enums --
+   reused by Open Play (and its published Find a Game entry) since it now
+   shares the exact same two fields instead of a free-standing "format". */
+function gameModeLabel(mode){ return mode === 'singles' ? 'Singles' : 'Doubles'; }
+function rotationRuleLabel(rule){
+  return rule === 'fixed_pairs' ? 'Fixed Pairs'
+    : rule === 'partner_rotation' ? 'Partner Rot.'
+    : rule === 'timed_rotation' ? 'Timed Rot.'
+    : rule === 'fixed_rotation' ? 'Fixed Rot.'
+    : rule === 'four_off_four_on' ? 'Four On/Off'
+    : 'Winner Stays';
+}
 
 /* ---------- Load / Save wrappers (Supabase + localStorage cache) ---------- */
 function loadBookings(){ return fbLoadCache(LS.bookings, []); }
@@ -4989,7 +5015,8 @@ function renderOpenGames(){
           <div class="flex items-center gap-2 flex-wrap">
             ${isFacility
               ? `<span class="mono text-[10px] px-2 py-0.5 rounded-full bg-[#D6FF5F] text-[#201C19] font-[800] uppercase">Open Play</span>
-                 <span class="mono text-[10px] px-2 py-0.5 rounded-full bg-[#F1E9DF] font-[700]">${escapeHtml(g.format)}</span>
+                 <span class="mono text-[10px] px-2 py-0.5 rounded-full bg-[#F1E9DF] font-[700]">${gameModeLabel(g.gameMode)}</span>
+                 <span class="mono text-[10px] px-2 py-0.5 rounded-full bg-[#F1E9DF] font-[700]">${rotationRuleLabel(g.rotationRule)}</span>
                  <span class="mono text-[10px] px-2 py-0.5 rounded-full font-[700] ${g.allowJoin===false ? 'bg-[#F1E9DF] opacity-70' : 'bg-[#E8F5D8] text-[#3F7019]'}">${g.allowJoin===false ? 'Walk-ins only' : 'Public Joining'}</span>`
               : `<span class="mono text-[10px] px-2 py-0.5 rounded-full bg-[#EDE8FF] text-[#3B2A9E] font-[700] uppercase">${escapeHtml(g.skillLevel)}</span>
                  <span class="mono text-[10px] px-2 py-0.5 rounded-full bg-[#F1E9DF] font-[700]">${escapeHtml(g.format)}</span>`}
@@ -5316,7 +5343,10 @@ function renderOgDetailModal(gameId){
   body.innerHTML = `
     <div class="mono text-[13px] font-[700]">${fmtDateLabel(game.date)}<br/>${isFacility && game.endHour != null ? to12Range(game.startHour, game.endHour) : fmtTime(game.startHour)}</div>
     <div class="flex items-center gap-2 flex-wrap">
-      <span class="mono text-[10px] px-2 py-0.5 rounded-full bg-[#F1E9DF] font-[700]">${escapeHtml(game.format)}</span>
+      ${isFacility
+        ? `<span class="mono text-[10px] px-2 py-0.5 rounded-full bg-[#F1E9DF] font-[700]">${gameModeLabel(game.gameMode)}</span>
+           <span class="mono text-[10px] px-2 py-0.5 rounded-full bg-[#F1E9DF] font-[700]">${rotationRuleLabel(game.rotationRule)}</span>`
+        : `<span class="mono text-[10px] px-2 py-0.5 rounded-full bg-[#F1E9DF] font-[700]">${escapeHtml(game.format)}</span>`}
       ${isFacility ? `<span class="mono text-[10px] px-2 py-0.5 rounded-full font-[700] ${game.allowJoin===false ? 'bg-[#F1E9DF] opacity-70' : 'bg-[#E8F5D8] text-[#3F7019]'}">${game.allowJoin===false ? 'Walk-ins only' : 'Public Joining'}</span>` : ''}
       <span class="mono text-[10px] px-2.5 py-1 rounded-full font-[800] uppercase ${status==='OPEN'?'bg-[#D6FF5F] text-[#201C19]':status==='FULL'?'bg-[#201C19] text-white':status==='RESERVED'?'bg-[#E8F5D8] text-[#3F7019]':'bg-[#F1E9DF] text-[#201C19]/50'}">${isFacility ? `${game.players.length} joined` : `${game.players.length} / ${game.playersNeeded} Players`} · ${status}</span>
     </div>
@@ -5390,8 +5420,9 @@ function renderOpenPlayList(){
     div.innerHTML=`
       <div class="mono text-[11px]">
         <b>${fmtDateLabel(op.date)}</b><br/>${to12Range(op.start,op.end)}${courtName ? ` <span class="opacity-60">• ${escapeHtml(courtName)}</span>` : ''}
-        ${op.format || op.perPersonRate != null || op.allowJoin != null ? `<div class="flex items-center gap-1.5 mt-1 flex-wrap">
-          ${op.format ? `<span class="px-1.5 py-0.5 rounded-full bg-white/15 text-[9px] font-[700]">${escapeHtml(op.format)}</span>` : ''}
+        ${op.gameMode || op.rotationRule || op.perPersonRate != null || op.allowJoin != null ? `<div class="flex items-center gap-1.5 mt-1 flex-wrap">
+          ${op.gameMode ? `<span class="px-1.5 py-0.5 rounded-full bg-white/15 text-[9px] font-[700]">${gameModeLabel(op.gameMode)}</span>` : ''}
+          ${op.rotationRule ? `<span class="px-1.5 py-0.5 rounded-full bg-white/15 text-[9px] font-[700]">${rotationRuleLabel(op.rotationRule)}</span>` : ''}
           ${op.perPersonRate != null ? `<span class="px-1.5 py-0.5 rounded-full bg-white/15 text-[9px] font-[700]">${fmtMoney(op.perPersonRate)}/head</span>` : ''}
           <span class="px-1.5 py-0.5 rounded-full text-[9px] font-[700] ${op.allowJoin===false ? 'bg-white/15 opacity-70' : 'bg-[#D6FF5F] text-[#201C19]'}">${op.allowJoin===false ? 'Walk-ins only' : 'Public Joining'}</span>
         </div>` : ''}
@@ -5435,10 +5466,11 @@ document.getElementById('openPlayForm').addEventListener('submit', async e=>{
     err.textContent=`Overlaps with ${overlap.type}: ${overlap.data? to12Range(overlap.data.start,overlap.data.end):''}`;
     err.classList.remove('hidden'); return;
   }
-  const format = document.getElementById('opFormat').value;
+  const gameMode = document.getElementById('opGameMode').value;
+  const rotationRule = document.getElementById('opRotationRule').value;
   const perPersonRate = Math.max(0, parseFloat(document.getElementById('opRate').value) || 0);
   const allowJoin = document.getElementById('opAllowJoin').value === 'true';
-  const entry = {id:'op_'+Date.now(), date, start, end, court: opCourtId, format, perPersonRate, allowJoin};
+  const entry = {id:'op_'+Date.now(), date, start, end, court: opCourtId, gameMode, rotationRule, perPersonRate, allowJoin};
 
   // Also publish this block to Find a Game so both online players and
   // walk-ins (advised to open the site and join like everyone else) can
@@ -5451,10 +5483,10 @@ document.getElementById('openPlayForm').addEventListener('submit', async e=>{
       const gameRef = db.collection(`clients/${currentClientId}/openGames`).doc();
       await gameRef.set({
         creatorName: CLIENT.business?.name || 'Facility', creatorEmail: `facility_${entry.id}@${currentClientId}.local`, creatorToken: null,
-        status: 'OPEN', date, startHour: start, endHour: end, skillLevel: 'All Levels', format,
+        status: 'OPEN', date, startHour: start, endHour: end, skillLevel: 'All Levels',
         playersNeeded: 40, court: opCourtId, notes: 'Facility-hosted open play — drop in and join!',
         players: [], reservationId: null, source: 'facility', linkedOpenPlayId: entry.id,
-        allowJoin, perPersonRate,
+        allowJoin, perPersonRate, gameMode, rotationRule,
         createdAt: firebase.firestore.FieldValue.serverTimestamp(), updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
       });
       entry.openGameId = gameRef.id;

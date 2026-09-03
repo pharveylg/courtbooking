@@ -1435,6 +1435,16 @@
               </div>
               <div class="grid grid-cols-2 gap-2">
                 <label class="flex flex-col gap-1.5">
+                  <span class="mono text-[10px] uppercase tracking-widest opacity-60">Queue Start</span>
+                  <select id="opQueueStart" class="h-11 rounded-[12px] bg-white/10 border border-white/15 px-3 mono text-[13px] outline-none focus:bg-white focus:text-[#201C19]"></select>
+                </label>
+                <label class="flex flex-col gap-1.5">
+                  <span class="mono text-[10px] uppercase tracking-widest opacity-60">Queue End</span>
+                  <select id="opQueueEnd" class="h-11 rounded-[12px] bg-white/10 border border-white/15 px-3 mono text-[13px] outline-none focus:bg-white focus:text-[#201C19]"></select>
+                </label>
+              </div>
+              <div class="grid grid-cols-2 gap-2">
+                <label class="flex flex-col gap-1.5">
                   <span class="mono text-[10px] uppercase tracking-widest opacity-60">Game Mode</span>
                   <select id="opGameMode" class="h-11 rounded-[12px] bg-white/10 border border-white/15 px-3 mono text-[13px] outline-none focus:bg-white focus:text-[#201C19]">
                     <option value="doubles">Doubles (4 Players)</option>
@@ -4048,6 +4058,8 @@ function populateTimeOptions(){
   // Populate Open Play selects once
   const opStart = document.getElementById('opStart');
   const opEnd = document.getElementById('opEnd');
+  const opQueueStart = document.getElementById('opQueueStart');
+  const opQueueEnd = document.getElementById('opQueueEnd');
   if(opStart && opEnd && opStart.options.length===0){
     const minH = Math.min(SCHED.queueStart, SCHED.bookStart);
     for(let h = minH; h < SCHED.close; h++){
@@ -4062,6 +4074,19 @@ function populateTimeOptions(){
     opEnd.value=String(Math.min(minH+11, SCHED.close));
     const opRate = document.getElementById('opRate');
     if(opRate && !opRate.value) opRate.value = String(CLIENT.rates.queuePerHead);
+  }
+  if(opQueueStart && opQueueEnd && opQueueStart.options.length===0){
+    const minH = Math.min(SCHED.queueStart, SCHED.bookStart);
+    for(let h = minH; h < SCHED.close; h++){
+      const o=document.createElement('option'); o.value=String(h); o.textContent=fmtTime(h);
+      opQueueStart.appendChild(o);
+    }
+    for(let h = minH + 1; h <= SCHED.close; h++){
+      const o=document.createElement('option'); o.value=String(h); o.textContent=fmtTime(h);
+      opQueueEnd.appendChild(o);
+    }
+    opQueueStart.value=String(SCHED.queueStart);
+    opQueueEnd.value=String(SCHED.queueEnd);
   }
 }
 
@@ -5586,6 +5611,7 @@ function renderOpenPlayList(){
     div.innerHTML=`
       <div class="mono text-[11px]">
         <b>${fmtDateLabel(op.date)}</b><br/>${to12Range(op.start,op.end)}${courtName ? ` <span class="opacity-60">• ${escapeHtml(courtName)}</span>` : ''}
+        ${op.queueStart != null && op.queueEnd != null && (op.queueStart !== op.start || op.queueEnd !== op.end) ? `<br/><span class="opacity-60">Queue: ${to12Range(op.queueStart, op.queueEnd)}</span>` : ''}
         ${op.gameMode || op.rotationRule || op.perPersonRate != null || op.allowJoin != null || op.queuePin ? `<div class="flex items-center gap-1.5 mt-1 flex-wrap">
           ${op.gameMode ? `<span class="px-1.5 py-0.5 rounded-full bg-white/15 text-[9px] font-[700]">${gameModeLabel(op.gameMode)}</span>` : ''}
           ${op.rotationRule ? `<span class="px-1.5 py-0.5 rounded-full bg-white/15 text-[9px] font-[700]">${rotationRuleLabel(op.rotationRule)}</span>` : ''}
@@ -5626,10 +5652,13 @@ document.getElementById('openPlayForm').addEventListener('submit', async e=>{
   const date = document.getElementById('opDate').value;
   const start = parseInt(document.getElementById('opStart').value,10);
   const end = parseInt(document.getElementById('opEnd').value,10);
+  const queueStart = parseInt(document.getElementById('opQueueStart').value,10);
+  const queueEnd = parseInt(document.getElementById('opQueueEnd').value,10);
   const err = document.getElementById('opError');
   err.classList.add('hidden');
   if(!date){ err.textContent='Select date'; err.classList.remove('hidden'); return; }
   if(end<=start){ err.textContent='End must be after start'; err.classList.remove('hidden'); return; }
+  if(queueEnd<=queueStart){ err.textContent='Queue end must be after queue start'; err.classList.remove('hidden'); return; }
   if(start >= SCHED.queueEnd && start < SCHED.bookStart){ err.textContent=`${_hh12(SCHED.queueEnd)} break not allowed`; err.classList.remove('hidden'); return; }
   if(_crossesGap(start,end)){ err.textContent=`Cannot cross ${_hh12(SCHED.queueEnd)}–${_hh12(SCHED.bookStart)} break`; err.classList.remove('hidden'); return; }
   const opCourtId = (document.getElementById('opCourt') && document.getElementById('opCourtLabel') && !document.getElementById('opCourtLabel').classList.contains('hidden'))
@@ -5643,7 +5672,7 @@ document.getElementById('openPlayForm').addEventListener('submit', async e=>{
   const rotationRule = document.getElementById('opRotationRule').value;
   const perPersonRate = Math.max(0, parseFloat(document.getElementById('opRate').value) || 0);
   const allowJoin = document.getElementById('opAllowJoin').value === 'true';
-  const entry = {id:'op_'+Date.now(), date, start, end, court: opCourtId, gameMode, rotationRule, perPersonRate, allowJoin};
+  const entry = {id:'op_'+Date.now(), date, start, end, queueStart, queueEnd, court: opCourtId, gameMode, rotationRule, perPersonRate, allowJoin};
 
   // Also publish this block to Find a Game so both online players and
   // walk-ins (advised to open the site and join like everyone else) can
@@ -5679,11 +5708,11 @@ document.getElementById('openPlayForm').addEventListener('submit', async e=>{
      Open Play list) and expires when the Open Play block ends. */
   const queuePin = String(Math.floor(1000 + Math.random() * 9000));
   const courtLabel = opCourtId ? getCourtName(opCourtId) : '';
-  const queueSessionName = `Open Play: ${fmtDateLabel(date)} ${fmtTime(start)}–${fmtTime(end)}${courtLabel ? ' • ' + courtLabel : ''}`;
-  // Queue session expires at the Open Play block's end time (not midnight)
-  const endTimestamp = new Date(date + 'T00:00:00').getTime() + end * 3600000;
-  // Queue session becomes active at the Open Play block's start time
-  const startTimestamp = new Date(date + 'T00:00:00').getTime() + start * 3600000;
+  const queueSessionName = `Open Play: ${fmtDateLabel(date)} ${fmtTime(queueStart)}–${fmtTime(queueEnd)}${courtLabel ? ' • ' + courtLabel : ''}`;
+  // Queue session expires at the Queue end time (not midnight)
+  const endTimestamp = new Date(date + 'T00:00:00').getTime() + queueEnd * 3600000;
+  // Queue session becomes active at the Queue start time
+  const startTimestamp = new Date(date + 'T00:00:00').getTime() + queueStart * 3600000;
   const queueSession = {
     id: 'q_op_' + entry.id,
     name: queueSessionName,
@@ -5692,6 +5721,7 @@ document.getElementById('openPlayForm').addEventListener('submit', async e=>{
     pin: queuePin,
     allowJoin: allowJoin,
     court: opCourtId,
+    perPersonRate: perPersonRate,
     waiting: [],
     teams: {},
     activeMatch: null,
@@ -5910,6 +5940,7 @@ function renderQueueModule() {
               <span class="mono text-[9px] px-2 py-0.5 rounded-full ${isSelected ? 'bg-white/10 text-white/75' : 'bg-[#F1E9DF] text-[#201C19]/70'}">${s.rule === 'winner_stays' ? 'Winner Stays' : s.rule === 'fixed_pairs' ? 'Fixed Pairs' : s.rule === 'partner_rotation' ? 'Partner Rot.' : s.rule === 'timed_rotation' ? 'Timed Rot.' : s.rule === 'fixed_rotation' ? 'Fixed Rot.' : 'Four On/Off'}</span>
               ${courtName ? `<span class="mono text-[9px] px-2 py-0.5 rounded-full ${isSelected ? 'bg-white/10 text-white/75' : 'bg-[#EAE0D5] text-[#201C19]/70'}">${escapeHtml(courtName)}</span>` : ''}
               ${isOpenPlay ? `<span class="mono text-[9px] px-2 py-0.5 rounded-full bg-[#D6FF5F] text-[#201C19] font-[700]">🏓 Open Play</span>` : ''}
+              ${isOpenPlay && s.perPersonRate ? `<span class="mono text-[9px] px-2 py-0.5 rounded-full ${isSelected ? 'bg-white/10 text-[#D6FF5F]' : 'bg-[#E8F5D8] text-[#3F7019]'} font-[700]">${fmtMoney(s.perPersonRate)}/head</span>` : ''}
             </div>
           </div>
           <div class="text-right shrink-0">

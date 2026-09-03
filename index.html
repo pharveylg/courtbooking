@@ -5586,11 +5586,12 @@ function renderOpenPlayList(){
     div.innerHTML=`
       <div class="mono text-[11px]">
         <b>${fmtDateLabel(op.date)}</b><br/>${to12Range(op.start,op.end)}${courtName ? ` <span class="opacity-60">• ${escapeHtml(courtName)}</span>` : ''}
-        ${op.gameMode || op.rotationRule || op.perPersonRate != null || op.allowJoin != null ? `<div class="flex items-center gap-1.5 mt-1 flex-wrap">
+        ${op.gameMode || op.rotationRule || op.perPersonRate != null || op.allowJoin != null || op.queuePin ? `<div class="flex items-center gap-1.5 mt-1 flex-wrap">
           ${op.gameMode ? `<span class="px-1.5 py-0.5 rounded-full bg-white/15 text-[9px] font-[700]">${gameModeLabel(op.gameMode)}</span>` : ''}
           ${op.rotationRule ? `<span class="px-1.5 py-0.5 rounded-full bg-white/15 text-[9px] font-[700]">${rotationRuleLabel(op.rotationRule)}</span>` : ''}
           ${op.perPersonRate != null ? `<span class="px-1.5 py-0.5 rounded-full bg-white/15 text-[9px] font-[700]">${fmtMoney(op.perPersonRate)}/head</span>` : ''}
           <span class="px-1.5 py-0.5 rounded-full text-[9px] font-[700] ${op.allowJoin===false ? 'bg-white/15 opacity-70' : 'bg-[#D6FF5F] text-[#201C19]'}">${op.allowJoin===false ? 'Walk-ins only' : 'Public Joining'}</span>
+          ${op.queuePin ? `<span class="px-1.5 py-0.5 rounded-full bg-[#D6FF5F] text-[#201C19] text-[9px] font-[800]" title="Queue session PIN for score tracking">🏓 PIN: ${op.queuePin}</span>` : ''}
         </div>` : ''}
       </div>
       <button data-opdel="${op.id}" class="w-7 h-7 rounded-full bg-white/20 grid place-items-center text-[12px] shrink-0">✕</button>
@@ -5608,7 +5609,13 @@ function renderOpenPlayList(){
         try { await db.doc(`clients/${currentClientId}/openGames/${removed.openGameId}`).delete(); }
         catch(ex) { console.warn('Failed to remove linked open game:', ex.message); }
       }
-      renderOpenPlayList(); renderAdminBookings(); renderSchedule(); renderBookingsList();
+      // Also delete the linked Queue session (score tracking)
+      if(removed && removed.queueSessionId){
+        const qAll = loadQueues();
+        const filtered = qAll.filter(q => q.id !== removed.queueSessionId && q.linkedOpenPlayId !== id);
+        saveQueues(filtered);
+      }
+      renderOpenPlayList(); renderAdminBookings(); renderSchedule(); renderBookingsList(); renderQueueModule();
       toast('Open play removed');
     });
   });
@@ -5664,9 +5671,45 @@ document.getElementById('openPlayForm').addEventListener('submit', async e=>{
   // also add as booking with OpenPlay status for bookings list visibility
   bookings.unshift({id:entry.id, name:'Open Play', email:'', group:'Open Play block', court: opCourtId, date, start, end, status:'OpenPlay', createdAt:Date.now()});
   saveBookings(bookings);
+
+  /* ---------- Auto-create linked Queue session for score capture ----------
+     Every Open Play block gets its own Queue session so staff can use the
+     Queue scoring UI to record match results, which then feed into the
+     Match Stats leaderboard. The session uses a random PIN (shown in the
+     Open Play list) and expires when the Open Play block ends. */
+  const queuePin = String(Math.floor(1000 + Math.random() * 9000));
+  const courtLabel = opCourtId ? getCourtName(opCourtId) : '';
+  const queueSessionName = `Open Play: ${fmtDateLabel(date)} ${fmtTime(start)}–${fmtTime(end)}${courtLabel ? ' • ' + courtLabel : ''}`;
+  // Queue session expires at the Open Play block's end time (not midnight)
+  const endTimestamp = new Date(date + 'T00:00:00').getTime() + end * 3600000;
+  const queueSession = {
+    id: 'q_op_' + entry.id,
+    name: queueSessionName,
+    mode: gameMode,
+    rule: rotationRule,
+    pin: queuePin,
+    allowJoin: allowJoin,
+    court: opCourtId,
+    waiting: [],
+    teams: {},
+    activeMatch: null,
+    matches: [],
+    linkedOpenPlayId: entry.id,
+    source: 'open_play',
+    createdAt: Date.now(),
+    expiresAt: endTimestamp
+  };
+  entry.queueSessionId = queueSession.id;
+  entry.queuePin = queuePin;
+  // Re-save openPlays with the queueSessionId and queuePin added
+  saveOpenPlay(openPlays);
+  const qList = loadQueues();
+  qList.push(queueSession);
+  saveQueues(qList);
+
   logUsageEvent('open_play_created', { court: opCourtId, durationHours: end - start }); // analytics only, never billed
-  renderOpenPlayList(); renderAdminBookings(); renderSchedule(); renderBookingsList();
-  toast('Open play block added — also posted to Find a Game');
+  renderOpenPlayList(); renderAdminBookings(); renderSchedule(); renderBookingsList(); renderQueueModule();
+  toast(`Open play block added — Queue PIN: ${queuePin}`);
 });
 
 document.getElementById('addCourtBtn').addEventListener('click', ()=>{

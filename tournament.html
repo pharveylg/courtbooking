@@ -225,10 +225,12 @@ function renderDivisionShell(){
     <nav class="flex items-center gap-1 bg-[#F1E9DF] p-1 rounded-full overflow-x-auto no-scrollbar mb-4 w-fit">
       <button data-view-tab="schedule" class="view-tab-btn shrink-0 px-3.5 h-8 rounded-full mono text-[11px] font-[700] transition cursor-pointer">Schedule</button>
       <button data-view-tab="standings" class="view-tab-btn shrink-0 px-3.5 h-8 rounded-full mono text-[11px] font-[700] transition cursor-pointer">Standings</button>
+      <button data-view-tab="stats" class="view-tab-btn shrink-0 px-3.5 h-8 rounded-full mono text-[11px] font-[700] transition cursor-pointer">Stats</button>
       ${hasBracketView ? `<button data-view-tab="bracket" class="view-tab-btn shrink-0 px-3.5 h-8 rounded-full mono text-[11px] font-[700] transition cursor-pointer">Bracket</button>` : ''}
     </nav>
     <div id="view-schedule" class="tournament-view"><div class="mono text-[11px] opacity-50">Loading...</div></div>
     <div id="view-standings" class="tournament-view hidden"></div>
+    <div id="view-stats" class="tournament-view hidden"></div>
     ${hasBracketView ? `<div id="view-bracket" class="tournament-view hidden"></div>` : ''}
   `;
   document.querySelectorAll('.view-tab-btn').forEach(btn => btn.addEventListener('click', () => showView(btn.dataset.viewTab)));
@@ -275,6 +277,7 @@ function subscribeToDivisionData(divisionId){
       const matches = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       renderSchedule(matches);
       renderBracket(matches);
+      renderStatsTab(matches);
     }, ex => console.warn('[PickleTournamentPublic] matches listener failed:', ex.message));
 
   unsubStandings = db.doc(`clients/${currentClientId}/tournaments/${CURRENT_TOURNAMENT_ID}/standings/${divisionId}`)
@@ -394,6 +397,167 @@ function renderBracket(matches){
       </div>
     `).join('')}
   </div>`;
+}
+
+/* ================================================================
+   MATCH STATS -- per-division player/team leaderboard computed from
+   completed matches. Reads the same matches data the Schedule tab
+   already has; no additional Firestore queries needed.
+   ================================================================ */
+function renderStatsTab(matches){
+  const wrap = document.getElementById('view-stats');
+  if(!wrap) return;
+
+  const completed = matches.filter(m => m.status === 'completed' && m.score && m.winnerParticipantId);
+  if(completed.length === 0){
+    wrap.innerHTML = `<div class="mono text-[11px] opacity-50 text-center py-8">Player stats will appear once matches are scored.</div>`;
+    return;
+  }
+
+  // Compute per-participant stats
+  const stats = {}; // keyed by participantId
+  completed.forEach(m => {
+    const [idA, idB] = m.participantIds;
+    const [nameA, nameB] = m.participantNames;
+    if(idA === 'BYE' || idB === 'BYE') return;
+
+    // Initialize
+    if(!stats[idA]) stats[idA] = { name: nameA, gp: 0, w: 0, l: 0, pf: 0, pa: 0 };
+    if(!stats[idB]) stats[idB] = { name: nameB, gp: 0, w: 0, l: 0, pf: 0, pa: 0 };
+
+    stats[idA].gp++;
+    stats[idB].gp++;
+    stats[idA].pf += m.score.a;
+    stats[idA].pa += m.score.b;
+    stats[idB].pf += m.score.b;
+    stats[idB].pa += m.score.a;
+
+    if(m.winnerParticipantId === idA){ stats[idA].w++; stats[idB].l++; }
+    else { stats[idB].w++; stats[idA].l++; }
+  });
+
+  const rows = Object.values(stats).map(s => ({
+    ...s,
+    winPct: s.gp > 0 ? (s.w / s.gp) * 100 : 0,
+    diff: s.pf - s.pa
+  }));
+
+  // Sort: Win% → Point Diff → Points For
+  rows.sort((a, b) => {
+    if(b.winPct !== a.winPct) return b.winPct - a.winPct;
+    if(b.diff !== a.diff) return b.diff - a.diff;
+    return b.pf - a.pf;
+  });
+
+  // Summary stats
+  const totalMatches = completed.length;
+  const totalPlayers = rows.length;
+  const avgScore = Math.round(completed.reduce((sum, m) => sum + m.score.a + m.score.b, 0) / (totalMatches * 2));
+  const biggestBlowout = Math.max(...completed.map(m => Math.abs(m.score.a - m.score.b)));
+
+  // Build leaderboard table
+  const tableRows = rows.map((r, i) => {
+    const diffStr = r.diff > 0 ? `+${r.diff}` : `${r.diff}`;
+    const diffColor = r.diff > 0 ? 'color:#15803D' : r.diff < 0 ? 'color:#B91C1C' : 'opacity:0.5';
+    const isLeader = i === 0 && r.gp > 0;
+    const rankBg = isLeader ? 'background:#201C19;color:#D6FF5F' : 'background:#F1E9DF;color:rgba(32,28,25,0.7)';
+    return `
+      <tr class="border-t border-[#F1E9DF]"${isLeader ? ' style="background:rgba(214,255,95,0.15)"' : ''}>
+        <td class="py-2 pr-2"><span class="inline-grid place-items-center w-6 h-6 rounded-full text-[10px] font-[800]" style="${rankBg}">${i + 1}</span></td>
+        <td class="py-2 pr-3">
+          <div class="font-[800] text-[12px] tracking-[-0.01em]">${escapeHtml(r.name)}</div>
+          <div class="mt-1 h-1 w-20 rounded-full bg-[#F1E9DF] overflow-hidden"><div class="h-full rounded-full bg-[#201C19]" style="width:${r.winPct}%"></div></div>
+        </td>
+        <td class="py-2 px-2 text-center font-[600]">${r.gp}</td>
+        <td class="py-2 px-2 text-center font-[800]" style="color:#15803D">${r.w}</td>
+        <td class="py-2 px-2 text-center font-[800]" style="color:#B91C1C">${r.l}</td>
+        <td class="py-2 px-2 text-right font-[600]">${r.pf}</td>
+        <td class="py-2 px-2 text-right font-[600]" style="opacity:0.7">${r.pa}</td>
+        <td class="py-2 px-2 text-right font-[800]" style="${diffColor}">${diffStr}</td>
+        <td class="py-2 pl-3 font-[800]">${Math.round(r.winPct)}<span style="opacity:0.4;font-size:9px">%</span></td>
+      </tr>`;
+  }).join('');
+
+  // Win distribution bars (top 6)
+  const topBars = rows.slice(0, 6).map(r => {
+    const winW = r.winPct;
+    const lossW = 100 - r.winPct;
+    return `
+      <div>
+        <div class="flex items-center justify-between mb-1">
+          <span class="font-[700] text-[11px] truncate max-w-[120px]">${escapeHtml(r.name)}</span>
+          <span class="mono text-[9px] opacity-60">${r.w}W-${r.l}L</span>
+        </div>
+        <div class="h-1.5 rounded-full bg-[#F1E9DF] overflow-hidden flex">
+          <div class="h-full bg-[#4ADE80]" style="width:${winW}%"></div>
+          <div class="h-full bg-[#F87171]" style="width:${lossW}%"></div>
+        </div>
+      </div>`;
+  }).join('');
+
+  wrap.innerHTML = `
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div class="md:col-span-2">
+        <div class="rounded-[20px] bg-white border border-[#EAE0D5] p-4 md:p-5">
+          <div class="flex items-center justify-between flex-wrap gap-2 mb-3">
+            <div>
+              <div class="font-[800] text-[14px]">Player Leaderboard</div>
+              <div class="mono text-[9.5px] opacity-50 mt-0.5">Rank: Win% → Point Diff → Points For</div>
+            </div>
+            <span class="mono text-[9px] px-2.5 py-1 rounded-full bg-[#201C19] text-white font-[700] uppercase tracking-wider">${totalPlayers} Players</span>
+          </div>
+          <div class="overflow-x-auto no-scrollbar">
+            <table class="w-full mono text-[11px] whitespace-nowrap">
+              <thead>
+                <tr class="text-left text-[9px] uppercase tracking-wider opacity-50 border-b border-[#F1E9DF]">
+                  <th class="py-2 pr-2 font-[700]">#</th>
+                  <th class="py-2 pr-3 font-[700]">Player / Team</th>
+                  <th class="py-2 px-2 text-center font-[700]" title="Games Played">GP</th>
+                  <th class="py-2 px-2 text-center font-[700]" title="Wins">W</th>
+                  <th class="py-2 px-2 text-center font-[700]" title="Losses">L</th>
+                  <th class="py-2 px-2 text-right font-[700]" title="Points For">PF</th>
+                  <th class="py-2 px-2 text-right font-[700]" title="Points Against">PA</th>
+                  <th class="py-2 px-2 text-right font-[700]" title="Point Differential">+/−</th>
+                  <th class="py-2 pl-3 font-[700]" title="Winning Percentage">Win%</th>
+                </tr>
+              </thead>
+              <tbody>${tableRows}</tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      <div class="flex flex-col gap-4">
+        <div class="rounded-[20px] bg-[#201C19] text-white p-4 relative overflow-hidden">
+          <div class="absolute -right-8 -top-8 w-[80px] h-[80px] rounded-full bg-[#D6FF5F]/10 blur-[2px]"></div>
+          <div class="relative">
+            <div class="font-[800] text-[13px]">Session Summary</div>
+            <div class="mono text-[9px] opacity-50 mt-0.5 uppercase">${escapeHtml(DIVISIONS.find(d => d.id === CURRENT_DIVISION_ID)?.name || '')}</div>
+          </div>
+          <div class="relative mt-3 grid grid-cols-2 gap-2">
+            <div class="rounded-[12px] bg-white/5 border border-white/10 p-2.5 text-center">
+              <div class="font-[800] text-[20px] text-[#D6FF5F]">${totalMatches}</div>
+              <div class="mono text-[8px] uppercase opacity-60 mt-0.5">Matches</div>
+            </div>
+            <div class="rounded-[12px] bg-white/5 border border-white/10 p-2.5 text-center">
+              <div class="font-[800] text-[20px] text-[#D6FF5F]">${totalPlayers}</div>
+              <div class="mono text-[8px] uppercase opacity-60 mt-0.5">Players</div>
+            </div>
+            <div class="rounded-[12px] bg-white/5 border border-white/10 p-2.5 text-center">
+              <div class="font-[800] text-[16px]">${avgScore}</div>
+              <div class="mono text-[8px] uppercase opacity-60 mt-0.5">Avg Score</div>
+            </div>
+            <div class="rounded-[12px] bg-white/5 border border-white/10 p-2.5 text-center">
+              <div class="font-[800] text-[16px]">+${biggestBlowout}</div>
+              <div class="mono text-[8px] uppercase opacity-60 mt-0.5">Blowout</div>
+            </div>
+          </div>
+        </div>
+        <div class="rounded-[20px] bg-white border border-[#EAE0D5] p-4">
+          <div class="font-[800] text-[13px] mb-3">Win Distribution</div>
+          <div class="space-y-2">${topBars}</div>
+        </div>
+      </div>
+    </div>`;
 }
 
 /* ================================================================

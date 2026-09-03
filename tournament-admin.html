@@ -296,6 +296,7 @@
         <p class="mono text-[10px] opacity-50 mb-3">Scores, standings, and bracket advancement are handled server-side -- this is the one part of the app where the browser never writes match data directly.</p>
         <div id="matchesActionRow" class="mb-3"></div>
         <div id="standingsWrap" class="mb-4"></div>
+        <div id="statsWrap" class="mb-4"></div>
         <div id="matchesList" class="space-y-4">
           <div class="mono text-[11px] opacity-50">Add a division to see its matches here.</div>
         </div>
@@ -1208,6 +1209,7 @@ async function loadMatchesForDivision(divisionId){
     const matches = matchesSnap.docs.map(d => ({ id: d.id, ...d.data() }));
     renderMatchesActionRow(division, matches);
     renderStandings(standingsSnap.exists ? standingsSnap.data() : null);
+    renderAdminStats(matches);
     renderMatchesList(division, matches);
   } catch(ex) {
     document.getElementById('matchesList').innerHTML = `<div class="mono text-[11px] text-[#8C2C10]">Failed to load matches: ${escapeHtml(ex.message)}</div>`;
@@ -1292,6 +1294,147 @@ function renderStandings(standings){
       { label: 'Status', render: r => statusLabel[r.status] || r.status }, { label: 'Rounds Won', render: r => r.roundsWon },
     ]);
   }
+}
+
+/* ---------- Tournament Match Stats (admin view, per-division) ---------- */
+function renderAdminStats(matches){
+  const wrap = document.getElementById('statsWrap');
+  if(!wrap) return;
+
+  const completed = matches.filter(m => m.status === 'completed' && m.score && m.winnerParticipantId);
+  if(completed.length === 0){
+    wrap.innerHTML = '';
+    return;
+  }
+
+  // Compute per-participant stats
+  const stats = {};
+  completed.forEach(m => {
+    const [idA, idB] = m.participantIds;
+    const [nameA, nameB] = m.participantNames;
+    if(idA === 'BYE' || idB === 'BYE') return;
+    if(!stats[idA]) stats[idA] = { name: nameA, gp: 0, w: 0, l: 0, pf: 0, pa: 0 };
+    if(!stats[idB]) stats[idB] = { name: nameB, gp: 0, w: 0, l: 0, pf: 0, pa: 0 };
+    stats[idA].gp++; stats[idB].gp++;
+    stats[idA].pf += m.score.a; stats[idA].pa += m.score.b;
+    stats[idB].pf += m.score.b; stats[idB].pa += m.score.a;
+    if(m.winnerParticipantId === idA){ stats[idA].w++; stats[idB].l++; }
+    else { stats[idB].w++; stats[idA].l++; }
+  });
+
+  const rows = Object.values(stats).map(s => ({
+    ...s, winPct: s.gp > 0 ? (s.w / s.gp) * 100 : 0, diff: s.pf - s.pa
+  }));
+  rows.sort((a, b) => {
+    if(b.winPct !== a.winPct) return b.winPct - a.winPct;
+    if(b.diff !== a.diff) return b.diff - a.diff;
+    return b.pf - a.pf;
+  });
+
+  const totalMatches = completed.length;
+  const totalPlayers = rows.length;
+  const avgScore = Math.round(completed.reduce((s, m) => s + m.score.a + m.score.b, 0) / (totalMatches * 2));
+  const biggestBlowout = Math.max(...completed.map(m => Math.abs(m.score.a - m.score.b)));
+
+  // Top performers
+  const bestWinPct = rows.filter(r => r.gp >= 2).sort((a, b) => b.winPct - a.winPct)[0];
+  const mostWins = [...rows].sort((a, b) => b.w - a.w)[0];
+  const bestDiff = [...rows].sort((a, b) => b.diff - a.diff)[0];
+
+  const performerCards = [];
+  if(bestWinPct && bestWinPct.gp >= 2) performerCards.push({ icon:'🎯', label:'Best Win%', name: bestWinPct.name, value: `${Math.round(bestWinPct.winPct)}%` });
+  if(mostWins && mostWins.w > 0) performerCards.push({ icon:'🏆', label:'Most Wins', name: mostWins.name, value: `${mostWins.w}W` });
+  if(bestDiff && bestDiff.diff > 0) performerCards.push({ icon:'📈', label:'Best +/−', name: bestDiff.name, value: `+${bestDiff.diff}` });
+
+  // Win distribution bars (top 6)
+  const topBars = rows.slice(0, 6).map(r => {
+    const winW = r.winPct; const lossW = 100 - r.winPct;
+    return `<div class="flex items-center gap-2">
+      <span class="font-[700] text-[11px] truncate w-[100px]">${escapeHtml(r.name)}</span>
+      <div class="flex-1 h-1.5 rounded-full bg-[#F1E9DF] overflow-hidden flex">
+        <div class="h-full bg-[#4ADE80]" style="width:${winW}%"></div>
+        <div class="h-full bg-[#F87171]" style="width:${lossW}%"></div>
+      </div>
+      <span class="mono text-[9px] opacity-60 shrink-0">${r.w}W-${r.l}L</span>
+    </div>`;
+  }).join('');
+
+  // Leaderboard table rows
+  const tableRows = rows.map((r, i) => {
+    const diffStr = r.diff > 0 ? `+${r.diff}` : `${r.diff}`;
+    const diffColor = r.diff > 0 ? 'color:#15803D' : r.diff < 0 ? 'color:#B91C1C' : 'opacity:0.5';
+    const isLeader = i === 0 && r.gp > 0;
+    const rankBg = isLeader ? 'background:#201C19;color:#D6FF5F' : 'background:#F1E9DF;color:rgba(32,28,25,0.7)';
+    return `<tr class="border-t border-[#F1E9DF] hover:bg-[#FFFBF5]"${isLeader ? ' style="background:rgba(214,255,95,0.15)"' : ''}>
+      <td class="py-2 pr-2"><span class="inline-grid place-items-center w-5 h-5 rounded-full text-[9px] font-[800]" style="${rankBg}">${i+1}</span></td>
+      <td class="py-2 pr-3 font-[800] text-[11px]">${escapeHtml(r.name)}</td>
+      <td class="py-2 px-1.5 text-center font-[600]">${r.gp}</td>
+      <td class="py-2 px-1.5 text-center font-[800]" style="color:#15803D">${r.w}</td>
+      <td class="py-2 px-1.5 text-center font-[800]" style="color:#B91C1C">${r.l}</td>
+      <td class="py-2 px-1.5 text-right font-[600]">${r.pf}</td>
+      <td class="py-2 px-1.5 text-right font-[600]" style="opacity:0.7">${r.pa}</td>
+      <td class="py-2 px-1.5 text-right font-[800]" style="${diffColor}">${diffStr}</td>
+      <td class="py-2 pl-2 font-[800]">${Math.round(r.winPct)}<span style="opacity:0.4;font-size:8px">%</span></td>
+    </tr>`;
+  }).join('');
+
+  wrap.innerHTML = `
+    <div class="rounded-[18px] bg-[#FFFBF5] border border-[#EAE0D5] p-4">
+      <div class="flex items-center justify-between flex-wrap gap-2 mb-3">
+        <div class="font-[800] text-[14px]">📊 Match Stats</div>
+        <span class="mono text-[9px] px-2 py-0.5 rounded-full bg-[#201C19] text-white font-[700]">${totalMatches} matches · ${totalPlayers} players</span>
+      </div>
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4">
+        <div class="rounded-[12px] bg-white border border-[#EAE0D5] p-2.5 text-center">
+          <div class="font-[800] text-[18px] text-[#201C19]">${totalMatches}</div>
+          <div class="mono text-[8px] uppercase opacity-60">Matches</div>
+        </div>
+        <div class="rounded-[12px] bg-white border border-[#EAE0D5] p-2.5 text-center">
+          <div class="font-[800] text-[18px] text-[#201C19]">${avgScore}</div>
+          <div class="mono text-[8px] uppercase opacity-60">Avg Score</div>
+        </div>
+        <div class="rounded-[12px] bg-white border border-[#EAE0D5] p-2.5 text-center">
+          <div class="font-[800] text-[18px] text-[#201C19]">+${biggestBlowout}</div>
+          <div class="mono text-[8px] uppercase opacity-60">Biggest Blowout</div>
+        </div>
+        <div class="rounded-[12px] bg-white border border-[#EAE0D5] p-2.5 text-center">
+          <div class="font-[800] text-[18px] text-[#201C19]">${totalPlayers}</div>
+          <div class="mono text-[8px] uppercase opacity-60">Players</div>
+        </div>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div class="md:col-span-2 overflow-x-auto no-scrollbar">
+          <table class="w-full mono text-[10px] whitespace-nowrap">
+            <thead><tr class="text-left text-[8px] uppercase tracking-wider opacity-50 border-b border-[#F1E9DF]">
+              <th class="py-1.5 pr-2 font-[700]">#</th><th class="py-1.5 pr-3 font-[700]">Player / Team</th>
+              <th class="py-1.5 px-1.5 text-center font-[700]">GP</th><th class="py-1.5 px-1.5 text-center font-[700]">W</th>
+              <th class="py-1.5 px-1.5 text-center font-[700]">L</th><th class="py-1.5 px-1.5 text-right font-[700]">PF</th>
+              <th class="py-1.5 px-1.5 text-right font-[700]">PA</th><th class="py-1.5 px-1.5 text-right font-[700]">+/−</th>
+              <th class="py-1.5 pl-2 font-[700]">Win%</th>
+            </tr></thead>
+            <tbody>${tableRows}</tbody>
+          </table>
+        </div>
+        <div class="space-y-3">
+          <div>
+            <div class="mono text-[9px] uppercase tracking-widest opacity-50 font-[700] mb-2">Top Performers</div>
+            ${performerCards.length ? performerCards.map(c => `
+              <div class="flex items-center gap-2 p-2 rounded-[10px] bg-white border border-[#EAE0D5] mb-1.5">
+                <span class="text-[16px]">${c.icon}</span>
+                <div class="flex-1 min-w-0">
+                  <div class="mono text-[8px] uppercase opacity-60 font-[700]">${c.label}</div>
+                  <div class="font-[800] text-[11px] truncate">${escapeHtml(c.name)}</div>
+                </div>
+                <div class="font-[800] text-[14px]">${c.value}</div>
+              </div>`).join('') : '<div class="mono text-[10px] opacity-50">Not enough data</div>'}
+          </div>
+          <div>
+            <div class="mono text-[9px] uppercase tracking-widest opacity-50 font-[700] mb-2">Win Distribution</div>
+            <div class="space-y-1.5">${topBars || '<div class="mono text-[10px] opacity-50">No data</div>'}</div>
+          </div>
+        </div>
+      </div>
+    </div>`;
 }
 
 function matchStatusBadge(status){

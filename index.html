@@ -121,9 +121,9 @@
               <div id="heroLocation" class="inline-flex items-center gap-2 px-3 h-7 rounded-full bg-white/10 border border-white/10 mono text-[11px] tracking-widest uppercase">Single Court</div>
               <h1 id="heroTitle" class="mt-4 text-[32px] md:text-[44px] font-[800] leading-[0.92] tracking-[-0.04em] max-w-[16ch]">Book the court.<br/>Run the queue.</h1>
               <div class="mt-4 flex flex-wrap gap-2">
-                <div id="chipHourly" class="px-3 py-1.5 rounded-full bg-[#D6FF5F] text-[#201C19] mono text-[11px] font-[700]">₱300 / hour • 1PM–10PM</div>
-                <div id="chipQueue" class="px-3 py-1.5 rounded-full bg-white/10 border border-white/15 mono text-[11px]">₱100 / head • 7AM–12PM Queue</div>
-                <div id="chipOpenPlay" class="hidden px-3 py-1.5 rounded-full bg-[#EDE8FF] border border-[#D8D0FF] mono text-[11px] font-[700] text-[#5B4FA8]">🏓 Open Play Today</div>
+                <div id="chipHourly" class="px-3 py-1.5 rounded-full bg-[#D6FF5F] text-[#201C19] mono text-[11px] font-[700]">₱300 / hour • Reservations</div>
+                <div id="chipQueue" class="px-3 py-1.5 rounded-full bg-white/10 border border-white/15 mono text-[11px]">₱100 / head • Queue</div>
+                <div id="chipOpenPlay" class="px-3 py-1.5 rounded-full bg-[#EDE8FF] border border-[#D8D0FF] mono text-[11px] font-[700] text-[#5B4FA8]">₱120 / head • Open Play</div>
               </div>
             </div>
             <div class="bg-white/5 border border-white/10 rounded-[16px] p-3 w-full md:w-[240px]">
@@ -1750,10 +1750,11 @@ function applyBranding(){
     else { wm.classList.add('hidden'); wm.removeAttribute('src'); }
   }
   // Rates + hours labels
-  setText('chipHourly', `${fmtMoney(CLIENT.rates.hourly)} / hour • ${_hh12(SCHED.bookStart)}–${_hh12(SCHED.close)}`);
-  setText('chipQueue', `${fmtMoney(CLIENT.rates.queuePerHead)} / head • ${_hh12(SCHED.queueStart)}–${_hh12(SCHED.queueEnd)} Queue`);
-  // Open Play indicator: show if Open Play is set up for today
-  updateOpenPlayChip();
+  setText('chipHourly', `${fmtMoney(CLIENT.rates.hourly)} / hour • Reservations`);
+  setText('chipQueue', `${fmtMoney(CLIENT.rates.queuePerHead)} / head • Queue`);
+  // Open Play rate chip (always visible)
+  const openPlayRate = CLIENT.rates.openPlayPerHead || CLIENT.rates.queuePerHead;
+  setText('chipOpenPlay', `${fmtMoney(openPlayRate)} / head • Open Play`);
   setText('payRateHourly', `${fmtMoney(CLIENT.rates.hourly)} / hour`);
   setText('payRateHourlyLabel', `Reservation (${_hh12(SCHED.bookStart)}–${_hh12(SCHED.close)})`);
   setText('payRateQueue', `${fmtMoney(CLIENT.rates.queuePerHead)} / head`);
@@ -5615,21 +5616,6 @@ function renderOpenPlayList(){
       toast('Open play removed');
     });
   });
-  // Update Open Play chip in header
-  updateOpenPlayChip();
-}
-
-function updateOpenPlayChip(){
-  const chipOpenPlay = document.getElementById('chipOpenPlay');
-  if(!chipOpenPlay) return;
-  const todayStr = fmtISO(new Date());
-  const todayOpenPlays = openPlays.filter(op => op.date === todayStr);
-  if(todayOpenPlays.length > 0){
-    chipOpenPlay.textContent = `🏓 Open Play Today (${todayOpenPlays.length} block${todayOpenPlays.length > 1 ? 's' : ''})`;
-    chipOpenPlay.classList.remove('hidden');
-  } else {
-    chipOpenPlay.classList.add('hidden');
-  }
 }
 
 document.getElementById('openPlayForm').addEventListener('submit', async e=>{

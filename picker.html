@@ -480,7 +480,7 @@ body{
   if (activeClient) {
     // Tenant already selected — go to main app immediately
     localStorage.setItem(LS_TENANT, activeClient);
-    window.location.replace('/app?client=' + encodeURIComponent(activeClient));
+    window.location.replace('/?client=' + encodeURIComponent(activeClient));
     return;
   }
 
@@ -515,7 +515,10 @@ body{
   async function loadTenants() {
     showState('loading');
     try {
-      const snap = await db.collection('platformTenants').where('status', '==', 'active').get();
+      // tenantDirectory (not platformTenants) is the public-readable mirror --
+      // platformTenants holds billing/credit data and is locked to superadmin
+      // reads only, so a public picker page can never query it directly.
+      const snap = await db.collection('tenantDirectory').where('status', '==', 'active').get();
       allTenants = snap.docs.map(d => {
         const data = d.data();
         return {
@@ -583,7 +586,7 @@ body{
   // ── Select tenant ──────────────────────────────────────
   function selectTenant(clientId) {
     localStorage.setItem(LS_TENANT, clientId);
-    window.location.href = '/app?client=' + encodeURIComponent(clientId);
+    window.location.href = '/?client=' + encodeURIComponent(clientId);
   }
 
   // ── Search ─────────────────────────────────────────────

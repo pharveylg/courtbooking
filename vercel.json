@@ -61,6 +61,7 @@
     { "source": "/icons/(.*)", "destination": "/icons/$1" },
     { "source": "/app", "destination": "/index.html" },
     { "source": "/app/(.*)", "destination": "/index.html" },
+    { "source": "/", "has": [{ "type": "query", "key": "client" }], "destination": "/index.html" },
     { "source": "/superadmin", "destination": "/superadmin.html" },
     { "source": "/superadmin.html", "destination": "/superadmin.html" },
     { "source": "/store", "destination": "/store.html" },

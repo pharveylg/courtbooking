@@ -2037,9 +2037,14 @@ function getCurrentTenant() {
     return storedClient;
   }
 
-  // Strategy 3: Path-based (e.g., dula-hq.vercel.app/demo)
+  // Strategy 3: Path-based (e.g., dula-hq.vercel.app/demo). Reserved route
+  // segments never count as a tenant slug -- vercel.json rewrites /app (and
+  // /app/*) straight to this same file with no query param when a visitor
+  // hits it directly, and without this exclusion the "app" path segment
+  // itself used to get misread as tenant "app".
+  const RESERVED_PATH_SEGMENTS = ['app', 'picker', 'superadmin', 'store', 'tournament-admin', 'tournament', 'gallery'];
   const pathParts = window.location.pathname.split('/').filter(p => p);
-  if (pathParts.length > 0 && /^[a-z0-9-]+$/.test(pathParts[0])) {
+  if (pathParts.length > 0 && /^[a-z0-9-]+$/.test(pathParts[0]) && !RESERVED_PATH_SEGMENTS.includes(pathParts[0])) {
     return pathParts[0];
   }
   

@@ -86,14 +86,23 @@ const tenants = [
 ];
 
 async function seed() {
-  console.log(`🌱 Seeding ${tenants.length} tenant(s) into tenantDirectory...\n`);
+  console.log(`🌱 Seeding ${tenants.length} tenant(s) into platformTenants + tenantDirectory...\n`);
 
   const batch = db.batch();
 
   for (const tenant of tenants) {
-    const ref = db.collection('tenantDirectory').doc(tenant.slug);
     const { slug, ...data } = tenant;
-    batch.set(ref, {
+    
+    // Write to platformTenants (private, superadmin-only)
+    const platformRef = db.collection('platformTenants').doc(slug);
+    batch.set(platformRef, {
+      ...data,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+
+    // Mirror to tenantDirectory (public, readable by picker)
+    const directoryRef = db.collection('tenantDirectory').doc(slug);
+    batch.set(directoryRef, {
       ...data,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     }, { merge: true });
@@ -103,7 +112,7 @@ async function seed() {
 
   await batch.commit();
 
-  console.log(`\n✅ Done! ${tenants.length} tenant(s) written to tenantDirectory.\n`);
+  console.log(`\n✅ Done! ${tenants.length} tenant(s) written to platformTenants + tenantDirectory.\n`);
 }
 
 seed().catch(err => {

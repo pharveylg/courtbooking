@@ -49,6 +49,26 @@
         "destination": "/index.html"
       },
       {
+        "source": "/superadmin",
+        "destination": "/superadmin.html"
+      },
+      {
+        "source": "/store",
+        "destination": "/store.html"
+      },
+      {
+        "source": "/tournament",
+        "destination": "/tournament.html"
+      },
+      {
+        "source": "/tournament-admin",
+        "destination": "/tournament-admin.html"
+      },
+      {
+        "source": "/gallery",
+        "destination": "/gallery.html"
+      },
+      {
         "source": "**",
         "destination": "/picker.html"
       }

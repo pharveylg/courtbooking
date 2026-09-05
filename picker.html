@@ -633,27 +633,37 @@ body{
   const installDismiss = document.getElementById('installDismiss');
 
   const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
-  const wasDismissed = localStorage.getItem('pwa_install_dismissed');
 
-  if (!isStandalone && !wasDismissed) {
+  // Always show install bar if not already installed (no dismiss memory)
+  if (!isStandalone) {
+    installBar.style.display = '';
+
     window.addEventListener('beforeinstallprompt', (e) => {
       e.preventDefault();
       deferredPrompt = e;
-      installBar.style.display = '';
     });
   }
 
   installBtn.addEventListener('click', async () => {
-    if (!deferredPrompt) return;
-    deferredPrompt.prompt();
-    const { outcome } = await deferredPrompt.userChoice;
-    if (outcome === 'accepted') installBar.style.display = 'none';
-    deferredPrompt = null;
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      if (outcome === 'accepted') installBar.style.display = 'none';
+      deferredPrompt = null;
+    } else {
+      // No beforeinstallprompt (iOS or already dismissed by browser)
+      // Show manual install instructions
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+      if (isIOS) {
+        alert('To install: tap the Share button (□↑) then "Add to Home Screen"');
+      } else {
+        alert('To install: click the install icon (⊕) in your browser\'s address bar, or open the browser menu and select "Install app"');
+      }
+    }
   });
 
   installDismiss.addEventListener('click', () => {
     installBar.style.display = 'none';
-    localStorage.setItem('pwa_install_dismissed', '1');
   });
 
   window.addEventListener('appinstalled', () => {

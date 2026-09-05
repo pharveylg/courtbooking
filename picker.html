@@ -582,7 +582,7 @@ body{
   // ── Select tenant ──────────────────────────────────────
   function selectTenant(clientId) {
     localStorage.setItem(LS_TENANT, clientId);
-    window.location.href = '/?client=' + encodeURIComponent(clientId);
+    window.open('/?client=' + encodeURIComponent(clientId), '_blank');
   }
 
   // ── Search ─────────────────────────────────────────────

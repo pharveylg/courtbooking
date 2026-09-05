@@ -2069,8 +2069,18 @@ let clientConfigCache = new Map(); // Cache for client configs
 
 console.log('[CourtBooking] Tenant ID:', currentClientId || '(none - demo mode)');
 
-// Redirect to facility picker if no tenant is selected
-if (!currentClientId && FB_ENABLED) {
+// Root URL (/) always shows picker unless ?client=xxx is present.
+// This ensures users always see the facility picker landing page at the root,
+// and the app is only accessed via explicit tenant links (/?client=xxx, /samahan, etc.)
+const urlParams = new URLSearchParams(window.location.search);
+const hasClientParam = urlParams.has('client');
+const isRootPath = window.location.pathname === '/' || window.location.pathname === '/index.html' || window.location.pathname === '';
+
+if (isRootPath && !hasClientParam && FB_ENABLED) {
+  // At root URL with no ?client param → always show picker
+  window.location.replace('/picker.html');
+} else if (!currentClientId && FB_ENABLED) {
+  // Not at root but no tenant found → also show picker
   window.location.replace('/picker.html');
 } else {
   // Tenant exists — show the page

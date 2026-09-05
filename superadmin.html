@@ -1251,6 +1251,8 @@ function renderTenantRow(slug, data, status){
     const wasActive = e.target.dataset.current === 'true';
     try {
       await db.doc(`platformTenants/${slug}`).update({ status: wasActive ? 'suspended' : 'active' });
+      // Mirror status to public tenantDirectory
+      await db.doc(`tenantDirectory/${slug}`).set({ status: wasActive ? 'suspended' : 'active' }, { merge: true });
       // Mirrored onto clients/{slug}/status/state -- a separate doc from
       // the open-write config/state, locked in firestore.rules to
       // superadmin-only writes, since this is the one flag where "which
@@ -1271,6 +1273,8 @@ function renderTenantRow(slug, data, status){
       const oldName = data.businessName || slug;
       await db.doc(`clients/${slug}/config/state`).update({ 'data.business.name': newName, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
       await db.doc(`platformTenants/${slug}`).set({ businessName: newName }, { merge: true });
+      // Mirror name to public tenantDirectory
+      await db.doc(`tenantDirectory/${slug}`).set({ businessName: newName }, { merge: true });
       await logAudit('rename', slug, `"${oldName}" -> "${newName}"`);
       toast('Business name updated');
       loadTenants();
@@ -1561,6 +1565,12 @@ document.getElementById('createTenantForm').addEventListener('submit', async (e)
         status: 'active',
         createdAt: firebase.firestore.FieldValue.serverTimestamp()
       }, { merge: true });
+      // Mirror to public tenantDirectory for the picker page
+      await db.doc(`tenantDirectory/${slug}`).set({
+        businessName: existingName,
+        status: 'active',
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
       if(watermarkUrl){
         await db.doc(`clients/${slug}/config/state`).update({ 'data.branding.watermarkUrl': watermarkUrl, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
       }
@@ -1574,6 +1584,12 @@ document.getElementById('createTenantForm').addEventListener('submit', async (e)
         status: 'active',
         createdAt: firebase.firestore.FieldValue.serverTimestamp()
       });
+      // Mirror to public tenantDirectory for the picker page
+      await db.doc(`tenantDirectory/${slug}`).set({
+        businessName: name,
+        status: 'active',
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
       await logAudit('create-tenant', slug, `Created tenant "${name}"`);
       toast(`Tenant "${name}" created`);
     }

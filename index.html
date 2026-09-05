@@ -45,7 +45,7 @@
 }
 </style>
 </head>
-<body class="bg-[#FFFBF5] text-[#201C19] antialiased selection:bg-[#D6FF5F]">
+<body class="bg-[#FFFBF5] text-[#201C19] antialiased selection:bg-[#D6FF5F]" style="visibility:hidden">
 
 
 <!-- Tenant Picker Overlay -->
@@ -2072,6 +2072,9 @@ console.log('[CourtBooking] Tenant ID:', currentClientId || '(none - demo mode)'
 // Redirect to facility picker if no tenant is selected
 if (!currentClientId && FB_ENABLED) {
   window.location.replace('/picker.html');
+} else {
+  // Tenant exists — show the page
+  document.body.style.visibility = 'visible';
 }
 
 /* ---------- Normalize tenant config: adapt the flat schema written by the

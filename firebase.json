@@ -34,15 +34,12 @@
       "SUPERADMIN_GUIDE.md",
       "ARCHITECTURE_DIAGRAM.html"
     ],
-    "redirects": [
-      {
-        "source": "/",
-        "destination": "/picker.html",
-        "type": 302
-      }
-    ],
     "cleanUrls": false,
     "rewrites": [
+      {
+        "source": "/",
+        "destination": "/index.html"
+      },
       {
         "source": "/app",
         "destination": "/index.html"

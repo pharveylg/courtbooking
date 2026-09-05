@@ -2,14 +2,16 @@
 /**
  * seed-tenant-directory.js
  * ────────────────────────
- * Seeds the Firestore `platformTenants` collection with public tenant info.
+ * Seeds the Firestore `tenantDirectory` collection with public tenant info.
+ * This is the public-readable mirror that the picker page queries.
+ * (platformTenants holds billing/credit data and is locked to superadmin only.)
  *
  * Usage:
  *   1. Run: gcloud auth application-default login
  *   2. Run: node seed-tenant-directory.js
  *
  * If you don't have gcloud CLI, add tenants manually in Firebase Console:
- *   Firestore Database → + Start collection → platformTenants
+ *   Firestore Database → + Start collection → tenantDirectory
  *   Document ID: your-tenant-slug
  *   Fields: businessName (string), status (string 'active'), logoUrl (string), sub (string), location (string)
  */
@@ -84,12 +86,12 @@ const tenants = [
 ];
 
 async function seed() {
-  console.log(`🌱 Seeding ${tenants.length} tenant(s) into platformTenants...\n`);
+  console.log(`🌱 Seeding ${tenants.length} tenant(s) into tenantDirectory...\n`);
 
   const batch = db.batch();
 
   for (const tenant of tenants) {
-    const ref = db.collection('platformTenants').doc(tenant.slug);
+    const ref = db.collection('tenantDirectory').doc(tenant.slug);
     const { slug, ...data } = tenant;
     batch.set(ref, {
       ...data,
@@ -101,7 +103,7 @@ async function seed() {
 
   await batch.commit();
 
-  console.log(`\n✅ Done! ${tenants.length} tenant(s) written to platformTenants.\n`);
+  console.log(`\n✅ Done! ${tenants.length} tenant(s) written to tenantDirectory.\n`);
 }
 
 seed().catch(err => {

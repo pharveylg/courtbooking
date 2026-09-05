@@ -474,15 +474,11 @@ body{
   // ── Check stored tenant ────────────────────────────────
   const urlParams = new URLSearchParams(window.location.search);
   const queryClient = urlParams.get('client');
-  const storedClient = localStorage.getItem(LS_TENANT);
-  const activeClient = queryClient || storedClient;
 
-  if (activeClient) {
-    // Tenant already selected — go to main app immediately
-    localStorage.setItem(LS_TENANT, activeClient);
-    window.location.replace('/?client=' + encodeURIComponent(activeClient));
-    return;
-  }
+  // Removed auto-redirect: picker always shows the picker page.
+  // Users explicitly click a tile to go to /?client=xxx.
+  // (Previously this would auto-redirect if localStorage had a saved tenant,
+  // which caused the root URL to skip the picker and go straight to the app.)
 
   // ── DOM refs ───────────────────────────────────────────
   const searchInput = document.getElementById('searchInput');

@@ -2117,11 +2117,12 @@ if (isRootPath && !hasClientParam && FB_ENABLED) {
   // Not at root but no tenant found → also show picker
   const ls2 = document.getElementById('loadingScreen'); if (ls2) ls2.style.display = 'none';
   window.location.replace('/picker.html');
-} else {
-  // Tenant exists — hide loading screen and show the page
-  const loadingScreen = document.getElementById('loadingScreen');
-  if (loadingScreen) loadingScreen.style.display = 'none';
 }
+// Tenant exists: the loading screen stays up here -- it's only hidden once
+// initializeApp() below has actually fetched and applied this tenant's real
+// branding (applyBranding()), not the instant we know a tenant ID exists.
+// Hiding it here instead used to reveal the generic default-themed page for
+// however long the Firestore round-trip took.
 
 /* ---------- Normalize tenant config: adapt the flat schema written by the
    setup-sample-tenants scripts (businessName, contactPhone, theme.primaryColor, ...)
@@ -7609,6 +7610,10 @@ async function initializeApp() {
   computeSchedule();         // recompute SCHED/STAFF_DAYS from the tenant's hours
   computeHours();            // recompute HOURS/ALL_HOURS_START from SCHED
   applyBranding();           // white-label: brand, theme labels, contact, footer
+
+  // Only now does the page actually reflect this tenant -- safe to reveal it.
+  const loadingScreen = document.getElementById('loadingScreen');
+  if (loadingScreen) loadingScreen.style.display = 'none';
 
   if (CLIENT.bookingPaused) {
     showPausedState();

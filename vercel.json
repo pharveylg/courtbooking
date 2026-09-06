@@ -4,7 +4,9 @@
   "cleanUrls": true,
   "trailingSlash": false,
   "redirects": [
-    { "source": "/", "missing": [{ "type": "query", "key": "client" }], "destination": "/picker.html", "permanent": false }
+    { "source": "/", "missing": [{ "type": "query", "key": "client" }], "destination": "/picker.html", "permanent": false },
+    { "source": "/app", "destination": "/", "permanent": false },
+    { "source": "/app/(.*)", "destination": "/", "permanent": false }
   ],
   "headers": [
     {
@@ -62,8 +64,6 @@
     { "source": "/sw.js", "destination": "/sw.js" },
     { "source": "/manifest.json", "destination": "/manifest.json" },
     { "source": "/icons/(.*)", "destination": "/icons/$1" },
-    { "source": "/app", "destination": "/index.html" },
-    { "source": "/app/(.*)", "destination": "/index.html" },
     { "source": "/", "has": [{ "type": "query", "key": "client" }], "destination": "/index.html" },
     { "source": "/superadmin", "destination": "/superadmin.html" },
     { "source": "/superadmin.html", "destination": "/superadmin.html" },

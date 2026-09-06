@@ -34,19 +34,19 @@
       "name": "Book Court",
       "short_name": "Book",
       "description": "Reserve a court",
-      "url": "/app?tab=book&source=shortcut"
+      "url": "/?tab=book&source=shortcut"
     },
     {
       "name": "Queue",
       "short_name": "Queue",
       "description": "Join the walk-in queue",
-      "url": "/app?tab=queue&source=shortcut"
+      "url": "/?tab=queue&source=shortcut"
     },
     {
       "name": "Match Stats",
       "short_name": "Stats",
       "description": "View match statistics",
-      "url": "/app?tab=stats&source=shortcut"
+      "url": "/?tab=stats&source=shortcut"
     }
   ]
 }

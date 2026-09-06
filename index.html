@@ -45,30 +45,37 @@
 }
 </style>
 </head>
-<body class="bg-[#FFFBF5] text-[#201C19] antialiased selection:bg-[#D6FF5F]" style="visibility:hidden">
+<body class="bg-[#FFFBF5] text-[#201C19] antialiased selection:bg-[#D6FF5F]">
 
-<!-- Loading Screen (shown while tenant theme loads) -->
-<div id="loadingScreen" class="fixed inset-0 z-[99999] bg-[#FFFBF5] flex flex-col items-center justify-center" style="visibility:visible">
-  <div class="text-center">
-    <div class="w-12 h-12 mx-auto mb-4 rounded-full bg-[#201C19] text-white grid place-items-center font-black text-[16px] animate-pulse">CB</div>
-    <div class="text-[20px] font-[800] tracking-[-0.02em] text-[#201C19]" id="loadingTenantName">Loading...</div>
-    <div class="mono text-[11px] opacity-60 mt-2">Preparing your booking page</div>
+<!-- Loading Screen (covers everything until theme loads) -->
+<div id="loadingScreen" style="position:fixed;top:0;left:0;right:0;bottom:0;z-index:999999;background:#FFFBF5;display:flex;flex-direction:column;align-items:center;justify-content:center">
+  <div style="text-align:center">
+    <div id="loadingLogo" style="width:48px;height:48px;margin:0 auto 16px;border-radius:50%;background:#201C19;color:white;display:grid;place-items:center;font-weight:900;font-size:16px;animation:pulse 2s cubic-bezier(0.4,0,0.6,1) infinite">CB</div>
+    <div id="loadingTenantName" style="font-size:20px;font-weight:800;letter-spacing:-0.02em;color:#201C19">Loading...</div>
+    <div style="font-family:'JetBrains Mono',monospace;font-size:11px;opacity:0.6;margin-top:8px">Preparing your booking page</div>
   </div>
+  <style>@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}</style>
 </div>
 
 <script>
-// Show tenant name on loading screen immediately
+// Show tenant name on loading screen immediately (runs before anything else)
 (function() {
-  const params = new URLSearchParams(window.location.search);
-  const clientParam = params.get('client');
-  const storedClient = localStorage.getItem('cb_selected_tenant');
-  const tenantSlug = clientParam || storedClient || '';
-  
-  const nameEl = document.getElementById('loadingTenantName');
+  var params = new URLSearchParams(window.location.search);
+  var clientParam = params.get('client');
+  var storedClient = localStorage.getItem('cb_selected_tenant');
+  var tenantSlug = clientParam || storedClient || '';
+  var nameEl = document.getElementById('loadingTenantName');
+  var logoEl = document.getElementById('loadingLogo');
   if (nameEl && tenantSlug) {
-    // Convert slug to title case: "white-kitchen" → "White Kitchen"
-    const prettyName = tenantSlug.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+    var prettyName = tenantSlug.split('-').map(function(w) { return w.charAt(0).toUpperCase() + w.slice(1); }).join(' ');
     nameEl.textContent = 'Loading ' + prettyName + '...';
+  }
+  // If no tenant and at root, hide loading screen (redirect will happen)
+  var pathname = window.location.pathname;
+  var isRoot = pathname === '/' || pathname === '/index.html' || pathname === '';
+  if (!tenantSlug && isRoot && !clientParam) {
+    var ls = document.getElementById('loadingScreen');
+    if (ls) ls.style.display = 'none';
   }
 })();
 </script>
@@ -2114,8 +2121,7 @@ if (isRootPath && !hasClientParam && FB_ENABLED) {
   const ls2 = document.getElementById('loadingScreen'); if (ls2) ls2.style.display = 'none';
   window.location.replace('/picker.html');
 } else {
-  // Tenant exists — show the page
-  document.body.style.visibility = 'visible';
+  // Tenant exists — hide loading screen and show the page
   const loadingScreen = document.getElementById('loadingScreen');
   if (loadingScreen) loadingScreen.style.display = 'none';
 }

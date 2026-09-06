@@ -3,6 +3,9 @@
   "outputDirectory": ".",
   "cleanUrls": true,
   "trailingSlash": false,
+  "redirects": [
+    { "source": "/", "missing": [{ "type": "query", "key": "client" }], "destination": "/picker.html", "permanent": false }
+  ],
   "headers": [
     {
       "source": "/(.*)",

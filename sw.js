@@ -3,7 +3,7 @@
 // Caches app shell for offline support + fast repeat loads
 // ═══════════════════════════════════════════════════════════════
 
-const CACHE_NAME = 'courtbooking-v1';
+const CACHE_NAME = 'courtbooking-v2';
 
 // App shell: everything needed to render the app offline
 const APP_SHELL = [
@@ -85,11 +85,12 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // HTML pages: stale-while-revalidate
+  // HTML pages: network-first (branding/behavior must reflect the latest
+  // deploy immediately; cache is only a fallback for offline use)
   if (request.headers.get('Accept')?.includes('text/html') ||
       url.pathname.endsWith('.html') ||
       url.pathname === '/') {
-    event.respondWith(staleWhileRevalidate(request));
+    event.respondWith(networkFirst(request, CACHE_NAME));
     return;
   }
 
@@ -142,19 +143,4 @@ async function networkFirst(request, cacheName) {
     const cached = await caches.match(request);
     return cached || new Response('Offline', { status: 503, statusText: 'Service Unavailable' });
   }
-}
-
-// Stale-while-revalidate: instant load from cache, update in background
-async function staleWhileRevalidate(request) {
-  const cache = await caches.open(CACHE_NAME);
-  const cached = await cache.match(request);
-
-  const fetchPromise = fetch(request).then((response) => {
-    if (response.ok) {
-      cache.put(request, response.clone());
-    }
-    return response;
-  }).catch(() => cached);
-
-  return cached || fetchPromise;
 }

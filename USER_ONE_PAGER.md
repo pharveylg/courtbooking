@@ -1,6 +1,6 @@
 # Quick Guide for Players
 
-Use the booking link your facility shared with you (it looks like `.../?client=yourfacility`). Everyone sees four tabs: **Book**, **Queue**, **Find a Game**, and **Payment**.
+Use the booking link your facility shared with you (it looks like `.../?client=yourfacility`). No link handy? Visit the site's bare domain and pick your facility from the list — your choice is remembered on that device, so you won't see the picker again until you tap **Switch Facility**. Everyone sees four tabs: **Book**, **Queue**, **Find a Game**, and **Payment**.
 
 ## Book a Court
 
@@ -22,10 +22,12 @@ Your reservation starts as **Pending**. Staff move it to **Reserved** once they'
 
 Looking for people to play with instead of booking solo?
 
-- Browse **Find a Game** for open pickup games and tap in to join one.
+- Browse **Find a Game** for open pickup games and tap in to join one — free, no payment needed.
 - Or **+ Create Game** with a date, time, skill level, format, and how many players you need.
 - Already have a Reserved booking? Open your game and enter your **Booking PIN** to link it to that reservation.
 - "My Games" on this tab shows what you've created or joined on this device.
+
+**"Open Play" cards are different** — these are staff-hosted sessions, not player-created. If the card shows "Public Joining," tap **Join & Pay**: you'll enter your name/email and land straight on the **Payment** tab to pay the per-person rate shown on the card. That creates a Pending booking for you, same as reserving a court — staff confirm it once they've verified your payment, just like any other reservation.
 
 ## Use the Queue
 
@@ -33,7 +35,7 @@ No reservation needed — the **Queue** tab is a free walk-in rotation board:
 
 - Create or join a queue (singles or doubles).
 - Matches rotate by Winner Stays or Fixed Order, whichever the queue creator picked.
-- Whoever created the queue set a PIN for it — you'll need that PIN only if you're resetting, deleting, or removing a player, not to just play.
+- Whoever created the queue set a PIN for it — you'll need that PIN to open the queue's live scoreboard/management screen at all, so get it from the creator if you're helping run the session.
 - Queues clear out automatically after midnight.
 
 ## A Few Reminders

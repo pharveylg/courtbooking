@@ -8,7 +8,9 @@ If you manage the platform itself (creating tenants, billing, cross-tenant repor
 
 ## 1. Your Site & Multi-Tenancy
 
-Your booking site is reachable at `https://<the platform's domain>/?client=<your-slug>` — the `?client=` part is what tells the app which facility's data to load. Bookmark and share the full link, including the `?client=` part; sharing just the bare domain will not point guests to your facility.
+Your booking site is reachable at `https://<the platform's domain>/?client=<your-slug>` — the `?client=` part is what tells the app which facility's data to load. Bookmark and share the full link, including the `?client=` part; a guest who visits the bare domain with no `?client=` lands on the platform's facility picker instead (a searchable list of every active facility) rather than going straight to yours.
+
+Once someone has selected your facility once (via your link or the picker), the site remembers their choice on that device/browser and skips the picker on their next visit. The **Switch Facility** button in the header (available to everyone, not just staff) clears that and sends them back to the picker.
 
 Everything you and your players do is scoped to your slug — courts, bookings, pricing, operating hours, staff-reserved hours, queues, and Open Games are all independent per tenant. Nothing you do here affects any other facility on the platform.
 
@@ -18,7 +20,7 @@ Everything you and your players do is scoped to your slug — courts, bookings, 
 2. Enter your Admin PIN. The default PIN for a newly-provisioned tenant is `1234` unless whoever set up your site changed it — change it yourself under Admin → Security as your first step (Section 10).
 3. Once unlocked, two tabs that were hidden become visible in the nav: **Bookings** and **Admin**. Everyone else (players, guests) only ever sees Book, Queue, Find a Game, and Payment.
 
-Unlocking is per-browser: if you switch devices or clear your browser data, you'll need to enter the PIN again. There's no separate staff account/login — the PIN is the only gate.
+Unlocking is per-browser tab session and per-facility: if you switch devices, clear your browser data, or use **Switch Facility** to move to a different tenant, you'll need to enter the PIN again — Admin always starts locked on a fresh visit to any facility, including your own after switching away and back. There's no separate staff account/login — the PIN is the only gate.
 
 ## 3. Confirming Reservations (Payment Verification)
 
@@ -98,17 +100,36 @@ Admin → **Create Open Play Entry**. This is a simpler, one-off version of Staf
 
 Note this form's time dropdowns are based on your Facility Default hours (Section 6), not a specific court's custom hours, even if you then assign the block to a particular court.
 
-This is different from **Find a Game** (Section 9 below), which is a public, player-run matchmaking feature, not something staff create.
+Beyond date/time/court, every block also has:
+
+| Field | What it does |
+|---|---|
+| **Game Mode** | Doubles or Singles — the same two options as the Queue tab's Game Mode |
+| **Rotation Rule** | Same list as Queue (Winner Stays, Four Off Four On, Fixed/Timed Rotation, Partner Rotation, Fixed Pairs) — informational, describing how you intend the session to run |
+| **Rate / person** | What you charge each person who joins online. Defaults to your Queue per-head rate; change it per block as needed |
+| **Public Joining** | **Allowed** publishes the block to the public **Find a Game** tab with a working "Join & Pay" button; **Restricted** still creates the block (still shows on your schedule as blocked) but walk-ins must join in person — nothing appears for online joining |
+
+When Public Joining is Allowed, the block appears on **Find a Game** as an "Open Play" card showing the date, Game Mode, Rotation Rule, and rate — see Section 9 for what happens when someone taps Join. Deleting the block also removes its Find a Game listing.
 
 ## 9. Find a Game (Open Games) — What Your Players See
 
-You don't create these — players do, from the public **Find a Game** tab. It's worth understanding so you can help players who ask about it:
+Find a Game shows two kinds of entries: **player-created pickup games** (below) and your **Open Play blocks** with Public Joining Allowed (Section 8). Both live in the same list, but they behave differently:
+
+**Player-created games** — you don't create these, players do:
 
 - Any player can create an open game: date, start time, skill level, format (singles/doubles/open), players needed, an optional court, notes, and their name + email.
 - Other players browse open games and join until it's full.
 - A player can optionally **link** their open game to a real court reservation using their **Booking PIN** (the 4-digit PIN they chose when they reserved — see Section 3 of the player guide) once that reservation is marked Reserved — this ties the pickup game to an actual paid slot on your schedule.
 - There's a soft rate limit on how many games one email can create in a short window, meant to discourage spam/abuse — a player who hits it will see a message asking them to wait, not a hard account lock.
 - Games auto-expire (marked completed/expired) once their time window has passed, and a creator can cancel their own game before then.
+- Joining one of these is free — no payment step, since it's just players coordinating who's showing up.
+
+**Your Open Play blocks** — this is where you get paid:
+
+- A player taps **Join & Pay** on your block's card, enters their name/email, and is immediately taken to the **Payment** tab with your configured rate shown.
+- Behind the scenes this creates a real **Pending** booking for that player, tagged "Open Play join" — it shows up in **Confirm & Tag Bookings** (Section 3) exactly like a normal reservation, with the per-person rate shown as a badge next to their name.
+- Confirm it the same way you confirm any Pending booking: verify their payment externally, then flip the dropdown to Reserved. This also marks them "paid" on the Find a Game listing so other players can see who's already square with you.
+- Because many people can join the same Open Play slot (unlike an exclusive court reservation), you'll see one Pending entry per joiner, not one shared entry — confirm each person's payment individually as it comes in.
 
 ## 10. Branding & Site Settings
 
@@ -142,7 +163,7 @@ The **Queue** tab is public, self-serve, and not tied to reservations at all —
 - Rotation styles: Winner Stays or Fixed Order.
 - Exact scores can be logged per match.
 - Mid-queue joining is allowed if the queue's creator enabled it.
-- Each queue has its own PIN (set by whoever created it) required to reset, delete, or remove a player — separate from your facility's Admin PIN.
+- Each queue has its own PIN (set by whoever created it), separate from your facility's Admin PIN — it's required just to **open** that queue's live scoreboard/management view at all, not only for reset/delete/remove-player. Anyone with the PIN can manage the session (record scores, reset, delete, remove a player) once they're in; without it, they can't get past the door.
 
 Queue sessions automatically expire and get cleared out after midnight, on whichever page load first notices the day has changed — there's no separate cleanup step for you to run.
 

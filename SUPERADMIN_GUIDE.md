@@ -8,7 +8,7 @@ If you are looking for the guide for court/facility staff running their own tena
 
 ## 1. What the Superadmin Console Is
 
-- URL: `https://<your-domain>/superadmin.html` (also reachable at `/superadmin` — both are configured to route to the same file).
+- URL: `https://<your-domain>/superadmin.html` (also reachable at `/superadmin` — both are configured to route to the same file). This is the **only** way in — no tenant site, the public facility picker, or any other page in the app links to or exposes this console.
 - It manages the **platform**, not one court: creating tenants, renaming/re-theming them, resetting PINs, setting billing formulas, tracking usage, and exploring feature ideas.
 - It is a completely separate authentication system from the tenant-facing app. Tenant sites have no login for players and only a 4-digit Admin PIN for staff. The Superadmin Console uses real Firebase Authentication (email + password) gated by a custom claim — nobody can reach it just by knowing a URL or a PIN.
 - There is **no self-serve sign-up**. Every superadmin account is created manually by whoever already has access to the Firebase project (see Section 2).
@@ -57,24 +57,26 @@ Click **Create / Register Tenant**. Two things can happen:
 - **New slug**: default courts (one court, "Court 1"), default settings (hashed PIN, empty payment methods), empty bookings/queues/open play, and a default weekly staff-reserve pattern are all written, plus the config document (business name, branding, theme color). The tenant is registered in `platformTenants/{slug}` with `status: active`.
 - **Slug already has data**: the tenant-facing app auto-creates a minimal default config for *any* slug the moment someone visits it (see Section 9's note on organic tenants). If that already happened before you provisioned it, the form detects the existing config and **registers it into the directory without overwriting it** — it pulls the existing business name/color instead of the ones you typed. If you uploaded a watermark in this case, it's still applied on top of the existing config.
 
+Either way, this also writes a mirror doc to `tenantDirectory/{slug}` (business name + status only — no billing data) — that's the collection the public **facility picker** actually reads (Section 9), so the new tenant shows up there immediately, not just in this console.
+
 After creation, open the tenant from the Tenant Directory ("Open Site ↗") to verify it looks right, and hand the staff their PIN and URL.
 
 ## 5. Tenant Directory & the Manage Panel
 
 Each row shows the tenant's name, color swatch, slug, and active/suspended state, with three actions:
 
-- **Open Site ↗** — opens the tenant's live booking page in a new tab.
+- **Open Site ↗** — opens the tenant's live booking page in a new tab, at the canonical `/?client=<slug>` URL. Because your superadmin sign-in session carries over to that new tab (same origin), the tenant's Admin Console **unlocks automatically** — you don't need their PIN.
 - **Manage** — expands an in-place panel (see below).
-- **Suspend / Activate** — actually takes the tenant's site offline (see below), and updates the status flag shown in this directory and in Reports.
+- **Suspend / Activate** — actually takes the tenant's site offline (see below), and updates the status flag shown in this directory, in Reports, and on the public facility picker.
 
-Suspend sets `status` on the tenant's `platformTenants/{slug}` document (superadmin-only, for the directory/Reports display) **and** mirrors a `paused` flag onto the tenant's own `clients/{slug}/config/state` document, which the tenant-facing app actually reads. When paused, the tenant's site replaces its entire booking app with a "Booking Page Paused" screen (showing the facility's name/logo and contact info, if set) for every visitor — players and staff alike, with no PIN bypass. Realtime listeners, view counting, and the retention check are all skipped while paused, so nothing runs in the background either. A tenant that's already open in someone's browser when you suspend it will pick this up and reload within moments, the same way any other config change propagates (Section 9). Activating reverses all of this immediately.
+Suspend sets `status` on the tenant's `platformTenants/{slug}` document (superadmin-only, for the directory/Reports display), mirrors that same status to `tenantDirectory/{slug}` (so a suspended tenant also disappears from the public facility picker — Section 9), **and** mirrors a `paused` flag onto the tenant's own `clients/{slug}/config/state` document, which the tenant-facing app actually reads. When paused, the tenant's site replaces its entire booking app with a "Booking Page Paused" screen (showing the facility's name/logo and contact info, if set) for every visitor — players and staff alike, with no PIN bypass. Realtime listeners, view counting, and the retention check are all skipped while paused, so nothing runs in the background either. A tenant that's already open in someone's browser when you suspend it will pick this up and reload within moments, the same way any other config change propagates (Section 9). Activating reverses all of this immediately.
 
 Expanding **Manage** loads a few fields lazily (data-retention days and the current watermark, if any) and gives you:
 
 | Control | What it does |
 |---|---|
-| Rename Business | Updates the display name everywhere on the tenant's site. |
-| Primary Color | Updates the accent color and its hover shade. |
+| Rename Business | Updates the display name everywhere on the tenant's site, and mirrors the new name to `tenantDirectory` so the facility picker reflects it too. |
+| Primary Color | Updates the accent color and its hover shade on the tenant's own site. **Does not** mirror to `tenantDirectory` — the picker's tile color reflects whatever color was set at provisioning time only, so a later color change here won't show up there. |
 | Reset Admin PIN | Overwrites the tenant's PIN hash directly — use this if staff forgot their PIN. It does not require knowing the old PIN. |
 | Data Retention (days) | See Section 8. Defaults to 14 if never set. |
 | Watermark Image | Upload a new image (replaces any existing one) or Remove the current one. Preview thumbnail shown once loaded. |
@@ -149,7 +151,9 @@ Because it's triggered by a visit rather than a clock, a tenant with zero traffi
 
 ## 9. Two Things Worth Understanding About How Tenants Work
 
-**Anyone can "organically" create a tenant.** The tenant-facing app auto-seeds default courts/settings/config for *any* slug the first time it's visited via `?client=whatever` — there's no gate. Provisioning through this console is how you set a real name/color/PIN/watermark upfront and get the tenant listed in the Tenant Directory; skipping it doesn't stop the tenant from working, it just means it won't show up here until you register it (which the Create Tenant form does automatically if you try to provision an already-existing slug — see Section 4).
+**Anyone can "organically" create a tenant.** The tenant-facing app auto-seeds default courts/settings/config for *any* slug the first time it's visited via `?client=whatever` — there's no gate. Provisioning through this console is how you set a real name/color/PIN/watermark upfront and get the tenant listed in the Tenant Directory; skipping it doesn't stop the tenant from working, it just means it won't show up here until you register it (which the Create Tenant form does automatically if you try to provision an already-existing slug — see Section 4). An organically-created tenant also won't appear on the **public facility picker** (below) until it's registered here, since only this console writes to the collection the picker reads.
+
+**The public facility picker is a separate, read-only mirror of this directory.** A visitor who lands on the site's bare domain (no `?client=`) sees a searchable grid of every active facility — that's `picker.html`, reading from the `tenantDirectory` collection, which is deliberately **not** the same collection as `platformTenants`. `platformTenants` holds billing/credit data and is locked to superadmin-only reads; `tenantDirectory` holds nothing but business name, theme color, and active/suspended status, and is public-readable so an anonymous visitor can browse it safely. This console writes to both together whenever something picker-relevant changes (provisioning, rename, suspend/activate — see above), so you never edit `tenantDirectory` directly; just use the normal Manage controls and the mirror keeps itself current.
 
 **Config changes take effect on next real load, with a safety net.** Tenant browsers cache their config in `localStorage` so the site loads instantly. A background check runs after every page load that compares against Firestore and silently patches the page (theme, branding, watermark, business info) if anything changed since that browser's cache was written — so an edit you make here will show up for returning visitors without them needing to clear anything, typically within moments of their next visit.
 

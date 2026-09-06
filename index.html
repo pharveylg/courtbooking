@@ -2084,20 +2084,14 @@ function getCurrentTenant() {
     return pathParts[0];
   }
   
-  // Strategy 4: Subdomain (future: demo.customdomain.com). Must never match
-  // the platform's own default hosting domains -- courtbooking-85175.web.app
-  // and any *.vercel.app preview URL both split into 3+ dot-separated parts
-  // and would otherwise get their project-id/deployment-id segment misread
-  // as a tenant slug.
-  const host = window.location.hostname;
-  const parts = host.split('.');
-  const PLATFORM_DEFAULT_HOSTS = ['vercel.app', 'web.app', 'firebaseapp.com'];
-  if (parts.length >= 3 &&
-      parts[0] !== 'www' &&
-      parts[0] !== 'app' &&
-      !PLATFORM_DEFAULT_HOSTS.some(h => host.endsWith(h))) {
-    return parts[0];
-  }
+  // Strategy 4 (subdomain-based resolution, e.g. demo.customdomain.com) is
+  // disabled: no tenant actually uses a custom domain today, and every
+  // hosting/preview environment's own hostname (Vercel deployment URLs,
+  // Firebase's *.web.app, and other preview domains not on either list)
+  // has 3+ dot-separated parts too, so this kept misreading unrelated
+  // testing hostnames as tenant slugs and polluting platformTenants with
+  // junk entries. Re-enable with an explicit tenant-domain allowlist if
+  // custom domains ever become a real feature -- don't infer from shape.
   
   return null;
 }

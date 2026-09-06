@@ -1,6 +1,5 @@
 {
   "scripts": {
-    "patch": "node patch.js",
     "build": "tailwindcss -i ./tailwind-input.css -o ./tailwind.css --minify"
   },
   "dependencies": {

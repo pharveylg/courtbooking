@@ -86,6 +86,7 @@ body{background:#FFFBF5;color:#201C19}
             <div class="font-[750] text-[15px]">Tenant Directory</div>
             <div class="mono text-[11px] opacity-60"><span id="tenantCount">0</span> tenants</div>
           </div>
+          <div id="tenantTabBar" class="flex gap-1.5 overflow-x-auto px-4 pt-3 pb-1 border-b border-[#F1E9DF]"></div>
           <div id="tenantList" class="divide-y divide-[#F5EDE4]"></div>
         </div>
       </div>
@@ -345,19 +346,43 @@ document.getElementById('ctColor').addEventListener('change', (e) => {
   if(isValidHex(e.target.value.trim())) document.getElementById('ctColorPicker').value = e.target.value.trim();
 });
 
-/* ---------- Tenant Directory ---------- */
+/* ---------- Tenant Directory ----------
+   One tenant's full row+Manage panel is shown at a time, selected via a tab
+   bar above the list -- with every tenant's full Manage panel (billing,
+   watermark, demo data, etc.) rendered at once like before, a directory of
+   any real size turned into a long scroll of mostly-collapsed accordions.
+   The row markup and all its per-slug event wiring are unchanged; only
+   which row is visible changes. */
 const LS_TENANT_CACHE = 'sa_tenant_cache_v1';
+let selectedDirectoryTenant = null;
 function renderTenantList(entries, statusMap){
   const list = document.getElementById('tenantList');
+  const tabBar = document.getElementById('tenantTabBar');
   const countEl = document.getElementById('tenantCount');
   countEl.textContent = entries.length;
   if(entries.length === 0){
+    tabBar.innerHTML = '';
     list.innerHTML = `<div class="p-8 text-center mono text-[12px] opacity-50">No tenants registered yet. Create one above.</div>`;
     document.getElementById('reportingList').innerHTML = `<div class="p-8 text-center mono text-[12px] opacity-50">No tenants to report on yet.</div>`;
     return;
   }
+  // Keep whatever tenant was already selected (e.g. after a save re-renders
+  // the list) if it still exists; otherwise default to the first one.
+  if(!selectedDirectoryTenant || !entries.some(e => e.id === selectedDirectoryTenant)){
+    selectedDirectoryTenant = entries[0].id;
+  }
+  tabBar.innerHTML = entries.map(({ id, data }) => `
+    <button type="button" data-tenant-tab="${cssAttr(id)}" class="shrink-0 px-3.5 h-9 rounded-full mono text-[11px] font-[700] whitespace-nowrap transition cursor-pointer border ${id === selectedDirectoryTenant ? 'bg-[#201C19] text-white border-[#201C19]' : 'bg-white border-[#EAE0D5] hover:border-[#201C19]'}">${escapeHtml(data.businessName || id)}</button>
+  `).join('');
+  tabBar.querySelectorAll('[data-tenant-tab]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      selectedDirectoryTenant = btn.dataset.tenantTab;
+      renderTenantList(entries, statusMap);
+    });
+  });
+
   list.innerHTML = '';
-  entries.forEach(({ id, data }) => renderTenantRow(id, data, statusMap ? (statusMap[id] || {}) : null));
+  entries.forEach(({ id, data }) => renderTenantRow(id, data, statusMap ? (statusMap[id] || {}) : null, id === selectedDirectoryTenant));
 }
 async function loadTenants(){
   const list = document.getElementById('tenantList');
@@ -1105,13 +1130,14 @@ function compactStatusPill(label, status){
   `;
 }
 
-function renderTenantRow(slug, data, status){
+function renderTenantRow(slug, data, status, isVisible){
   const list = document.getElementById('tenantList');
   const isActive = data.status !== 'suspended';
   const storeStatus = status ? { enabled: !!status.storeEnabled, paused: !!status.storePaused } : null;
   const tournamentStatus = status ? { enabled: !!status.tournamentEnabled, paused: !!status.tournamentPaused } : null;
   const row = document.createElement('div');
-  row.className = 'p-4';
+  row.className = isVisible ? 'p-4' : 'p-4 hidden';
+  row.dataset.tenantRow = slug;
   row.innerHTML = `
     <div class="flex flex-wrap items-center justify-between gap-3">
       <div class="flex items-center gap-3 min-w-0">

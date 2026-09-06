@@ -12,7 +12,6 @@ pickleball-booking/
 │   └── index.html          ← Deploy target (copy from root)
 ├── index.html               ← Source (single-file app)
 ├── package.json              ← npm scripts for dev/deploy
-├── vercel.json               ← Vercel hosting config
 ├── firebase.json             ← Firebase Hosting config
 ├── .firebaserc               ← Firebase project link
 ├── .gitignore                ← Git ignore rules
@@ -35,42 +34,6 @@ npx serve public -l 3000
 
 # 3. Open http://localhost:3000
 ```
-
----
-
-## ☁️ Deploy to Vercel
-
-### Option A: CLI (recommended)
-
-```bash
-# 1. Install Vercel CLI
-npm i -g vercel
-
-# 2. Copy app to public/
-mkdir -p public && cp index.html public/index.html
-
-# 3. Deploy
-vercel
-
-# 4. Deploy to production
-vercel --prod
-```
-
-### Option B: GitHub Integration (auto-deploy on push)
-
-1. Push this repo to GitHub
-2. Go to [vercel.com/new](https://vercel.com/new)
-3. Import your GitHub repo
-4. Vercel auto-detects `vercel.json` — click **Deploy**
-5. Every `git push` to `main` auto-deploys
-
-### Custom Domain on Vercel
-
-```bash
-vercel domains add book.whitekitchenpickleball.com
-```
-
-Then point your domain DNS (CNAME) to `cname.vercel-dns.com`.
 
 ---
 
@@ -162,12 +125,6 @@ git push -u origin main
 ---
 
 ## 🔄 Workflow: Make Changes → Re-Deploy
-
-### Vercel (auto)
-```bash
-git add . && git commit -m "update" && git push
-# Vercel auto-deploys on push ✅
-```
 
 ### Firebase (manual)
 ```bash

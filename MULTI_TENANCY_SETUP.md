@@ -2,13 +2,13 @@
 
 ## Overview
 
-Pickleball Court Booking is a multi-tenant pickleball court booking system deployed at `https://picklecourtbooking.vercel.app/`. Each tenant (pickleball club/court owner) gets their own isolated data, branding, and booking system while sharing the same application infrastructure.
+Pickleball Court Booking is a multi-tenant pickleball court booking system deployed at `https://courtbooking-85175.web.app/`. Each tenant (pickleball club/court owner) gets their own isolated data, branding, and booking system while sharing the same application infrastructure.
 
 **First-Year Scale:**
 - <10 clients
 - Max 4 courts per client
 - Firebase free tier
-- Single Vercel deployment
+- Single Firebase Hosting deployment
 
 ---
 
@@ -18,14 +18,14 @@ The application supports multiple tenant resolution strategies:
 
 ### Current (Development/Testing)
 ```
-https://picklecourtbooking.vercel.app/?client=demo
-https://picklecourtbooking.vercel.app/?client=acepickle
+https://courtbooking-85175.web.app/?client=demo
+https://courtbooking-85175.web.app/?client=acepickle
 ```
 
 ### Path-Based (Production Ready)
 ```
-https://picklecourtbooking.vercel.app/demo
-https://picklecourtbooking.vercel.app/acepickle
+https://courtbooking-85175.web.app/demo
+https://courtbooking-85175.web.app/acepickle
 ```
 
 ### Future (Custom Domain)
@@ -264,9 +264,9 @@ Create empty state documents for:
 
 ### Step 5: Access the Tenant
 
-Visit: `https://picklecourtbooking.vercel.app/?client={clientId}`
+Visit: `https://courtbooking-85175.web.app/?client={clientId}`
 
-Or with path-based routing: `https://picklecourtbooking.vercel.app/{clientId}`
+Or with path-based routing: `https://courtbooking-85175.web.app/{clientId}`
 
 ---
 
@@ -347,13 +347,13 @@ All tenants share:
 
 1. **Valid Tenant Access:**
    ```
-   GET https://picklecourtbooking.vercel.app/?client=demo
+   GET https://courtbooking-85175.web.app/?client=demo
    Expected: Loads demo tenant config and data
    ```
 
 2. **Invalid Tenant:**
    ```
-   GET https://picklecourtbooking.vercel.app/?client=invalid-tenant
+   GET https://courtbooking-85175.web.app/?client=invalid-tenant
    Expected: Shows error or falls back to default config
    ```
 
@@ -375,16 +375,13 @@ All tenants share:
 
 When ready to add custom domains:
 
-### Step 1: Add Domain in Vercel
-```bash
-vercel domains add customdomain.com
-```
+### Step 1: Add Domain in Firebase Hosting
+Firebase Console → Hosting → Add custom domain → `customdomain.com`
 
 ### Step 2: Configure DNS
-Add CNAME record:
-```
-*.customdomain.com → cname.vercel-dns.com
-```
+Add the A/TXT records Firebase gives you during verification (shown in
+the console once you add the domain — they're generated per-project,
+not a fixed CNAME target).
 
 ### Step 3: Update Tenant Resolution
 The app already supports subdomain-based resolution:
@@ -472,7 +469,7 @@ For issues or questions:
 
 **Next Steps:**
 1. Run `setup-first-client.js` to create your first tenant
-2. Test at `https://picklecourtbooking.vercel.app/?client={clientId}`
+2. Test at `https://courtbooking-85175.web.app/?client={clientId}`
 3. Customize branding and courts for each tenant
 4. Deploy Firestore security rules
 5. Monitor usage in Firebase Console

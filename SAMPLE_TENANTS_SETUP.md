@@ -145,10 +145,10 @@ Use the configurations from `setup-sample-tenants-admin.js` as reference.
 
 Open these URLs in your browser:
 
-- **Demo**: https://picklecourtbooking.vercel.app/?client=demo
-- **Ace Pickleball**: https://picklecourtbooking.vercel.app/?client=acepickle
-- **Smash Club**: https://picklecourtbooking.vercel.app/?client=smash-club
-- **Rally Point**: https://picklecourtbooking.vercel.app/?client=rally-point
+- **Demo**: https://courtbooking-85175.web.app/?client=demo
+- **Ace Pickleball**: https://courtbooking-85175.web.app/?client=acepickle
+- **Smash Club**: https://courtbooking-85175.web.app/?client=smash-club
+- **Rally Point**: https://courtbooking-85175.web.app/?client=rally-point
 
 ### 2. Verify Branding
 
@@ -176,7 +176,7 @@ Each tenant should show:
 
 ### 5. Test Invalid Tenant
 
-Visit: https://picklecourtbooking.vercel.app/?client=invalid-tenant-123
+Visit: https://courtbooking-85175.web.app/?client=invalid-tenant-123
 
 Expected behavior:
 - ❌ Should show error or fallback to default

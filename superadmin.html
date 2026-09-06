@@ -1122,7 +1122,7 @@ function renderTenantRow(slug, data, status){
         </div>
       </div>
       <div class="flex items-center gap-2 shrink-0">
-        <a href="/app?client=${encodeURIComponent(slug)}" target="_blank" rel="noopener" class="h-8 px-3.5 rounded-full bg-white border border-[#EAE0D5] mono text-[11px] font-[700] hover:border-[#201C19] transition">Open Site ↗</a>
+        <a href="/?client=${encodeURIComponent(slug)}" target="_blank" rel="noopener" class="h-8 px-3.5 rounded-full bg-white border border-[#EAE0D5] mono text-[11px] font-[700] hover:border-[#201C19] transition">Open Site ↗</a>
         <button type="button" data-manage="${slug}" class="h-8 px-3.5 rounded-full bg-[#201C19] text-white mono text-[11px] font-[700] cursor-pointer hover:opacity-90 transition">Manage</button>
         <button type="button" data-toggle-status="${slug}" data-current="${isActive}" class="h-8 px-3.5 rounded-full ${isActive?'bg-[#FFE9E0] text-[#8C2C10] border border-[#FFC9B6]':'bg-[#E8F5D8] text-[#3F7019] border border-[#CFE8B5]'} mono text-[11px] font-[700] cursor-pointer transition">${isActive?'Suspend':'Activate'}</button>
       </div>

@@ -582,15 +582,11 @@ body{
   // ── Select tenant ──────────────────────────────────────
   function selectTenant(clientId) {
     localStorage.setItem(LS_TENANT, clientId);
-    // Create a temporary link and click it to open in new tab
-    // (more reliable than window.open which can be blocked)
-    const link = document.createElement('a');
-    link.href = '/?client=' + encodeURIComponent(clientId);
-    link.target = '_blank';
-    link.rel = 'noopener noreferrer';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    // Same-tab navigation -- a synthetic click on a target="_blank" anchor
+    // isn't reliably treated as a trusted user gesture across browsers, so
+    // popup blockers can silently swallow it and leave the picker on screen
+    // with nothing happening. Plain navigation always works.
+    window.location.href = '/?client=' + encodeURIComponent(clientId);
   }
 
   // ── Search ─────────────────────────────────────────────

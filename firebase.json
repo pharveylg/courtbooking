@@ -26,13 +26,7 @@
       "README.md",
       "package.json",
       "package-lock.json",
-      "vercel.json",
-      "copy-to-public.sh",
-      "public/**",
-      "ADMIN_GUIDE.md",
-      "USER_ONE_PAGER.md",
-      "SUPERADMIN_GUIDE.md",
-      "ARCHITECTURE_DIAGRAM.html"
+      "public/**"
     ],
     "cleanUrls": false,
     "rewrites": [

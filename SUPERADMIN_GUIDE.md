@@ -31,7 +31,7 @@ There is no in-app "forgot password" link. Reset a superadmin's password from Fi
 
 ## 3. Layout
 
-The console is a single page with a left sidebar (top bar on mobile) and nine tabs, organized as a platform control plane — the same shape the DulaHQ platform roadmap prescribes (Overview → Tenants → Entitlements → Plans & Billing → Usage → Support → Audit):
+The console is a single page with a left sidebar (top bar on mobile) and ten tabs, organized as a platform control plane — the same shape the DulaHQ platform roadmap prescribes (Overview → Tenants → Entitlements → Plans & Billing → Usage → Support → Audit):
 
 | Tab | Purpose |
 |---|---|
@@ -42,6 +42,7 @@ The console is a single page with a left sidebar (top bar on mobile) and nine ta
 | Plans & Pricing | The plan catalog (base fee, included bookings, overage rate, court limits, add-on fees, pricing version), plan assignment to tenants, and the platform's manual payment instructions (GCash/bank) |
 | Invoices | The billing domain: generate draft invoices for the current month with frozen line items, issue them, record/verify manual payments, apply credit balance, waive, reject, cancel |
 | Usage Reports | Usage metrics and the billing formula per tenant (the Reporting & Billing Center deep dive + all-tenants usage), with CSV export |
+| Diagnostics | Per-tenant access explainer: why the site or a product is online/paused/offline, who set the lifecycle and when, expected vs actual runtime mirror (drift detection with one-click re-sync), and the tenant's recent audited actions |
 | Feature Ideas | A running, superadmin-only scratchpad of ideas worth scoping before building |
 | Audit & Security | Known risk areas and the append-only audit log of every mutating console action |
 
@@ -53,7 +54,7 @@ Each tenant owns **product entitlements** — one per product: `booking` (the co
 not added → trial → active → suspended → cancelled        (+ independent PAUSED hold)
 ```
 
-- **Trial** — a 7-day evaluation window (end date tracked; the Overview flags trials ending within 2 days).
+- **Trial** — a 7-day evaluation window (end date tracked; the Overview flags trials ending within 2 days **with one-click Activate / Revoke actions** right on the flag).
 - **Active** — the product is entitled and live.
 - **Suspended** — the product is offline for that tenant; other products are unaffected.
 - **Cancelled (revoke)** — entitlement removed; the tenant's product data is kept, and re-granting restores it. History is preserved on the entitlement record.
@@ -65,12 +66,14 @@ Every change writes an entry to that entitlement's history (who, when, from → 
 
 The entitlement documents live under `platformTenants/{slug}/entitlements/` and are superadmin-only. The tenant-facing sites don't read those directly — they read the same runtime flags as always (`clients/{slug}/status/state`: `bookingPaused`, `storeEnabled/storePaused`, `tournamentEnabled/tournamentPaused`). The console re-derives and re-mirrors those flags automatically on every entitlement or lifecycle change. Consequence: **you never edit `status/state` by hand anymore** — grant/revoke/pause/suspend through the console and the runtime follows.
 
+One derivation function (`deriveRuntimeExpectation`) is the single source of truth for both the mirror writer and the Diagnostics explainer. It consults one **platform policy**: *"suspending a tenant also pauses Store & Tournaments"* (toggle at the bottom of the Entitlements tab, stored in `platformSettings/policy`). **Off (default)** = the historical behavior — suspension takes only the Booking site down. Turning it on applies to future lifecycle changes immediately; use Diagnostics → **Re-sync All Mirrors** to apply it to already-suspended tenants retroactively.
+
 ### 3.3 Tenant lifecycle and billing status (three separate statuses)
 
 A tenant now carries three independent statuses, per the roadmap's "access status ≠ billing status ≠ product status" rule:
 
 - **Lifecycle** (access): `provisioning → trial → active → grace → restricted → suspended → cancelled → archived`. Lifecycle states outside {provisioning, trial, active, grace} take the tenant's booking site offline. The old Suspend/Activate button is now just the fast path between `active` and `suspended`.
-- **Billing status**: `current / grace / overdue / suspended_notify_only` — metadata for the money conversation. It does **not** block anything by itself (consistent with this platform's no-automatic-suspension policy); it feeds the Overview "needs attention" list and the Entitlements matrix.
+- **Billing status**: `current / grace / overdue / suspended_notify_only` — metadata for the money conversation. It does **not** block anything by itself (consistent with this platform's no-automatic-suspension policy). The Overview's **Billing Status Suggestions** card proposes changes from live invoice states — overdue invoice → `overdue`; open balance or negative prepaid → `grace`; everything settled → `current` — each with the reason and a one-click **Set** button. Suggestions are rules of thumb; applying is always your call.
 - **Product status**: each entitlement's own trial/active/suspended/cancelled/paused state (3.1).
 
 ### 3.4 Plans and subscriptions
@@ -256,6 +259,12 @@ No. A submission is the payer *claiming* they paid. Only "Record Verified Paymen
 
 **I edited a plan but a tenant's charges didn't change.**
 Plan edits never rewrite an existing subscription or an already-generated invoice. The tenant's billing formula was copied from the plan at assignment time; re-assign the plan to push updated pricing, and next month's draft invoices pick it up. Each subscription keeps the pricing version it was signed at.
+
+**Diagnostics says "Mirror drift" — what does that mean and is it dangerous?**
+The runtime doc (`clients/{slug}/status/state`) no longer matches what the platform would derive from the tenant's lifecycle and entitlements — usually because someone edited the doc by hand in the Firebase Console, or because a policy (like suspension-affects-add-ons) changed after the mirror was last written. Tenant apps read that doc, so what players see may not match what you intended. Click **Re-sync now** (or Diagnostics → Re-sync All Mirrors for every tenant) — it rewrites the doc from platform state and logs the action. Nothing else is touched.
+
+**I toggled "suspension also pauses Store & Tournaments" — why didn't already-suspended tenants change?**
+Policy applies when lifecycle changes happen. To apply it to tenants suspended before the toggle, run Diagnostics → **Re-sync All Mirrors** once.
 
 **A tenant says they paid — where do I see it?**
 Invoices tab → **Verification Queue**. Submissions from their billing portal arrive there with method, reference, amount, and (usually) attached proof. Verify & Apply to settle the invoice, or Reject with a reason. A submission sitting in "pending" has not moved the invoice at all — that's by design.

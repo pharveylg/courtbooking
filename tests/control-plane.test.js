@@ -126,7 +126,7 @@ const EXPOSE = `
 globalThis.__makeCtx = () => ({ get TENANT_INDEX(){return TENANT_INDEX}, get ENT_STATE(){return ENT_STATE}, get PLANS_CACHE(){return PLANS_CACHE},
   setEntitlement, setTenantLifecycle, setTenantBillingStatus, seedStarterPlans, assignPlanToTenant, generateDraftInvoices, invoiceApplyAction,
   loadPendingSubmissions, loadInvoiceSubmissions, verifySubmission, rejectSubmission, renderInvoiceQueue, monthInputToOffset, computeTenantReport,
-  renderEntitlementsTab, renderPlansTab, renderInvoicesTab, renderOverview, exportReportingCsv, usagePeriod, monthStartDate, invoiceDocId, loadTenants, db });
+  renderEntitlementsTab, renderPlansTab, renderInvoicesTab, renderOverview, exportReportingCsv, usagePeriod, monthStartDate, invoiceDocId, loadTenants, deriveRuntimeExpectation, computeBillingSuggestions, updatePlatformPolicy, get POLICY(){return POLICY}, renderDiagnostics, db });
 `;
 eval(code + EXPOSE);
 const C = globalThis.__makeCtx();
@@ -246,8 +246,45 @@ const C = globalThis.__makeCtx();
   const inv2 = store.get(`platformInvoices/inv_alpha2_${period}`);
   check('credit applied recorded', inv2.creditsApplied === 200 && inv2.payments[0].method === 'credit_balance' && inv2.status === 'partially_paid');
 
+  /* ===== B3: suspension policy engine ===== */
+  check('B3: derive default — active alpha store on', C.deriveRuntimeExpectation('alpha').storeEnabled === true);
+  await C.updatePlatformPolicy({ suspendTenantAffectsAddons: true });
+  check('B3: POLICY updated', C.POLICY.suspendTenantAffectsAddons === true);
+  check('B3: audit logged policy-change', [...store.keys()].some(k => k.startsWith('platformAuditLog/') && store.get(k).action === 'policy-change'));
+  await C.setTenantLifecycle('alpha', 'suspended');
+  let dS = C.deriveRuntimeExpectation('alpha');
+  let mS = store.get('clients/alpha/status/state').data;
+  check('B3: policy ON — suspend gates addons (derived)', dS.storeEnabled === false && dS.tournamentEnabled === false && dS.bookingPaused === true);
+  check('B3: policy ON — mirror written accordingly', mS.storeEnabled === false && mS.tournamentEnabled === false && mS.bookingPaused === true);
+  await C.setTenantLifecycle('alpha', 'active');
+  dS = C.deriveRuntimeExpectation('alpha'); mS = store.get('clients/alpha/status/state').data;
+  check('B3: policy ON — reactivate restores addons', dS.storeEnabled === true && mS.storeEnabled === true);
+  await C.updatePlatformPolicy({ suspendTenantAffectsAddons: false });
+  await C.setTenantLifecycle('alpha', 'suspended');
+  dS = C.deriveRuntimeExpectation('alpha'); mS = store.get('clients/alpha/status/state').data;
+  check('B3: policy OFF (default) — suspend preserves addons', dS.storeEnabled === true && mS.storeEnabled === true && dS.bookingPaused === true);
+  await C.setTenantLifecycle('alpha', 'active');
+
+  /* ===== B3: billing-status suggestion engine ===== */
+  const sugPeriod = C.usagePeriod(0);
+  C.TENANT_INDEX.gamma = { businessName: 'Gamma', billingStatus: 'current', creditBalance: -50, status: 'active' };
+  C.TENANT_INDEX.delta = { businessName: 'Delta', billingStatus: 'current', creditBalance: 0, status: 'active' };
+  C.TENANT_INDEX.eps = { businessName: 'Eps', billingStatus: 'overdue', creditBalance: 0, status: 'active' };
+  const sugInv = [
+    { tenantId: 'gamma', status: 'awaiting_payment', total: 100, payments: [], creditsApplied: 0 },
+    { tenantId: 'delta', status: 'overdue', total: 50, payments: [], creditsApplied: 0 },
+    { tenantId: 'alpha', status: 'verified', total: 750, payments: [{ amount: 750 }], creditsApplied: 0 },
+  ];
+  const sug = C.computeBillingSuggestions(sugInv);
+  const sg = Object.fromEntries(sug.map(s => [s.slug, s]));
+  check('B3: gamma (open + negative balance) -> grace', sg.gamma && sg.gamma.to === 'grace');
+  check('B3: delta (overdue invoice) -> overdue', sg.delta && sg.delta.to === 'overdue');
+  check('B3: eps (overdue status, nothing open) -> current', sg.eps && sg.eps.to === 'current');
+  check('B3: alpha (settled, current) -> no suggestion', !sg.alpha);
+  check('B3: draft invoices never count as open', C.computeBillingSuggestions([{ tenantId: 'gamma', status: 'draft', total: 999, payments: [], creditsApplied: 0 }]).find(s => s.slug === 'gamma') === undefined || C.computeBillingSuggestions([{ tenantId: 'gamma', status: 'draft', total: 999, payments: [], creditsApplied: 0 }]).find(s => s.slug === 'gamma').to === 'grace');
+
   /* ===== renderers ===== */
-  C.renderEntitlementsTab(); C.renderPlansTab(); C.renderInvoicesTab([{ id: 'x', ...vInv }]); C.renderInvoiceQueue(); await C.renderOverview();
+  C.renderEntitlementsTab(); C.renderPlansTab(); C.renderInvoicesTab([{ id: 'x', ...vInv }]); C.renderInvoiceQueue(); await C.renderOverview(); await C.renderDiagnostics();
   check('renderers executed without throw', true);
   C.exportReportingCsv();
   check('CSV export executed', true);

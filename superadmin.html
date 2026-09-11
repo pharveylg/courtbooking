@@ -81,6 +81,7 @@ body{background:#FFFBF5;color:#201C19}
       <button type="button" data-sa-tab="plans" class="sa-tab-btn shrink-0 text-left px-4 h-10 rounded-full md:rounded-[14px] mono text-[12px] font-[700] transition cursor-pointer whitespace-nowrap">Plans &amp; Pricing</button>
       <button type="button" data-sa-tab="invoices" class="sa-tab-btn shrink-0 text-left px-4 h-10 rounded-full md:rounded-[14px] mono text-[12px] font-[700] transition cursor-pointer whitespace-nowrap">Invoices</button>
       <button type="button" data-sa-tab="reports" class="sa-tab-btn shrink-0 text-left px-4 h-10 rounded-full md:rounded-[14px] mono text-[12px] font-[700] transition cursor-pointer whitespace-nowrap">Usage Reports</button>
+      <button type="button" data-sa-tab="diagnostics" class="sa-tab-btn shrink-0 text-left px-4 h-10 rounded-full md:rounded-[14px] mono text-[12px] font-[700] transition cursor-pointer whitespace-nowrap">Diagnostics</button>
       <button type="button" data-sa-tab="ideas" class="sa-tab-btn shrink-0 text-left px-4 h-10 rounded-full md:rounded-[14px] mono text-[12px] font-[700] transition cursor-pointer whitespace-nowrap">Feature Ideas</button>
       <button type="button" data-sa-tab="security" class="sa-tab-btn shrink-0 text-left px-4 h-10 rounded-full md:rounded-[14px] mono text-[12px] font-[700] transition cursor-pointer whitespace-nowrap">Audit &amp; Security</button>
     </nav>
@@ -90,16 +91,21 @@ body{background:#FFFBF5;color:#201C19}
       <!-- PANEL: Overview (platform health at a glance) -->
       <div id="sa-panel-overview" class="sa-panel">
         <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3 mb-5" id="ovKpiRow"></div>
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-5">
+        <div class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-3 mb-5">
           <div class="rounded-[24px] bg-white border border-[#EAE0D5] p-5">
             <div class="font-[750] text-[14px] mb-1">Needs Attention</div>
-            <div class="mono text-[10px] opacity-50 mb-3">Suspended tenants, overdue/unverified invoices, trials past their end date.</div>
+            <div class="mono text-[10px] opacity-50 mb-3">Suspended tenants, overdue/unverified invoices, trials past their end date — trials have one-click actions.</div>
             <div id="ovAttention" class="space-y-2"></div>
           </div>
           <div class="rounded-[24px] bg-white border border-[#EAE0D5] p-5">
             <div class="font-[750] text-[14px] mb-1">Entitlements Across Tenants</div>
             <div class="mono text-[10px] opacity-50 mb-3">Live product grants by lifecycle state. Manage per tenant under Entitlements.</div>
             <div id="ovEntSummary" class="space-y-2"></div>
+          </div>
+          <div class="rounded-[24px] bg-white border border-[#EAE0D5] p-5">
+            <div class="font-[750] text-[14px] mb-1">Billing Status Suggestions</div>
+            <div class="mono text-[10px] opacity-50 mb-3">Rule-of-thumb suggestions from live invoice states (overdue invoice &rarr; overdue; open balance or negative prepaid &rarr; grace; all settled &rarr; current). Applying is always your call.</div>
+            <div id="ovSuggestions" class="space-y-2"></div>
           </div>
         </div>
         <div class="rounded-[24px] bg-white border border-[#EAE0D5] overflow-hidden">
@@ -189,6 +195,13 @@ body{background:#FFFBF5;color:#201C19}
             <span class="px-2 py-1 rounded-full bg-[#FFF0D6] text-[#8A5A00] font-[700]">SUSPENDED — product offline</span>
             <span class="px-2 py-1 rounded-full bg-[#FFE9E0] text-[#8C2C10] font-[700]">CANCELLED — revoked (history kept)</span>
             <span class="px-2 py-1 rounded-full bg-[#F1E9DF] text-[#201C19]/60 font-[700]">NOT ADDED — never granted</span>
+          </div>
+          <div class="mt-3 pt-3 border-t border-[#F1E9DF] flex flex-wrap items-center justify-between gap-2">
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" id="policySuspendAddons" class="w-4 h-4 accent-[#201C19]"/>
+              <span class="mono text-[11px] font-[700]">Platform policy: suspending a tenant also pauses Store &amp; Tournaments</span>
+            </label>
+            <span class="mono text-[9px] opacity-50 max-w-[52ch]">Off (default) = current behavior: suspension pauses the Booking site only. Applies to future changes — use Diagnostics &rarr; Re-sync all to apply it retroactively.</span>
           </div>
         </div>
         <div class="rounded-[24px] bg-white border border-[#EAE0D5] overflow-hidden">
@@ -321,6 +334,23 @@ body{background:#FFFBF5;color:#201C19}
           </div>
           <div id="reportingList"></div>
         </div>
+      </div>
+
+      <!-- PANEL: Diagnostics (access explainer + mirror health) -->
+      <div id="sa-panel-diagnostics" class="sa-panel hidden">
+        <div class="rounded-[24px] bg-white border border-[#EAE0D5] p-6 shadow-xs mb-5">
+          <div class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#201C19] text-[#D6FF5F] mono text-[10px] font-[800] uppercase tracking-widest">Platform</div>
+          <h2 class="mt-1.5 text-[17px] font-[800] tracking-[-0.02em]">Access Diagnostics</h2>
+          <p class="mono text-[11px] opacity-60 mt-0.5">Explains exactly why a tenant's site or product is online, paused, or offline — from lifecycle and entitlement state down to the runtime mirror the tenant apps read — and detects drift between what the platform derives and what's actually stored.</p>
+          <div class="mt-3 flex flex-wrap items-end gap-2">
+            <label class="flex flex-col gap-1"><span class="mono text-[10px] uppercase tracking-widest opacity-60">Tenant</span>
+              <select id="diagTenant" class="h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-3 mono text-[11px] font-[700] outline-none focus:border-[#201C19] min-w-[220px]"><option value="">Select tenant...</option></select>
+            </label>
+            <button type="button" id="diagResyncOneBtn" class="h-10 px-4 rounded-full bg-white border border-[#EAE0D5] mono text-[11px] font-[700] cursor-pointer hover:border-[#201C19]">Re-sync This Tenant's Mirror</button>
+            <button type="button" id="resyncAllBtn" class="h-10 px-4 rounded-full bg-[#D6FF5F] hover:bg-[#CBF052] text-[#201C19] font-[800] text-[12px] border border-[#201C19]/10 transition cursor-pointer">Re-sync All Mirrors</button>
+          </div>
+        </div>
+        <div id="diagBody" class="space-y-3"></div>
       </div>
 
       <!-- PANEL: Feature Ideas -->
@@ -514,6 +544,7 @@ let _lastEntries = [];       // last platformTenants snapshot for re-renders
 let _lastStatusMap = {};     // last clients/{slug}/status/state snapshot
 let PLANS_CACHE = {};        // planId -> plan doc
 let PAY_SETTINGS = null;     // platformSettings/billing doc data
+let POLICY = {};             // platformSettings/policy doc (B3 lifecycle policy engine)
 
 function actorEmail(){ return (auth.currentUser && auth.currentUser.email) || 'unknown'; }
 function isEntOnline(ent){ return !!ent && (ent.status === 'trial' || ent.status === 'active'); }
@@ -541,31 +572,48 @@ async function loadEntitlementsFor(slug, legacyStatus){
 }
 const ENTS_VALID = { booking: true, store: true, tournament: true };
 
+/* Derive what the runtime gate SHOULD be for a tenant, from the platform
+   state (lifecycle + entitlements + policy). Pure function -- both the
+   mirror writer and the Diagnostics explainer render from this, so the
+   "why" and the "what" can never diverge. */
+function deriveRuntimeExpectation(slug){
+  const t = TENANT_INDEX[slug] || {};
+  const ents = ENT_STATE[slug] || {};
+  const lifecycle = t.lifecycle || (t.status === 'suspended' ? 'suspended' : 'active');
+  const siteOnline = LIFECYCLE_ONLINE.includes(lifecycle);
+  // A virtual booking entitlement (no materialized doc) tracks the
+  // tenant's CURRENT operational state, not a stale snapshot.
+  let booking = ents.booking;
+  if(!booking || booking.virtual) booking = { status: siteOnline ? 'active' : 'suspended', paused: false };
+  const bR = entRuntime(booking), sR = entRuntime(ents.store), tR = entRuntime(ents.tournament);
+  // B3 policy lever: tenant suspension can optionally extend to add-ons.
+  // Default OFF = the app's historical behavior (suspension pauses Booking only).
+  const addonGate = siteOnline || !(POLICY && POLICY.suspendTenantAffectsAddons === true);
+  return {
+    lifecycle, siteOnline,
+    bookingPaused: !siteOnline || !bR.enabled,
+    storeEnabled: sR.enabled && addonGate,
+    storePaused: sR.paused,
+    tournamentEnabled: tR.enabled && addonGate,
+    tournamentPaused: tR.paused,
+  };
+}
 /* Write the derived runtime gate the tenant-facing apps actually read.
    Everything on clients/{slug}/status/state is DERIVED here from the
    tenant lifecycle + entitlements -- the one place the two layers meet. */
 async function syncTenantRuntime(slug){
   const t = TENANT_INDEX[slug] || {};
-  const ents = ENT_STATE[slug] || {};
-  const lifecycle = t.lifecycle || (t.status === 'suspended' ? 'suspended' : 'active');
-  const siteOnline = LIFECYCLE_ONLINE.includes(lifecycle);
-  // A virtual booking entitlement (no materialized doc) must track the
-  // tenant's CURRENT operational state, not the snapshot from load time --
-  // otherwise a suspended-then-reactivated tenant stays paused forever.
-  let booking = ents.booking;
-  if(!booking || booking.virtual) booking = { status: siteOnline ? 'active' : 'suspended', paused: false };
-  const bR = entRuntime(booking), sR = entRuntime(ents.store), tR = entRuntime(ents.tournament);
-  const bookingPaused = !siteOnline || !bR.enabled;
+  const x = deriveRuntimeExpectation(slug);
   await db.doc(`clients/${slug}/status/state`).set({
     data: {
-      bookingPaused,
-      storeEnabled: sR.enabled, storePaused: sR.paused,
-      tournamentEnabled: tR.enabled, tournamentPaused: tR.paused,
+      bookingPaused: x.bookingPaused,
+      storeEnabled: x.storeEnabled, storePaused: x.storePaused,
+      tournamentEnabled: x.tournamentEnabled, tournamentPaused: x.tournamentPaused,
     },
     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
   }, { merge: true });
   // Keep the legacy operational flag aligned so picker/reports keep working.
-  const legacyStatus = siteOnline ? 'active' : 'suspended';
+  const legacyStatus = x.siteOnline ? 'active' : 'suspended';
   if(t.status !== legacyStatus){
     await db.doc(`platformTenants/${slug}`).set({ status: legacyStatus }, { merge: true });
     await db.doc(`tenantDirectory/${slug}`).set({ status: legacyStatus }, { merge: true });
@@ -742,6 +790,20 @@ async function loadPaymentSettings(){
   const set = (id, v) => { const el = document.getElementById(id); if(el) el.value = v || ''; };
   set('psGcashName', f.gcashName); set('psGcashNumber', f.gcashNumber);
   set('psBankName', f.bankName); set('psBankAccount', f.bankAccount); set('psNotes', f.notes);
+}
+/* ---------- Platform policy (B3 lifecycle policy engine) ---------- */
+async function loadPolicySettings(){
+  try {
+    const snap = await db.doc('platformSettings/policy').get();
+    POLICY = (snap.exists && snap.data()) || {};
+  } catch(ex) { POLICY = {}; }
+  const cb = document.getElementById('policySuspendAddons');
+  if(cb) cb.checked = POLICY.suspendTenantAffectsAddons === true;
+}
+async function updatePlatformPolicy(patch){
+  POLICY = { ...(POLICY || {}), ...patch };
+  await db.doc('platformSettings/policy').set(POLICY, { merge: true });
+  await logAudit('policy-change', null, Object.entries(patch).map(([k, v]) => `${k}=${v}`).join(', '));
 }
 function paymentInstructionsHtml(){
   const p = PAY_SETTINGS || {};
@@ -970,9 +1032,54 @@ function populateTenantSelects(){
   if(at) at.innerHTML = '<option value="">Select tenant...</option>' + opts;
   const itf = document.getElementById('invoiceTenantFilter');
   if(itf) itf.innerHTML = '<option value="">All tenants</option>' + opts;
+  const dt = document.getElementById('diagTenant');
+  if(dt) dt.innerHTML = '<option value="">Select tenant...</option>' + opts;
 }
 
 /* ---------- Overview ---------- */
+/* B3: rule-of-thumb billing-status suggestions from live invoice states.
+   Pure -- renderOverview passes ALL_INVOICES; tests pass fixtures. */
+function computeBillingSuggestions(invoices){
+  const list = invoices || [];
+  const out = [];
+  Object.keys(TENANT_INDEX).forEach(slug => {
+    const t = TENANT_INDEX[slug];
+    const current = t.billingStatus || 'current';
+    const open = list.filter(i => i.tenantId === slug && !['draft','waived','cancelled','verified'].includes(i.status) && invoiceTotals(i).remaining > 0);
+    const overdueCount = open.filter(i => i.status === 'overdue').length;
+    const negative = (Number(t.creditBalance) || 0) < 0;
+    let suggested = current, reason = '';
+    if(overdueCount > 0){ suggested = 'overdue'; reason = `${overdueCount} overdue invoice${overdueCount > 1 ? 's' : ''}`; }
+    else if(open.length > 0 && negative){ suggested = 'grace'; reason = `${open.length} open invoice${open.length > 1 ? 's' : ''} + negative prepaid balance`; }
+    else if(negative){ suggested = 'grace'; reason = 'negative prepaid balance'; }
+    else if(open.length === 0 && current !== 'current'){ suggested = 'current'; reason = 'no open invoices'; }
+    if(suggested !== current) out.push({ slug, name: t.businessName || slug, from: current, to: suggested, reason });
+  });
+  return out;
+}
+function renderBillingSuggestions(suggestions){
+  const wrap = document.getElementById('ovSuggestions'); if(!wrap) return;
+  if(!suggestions.length){
+    wrap.innerHTML = '<div class="mono text-[11px] opacity-50 py-3 text-center">All tenants\' billing statuses look right for their invoice states.</div>';
+    return;
+  }
+  wrap.innerHTML = suggestions.map(s => `
+    <div class="flex items-center justify-between gap-2 px-3 py-2 rounded-[12px] bg-[#FFFBF5] border border-[#F1E9DF]">
+      <div class="min-w-0">
+        <div class="mono text-[11px] font-[700] truncate">${escapeHtml(s.name)}</div>
+        <div class="mono text-[9px] opacity-60">${escapeHtml(s.from.replace(/_/g,' '))} &rarr; <span class="font-[800]">${escapeHtml(s.to.replace(/_/g,' '))}</span> · ${escapeHtml(s.reason)}</div>
+      </div>
+      <button type="button" data-bs-apply="${s.slug}" data-bs-to="${s.to}" class="h-7 px-2.5 rounded-full bg-[#201C19] text-white mono text-[9px] font-[700] cursor-pointer shrink-0">Set</button>
+    </div>`).join('');
+  wrap.querySelectorAll('[data-bs-apply]').forEach(btn => btn.addEventListener('click', async () => {
+    btn.disabled = true;
+    try {
+      await setTenantBillingStatus(btn.dataset.bsApply, btn.dataset.bsTo);
+      toast(`Billing status set to ${btn.dataset.bsTo.replace(/_/g,' ')}`);
+      renderBillingSuggestions(computeBillingSuggestions(ALL_INVOICES));
+    } catch(ex) { toast('Failed: ' + ex.message); btn.disabled = false; }
+  }));
+}
 function ovKpi(label, value, sub){
   return `<div class="rounded-[24px] bg-white border border-[#EAE0D5] p-5">
     <div class="mono text-[10px] uppercase tracking-widest opacity-60">${label}</div>
@@ -1027,11 +1134,13 @@ async function renderOverview(){
       const ent = (ENT_STATE[t.slug] || {})[p];
       if(ent && ent.status === 'trial' && ent.trialEndsAt){
         const days = Math.ceil((new Date(ent.trialEndsAt) - new Date()) / 864e5);
-        if(days <= 2) attn.push({ label: `${escapeHtml(t.businessName || t.slug)} · ${PRODUCTS[p].label}`, note: days < 0 ? 'Trial expired — activate or revoke' : `Trial ends in ${days} day(s)`, cls: 'bg-[#FFF0D6] text-[#8A5A00]' });
+        if(days <= 2) attn.push({ label: `${escapeHtml(t.businessName || t.slug)} · ${PRODUCTS[p].label}`, note: days < 0 ? 'Trial expired — act:' : `Trial ends in ${days} day(s) — act:`, cls: 'bg-[#FFF0D6] text-[#8A5A00]', trial: { slug: t.slug, product: p } });
       }
     });
   });
-  document.getElementById('ovAttention').innerHTML = attn.length ? attn.slice(0, 12).map(a => `<div class="flex items-center justify-between gap-2 px-3 py-2 rounded-[12px] ${a.cls}"><span class="mono text-[11px] font-[700]">${a.label}</span><span class="mono text-[10px] text-right">${a.note}</span></div>`).join('') + (attn.length > 12 ? `<div class="mono text-[10px] opacity-50 text-center">+ ${attn.length - 12} more</div>` : '') : '<div class="mono text-[11px] opacity-50 py-3 text-center">Nothing needs attention right now.</div>';
+  document.getElementById('ovAttention').innerHTML = attn.length ? attn.slice(0, 12).map((a, idx) => `<div class="flex items-center justify-between gap-2 px-3 py-2 rounded-[12px] ${a.cls}"><span class="mono text-[11px] font-[700]">${a.label}</span><span class="mono text-[10px] text-right">${a.note}${a.trial ? ` <button type="button" data-ta-activate="${a.trial.slug}|${a.trial.product}" class="underline font-[800] cursor-pointer ml-1">activate</button> · <button type="button" data-ta-cancel="${a.trial.slug}|${a.trial.product}" class="underline font-[800] cursor-pointer ml-1">revoke</button>` : ''}</span></div>`).join('') + (attn.length > 12 ? `<div class="mono text-[10px] opacity-50 text-center">+ ${attn.length - 12} more</div>` : '') : '<div class="mono text-[11px] opacity-50 py-3 text-center">Nothing needs attention right now.</div>';
+
+  renderBillingSuggestions(computeBillingSuggestions(ALL_INVOICES));
 
   // Entitlement summary per product
   document.getElementById('ovEntSummary').innerHTML = PRODUCT_KEYS.map(p => {
@@ -1062,6 +1171,33 @@ async function renderOverview(){
   }
 }
 document.getElementById('ovRefreshBtn').addEventListener('click', async () => { await loadInvoices(); await renderOverview(); toast('Overview refreshed'); });
+/* B3: one-click trial resolution from the Overview attention list. */
+document.getElementById('ovAttention').addEventListener('click', async (e) => {
+  const btn = e.target.closest('[data-ta-activate],[data-ta-cancel]');
+  if(!btn) return;
+  const activate = btn.hasAttribute('data-ta-activate');
+  const parts = (activate ? btn.dataset.taActivate : btn.dataset.taCancel).split('|');
+  const slug = parts[0], product = parts[1];
+  btn.disabled = true;
+  try {
+    if(activate){
+      await setEntitlement(slug, product, { status: 'active', paused: false }, 'activate', 'trial resolved from Overview');
+      toast(`${PRODUCTS[product].label} activated for ${TENANT_INDEX[slug]?.businessName || slug}`);
+    } else {
+      await setEntitlement(slug, product, { status: 'cancelled', paused: false }, 'cancel', 'trial resolved from Overview');
+      toast(`${PRODUCTS[product].label} revoked for ${TENANT_INDEX[slug]?.businessName || slug}`);
+    }
+    await loadTenants();
+    await renderOverview();
+  } catch(ex) { toast('Failed: ' + ex.message); btn.disabled = false; }
+});
+/* B3: platform policy toggle (Entitlements tab). */
+document.getElementById('policySuspendAddons').addEventListener('change', async (e) => {
+  try {
+    await updatePlatformPolicy({ suspendTenantAffectsAddons: e.target.checked });
+    toast(`Policy saved: tenant suspension ${e.target.checked ? 'now also pauses' : 'no longer touches'} Store & Tournaments${e.target.checked ? ' — run Diagnostics → Re-sync All to apply retroactively' : ''}`);
+  } catch(ex) { toast('Failed: ' + ex.message); e.target.checked = !e.target.checked; }
+});
 
 /* ---------- Entitlements matrix ---------- */
 function entChip(product, ent){
@@ -1182,6 +1318,122 @@ async function runEntAction(slug, product, action){
   renderOverview();
 }
 document.getElementById('entRefreshBtn').addEventListener('click', async () => { await loadTenants(); toast('Entitlements refreshed'); });
+
+/* ---------- Diagnostics (B4: access explainer + mirror health) ---------- */
+async function renderDiagnostics(){
+  const body = document.getElementById('diagBody');
+  const slug = document.getElementById('diagTenant').value;
+  if(!slug){ body.innerHTML = '<div class="rounded-[24px] bg-white border border-[#EAE0D5] p-8 mono text-[11px] opacity-50 text-center">Select a tenant to explain their access state.</div>'; return; }
+  body.innerHTML = '<div class="rounded-[24px] bg-white border border-[#EAE0D5] p-6 mono text-[11px] opacity-50 text-center">Diagnosing…</div>';
+  const t = TENANT_INDEX[slug] || {};
+  if(!ENT_STATE[slug]) ENT_STATE[slug] = await loadEntitlementsFor(slug, {});
+  const x = deriveRuntimeExpectation(slug);
+  let mirror = {}, mirrorErr = '';
+  try { const s = await db.doc(`clients/${slug}/status/state`).get(); mirror = (s.exists && s.data().data) || {}; }
+  catch(ex){ mirrorErr = ex.message; }
+  // Lifecycle provenance + recent tenant actions, client-side filtered from
+  // the recent audit window (avoids a composite index on slug+createdAt).
+  let lcAudit = null; const tenantAudit = [];
+  try {
+    const snap = await db.collection('platformAuditLog').orderBy('createdAt', 'desc').limit(200).get();
+    snap.forEach(dd => {
+      const ev = dd.data();
+      if(ev.slug !== slug) return;
+      if(!lcAudit && ev.action === 'lifecycle-change') lcAudit = ev;
+      if(tenantAudit.length < 8) tenantAudit.push(ev);
+    });
+  } catch(ex) { /* audit feed optional */ }
+  const lcMeta = LIFECYCLE_META[x.lifecycle] || LIFECYCLE_META.active;
+  const checks = [
+    { key: 'bookingPaused', label: 'bookingPaused', expect: x.bookingPaused },
+    { key: 'storeEnabled', label: 'storeEnabled', expect: x.storeEnabled },
+    { key: 'storePaused', label: 'storePaused', expect: x.storePaused },
+    { key: 'tournamentEnabled', label: 'tournamentEnabled', expect: x.tournamentEnabled },
+    { key: 'tournamentPaused', label: 'tournamentPaused', expect: x.tournamentPaused },
+  ];
+  const drift = checks.filter(c => mirror[c.key] !== undefined && !!mirror[c.key] !== !!c.expect);
+  const mirrorCell = (ok) => `<span class="mono text-[9px] font-[800] px-2 py-0.5 rounded-full" style="background:${ok ? '#E8F5D8' : '#FFE9E0'};color:${ok ? '#3F7019' : '#8C2C10'}">${ok ? 'MATCH' : 'DRIFT'}</span>`;
+  const productRows = PRODUCT_KEYS.map(p => {
+    const ent = ENT_STATE[slug][p];
+    const entMeta = ENT_STATUS_META[ent ? ent.status : 'not_added'] || ENT_STATUS_META.not_added;
+    const why = p === 'booking'
+      ? (x.siteOnline ? `Site online — lifecycle "${x.lifecycle}" is an online state.` : `Site offline — lifecycle "${x.lifecycle}" takes the booking page down.`)
+      : (!ent ? 'Never granted; mirror stays off.' : isEntOnline(ent) ? `Entitlement ${ent.status}${ent.paused ? ', on hold (paused)' : ''} — product gate on.` : `Entitlement ${ent.status} — product offline regardless of mirror.`);
+    return `<tr class="border-t border-[#F5EDE4]">
+      <td class="py-2 pr-2 font-[700]">${PRODUCTS[p].label}</td>
+      <td class="py-2 px-2"><span class="mono text-[9px] font-[800] px-2 py-0.5 rounded-full" style="background:${entMeta.bg};color:${entMeta.fg}">${entMeta.label}${ent && ent.paused && isEntOnline(ent) ? ' · Paused' : ''}</span></td>
+      <td class="py-2 px-2 mono text-[10px] opacity-70">${why}</td>
+    </tr>`;
+  }).join('');
+  body.innerHTML = `
+    <div class="rounded-[24px] bg-white border border-[#EAE0D5] p-5">
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <div class="font-[750] text-[14px]">${escapeHtml(t.businessName || slug)} <span class="mono text-[10px] opacity-60 font-[400]">?client=${escapeHtml(slug)}</span></div>
+        <span class="mono text-[10px] px-2.5 py-1 rounded-full" style="background:${lcMeta.bg};color:${lcMeta.fg}">${lcMeta.label}</span>
+      </div>
+      <div class="mt-2 mono text-[11px] leading-[1.8]">
+        <div>&bull; Booking site is <span class="font-[800]">${x.siteOnline ? 'ONLINE' : 'OFFLINE'}</span> because lifecycle is "${escapeHtml(x.lifecycle)}"${lcAudit ? ` — last change: ${escapeHtml(lcAudit.details || '')} (${escapeHtml(lcAudit.actorEmail || '')}, ${lcAudit.createdAt && lcAudit.createdAt.toDate ? lcAudit.createdAt.toDate().toLocaleString() : ''})` : ' — no recorded lifecycle change'}</div>
+        <div>&bull; Billing status "${escapeHtml((t.billingStatus || 'current').replace(/_/g, ' '))}" — informational, never blocks access.</div>
+        <div>&bull; Policy: ${POLICY.suspendTenantAffectsAddons ? `tenant suspension <span class="font-[800]">also pauses</span> Store &amp; Tournaments${x.siteOnline ? '' : ' — in effect right now'}` : 'tenant suspension pauses <span class="font-[800]">Booking only</span>; add-ons follow their own entitlements'}.</div>
+      </div>
+    </div>
+    <div class="rounded-[24px] bg-white border border-[#EAE0D5] overflow-hidden">
+      <div class="px-5 h-[48px] flex items-center justify-between border-b border-[#F1E9DF]">
+        <div class="font-[750] text-[13px]">Product entitlements &rarr; expected runtime state</div>
+        ${mirrorErr ? `<span class="mono text-[10px] text-[#8C2C10]">mirror unreadable: ${escapeHtml(mirrorErr)}</span>` : ''}
+      </div>
+      <div class="px-5 pb-2"><table class="w-full mono text-[11px]"><tbody>${productRows}</tbody></table></div>
+      <div class="px-5 py-3 border-t border-[#F1E9DF] flex flex-wrap items-center gap-2">
+        <div class="mono text-[10px] uppercase tracking-widest opacity-60 w-full">Runtime mirror (clients/${escapeHtml(slug)}/status/state)</div>
+        ${checks.map(c => {
+          const actual = mirror[c.key];
+          const shown = actual === undefined ? 'unset' : actual;
+          const ok = actual !== undefined && (!!actual === !!c.expect);
+          return `<span class="mono text-[10px] px-2 py-1 rounded-full bg-[#FFFBF5] border border-[#F1E9DF]">${c.label}: <span class="font-[800]">${escapeHtml(String(shown))}</span> ${mirrorCell(ok)}</span>`;
+        }).join('')}
+      </div>
+      ${drift.length ? `<div class="px-5 py-3 border-t border-[#FFC9B6] bg-[#FFE9E0] flex flex-wrap items-center gap-2">
+        <span class="mono text-[11px] font-[700] text-[#8C2C10]">Mirror drift on ${drift.length} flag(s) (${drift.map(c => c.key).join(', ')}) — the stored runtime state no longer matches platform state. Re-syncing rewrites it.</span>
+        <button type="button" id="diagResyncFromDrift" class="h-8 px-3 rounded-full bg-[#201C19] text-white mono text-[10px] font-[700] cursor-pointer">Re-sync now</button>
+      </div>` : ''}
+    </div>
+    <div class="rounded-[24px] bg-white border border-[#EAE0D5] overflow-hidden">
+      <div class="px-5 h-[48px] flex items-center border-b border-[#F1E9DF]"><div class="font-[750] text-[13px]">Recent actions for this tenant</div></div>
+      <div class="divide-y divide-[#F5EDE4]">${tenantAudit.length ? tenantAudit.map(ev => `<div class="px-5 py-2 mono text-[10px] flex flex-wrap gap-2"><span class="font-[800] px-1.5 py-0.5 rounded-full bg-[#F1E9DF]">${escapeHtml(ev.action || '')}</span><span class="opacity-70 flex-1">${escapeHtml(ev.details || '')}</span><span class="opacity-50">${ev.createdAt && ev.createdAt.toDate ? ev.createdAt.toDate().toLocaleString() : ''} &middot; ${escapeHtml(ev.actorEmail || '')}</span></div>`).join('') : '<div class="p-4 mono text-[10px] opacity-50 text-center">No audit entries for this tenant in the recent log window.</div>'}</div>
+    </div>`;
+  const resyncDrift = document.getElementById('diagResyncFromDrift');
+  if(resyncDrift) resyncDrift.addEventListener('click', async () => {
+    resyncDrift.disabled = true;
+    try {
+      await syncTenantRuntime(slug);
+      await logAudit('mirror-resync', slug, `Mirror re-synced from Diagnostics (drift: ${drift.map(c => c.key).join(', ')})`);
+      toast('Mirror re-synced from platform state');
+      await renderDiagnostics();
+    } catch(ex) { toast('Failed: ' + ex.message); resyncDrift.disabled = false; }
+  });
+}
+document.getElementById('diagTenant').addEventListener('change', () => renderDiagnostics());
+document.getElementById('diagResyncOneBtn').addEventListener('click', async () => {
+  const slug = document.getElementById('diagTenant').value;
+  if(!slug){ toast('Select a tenant first'); return; }
+  try {
+    await syncTenantRuntime(slug);
+    await logAudit('mirror-resync', slug, 'Mirror re-synced from Diagnostics');
+    toast('Mirror re-synced from platform state');
+    await renderDiagnostics();
+  } catch(ex) { toast('Failed: ' + ex.message); }
+});
+document.getElementById('resyncAllBtn').addEventListener('click', async () => {
+  const slugs = Object.keys(TENANT_INDEX);
+  if(!slugs.length){ toast('No tenants to re-sync'); return; }
+  if(!confirm(`Re-derive and rewrite the runtime mirror for all ${slugs.length} tenant(s) from current platform state? This fixes drift and applies a changed suspension policy retroactively.`)) return;
+  let ok = 0;
+  for(const s of slugs){ try { await syncTenantRuntime(s); ok++; } catch(ex) { console.warn('[Diagnostics] resync failed', s, ex.message); } }
+  await logAudit('mirror-resync-all', null, `${ok}/${slugs.length} mirrors re-synced`);
+  toast(`Re-synced ${ok}/${slugs.length} tenant mirrors`);
+  renderOverview();
+  if(document.getElementById('diagTenant').value) renderDiagnostics();
+});
 
 /* ---------- Plans tab ---------- */
 function renderPlansTab(){
@@ -1549,6 +1801,7 @@ auth.onAuthStateChanged(async (user) => {
     loadSecurityPanel();
     loadPlans();
     loadPaymentSettings();
+    loadPolicySettings();
   } else {
     document.getElementById('notAuthorizedEmail').textContent = user.email;
     document.getElementById('notAuthorizedUid').textContent = user.uid;
@@ -3361,6 +3614,7 @@ const AUDIT_ACTION_LABELS = {
   'ent-pause': 'Paused entitlement', 'ent-unpause': 'Unpaused entitlement', 'ent-suspend': 'Suspended entitlement',
   'ent-cancel': 'Revoked entitlement', 'lifecycle-change': 'Changed tenant lifecycle',
   'billing-status-change': 'Changed billing status', 'provision-entitlements': 'Provisioned entitlements',
+  'policy-change': 'Changed platform policy', 'mirror-resync': 'Re-synced runtime mirror', 'mirror-resync-all': 'Re-synced all runtime mirrors',
   'plans-seed': 'Seeded starter plans', 'plan-create': 'Created plan', 'plan-update': 'Updated plan',
   'plan-assign': 'Assigned plan to tenant', 'payment-settings': 'Updated platform payment instructions',
   'invoices-generate': 'Generated draft invoices', 'invoice-issue': 'Issued invoice',

@@ -69,18 +69,53 @@ body{background:#FFFBF5;color:#201C19}
 
   <div class="flex flex-col md:flex-row gap-5">
     <!-- Sidebar -->
+    <!-- Sidebar. Mirrors the DulaHQ-style platform control-plane layout:
+         Overview / Tenants / Entitlements / Plans & Billing / Usage /
+         Support(ideas) / Audit. Provisioning is a tenant action; invoices
+         are the billing domain's documents. -->
     <nav class="md:w-[200px] shrink-0 flex md:flex-col gap-1.5 overflow-x-auto md:overflow-visible pb-1 md:pb-0">
-      <button type="button" data-sa-tab="directory" class="sa-tab-btn shrink-0 text-left px-4 h-10 rounded-full md:rounded-[14px] mono text-[12px] font-[700] transition cursor-pointer whitespace-nowrap">Tenant Directory</button>
-      <button type="button" data-sa-tab="provisioning" class="sa-tab-btn shrink-0 text-left px-4 h-10 rounded-full md:rounded-[14px] mono text-[12px] font-[700] transition cursor-pointer whitespace-nowrap">Provisioning</button>
-      <button type="button" data-sa-tab="reports" class="sa-tab-btn shrink-0 text-left px-4 h-10 rounded-full md:rounded-[14px] mono text-[12px] font-[700] transition cursor-pointer whitespace-nowrap">Reports &amp; Billing</button>
+      <button type="button" data-sa-tab="overview" class="sa-tab-btn shrink-0 text-left px-4 h-10 rounded-full md:rounded-[14px] mono text-[12px] font-[700] transition cursor-pointer whitespace-nowrap">Overview</button>
+      <button type="button" data-sa-tab="directory" class="sa-tab-btn shrink-0 text-left px-4 h-10 rounded-full md:rounded-[14px] mono text-[12px] font-[700] transition cursor-pointer whitespace-nowrap">Tenants</button>
+      <button type="button" data-sa-tab="provisioning" class="sa-tab-btn shrink-0 text-left px-4 h-10 rounded-full md:rounded-[14px] mono text-[12px] font-[700] transition cursor-pointer whitespace-nowrap">Provision Tenant</button>
+      <button type="button" data-sa-tab="entitlements" class="sa-tab-btn shrink-0 text-left px-4 h-10 rounded-full md:rounded-[14px] mono text-[12px] font-[700] transition cursor-pointer whitespace-nowrap">Entitlements</button>
+      <button type="button" data-sa-tab="plans" class="sa-tab-btn shrink-0 text-left px-4 h-10 rounded-full md:rounded-[14px] mono text-[12px] font-[700] transition cursor-pointer whitespace-nowrap">Plans &amp; Pricing</button>
+      <button type="button" data-sa-tab="invoices" class="sa-tab-btn shrink-0 text-left px-4 h-10 rounded-full md:rounded-[14px] mono text-[12px] font-[700] transition cursor-pointer whitespace-nowrap">Invoices</button>
+      <button type="button" data-sa-tab="reports" class="sa-tab-btn shrink-0 text-left px-4 h-10 rounded-full md:rounded-[14px] mono text-[12px] font-[700] transition cursor-pointer whitespace-nowrap">Usage Reports</button>
       <button type="button" data-sa-tab="ideas" class="sa-tab-btn shrink-0 text-left px-4 h-10 rounded-full md:rounded-[14px] mono text-[12px] font-[700] transition cursor-pointer whitespace-nowrap">Feature Ideas</button>
-      <button type="button" data-sa-tab="security" class="sa-tab-btn shrink-0 text-left px-4 h-10 rounded-full md:rounded-[14px] mono text-[12px] font-[700] transition cursor-pointer whitespace-nowrap">Security</button>
+      <button type="button" data-sa-tab="security" class="sa-tab-btn shrink-0 text-left px-4 h-10 rounded-full md:rounded-[14px] mono text-[12px] font-[700] transition cursor-pointer whitespace-nowrap">Audit &amp; Security</button>
     </nav>
 
     <!-- Content -->
     <div class="flex-1 min-w-0">
-      <!-- PANEL: Tenant Directory -->
-      <div id="sa-panel-directory" class="sa-panel">
+      <!-- PANEL: Overview (platform health at a glance) -->
+      <div id="sa-panel-overview" class="sa-panel">
+        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3 mb-5" id="ovKpiRow"></div>
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-5">
+          <div class="rounded-[24px] bg-white border border-[#EAE0D5] p-5">
+            <div class="font-[750] text-[14px] mb-1">Needs Attention</div>
+            <div class="mono text-[10px] opacity-50 mb-3">Suspended tenants, overdue/unverified invoices, trials past their end date.</div>
+            <div id="ovAttention" class="space-y-2"></div>
+          </div>
+          <div class="rounded-[24px] bg-white border border-[#EAE0D5] p-5">
+            <div class="font-[750] text-[14px] mb-1">Entitlements Across Tenants</div>
+            <div class="mono text-[10px] opacity-50 mb-3">Live product grants by lifecycle state. Manage per tenant under Entitlements.</div>
+            <div id="ovEntSummary" class="space-y-2"></div>
+          </div>
+        </div>
+        <div class="rounded-[24px] bg-white border border-[#EAE0D5] overflow-hidden">
+          <div class="px-6 h-[56px] flex items-center justify-between border-b border-[#F1E9DF]">
+            <div>
+              <div class="font-[750] text-[15px]">Recent Platform Activity</div>
+              <div class="mono text-[10px] opacity-50">Last 8 superadmin actions. Full history under Audit &amp; Security.</div>
+            </div>
+            <button type="button" id="ovRefreshBtn" class="h-9 px-4 rounded-full bg-white border border-[#EAE0D5] mono text-[11px] font-[700] cursor-pointer hover:border-[#201C19] transition shrink-0">Refresh</button>
+          </div>
+          <div id="ovAuditList" class="divide-y divide-[#F5EDE4]"></div>
+        </div>
+      </div>
+
+      <!-- PANEL: Tenants (directory + per-tenant cockpit) -->
+      <div id="sa-panel-directory" class="sa-panel hidden">
         <div class="rounded-[24px] bg-white border border-[#EAE0D5] overflow-hidden">
           <div class="px-6 h-[56px] flex items-center justify-between border-b border-[#F1E9DF]">
             <div class="font-[750] text-[15px]">Tenant Directory</div>
@@ -117,6 +152,19 @@ body{background:#FFFBF5;color:#201C19}
               <span class="mono text-[10px] uppercase tracking-widest opacity-60">Initial Admin PIN</span>
               <input type="text" id="ctPin" value="1234" maxlength="8" required class="h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-4 mono text-[12px] font-[700] outline-none focus:border-[#201C19]"/>
             </label>
+            <label class="flex flex-col gap-1.5">
+              <span class="mono text-[10px] uppercase tracking-widest opacity-60">Plan (sets billing formula + subscription)</span>
+              <select id="ctPlan" class="h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-3 mono text-[12px] font-[700] outline-none focus:border-[#201C19]">
+                <option value="">No plan — manual billing formula</option>
+              </select>
+            </label>
+            <label class="flex flex-col gap-1.5 justify-end">
+              <span class="mono text-[10px] uppercase tracking-widest opacity-60">Start in Trial</span>
+              <label class="flex items-center gap-2 h-10 px-4 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] cursor-pointer">
+                <input type="checkbox" id="ctTrial" class="w-4 h-4 accent-[#201C19]"/>
+                <span class="mono text-[11px] font-[700]">7-day trial (all granted products start as Trial)</span>
+              </label>
+            </label>
             <label class="flex flex-col gap-1.5 md:col-span-2">
               <span class="mono text-[10px] uppercase tracking-widest opacity-60">Watermark Image (optional)</span>
               <input type="file" id="ctWatermark" accept="image/*" class="h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-3 mono text-[11px] outline-none focus:border-[#201C19] file:mr-3 file:h-full file:border-0 file:rounded-full file:bg-[#201C19] file:text-white file:px-3 file:mono file:text-[10px] file:font-[700] file:cursor-pointer cursor-pointer"/>
@@ -126,6 +174,107 @@ body{background:#FFFBF5;color:#201C19}
             <button type="submit" class="md:col-span-2 h-11 rounded-full bg-[#D6FF5F] hover:bg-[#CBF052] text-[#201C19] font-[800] text-[13px] border border-[#201C19]/10 transition cursor-pointer">Create / Register Tenant</button>
           </form>
         </div>
+      </div>
+
+      <!-- PANEL: Entitlements (tenant x product lifecycle matrix) -->
+      <div id="sa-panel-entitlements" class="sa-panel hidden">
+        <div class="rounded-[24px] bg-white border border-[#EAE0D5] p-6 shadow-xs mb-5">
+          <div class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#201C19] text-[#D6FF5F] mono text-[10px] font-[800] uppercase tracking-widest">Control Plane</div>
+          <h2 class="mt-1.5 text-[17px] font-[800] tracking-[-0.02em]">Entitlements by Tenant</h2>
+          <p class="mono text-[11px] opacity-60 mt-0.5">Product entitlement lifecycle per tenant: trial &rarr; active &rarr; suspended &rarr; cancelled, plus an independent pause hold. Granting here mirrors the runtime flags the tenant-facing sites actually read (<span class="font-[700]">clients/{slug}/status/state</span>) — the two-layer model: the platform decides what a tenant owns; the product consumes a derived gate.</p>
+          <div class="mt-3 flex flex-wrap gap-1.5 mono text-[9px]">
+            <span class="px-2 py-1 rounded-full bg-[#E8F5D8] text-[#3F7019] font-[700]">TRIAL — running evaluation window</span>
+            <span class="px-2 py-1 rounded-full bg-[#E8F5D8] text-[#3F7019] font-[700]">ACTIVE — entitled</span>
+            <span class="px-2 py-1 rounded-full bg-[#FFF0D6] text-[#8A5A00] font-[700]">PAUSED — hold, status unchanged</span>
+            <span class="px-2 py-1 rounded-full bg-[#FFF0D6] text-[#8A5A00] font-[700]">SUSPENDED — product offline</span>
+            <span class="px-2 py-1 rounded-full bg-[#FFE9E0] text-[#8C2C10] font-[700]">CANCELLED — revoked (history kept)</span>
+            <span class="px-2 py-1 rounded-full bg-[#F1E9DF] text-[#201C19]/60 font-[700]">NOT ADDED — never granted</span>
+          </div>
+        </div>
+        <div class="rounded-[24px] bg-white border border-[#EAE0D5] overflow-hidden">
+          <div class="px-6 h-[56px] flex items-center justify-between border-b border-[#F1E9DF]">
+            <div class="font-[750] text-[15px]">Entitlement Matrix</div>
+            <button type="button" id="entRefreshBtn" class="h-9 px-4 rounded-full bg-white border border-[#EAE0D5] mono text-[11px] font-[700] cursor-pointer hover:border-[#201C19] transition shrink-0">Refresh</button>
+          </div>
+          <div class="overflow-x-auto"><div id="entMatrix" class="min-w-[860px] divide-y divide-[#F5EDE4]"></div></div>
+        </div>
+      </div>
+
+      <!-- PANEL: Plans & Pricing (catalog + payment instructions) -->
+      <div id="sa-panel-plans" class="sa-panel hidden">
+        <div class="rounded-[24px] bg-white border border-[#EAE0D5] p-6 shadow-xs mb-5">
+          <div class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#201C19] text-[#D6FF5F] mono text-[10px] font-[800] uppercase tracking-widest">Commercial Layer</div>
+          <h2 class="mt-1.5 text-[17px] font-[800] tracking-[-0.02em]">Plan Catalog</h2>
+          <p class="mono text-[11px] opacity-60 mt-0.5">A plan bundles a monthly base fee, an included confirmed-booking allowance, per-booking overage rate, court limits, and per-add-on monthly fees. Assigning a plan sets the tenant's billing formula and stamps its pricing version — later plan edits never rewrite a tenant's subscription history.</p>
+          <div class="mt-4 flex flex-wrap gap-2">
+            <button type="button" id="seedPlansBtn" class="h-9 px-4 rounded-full bg-[#D6FF5F] hover:bg-[#CBF052] text-[#201C19] font-[800] text-[12px] border border-[#201C19]/10 transition cursor-pointer">Seed Starter Plans</button>
+            <button type="button" id="newPlanBtn" class="h-9 px-4 rounded-full bg-[#201C19] text-white mono text-[12px] font-[700] cursor-pointer">+ New Plan</button>
+            <button type="button" id="reloadPlansBtn" class="h-9 px-4 rounded-full bg-white border border-[#EAE0D5] mono text-[11px] font-[700] cursor-pointer hover:border-[#201C19]">Reload</button>
+          </div>
+          <form id="planForm" class="hidden mt-4 p-4 rounded-[16px] bg-[#FFFBF5] border border-[#EAE0D5] grid grid-cols-1 md:grid-cols-3 gap-3">
+            <label class="flex flex-col gap-1.5"><span class="mono text-[10px] uppercase tracking-widest opacity-60">Plan ID (immutable)</span><input type="text" id="pfId" required placeholder="e.g. plan-a" pattern="[a-z0-9-]+" class="h-9 rounded-full border border-[#EAE0D5] bg-white px-3 mono text-[11px] font-[700] outline-none focus:border-[#201C19]"/></label>
+            <label class="flex flex-col gap-1.5 md:col-span-2"><span class="mono text-[10px] uppercase tracking-widest opacity-60">Display Name</span><input type="text" id="pfName" required placeholder="e.g. Plan A — Monthly" class="h-9 rounded-full border border-[#EAE0D5] bg-white px-3 mono text-[11px] font-[700] outline-none focus:border-[#201C19]"/></label>
+            <label class="flex flex-col gap-1.5"><span class="mono text-[10px] uppercase tracking-widest opacity-60">Monthly Base (₱)</span><input type="number" id="pfBase" min="0" step="0.01" value="0" class="h-9 rounded-full border border-[#EAE0D5] bg-white px-3 mono text-[11px] font-[700] outline-none focus:border-[#201C19]"/></label>
+            <label class="flex flex-col gap-1.5"><span class="mono text-[10px] uppercase tracking-widest opacity-60">Included Bookings / mo</span><input type="number" id="pfIncluded" min="0" step="1" value="0" class="h-9 rounded-full border border-[#EAE0D5] bg-white px-3 mono text-[11px] font-[700] outline-none focus:border-[#201C19]"/></label>
+            <label class="flex flex-col gap-1.5"><span class="mono text-[10px] uppercase tracking-widest opacity-60">Rate / Booking Over Allowance (₱)</span><input type="number" id="pfRate" min="0" step="0.01" value="0" class="h-9 rounded-full border border-[#EAE0D5] bg-white px-3 mono text-[11px] font-[700] outline-none focus:border-[#201C19]"/></label>
+            <label class="flex flex-col gap-1.5"><span class="mono text-[10px] uppercase tracking-widest opacity-60">Max Courts (0 = unlimited)</span><input type="number" id="pfMaxCourts" min="0" step="1" value="0" class="h-9 rounded-full border border-[#EAE0D5] bg-white px-3 mono text-[11px] font-[700] outline-none focus:border-[#201C19]"/></label>
+            <label class="flex flex-col gap-1.5"><span class="mono text-[10px] uppercase tracking-widest opacity-60">Store Add-on Fee / mo (₱)</span><input type="number" id="pfStoreFee" min="0" step="0.01" value="0" class="h-9 rounded-full border border-[#EAE0D5] bg-white px-3 mono text-[11px] font-[700] outline-none focus:border-[#201C19]"/></label>
+            <label class="flex flex-col gap-1.5"><span class="mono text-[10px] uppercase tracking-widest opacity-60">Tournament Add-on Fee / mo (₱)</span><input type="number" id="pfTournFee" min="0" step="0.01" value="0" class="h-9 rounded-full border border-[#EAE0D5] bg-white px-3 mono text-[11px] font-[700] outline-none focus:border-[#201C19]"/></label>
+            <label class="flex flex-col gap-1.5"><span class="mono text-[10px] uppercase tracking-widest opacity-60">Pricing Version</span><input type="text" id="pfVersion" placeholder="e.g. 2026-09" class="h-9 rounded-full border border-[#EAE0D5] bg-white px-3 mono text-[11px] font-[700] outline-none focus:border-[#201C19]"/></label>
+            <label class="flex flex-col gap-1.5 md:col-span-3"><span class="mono text-[10px] uppercase tracking-widest opacity-60">Features / Notes (one per line)</span><textarea id="pfFeatures" rows="3" class="rounded-[14px] border border-[#EAE0D5] bg-white px-3 py-2 mono text-[11px] leading-[1.6] outline-none focus:border-[#201C19] resize-y"></textarea></label>
+            <div class="md:col-span-3 flex gap-2">
+              <button type="submit" class="h-9 px-4 rounded-full bg-[#201C19] text-white mono text-[11px] font-[700] cursor-pointer">Save Plan</button>
+              <button type="button" id="pfCancelBtn" class="h-9 px-4 rounded-full bg-white border border-[#EAE0D5] mono text-[11px] font-[700] cursor-pointer">Cancel</button>
+            </div>
+          </form>
+        </div>
+        <div id="planList" class="grid grid-cols-1 xl:grid-cols-2 gap-3 mb-5"></div>
+
+        <div class="rounded-[24px] bg-white border border-[#EAE0D5] p-6 shadow-xs mb-5">
+          <div class="font-[750] text-[15px]">Assign Plan to Tenant</div>
+          <p class="mono text-[11px] opacity-60 mt-0.5">Sets the tenant's subscription (with pricing version), overwrites its billing formula from the plan, and leaves existing entitlements untouched — grant or revoke products per tenant under Entitlements.</p>
+          <div class="mt-3 flex flex-wrap items-end gap-2">
+            <label class="flex flex-col gap-1.5"><span class="mono text-[10px] uppercase tracking-widest opacity-60">Tenant</span><select id="assignTenant" class="h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-3 mono text-[11px] font-[700] outline-none focus:border-[#201C19] min-w-[200px]"><option value="">Select tenant...</option></select></label>
+            <label class="flex flex-col gap-1.5"><span class="mono text-[10px] uppercase tracking-widest opacity-60">Plan</span><select id="assignPlan" class="h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-3 mono text-[11px] font-[700] outline-none focus:border-[#201C19] min-w-[200px]"><option value="">Select plan...</option></select></label>
+            <button type="button" id="assignPlanBtn" class="h-10 px-4 rounded-full bg-[#D6FF5F] hover:bg-[#CBF052] text-[#201C19] font-[800] text-[12px] border border-[#201C19]/10 transition cursor-pointer">Assign Plan</button>
+          </div>
+        </div>
+
+        <div class="rounded-[24px] bg-white border border-[#EAE0D5] p-6 shadow-xs">
+          <div class="font-[750] text-[15px]">Platform Payment Instructions (Manual QR)</div>
+          <p class="mono text-[11px] opacity-60 mt-0.5">Where tenants pay their platform invoices. Shown on every non-verified invoice; no payment processor is involved — you collect externally and verify manually. Stored in <span class="font-[700]">platformSettings/billing</span>.</p>
+          <form id="paySettingsForm" class="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
+            <label class="flex flex-col gap-1.5"><span class="mono text-[10px] uppercase tracking-widest opacity-60">GCash Name</span><input type="text" id="psGcashName" class="h-9 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-3 mono text-[11px] font-[700] outline-none focus:border-[#201C19]"/></label>
+            <label class="flex flex-col gap-1.5"><span class="mono text-[10px] uppercase tracking-widest opacity-60">GCash Number</span><input type="text" id="psGcashNumber" class="h-9 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-3 mono text-[11px] font-[700] outline-none focus:border-[#201C19]"/></label>
+            <label class="flex flex-col gap-1.5"><span class="mono text-[10px] uppercase tracking-widest opacity-60">Bank Name</span><input type="text" id="psBankName" class="h-9 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-3 mono text-[11px] font-[700] outline-none focus:border-[#201C19]"/></label>
+            <label class="flex flex-col gap-1.5"><span class="mono text-[10px] uppercase tracking-widest opacity-60">Bank Account Name &amp; Number</span><input type="text" id="psBankAccount" class="h-9 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-3 mono text-[11px] font-[700] outline-none focus:border-[#201C19]"/></label>
+            <label class="flex flex-col gap-1.5 md:col-span-2"><span class="mono text-[10px] uppercase tracking-widest opacity-60">Instructions / Notes</span><textarea id="psNotes" rows="2" class="rounded-[14px] border border-[#EAE0D5] bg-[#FFFBF5] px-3 py-2 mono text-[11px] leading-[1.6] outline-none focus:border-[#201C19] resize-y"></textarea></label>
+            <div class="md:col-span-2"><button type="submit" class="h-9 px-4 rounded-full bg-[#201C19] text-white mono text-[11px] font-[700] cursor-pointer">Save Payment Instructions</button></div>
+          </form>
+        </div>
+      </div>
+
+      <!-- PANEL: Invoices (billing domain documents + manual verification) -->
+      <div id="sa-panel-invoices" class="sa-panel hidden">
+        <div class="rounded-[24px] bg-white border border-[#EAE0D5] p-6 shadow-xs mb-5">
+          <div class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#201C19] text-[#D6FF5F] mono text-[10px] font-[800] uppercase tracking-widest">Billing Domain</div>
+          <h2 class="mt-1.5 text-[17px] font-[800] tracking-[-0.02em]">Platform Invoices</h2>
+          <p class="mono text-[11px] opacity-60 mt-0.5">Draft invoices materialize this month's usage with frozen line items (base subscription, booking overage, staff-reserve hours, add-on fees), then walk the manual payment states. A submitted payment is never auto-verified — verification is always a human action here.</p>
+          <div class="mt-3 flex flex-wrap items-end gap-2">
+            <button type="button" id="genInvoicesBtn" class="h-10 px-4 rounded-full bg-[#D6FF5F] hover:bg-[#CBF052] text-[#201C19] font-[800] text-[12px] border border-[#201C19]/10 transition cursor-pointer">Generate Draft Invoices (this month)</button>
+            <button type="button" id="reloadInvoicesBtn" class="h-10 px-4 rounded-full bg-white border border-[#EAE0D5] mono text-[11px] font-[700] cursor-pointer hover:border-[#201C19]">Refresh</button>
+            <label class="flex flex-col gap-1"><span class="mono text-[10px] uppercase tracking-widest opacity-60">Filter status</span>
+              <select id="invoiceStatusFilter" class="h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-3 mono text-[11px] font-[700] outline-none focus:border-[#201C19]">
+                <option value="">All statuses</option>
+              </select>
+            </label>
+            <label class="flex flex-col gap-1"><span class="mono text-[10px] uppercase tracking-widest opacity-60">Filter tenant</span>
+              <select id="invoiceTenantFilter" class="h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-3 mono text-[11px] font-[700] outline-none focus:border-[#201C19] min-w-[180px]"><option value="">All tenants</option></select>
+            </label>
+          </div>
+          <div id="invoiceGenNote" class="hidden mt-3 mono text-[11px] px-4 py-2.5 rounded-[14px] bg-[#FFFBF5] border border-[#EAE0D5]"></div>
+        </div>
+        <div id="invoiceList" class="space-y-3"></div>
       </div>
 
       <!-- PANEL: Reports & Billing -->
@@ -281,12 +430,913 @@ async function hashPin(pin){
   return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
+/* ================================================================
+   PLATFORM CONTROL PLANE -- tenants, entitlements, plans, invoices.
+   ================================================================
+   Restructured per the DulaHQ-style platform model:
+
+   1. ENTITIES: a tenant (organization) owns product entitlements
+      (booking core / store / tournament) that each carry their own
+      lifecycle (trial -> active -> suspended -> cancelled) plus an
+      independent pause hold, with an append-only history per doc.
+
+   2. TWO LAYERS: the platform decides what a tenant owns
+      (platformTenants/{slug}/entitlements/*, superadmin-only);
+      the tenant-facing products consume a derived runtime gate
+      (clients/{slug}/status/state booleans) that this console
+      re-mirrors on every entitlement change. Tenant apps are
+      untouched by this model -- they keep reading the same flags.
+
+   3. COMMERCIAL LAYER: plans bundle pricing (versioned); assigning
+      a plan sets the tenant's billing formula and stamps a
+      subscription. Invoices materialize usage into frozen line
+      items and walk the manual-QR payment states -- a submitted
+      payment is never auto-verified.
+   ================================================================ */
+const PRODUCTS = {
+  booking:    { key: 'booking',    label: 'Court Booking', core: true,  accent: '#3F7019' },
+  store:      { key: 'store',      label: 'Store',         core: false, accent: '#3B2A9E' },
+  tournament: { key: 'tournament', label: 'Tournaments',   core: false, accent: '#8A5A00' },
+};
+const PRODUCT_KEYS = Object.keys(PRODUCTS);
+const ENT_STATUS_META = {
+  trial:      { label: 'Trial',      bg: '#E8F5D8', fg: '#3F7019' },
+  active:     { label: 'Active',     bg: '#E8F5D8', fg: '#3F7019' },
+  suspended:  { label: 'Suspended',  bg: '#FFF0D6', fg: '#8A5A00' },
+  cancelled:  { label: 'Cancelled',  bg: '#FFE9E0', fg: '#8C2C10' },
+  not_added:  { label: 'Not Added',  bg: '#F1E9DF', fg: '#201C19' },
+};
+const TENANT_LIFECYCLE = ['provisioning','trial','active','grace','restricted','suspended','cancelled','archived'];
+const LIFECYCLE_ONLINE = ['provisioning','trial','active','grace'];   // site stays up
+const LIFECYCLE_META = {
+  provisioning:{ label:'Provisioning', bg:'#EDE8FF', fg:'#3B2A9E' },
+  trial:       { label:'Trial',        bg:'#E8F5D8', fg:'#3F7019' },
+  active:      { label:'Active',       bg:'#E8F5D8', fg:'#3F7019' },
+  grace:       { label:'Grace period', bg:'#FFF0D6', fg:'#8A5A00' },
+  restricted:  { label:'Restricted',   bg:'#FFF0D6', fg:'#8A5A00' },
+  suspended:   { label:'Suspended',    bg:'#FFE9E0', fg:'#8C2C10' },
+  cancelled:   { label:'Cancelled',    bg:'#FFE9E0', fg:'#8C2C10' },
+  archived:    { label:'Archived',     bg:'#F1E9DF', fg:'#201C19' },
+};
+const BILLING_STATUSES = ['current','grace','overdue','suspended_notify_only'];
+const INVOICE_STATUSES = ['draft','awaiting_payment','submitted_for_verification','partially_paid','verified','rejected','overdue','waived','cancelled'];
+const INVOICE_STATUS_META = {
+  draft:                        { label:'Draft',                        bg:'#F1E9DF', fg:'#201C19' },
+  awaiting_payment:             { label:'Awaiting payment',             bg:'#FFF0D6', fg:'#8A5A00' },
+  submitted_for_verification:   { label:'Submitted for verification',   bg:'#EDE8FF', fg:'#3B2A9E' },
+  partially_paid:               { label:'Partially paid',               bg:'#FFF0D6', fg:'#8A5A00' },
+  verified:                     { label:'Verified',                     bg:'#E8F5D8', fg:'#3F7019' },
+  rejected:                     { label:'Rejected',                     bg:'#FFE9E0', fg:'#8C2C10' },
+  overdue:                      { label:'Overdue',                      bg:'#FFE9E0', fg:'#8C2C10' },
+  waived:                       { label:'Waived',                       bg:'#F1E9DF', fg:'#201C19' },
+  cancelled:                    { label:'Cancelled',                    bg:'#F1E9DF', fg:'#201C19' },
+};
+
+/* Live platform state, rebuilt by loadTenants() and mutated in place by
+   entitlement actions so every surface (directory rows, matrix, overview)
+   can render from one source of truth. */
+let TENANT_INDEX = {};       // slug -> platformTenants doc data
+let ENT_STATE = {};          // slug -> { booking|store|tournament -> ent doc or null }
+let _lastEntries = [];       // last platformTenants snapshot for re-renders
+let _lastStatusMap = {};     // last clients/{slug}/status/state snapshot
+let PLANS_CACHE = {};        // planId -> plan doc
+let PAY_SETTINGS = null;     // platformSettings/billing doc data
+
+function actorEmail(){ return (auth.currentUser && auth.currentUser.email) || 'unknown'; }
+function isEntOnline(ent){ return !!ent && (ent.status === 'trial' || ent.status === 'active'); }
+function entRuntime(ent){
+  if(!ent) return { enabled: false, paused: false };
+  return { enabled: isEntOnline(ent), paused: ent.paused === true || ent.status === 'suspended' };
+}
+
+/* Resolve entitlements for one tenant: real docs win; missing docs fall
+   back to the legacy runtime booleans (migration-on-read -- pre-restructure
+   tenants have no entitlement docs yet). Booking is the core product: it
+   always exists, derived from the tenant's operational status if never
+   materialized. */
+async function loadEntitlementsFor(slug, legacyStatus){
+  const ents = { booking: null, store: null, tournament: null };
+  try {
+    const snap = await db.collection(`platformTenants/${slug}/entitlements`).get();
+    snap.forEach(doc => { if(ENTS_VALID[doc.id]) ents[doc.id] = { id: doc.id, ...doc.data() }; });
+  } catch(ex) { console.warn('[Platform] entitlement read failed for', slug, ex.message); }
+  const suspended = (TENANT_INDEX[slug] && TENANT_INDEX[slug].status) === 'suspended';
+  if(!ents.booking) ents.booking = { id: 'booking', product: 'booking', status: suspended ? 'suspended' : 'active', paused: false, virtual: true };
+  if(!ents.store && legacyStatus && legacyStatus.storeEnabled) ents.store = { id: 'store', product: 'store', status: 'active', paused: !!legacyStatus.storePaused, virtual: true, legacy: true };
+  if(!ents.tournament && legacyStatus && legacyStatus.tournamentEnabled) ents.tournament = { id: 'tournament', product: 'tournament', status: 'active', paused: !!legacyStatus.tournamentPaused, virtual: true, legacy: true };
+  return ents;
+}
+const ENTS_VALID = { booking: true, store: true, tournament: true };
+
+/* Write the derived runtime gate the tenant-facing apps actually read.
+   Everything on clients/{slug}/status/state is DERIVED here from the
+   tenant lifecycle + entitlements -- the one place the two layers meet. */
+async function syncTenantRuntime(slug){
+  const t = TENANT_INDEX[slug] || {};
+  const ents = ENT_STATE[slug] || {};
+  const lifecycle = t.lifecycle || (t.status === 'suspended' ? 'suspended' : 'active');
+  const siteOnline = LIFECYCLE_ONLINE.includes(lifecycle);
+  // A virtual booking entitlement (no materialized doc) must track the
+  // tenant's CURRENT operational state, not the snapshot from load time --
+  // otherwise a suspended-then-reactivated tenant stays paused forever.
+  let booking = ents.booking;
+  if(!booking || booking.virtual) booking = { status: siteOnline ? 'active' : 'suspended', paused: false };
+  const bR = entRuntime(booking), sR = entRuntime(ents.store), tR = entRuntime(ents.tournament);
+  const bookingPaused = !siteOnline || !bR.enabled;
+  await db.doc(`clients/${slug}/status/state`).set({
+    data: {
+      bookingPaused,
+      storeEnabled: sR.enabled, storePaused: sR.paused,
+      tournamentEnabled: tR.enabled, tournamentPaused: tR.paused,
+    },
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  }, { merge: true });
+  // Keep the legacy operational flag aligned so picker/reports keep working.
+  const legacyStatus = siteOnline ? 'active' : 'suspended';
+  if(t.status !== legacyStatus){
+    await db.doc(`platformTenants/${slug}`).set({ status: legacyStatus }, { merge: true });
+    await db.doc(`tenantDirectory/${slug}`).set({ status: legacyStatus }, { merge: true });
+    TENANT_INDEX[slug] = { ...(TENANT_INDEX[slug] || {}), status: legacyStatus };
+  }
+}
+
+/* One mutation path for every entitlement change, from any surface.
+   Writes the lifecycle doc (+ history entry), re-mirrors the runtime
+   gate, audits, and refreshes local state. Firestore write happens even
+   for a first-ever change on a virtual/legacy entitlement -- that's the
+   moment the entity is materialized. */
+async function setEntitlement(slug, product, patch, action, note){
+  const prev = (ENT_STATE[slug] || {})[product] || null;
+  const nextStatus = patch.status !== undefined ? patch.status : (prev ? prev.status : null);
+  const nextPaused = patch.paused !== undefined ? patch.paused : (prev ? !!prev.paused : false);
+  const historyEntry = {
+    at: new Date().toISOString(),
+    action,
+    from: prev ? prev.status : 'not_added',
+    to: nextStatus || (prev ? prev.status : 'not_added'),
+    pausedTo: patch.paused !== undefined ? nextPaused : undefined,
+    by: actorEmail(),
+    note: note || ''
+  };
+  const docData = {
+    product,
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    updatedBy: actorEmail(),
+    history: firebase.firestore.FieldValue.arrayUnion(historyEntry),
+  };
+  if(nextStatus) docData.status = nextStatus;
+  docData.paused = nextPaused;
+  if(!prev || !prev.grantedAt){ docData.grantedAt = firebase.firestore.FieldValue.serverTimestamp(); docData.grantedBy = actorEmail(); }
+  if(patch.trialEndsAt) docData.trialEndsAt = patch.trialEndsAt;
+  await db.doc(`platformTenants/${slug}/entitlements/${product}`).set(docData, { merge: true });
+  ENT_STATE[slug] = ENT_STATE[slug] || { booking: null, store: null, tournament: null };
+  ENT_STATE[slug][product] = { ...(prev || { grantedAt: null }), id: product, product, status: nextStatus || (prev && prev.status), paused: nextPaused, ...(patch.trialEndsAt ? { trialEndsAt: patch.trialEndsAt } : {}) };
+  await syncTenantRuntime(slug);
+  await logAudit(`ent-${action}`, slug, `${PRODUCTS[product].label}: ${historyEntry.from} -> ${historyEntry.to}${nextPaused ? ' (paused)' : ''}${note ? ' — ' + note : ''}`);
+}
+
+/* Tenant lifecycle + billing status (access / billing / product status
+   are deliberately separate fields). Lifecycle drives the runtime site
+   gate; billing status is policy metadata -- notify-only by design. */
+async function setTenantLifecycle(slug, lifecycle){
+  const t = TENANT_INDEX[slug] || {};
+  const prev = t.lifecycle || (t.status === 'suspended' ? 'suspended' : 'active');
+  const opStatus = LIFECYCLE_ONLINE.includes(lifecycle) ? 'active' : 'suspended';
+  await db.doc(`platformTenants/${slug}`).set({ lifecycle, status: opStatus }, { merge: true });
+  await db.doc(`tenantDirectory/${slug}`).set({ status: opStatus }, { merge: true });
+  TENANT_INDEX[slug] = { ...t, lifecycle, status: opStatus };
+  // Keep a virtual (not-yet-materialized) booking entitlement in step so
+  // chips and the matrix reflect the lifecycle change immediately.
+  if(ENT_STATE[slug] && ENT_STATE[slug].booking && ENT_STATE[slug].booking.virtual){
+    ENT_STATE[slug].booking = { ...ENT_STATE[slug].booking, status: opStatus === 'active' ? 'active' : 'suspended' };
+  }
+  await syncTenantRuntime(slug);
+  await logAudit('lifecycle-change', slug, `${t.businessName || slug}: ${prev} -> ${lifecycle}`);
+}
+async function setTenantBillingStatus(slug, billingStatus){
+  const t = TENANT_INDEX[slug] || {};
+  await db.doc(`platformTenants/${slug}`).set({ billingStatus }, { merge: true });
+  TENANT_INDEX[slug] = { ...t, billingStatus };
+  await logAudit('billing-status-change', slug, `${t.businessName || slug}: billing status -> ${billingStatus}`);
+}
+
+/* ---------- Plans (commercial catalog, versioned pricing) ---------- */
+async function loadPlans(){
+  try {
+    const snap = await db.collection('platformPlans').get();
+    PLANS_CACHE = {};
+    snap.forEach(doc => { PLANS_CACHE[doc.id] = { id: doc.id, ...doc.data() }; });
+  } catch(ex) { console.warn('[Platform] plan load failed:', ex.message); }
+  populatePlanSelects();
+  renderPlansTab();
+}
+function populatePlanSelects(){
+  const ids = Object.keys(PLANS_CACHE).sort();
+  const opts = ids.map(id => `<option value="${escapeHtml(id)}">${escapeHtml(PLANS_CACHE[id].name || id)}</option>`).join('');
+  const ct = document.getElementById('ctPlan');
+  if(ct) ct.innerHTML = '<option value="">No plan — manual billing formula</option>' + opts;
+  const ap = document.getElementById('assignPlan');
+  if(ap) ap.innerHTML = '<option value="">Select plan...</option>' + opts;
+}
+const STARTER_PLANS = {
+  'demo': { name: 'Demo / Validation', monthlyBase: 0, includedBookings: 50, perBookingRate: 0, maxCourts: 4, addonFees: { store: 0, tournament: 0 }, products: ['booking'], features: ['Full booking product for demos and validation', 'No charge — internal and prospect use'], pricingVersion: '2026-09' },
+  'plan-a': { name: 'Plan A — Monthly', monthlyBase: 500, includedBookings: 100, perBookingRate: 15, maxCourts: 4, addonFees: { store: 250, tournament: 250 }, products: ['booking'], features: ['Hosting, updates, support', '₱3,000 one-time setup (first 12 months)', '₱500/mo continues after month 12'], pricingVersion: '2026-09' },
+  'plan-c': { name: 'Plan C — Annual', monthlyBase: 0, includedBookings: 200, perBookingRate: 10, maxCourts: 4, addonFees: { store: 200, tournament: 200 }, products: ['booking'], features: ['Setup + 12 months all-in (₱10,000 setup)', 'Optional ₱500/mo after month 12; else export & sunset'], pricingVersion: '2026-09' },
+};
+async function seedStarterPlans(){
+  const missing = Object.keys(STARTER_PLANS).filter(id => !PLANS_CACHE[id]);
+  if(missing.length === 0){ toast('Starter plans already exist'); return; }
+  for(const id of missing){
+    const p = STARTER_PLANS[id];
+    await db.doc(`platformPlans/${id}`).set({ ...p, seeded: true, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+    PLANS_CACHE[id] = { id, ...p };
+  }
+  await logAudit('plans-seed', null, `Seeded starter plans: ${missing.join(', ')}`);
+  toast(`Seeded ${missing.length} starter plan(s)`);
+  populatePlanSelects();
+  renderPlansTab();
+}
+async function savePlanFromForm(){
+  const editing = document.getElementById('planForm').getAttribute('data-editing');
+  const id = (editing || document.getElementById('pfId').value.trim().toLowerCase());
+  const name = document.getElementById('pfName').value.trim();
+  if(!id || !/^[a-z0-9-]+$/.test(id)){ toast('Plan ID must be lowercase letters, numbers, hyphens'); return; }
+  if(!name){ toast('Plan name is required'); return; }
+  const plan = {
+    name,
+    monthlyBase: parseFloat(document.getElementById('pfBase').value) || 0,
+    includedBookings: parseInt(document.getElementById('pfIncluded').value, 10) || 0,
+    perBookingRate: parseFloat(document.getElementById('pfRate').value) || 0,
+    maxCourts: parseInt(document.getElementById('pfMaxCourts').value, 10) || 0,
+    addonFees: {
+      store: parseFloat(document.getElementById('pfStoreFee').value) || 0,
+      tournament: parseFloat(document.getElementById('pfTournFee').value) || 0,
+    },
+    products: ['booking'],
+    features: document.getElementById('pfFeatures').value.split('\n').map(s => s.trim()).filter(Boolean),
+    pricingVersion: document.getElementById('pfVersion').value.trim() || new Date().toISOString().slice(0,7),
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+  };
+  try {
+    if(!editing) plan.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+    await db.doc(`platformPlans/${id}`).set(plan, { merge: true });
+    PLANS_CACHE[id] = { ...(PLANS_CACHE[id] || {}), id, ...plan };
+    await logAudit(editing ? 'plan-update' : 'plan-create', null, `${name} (${id}) v${plan.pricingVersion}`);
+    toast(`Plan "${name}" saved`);
+    document.getElementById('planForm').classList.add('hidden');
+    document.getElementById('planForm').removeAttribute('data-editing');
+    populatePlanSelects();
+    renderPlansTab();
+  } catch(ex) { toast('Failed: ' + ex.message); }
+}
+async function assignPlanToTenant(){
+  const slug = document.getElementById('assignTenant').value;
+  const planId = document.getElementById('assignPlan').value;
+  if(!slug || !planId){ toast('Pick a tenant and a plan'); return; }
+  const t = TENANT_INDEX[slug] || {};
+  const plan = PLANS_CACHE[planId];
+  if(!confirm(`Assign "${plan.name}" to ${t.businessName || slug}?\n\nThis overwrites their billing formula with the plan's pricing (base ₱${(plan.monthlyBase||0).toFixed(2)} / ${plan.includedBookings||0} included bookings / ₱${(plan.perBookingRate||0).toFixed(2)} per booking over) and stamps subscription v${plan.pricingVersion || 'n/a'}. Existing entitlements are not changed.`)) return;
+  try {
+    const subscription = {
+      planId,
+      planName: plan.name || planId,
+      pricingVersion: plan.pricingVersion || null,
+      status: 'active',
+      startedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    };
+    const billing = {
+      baseFee: Number(plan.monthlyBase) || 0,
+      freeBookings: Number(plan.includedBookings) || 0,
+      perBookingRate: Number(plan.perBookingRate) || 0,
+    };
+    await db.doc(`platformTenants/${slug}`).set({ subscription, billing }, { merge: true });
+    TENANT_INDEX[slug] = { ...(TENANT_INDEX[slug] || {}), subscription, billing };
+    await logAudit('plan-assign', slug, `${t.businessName || slug} -> ${plan.name} (v${plan.pricingVersion || 'n/a'})`);
+    toast(`${plan.name} assigned to ${t.businessName || slug}`);
+    renderPlansTab();
+    renderEntitlementsTab();
+    renderOverview();
+  } catch(ex) { toast('Failed: ' + ex.message); }
+}
+
+/* ---------- Platform payment instructions (manual QR) ---------- */
+async function loadPaymentSettings(){
+  try {
+    const snap = await db.doc('platformSettings/billing').get();
+    PAY_SETTINGS = snap.exists ? (snap.data() || {}) : {};
+  } catch(ex) { PAY_SETTINGS = {}; }
+  const f = PAY_SETTINGS || {};
+  const set = (id, v) => { const el = document.getElementById(id); if(el) el.value = v || ''; };
+  set('psGcashName', f.gcashName); set('psGcashNumber', f.gcashNumber);
+  set('psBankName', f.bankName); set('psBankAccount', f.bankAccount); set('psNotes', f.notes);
+}
+function paymentInstructionsHtml(){
+  const p = PAY_SETTINGS || {};
+  const rows = [
+    p.gcashName || p.gcashNumber ? `GCash: ${escapeHtml([p.gcashName, p.gcashNumber].filter(Boolean).join(' · '))}` : null,
+    p.bankName || p.bankAccount ? `Bank: ${escapeHtml([p.bankName, p.bankAccount].filter(Boolean).join(' · '))}` : null,
+    p.notes ? escapeHtml(p.notes) : null,
+  ].filter(Boolean);
+  return rows.length ? rows.map(r => `<div class="mono text-[10px] leading-[1.7]">${r}</div>`).join('') : '<div class="mono text-[10px] opacity-60">No platform payment instructions configured yet — set them under Plans &amp; Pricing.</div>';
+}
+
+/* ---------- Provisioning: commercial initialization ---------- */
+async function initializeTenantCommercial(slug, planId, startTrial){
+  const plan = planId ? PLANS_CACHE[planId] : null;
+  const now = new Date();
+  const trialEndsAt = startTrial ? new Date(now.getTime() + 7 * 864e5).toISOString() : null;
+  if(plan){
+    const subscription = {
+      planId, planName: plan.name || planId, pricingVersion: plan.pricingVersion || null,
+      status: startTrial ? 'trial' : 'active', startedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      ...(trialEndsAt ? { trialEndsAt } : {}),
+    };
+    const billing = { baseFee: Number(plan.monthlyBase) || 0, freeBookings: Number(plan.includedBookings) || 0, perBookingRate: Number(plan.perBookingRate) || 0 };
+    await db.doc(`platformTenants/${slug}`).set({ subscription, billing, lifecycle: startTrial ? 'trial' : 'active' }, { merge: true });
+    TENANT_INDEX[slug] = { ...(TENANT_INDEX[slug] || {}), subscription, billing, lifecycle: startTrial ? 'trial' : 'active', status: 'active' };
+  } else {
+    await db.doc(`platformTenants/${slug}`).set({ lifecycle: startTrial ? 'trial' : 'active' }, { merge: true });
+    TENANT_INDEX[slug] = { ...(TENANT_INDEX[slug] || {}), lifecycle: startTrial ? 'trial' : 'active', status: 'active' };
+  }
+  ENT_STATE[slug] = { booking: null, store: null, tournament: null };
+  await setEntitlement(slug, 'booking', { status: startTrial ? 'trial' : 'active', paused: false }, 'grant', startTrial ? '7-day trial' : 'provisioned active');
+  await syncTenantRuntime(slug);
+  await logAudit('provision-entitlements', slug, `${plan ? 'Plan ' + plan.name : 'manual formula'}${startTrial ? ' + trial' : ''}`);
+}
+
+/* ---------- Invoices (billing domain) ---------- */
+function invoiceDocId(slug, period){ return `inv_${slug}_${period}`; }
+function invoiceTotals(inv){
+  const paid = (inv.payments || []).reduce((s, p) => s + (Number(p.amount) || 0), 0);
+  const credited = Number(inv.creditsApplied) || 0;
+  const remaining = Math.max(0, (Number(inv.total) || 0) - paid - credited);
+  return { paid, credited, remaining };
+}
+/* Freeze this month's usage into draft invoices with explainable lines.
+   Idempotent per tenant+period: existing drafts are refreshed, anything
+   already issued or beyond is never rewritten (snapshot semantics). */
+async function generateDraftInvoices(){
+  const period = usagePeriod(0);
+  const slugs = Object.keys(TENANT_INDEX);
+  if(slugs.length === 0){ toast('No tenants to invoice'); return; }
+  let created = 0, refreshed = 0, skippedNoCharge = 0, skippedIssued = 0;
+  const skippedList = [];
+  for(const slug of slugs){
+    try {
+      const t = TENANT_INDEX[slug];
+      const existingSnap = await db.doc(`platformInvoices/${invoiceDocId(slug, period)}`).get();
+      const existing = existingSnap.exists ? existingSnap.data() : null;
+      if(existing && existing.status && existing.status !== 'draft'){ skippedIssued++; continue; }
+      const rep = await computeTenantReport({ slug, businessName: t.businessName || slug, billing: t.billing || {} });
+      const billing = t.billing || {};
+      const plan = t.subscription && t.subscription.planId ? PLANS_CACHE[t.subscription.planId] : null;
+      const baseFee = Number(billing.baseFee) || 0;
+      const included = Number(billing.freeBookings) || 0;
+      const rate = Number(billing.perBookingRate) || 0;
+      const confirmed = (rep.thisM && rep.thisM.confirmedBookings) || 0;
+      const staffHours = rep.staffHours || 0;
+      const overage = Math.max(0, confirmed - included);
+      const staffCharge = staffHours * (rate / 2);
+      const ents = ENT_STATE[slug] || {};
+      const lines = [
+        { sourceType: 'subscription', sourceId: plan ? plan.id : 'manual-formula', description: plan ? `Base subscription — ${plan.name} (v${plan.pricingVersion || 'n/a'})` : 'Base fee (manual billing formula)', qty: 1, unitAmount: baseFee, amount: baseFee },
+        ...(overage > 0 ? [{ sourceType: 'usage_event', sourceId: 'booking_confirmed_overage', description: `Confirmed bookings over included allowance (${confirmed} − ${included})`, qty: overage, unitAmount: rate, amount: overage * rate }] : []),
+        ...(staffCharge > 0 ? [{ sourceType: 'usage_event', sourceId: 'staff_reserve_hours', description: 'Staff-reserved hours (MTD), billed at half the per-booking rate', qty: staffHours, unitAmount: rate / 2, amount: staffCharge }] : []),
+        ...PRODUCT_KEYS.filter(k => k !== 'booking' && isEntOnline(ents[k]) && plan && Number((plan.addonFees || {})[k]) > 0)
+          .map(k => ({ sourceType: 'entitlement', sourceId: k, description: `${PRODUCTS[k].label} add-on — monthly (v${plan.pricingVersion || 'n/a'})`, qty: 1, unitAmount: Number(plan.addonFees[k]) || 0, amount: Number(plan.addonFees[k]) || 0 })),
+      ];
+      const subtotal = lines.reduce((s, l) => s + (Number(l.amount) || 0), 0);
+      if(subtotal <= 0 && !lines.some(l => l.amount > 0)){ skippedNoCharge++; skippedList.push(t.businessName || slug); continue; }
+      const doc = {
+        tenantId: slug, tenantName: t.businessName || slug, period,
+        lines, subtotal, total: subtotal,
+        creditsApplied: existing ? (Number(existing.creditsApplied) || 0) : 0,
+        status: 'draft',
+        payments: existing ? (existing.payments || []) : [],
+        adjustments: existing ? (existing.adjustments || []) : [],
+        snapshot: { confirmedBookings: confirmed, staffReserveHours: staffHours, includedBookings: included, perBookingRate: rate, planId: plan ? plan.id : null, generatedAt: new Date().toISOString(), note: 'Line items frozen from the usage events ledger at generation time; later usage changes do not alter this draft.' },
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        ...(existing ? {} : { createdAt: firebase.firestore.FieldValue.serverTimestamp() }),
+      };
+      await db.doc(`platformInvoices/${invoiceDocId(slug, period)}`).set(doc, { merge: true });
+      existing ? refreshed++ : created++;
+    } catch(ex) {
+      console.warn('[Invoices] generation failed for', slug, ex.message);
+      skippedList.push(`${slug}: ${ex.message}`);
+    }
+  }
+  await logAudit('invoices-generate', null, `period ${period}: ${created} created, ${refreshed} refreshed, ${skippedIssued} already issued, ${skippedNoCharge} nothing to bill`);
+  const note = document.getElementById('invoiceGenNote');
+  note.classList.remove('hidden');
+  note.innerHTML = `Period <span class="font-[700]">${period}</span> — <span class="font-[700]">${created}</span> draft(s) created, ${refreshed} refreshed, ${skippedIssued} left untouched (already issued), ${skippedNoCharge} with nothing to bill${skippedList.length ? ' — ' + escapeHtml(skippedList.slice(0, 5).join(', ')) : ''}.`;
+  await loadInvoices();
+  renderOverview();
+}
+async function loadInvoices(){
+  try {
+    const snap = await db.collection('platformInvoices').orderBy('period', 'desc').limit(300).get();
+    const invs = [];
+    snap.forEach(d => invs.push({ id: d.id, ...d.data() }));
+    invs.sort((a, b) => (b.period || '').localeCompare(a.period || '') || (a.tenantName || '').localeCompare(b.tenantName || ''));
+    renderInvoicesTab(invs);
+    return invs;
+  } catch(ex) {
+    document.getElementById('invoiceList').innerHTML = `<div class="p-6 text-center mono text-[11px] text-[#8C2C10]">Failed to load invoices: ${escapeHtml(ex.message)}</div>`;
+    return [];
+  }
+}
+async function invoiceApplyAction(inv, patch, action, details, paymentEntry, adjustment){
+  try {
+    const update = { ...patch, updatedAt: firebase.firestore.FieldValue.serverTimestamp() };
+    if(paymentEntry) update.payments = firebase.firestore.FieldValue.arrayUnion({ at: new Date().toISOString(), by: actorEmail(), ...paymentEntry });
+    if(adjustment) update.adjustments = firebase.firestore.FieldValue.arrayUnion({ at: new Date().toISOString(), by: actorEmail(), ...adjustment });
+    if(patch.status === 'verified') update.verifiedAt = firebase.firestore.FieldValue.serverTimestamp();
+    if(patch.status === 'awaiting_payment' && inv.status === 'draft') update.issuedAt = firebase.firestore.FieldValue.serverTimestamp();
+    await db.doc(`platformInvoices/${inv.id}`).update(update);
+    await logAudit(`invoice-${action}`, inv.tenantId, `${inv.tenantName || inv.tenantId} ${inv.period}: ${details || action}`);
+    await loadInvoices();
+    renderOverview();
+    return true;
+  } catch(ex) { toast('Failed: ' + ex.message); return false; }
+}
+
 /* ---------- Screens ---------- */
 function showScreen(id){
   ['signInScreen','notAuthorizedScreen','dashboard'].forEach(s => {
     document.getElementById(s).classList.toggle('hidden', s !== id);
   });
 }
+
+/* ================================================================
+   CONTROL-PLANE UI -- Overview, Entitlements matrix, Plans,
+   Invoices. All of these render from the shared platform state
+   (TENANT_INDEX / ENT_STATE / PLANS_CACHE / ALL_INVOICES) that
+   loadTenants() and the services above maintain.
+   ================================================================ */
+let ALL_INVOICES = [];
+
+function populateTenantSelects(){
+  const entries = _lastEntries;
+  const opts = entries.map(e => `<option value="${escapeHtml(e.id)}">${escapeHtml(e.data.businessName || e.id)}</option>`).join('');
+  const at = document.getElementById('assignTenant');
+  if(at) at.innerHTML = '<option value="">Select tenant...</option>' + opts;
+  const itf = document.getElementById('invoiceTenantFilter');
+  if(itf) itf.innerHTML = '<option value="">All tenants</option>' + opts;
+}
+
+/* ---------- Overview ---------- */
+function ovKpi(label, value, sub){
+  return `<div class="rounded-[24px] bg-white border border-[#EAE0D5] p-5">
+    <div class="mono text-[10px] uppercase tracking-widest opacity-60">${label}</div>
+    <div class="text-[22px] font-[800] tracking-[-0.02em] mt-1">${value}</div>
+    <div class="mono text-[10px] opacity-60 mt-1">${sub}</div>
+  </div>`;
+}
+async function renderOverview(){
+  const kpiRow = document.getElementById('ovKpiRow'); if(!kpiRow) return;
+  const tenants = Object.keys(TENANT_INDEX).map(s => ({ slug: s, ...(TENANT_INDEX[s] || {}) }));
+  const total = tenants.length;
+  const online = tenants.filter(t => t.status !== 'suspended').length;
+  const suspended = total - online;
+  const trials = tenants.filter(t => (t.lifecycle || '') === 'trial').length;
+
+  const entCounts = {};
+  PRODUCT_KEYS.forEach(p => {
+    entCounts[p] = { trial: 0, active: 0, suspended: 0, cancelled: 0, paused: 0, none: 0 };
+    tenants.forEach(t => {
+      const ent = (ENT_STATE[t.slug] || {})[p];
+      if(!ent){ entCounts[p].none++; return; }
+      if(isEntOnline(ent)) entCounts[p][ent.status === 'trial' ? 'trial' : 'active']++;
+      else if(ent.status === 'suspended') entCounts[p].suspended++;
+      else if(ent.status === 'cancelled') entCounts[p].cancelled++;
+      if(ent.paused === true && isEntOnline(ent)) entCounts[p].paused++;
+    });
+  });
+
+  const rows = _lastReportingRows || [];
+  const okRows = rows.filter(r => !r.error);
+  const mtdCharge = okRows.reduce((s, r) => s + (Number(r.suggestedCharge) || 0), 0);
+  const mtdConfirmed = okRows.reduce((s, r) => s + ((r.thisM && r.thisM.confirmedBookings) || 0), 0);
+
+  const openInvoices = ALL_INVOICES.filter(i => ['awaiting_payment','submitted_for_verification','overdue','partially_paid'].includes(i.status));
+  const openTotal = openInvoices.reduce((s, i) => s + invoiceTotals(i).remaining, 0);
+  const verifiedTotal = ALL_INVOICES.filter(i => i.status === 'verified' && i.period === usagePeriod(0)).reduce((s, i) => s + (Number(i.total) || 0), 0);
+
+  kpiRow.innerHTML = [
+    ovKpi('Tenants', `${total}`, `${online} online · ${suspended} suspended · ${trials} in trial`),
+    ovKpi('Entitlements live', `${entCounts.booking.active + entCounts.booking.trial} · ${entCounts.store.active + entCounts.store.trial} · ${entCounts.tournament.active + entCounts.tournament.trial}`, `Booking / Store / Tournaments — active + trial`),
+    ovKpi('MTD projected billing', fmtMoneySA(mtdCharge), `${mtdConfirmed} confirmed bookings platform-wide`),
+    ovKpi('Open invoices', fmtMoneySA(openTotal), `${openInvoices.length} awaiting/verifying · ${fmtMoneySA(verifiedTotal)} verified MTD`),
+  ].join('');
+
+  // Needs attention
+  const attn = [];
+  tenants.filter(t => t.status === 'suspended').forEach(t => attn.push({ label: t.businessName || t.slug, note: 'Tenant suspended', cls: 'bg-[#FFE9E0] text-[#8C2C10]' }));
+  tenants.filter(t => (t.billingStatus || 'current') !== 'current').forEach(t => attn.push({ label: t.businessName || t.slug, note: `Billing status: ${escapeHtml((t.billingStatus || '').replace(/_/g,' '))}`, cls: 'bg-[#FFF0D6] text-[#8A5A00]' }));
+  openInvoices.forEach(i => attn.push({ label: `${escapeHtml(i.tenantName || i.tenantId)} · ${escapeHtml(i.period)}`, note: `Invoice ${INVOICE_STATUS_META[i.status] ? INVOICE_STATUS_META[i.status].label.toLowerCase() : i.status} — ${fmtMoneySA(invoiceTotals(i).remaining)} remaining`, cls: 'bg-[#EDE8FF] text-[#3B2A9E]' }));
+  tenants.forEach(t => {
+    PRODUCT_KEYS.forEach(p => {
+      const ent = (ENT_STATE[t.slug] || {})[p];
+      if(ent && ent.status === 'trial' && ent.trialEndsAt){
+        const days = Math.ceil((new Date(ent.trialEndsAt) - new Date()) / 864e5);
+        if(days <= 2) attn.push({ label: `${escapeHtml(t.businessName || t.slug)} · ${PRODUCTS[p].label}`, note: days < 0 ? 'Trial expired — activate or revoke' : `Trial ends in ${days} day(s)`, cls: 'bg-[#FFF0D6] text-[#8A5A00]' });
+      }
+    });
+  });
+  document.getElementById('ovAttention').innerHTML = attn.length ? attn.slice(0, 12).map(a => `<div class="flex items-center justify-between gap-2 px-3 py-2 rounded-[12px] ${a.cls}"><span class="mono text-[11px] font-[700]">${a.label}</span><span class="mono text-[10px] text-right">${a.note}</span></div>`).join('') + (attn.length > 12 ? `<div class="mono text-[10px] opacity-50 text-center">+ ${attn.length - 12} more</div>` : '') : '<div class="mono text-[11px] opacity-50 py-3 text-center">Nothing needs attention right now.</div>';
+
+  // Entitlement summary per product
+  document.getElementById('ovEntSummary').innerHTML = PRODUCT_KEYS.map(p => {
+    const c = entCounts[p];
+    return `<div class="flex items-center justify-between gap-2 px-3 py-2 rounded-[12px] bg-[#FFFBF5] border border-[#F1E9DF]">
+      <span class="mono text-[11px] font-[700]">${PRODUCTS[p].label}</span>
+      <span class="mono text-[10px] opacity-70">${c.active} active · ${c.trial} trial · ${c.paused} paused · ${c.suspended} susp · ${c.cancelled} cancelled · ${c.none} not added</span>
+    </div>`;
+  }).join('');
+
+  // Recent audit (fresh, last 8)
+  try {
+    const snap = await db.collection('platformAuditLog').orderBy('createdAt', 'desc').limit(8).get();
+    const items = [];
+    snap.forEach(d => {
+      const e = d.data();
+      const when = e.createdAt && e.createdAt.toDate ? e.createdAt.toDate().toLocaleString() : '';
+      items.push(`<div class="px-5 py-2.5 flex flex-wrap items-center gap-2">
+        <span class="mono text-[10px] font-[800] px-2 py-0.5 rounded-full bg-[#F1E9DF]">${escapeHtml(e.action || '')}</span>
+        <span class="mono text-[11px] font-[700]">${escapeHtml(e.slug || 'platform')}</span>
+        <span class="mono text-[10px] opacity-70 flex-1 min-w-[200px]">${escapeHtml(e.details || '')}</span>
+        <span class="mono text-[9px] opacity-50">${escapeHtml(e.actorEmail || '')} · ${when}</span>
+      </div>`);
+    });
+    document.getElementById('ovAuditList').innerHTML = items.join('') || '<div class="p-5 text-center mono text-[11px] opacity-50">No audit entries yet.</div>';
+  } catch(ex) {
+    document.getElementById('ovAuditList').innerHTML = `<div class="p-5 text-center mono text-[11px] opacity-50">Audit feed unavailable: ${escapeHtml(ex.message)}</div>`;
+  }
+}
+document.getElementById('ovRefreshBtn').addEventListener('click', async () => { await loadInvoices(); await renderOverview(); toast('Overview refreshed'); });
+
+/* ---------- Entitlements matrix ---------- */
+function entChip(product, ent){
+  const meta = ENT_STATUS_META[ent ? ent.status : 'not_added'] || ENT_STATUS_META.not_added;
+  const paused = ent && ent.paused === true && isEntOnline(ent);
+  return `<span class="mono text-[10px] font-[800] px-2 py-1 rounded-full" style="background:${meta.bg};color:${meta.fg}">${meta.label}${paused ? ' · Paused' : ''}</span>`;
+}
+function entActionsHtml(slug, product, ent){
+  if(product === 'booking') return `<span class="mono text-[9px] opacity-50">follows tenant lifecycle</span>`;
+  const b = [];
+  const st = ent ? ent.status : 'not_added';
+  const paused = ent && ent.paused === true;
+  if(st === 'not_added' || st === 'cancelled'){
+    b.push(`<button type="button" data-ent="grant" data-slug="${slug}" data-product="${product}" class="h-7 px-2.5 rounded-full bg-[#201C19] text-white mono text-[9px] font-[700] cursor-pointer">Grant</button>`);
+    b.push(`<button type="button" data-ent="trial" data-slug="${slug}" data-product="${product}" class="h-7 px-2.5 rounded-full bg-white border border-[#EAE0D5] mono text-[9px] font-[700] cursor-pointer">Trial</button>`);
+  }
+  if(st === 'trial') b.push(`<button type="button" data-ent="activate" data-slug="${slug}" data-product="${product}" class="h-7 px-2.5 rounded-full bg-[#E8F5D8] text-[#3F7019] border border-[#CFE8B5] mono text-[9px] font-[700] cursor-pointer">Activate</button>`);
+  if(st === 'active' || st === 'trial'){
+    b.push(`<button type="button" data-ent="${paused ? 'unpause' : 'pause'}" data-slug="${slug}" data-product="${product}" class="h-7 px-2.5 rounded-full bg-[#FFF0D6] text-[#8A5A00] border border-[#F5DFB8] mono text-[9px] font-[700] cursor-pointer">${paused ? 'Unpause' : 'Pause'}</button>`);
+    b.push(`<button type="button" data-ent="suspend" data-slug="${slug}" data-product="${product}" class="h-7 px-2.5 rounded-full bg-white border border-[#EAE0D5] mono text-[9px] font-[700] cursor-pointer">Suspend</button>`);
+  }
+  if(st === 'suspended') b.push(`<button type="button" data-ent="activate" data-slug="${slug}" data-product="${product}" class="h-7 px-2.5 rounded-full bg-[#E8F5D8] text-[#3F7019] border border-[#CFE8B5] mono text-[9px] font-[700] cursor-pointer">Reactivate</button>`);
+  if(st === 'active' || st === 'trial' || st === 'suspended') b.push(`<button type="button" data-ent="cancel" data-slug="${slug}" data-product="${product}" class="h-7 px-2.5 rounded-full bg-[#FFE9E0] text-[#8C2C10] border border-[#FFC9B6] mono text-[9px] font-[700] cursor-pointer">Revoke</button>`);
+  return b.join(' ');
+}
+function renderEntitlementsTab(){
+  const wrap = document.getElementById('entMatrix'); if(!wrap) return;
+  const entries = _lastEntries;
+  if(entries.length === 0){ wrap.innerHTML = '<div class="p-8 text-center mono text-[12px] opacity-50">No tenants yet — provision one first.</div>'; return; }
+  wrap.innerHTML = `
+    <div class="grid grid-cols-[minmax(180px,1.4fr)_repeat(3,minmax(190px,1fr))] gap-3 px-5 py-3 bg-[#FFFBF5] border-b border-[#F1E9DF] mono text-[10px] uppercase tracking-widest opacity-60">
+      <div>Tenant</div><div>Court Booking (core)</div><div>Store</div><div>Tournaments</div>
+    </div>
+  ` + entries.map(({ id, data }) => {
+    const ents = ENT_STATE[id] || {};
+    const t = TENANT_INDEX[id] || data || {};
+    const lc = t.lifecycle || (t.status === 'suspended' ? 'suspended' : 'active');
+    const lcMeta = LIFECYCLE_META[lc] || LIFECYCLE_META.active;
+    return `<div class="px-5 py-4" data-entrow="${id}">
+      <div class="grid grid-cols-[minmax(180px,1.4fr)_repeat(3,minmax(190px,1fr))] gap-3 items-start">
+        <div class="min-w-0">
+          <div class="font-[750] text-[13px] truncate">${escapeHtml(data.businessName || id)}</div>
+          <div class="mono text-[10px] opacity-60 mb-1.5">?client=${escapeHtml(id)}</div>
+          <span class="mono text-[9px] px-2 py-0.5 rounded-full" style="background:${lcMeta.bg};color:${lcMeta.fg}">${lcMeta.label}</span>
+          ${(t.billingStatus && t.billingStatus !== 'current') ? `<span class="mono text-[9px] px-2 py-0.5 rounded-full bg-[#FFF0D6] text-[#8A5A00] ml-1">bill: ${escapeHtml(String(t.billingStatus).replace(/_/g,' '))}</span>` : ''}
+        </div>
+        ${PRODUCT_KEYS.map(p => `
+          <div class="rounded-[14px] border border-[#F1E9DF] bg-[#FFFBF5] p-3">
+            <div class="mb-2">${entChip(p, ents[p])}</div>
+            <div class="flex flex-wrap gap-1.5">${entActionsHtml(id, p, ents[p])}</div>
+            <button type="button" data-ent-history="${id}|${p}" class="mt-2 mono text-[9px] opacity-50 hover:opacity-100 underline cursor-pointer">history</button>
+            <div id="enthist-${cssId(id)}-${p}" class="hidden mt-2 pt-2 border-t border-dashed border-[#EAE0D5] max-h-[180px] overflow-y-auto"></div>
+          </div>
+        `).join('')}
+      </div>
+    </div>`;
+  }).join('');
+
+  wrap.querySelectorAll('[data-ent]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const slug = btn.dataset.slug, product = btn.dataset.product, action = btn.dataset.ent;
+      btn.disabled = true;
+      try { await runEntAction(slug, product, action); }
+      catch(ex) { toast('Failed: ' + ex.message); }
+      finally { btn.disabled = false; }
+    });
+  });
+  wrap.querySelectorAll('[data-ent-history]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const parts = btn.dataset.entHistory.split('|');
+      const slug = parts[0], product = parts[1];
+      const box = document.getElementById(`enthist-${cssId(slug)}-${product}`);
+      box.classList.toggle('hidden');
+      if(box.dataset.loaded) return;
+      try {
+        const snap = await db.doc(`platformTenants/${slug}/entitlements/${product}`).get();
+        const history = (snap.exists && snap.data().history) || [];
+        box.innerHTML = history.length ? history.slice().reverse().map(h => `<div class="mono text-[9px] leading-[1.6] opacity-80">${escapeHtml(String(h.at || '').slice(0,16).replace('T',' '))} · <span class="font-[700]">${escapeHtml(h.action || '')}</span> ${escapeHtml(String(h.from || ''))}→${escapeHtml(String(h.to || ''))}${h.note ? ' · ' + escapeHtml(h.note) : ''}${h.by ? ' · ' + escapeHtml(h.by) : ''}</div>`).join('') : '<div class="mono text-[9px] opacity-50">No recorded history (pre-restructure entitlement).</div>';
+        box.dataset.loaded = '1';
+      } catch(ex) { box.innerHTML = `<div class="mono text-[9px] text-[#8C2C10]">${escapeHtml(ex.message)}</div>`; }
+    });
+  });
+}
+async function runEntAction(slug, product, action){
+  const t = TENANT_INDEX[slug] || {};
+  const name = t.businessName || slug;
+  if(action === 'grant' || action === 'trial'){
+    if(product === 'store'){
+      const pin = prompt(`Initial Store PIN for ${name} (separate from the Booking Admin PIN):`, '1234');
+      if(pin === null) return;
+      await provisionStoreDefaults(slug, (pin.trim() || '1234'));
+    }
+    const patch = action === 'trial'
+      ? { status: 'trial', paused: false, trialEndsAt: new Date(Date.now() + 7 * 864e5).toISOString() }
+      : { status: 'active', paused: false };
+    await setEntitlement(slug, product, patch, action === 'trial' ? 'trial' : 'grant', action === 'trial' ? '7-day trial from matrix' : 'granted from matrix');
+    toast(`${PRODUCTS[product].label} ${action === 'trial' ? 'trial started' : 'granted'} for ${name}`);
+  } else if(action === 'activate'){
+    await setEntitlement(slug, product, { status: 'active', paused: false }, 'activate', 'activated');
+    toast(`${PRODUCTS[product].label} activated for ${name}`);
+  } else if(action === 'pause'){
+    await setEntitlement(slug, product, { paused: true }, 'pause', 'paused');
+    toast(`${PRODUCTS[product].label} paused for ${name}`);
+  } else if(action === 'unpause'){
+    await setEntitlement(slug, product, { paused: false }, 'unpause', 'unpaused');
+    toast(`${PRODUCTS[product].label} unpaused for ${name}`);
+  } else if(action === 'suspend'){
+    if(!confirm(`Suspend ${PRODUCTS[product].label} for ${name}? The product goes offline for that tenant; other products are unaffected.`)) return;
+    await setEntitlement(slug, product, { status: 'suspended' }, 'suspend', 'suspended');
+    toast(`${PRODUCTS[product].label} suspended for ${name}`);
+  } else if(action === 'cancel'){
+    if(!confirm(`Revoke ${PRODUCTS[product].label} for ${name}? Tenant data is kept -- this only removes entitlement. History is preserved on the entitlement record.`)) return;
+    await setEntitlement(slug, product, { status: 'cancelled', paused: false }, 'cancel', 'revoked');
+    toast(`${PRODUCTS[product].label} revoked for ${name}`);
+  }
+  renderEntitlementsTab();
+  renderTenantList(_lastEntries, _lastStatusMap);
+  renderOverview();
+}
+document.getElementById('entRefreshBtn').addEventListener('click', async () => { await loadTenants(); toast('Entitlements refreshed'); });
+
+/* ---------- Plans tab ---------- */
+function renderPlansTab(){
+  const wrap = document.getElementById('planList'); if(!wrap) return;
+  const ids = Object.keys(PLANS_CACHE).sort();
+  if(ids.length === 0){
+    wrap.innerHTML = '<div class="rounded-[24px] bg-white border border-[#EAE0D5] p-6 mono text-[11px] opacity-60 text-center">No plans yet. Click <span class="font-[700]">Seed Starter Plans</span> (Demo / Plan A / Plan C from CLIENTS.md) or create one.</div>';
+    return;
+  }
+  wrap.innerHTML = ids.map(id => {
+    const p = PLANS_CACHE[id];
+    const tenantsOnPlan = Object.keys(TENANT_INDEX).filter(s => TENANT_INDEX[s].subscription && TENANT_INDEX[s].subscription.planId === id);
+    return `<div class="rounded-[24px] bg-white border border-[#EAE0D5] p-5">
+      <div class="flex items-center justify-between gap-2 flex-wrap">
+        <div class="font-[750] text-[14px]">${escapeHtml(p.name || id)} <span class="mono text-[9px] px-1.5 py-0.5 rounded-full bg-[#F1E9DF] font-[700] ml-1">v${escapeHtml(p.pricingVersion || 'n/a')}</span></div>
+        <button type="button" data-plan-edit="${id}" class="h-8 px-3 rounded-full bg-white border border-[#EAE0D5] mono text-[10px] font-[700] cursor-pointer hover:border-[#201C19]">Edit</button>
+      </div>
+      <div class="mono text-[9px] opacity-50 mb-3">${escapeHtml(id)} · ${tenantsOnPlan.length} tenant(s) subscribed</div>
+      <div class="grid grid-cols-2 md:grid-cols-3 gap-2 mono text-[10px]">
+        <div class="p-2 rounded-[10px] bg-[#FFFBF5] border border-[#F1E9DF]">Base <span class="font-[800] float-right">${fmtMoneySA(p.monthlyBase)}</span></div>
+        <div class="p-2 rounded-[10px] bg-[#FFFBF5] border border-[#F1E9DF]">Included bookings <span class="font-[800] float-right">${Number(p.includedBookings) || 0}</span></div>
+        <div class="p-2 rounded-[10px] bg-[#FFFBF5] border border-[#F1E9DF]">Overage/booking <span class="font-[800] float-right">${fmtMoneySA(p.perBookingRate)}</span></div>
+        <div class="p-2 rounded-[10px] bg-[#FFFBF5] border border-[#F1E9DF]">Max courts <span class="font-[800] float-right">${Number(p.maxCourts) || 0 || '∞'}</span></div>
+        <div class="p-2 rounded-[10px] bg-[#FFFBF5] border border-[#F1E9DF]">Store add-on <span class="font-[800] float-right">${fmtMoneySA((p.addonFees || {}).store)}</span></div>
+        <div class="p-2 rounded-[10px] bg-[#FFFBF5] border border-[#F1E9DF]">Tournament add-on <span class="font-[800] float-right">${fmtMoneySA((p.addonFees || {}).tournament)}</span></div>
+      </div>
+      ${((p.features || []).length) ? `<div class="mt-3 mono text-[10px] leading-[1.7] opacity-70">${p.features.map(f => '• ' + escapeHtml(f)).join('<br>')}</div>` : ''}
+    </div>`;
+  }).join('');
+  wrap.querySelectorAll('[data-plan-edit]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const p = PLANS_CACHE[btn.dataset.planEdit];
+      const form = document.getElementById('planForm');
+      form.classList.remove('hidden');
+      form.setAttribute('data-editing', btn.dataset.planEdit);
+      document.getElementById('pfId').value = p.id;
+      document.getElementById('pfId').disabled = true;
+      document.getElementById('pfName').value = p.name || '';
+      document.getElementById('pfBase').value = p.monthlyBase || 0;
+      document.getElementById('pfIncluded').value = p.includedBookings || 0;
+      document.getElementById('pfRate').value = p.perBookingRate || 0;
+      document.getElementById('pfMaxCourts').value = p.maxCourts || 0;
+      document.getElementById('pfStoreFee').value = (p.addonFees || {}).store || 0;
+      document.getElementById('pfTournFee').value = (p.addonFees || {}).tournament || 0;
+      document.getElementById('pfVersion').value = p.pricingVersion || '';
+      document.getElementById('pfFeatures').value = (p.features || []).join('\n');
+      form.scrollIntoView({ behavior: 'smooth' });
+    });
+  });
+}
+document.getElementById('seedPlansBtn').addEventListener('click', () => seedStarterPlans().catch(ex => toast('Failed: ' + ex.message)));
+document.getElementById('reloadPlansBtn').addEventListener('click', () => loadPlans());
+document.getElementById('newPlanBtn').addEventListener('click', () => {
+  const form = document.getElementById('planForm');
+  form.classList.remove('hidden');
+  form.removeAttribute('data-editing');
+  document.getElementById('pfId').disabled = false;
+  form.reset();
+  form.scrollIntoView({ behavior: 'smooth' });
+});
+document.getElementById('pfCancelBtn').addEventListener('click', () => {
+  const form = document.getElementById('planForm');
+  form.classList.add('hidden');
+  form.removeAttribute('data-editing');
+  document.getElementById('pfId').disabled = false;
+});
+document.getElementById('planForm').addEventListener('submit', (e) => { e.preventDefault(); savePlanFromForm(); });
+document.getElementById('assignPlanBtn').addEventListener('click', () => assignPlanToTenant());
+document.getElementById('paySettingsForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  try {
+    const doc = {
+      gcashName: document.getElementById('psGcashName').value.trim(),
+      gcashNumber: document.getElementById('psGcashNumber').value.trim(),
+      bankName: document.getElementById('psBankName').value.trim(),
+      bankAccount: document.getElementById('psBankAccount').value.trim(),
+      notes: document.getElementById('psNotes').value.trim(),
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    };
+    await db.doc('platformSettings/billing').set(doc, { merge: true });
+    PAY_SETTINGS = { ...(PAY_SETTINGS || {}), ...doc };
+    await logAudit('payment-settings', null, 'Platform payment instructions updated');
+    toast('Payment instructions saved');
+  } catch(ex) { toast('Failed: ' + ex.message); }
+});
+
+/* ---------- Invoices tab ---------- */
+function renderInvoicesTab(invs){
+  ALL_INVOICES = invs || [];
+  const list = document.getElementById('invoiceList'); if(!list) return;
+  const statusFilter = document.getElementById('invoiceStatusFilter').value;
+  const tenantFilter = document.getElementById('invoiceTenantFilter').value;
+  let rows = ALL_INVOICES;
+  if(statusFilter) rows = rows.filter(i => i.status === statusFilter);
+  if(tenantFilter) rows = rows.filter(i => i.tenantId === tenantFilter);
+  if(rows.length === 0){
+    list.innerHTML = '<div class="rounded-[24px] bg-white border border-[#EAE0D5] p-8 mono text-[11px] opacity-50 text-center">No invoices match. Generate drafts for the current month to materialize usage into billable documents.</div>';
+    return;
+  }
+  list.innerHTML = rows.map(inv => invoiceCardHtml(inv)).join('');
+  rows.forEach(inv => wireInvoiceCard(inv));
+}
+function invoiceCardHtml(inv){
+  const meta = INVOICE_STATUS_META[inv.status] || INVOICE_STATUS_META.draft;
+  const { paid, credited, remaining } = invoiceTotals(inv);
+  const linesHtml = (inv.lines || []).map(l => `
+    <tr class="border-t border-[#F5EDE4]">
+      <td class="py-1.5 pr-2">${escapeHtml(l.description || '')}<div class="mono text-[9px] opacity-50">${escapeHtml(l.sourceType || '')} · ${escapeHtml(l.sourceId || '')}</div></td>
+      <td class="py-1.5 px-2 text-right">${Number(l.qty) || 0}</td>
+      <td class="py-1.5 px-2 text-right">${fmtMoneySA(l.unitAmount)}</td>
+      <td class="py-1.5 pl-2 text-right font-[700]">${fmtMoneySA(l.amount)}</td>
+    </tr>`).join('');
+  const paysHtml = (inv.payments || []).map(p => `<div class="mono text-[10px]">${escapeHtml(String(p.at || '').slice(0,16).replace('T',' '))} · <span class="font-[700]">${fmtMoneySA(p.amount)}</span> via ${escapeHtml(p.method || 'manual')}${p.reference ? ' · ref ' + escapeHtml(p.reference) : ''}${p.by ? ' · ' + escapeHtml(p.by) : ''}</div>`).join('');
+  const adjHtml = (inv.adjustments || []).map(a => `<div class="mono text-[10px]">${escapeHtml(String(a.at || '').slice(0,16).replace('T',' '))} · ${escapeHtml(a.type || 'note')}${a.note ? ' · ' + escapeHtml(a.note) : ''}</div>`).join('');
+  const showInstructions = ['awaiting_payment','submitted_for_verification','rejected','overdue'].includes(inv.status);
+  const s = inv.status;
+  const actions = [];
+  if(s === 'draft') actions.push(`<button type="button" data-inv="issue" data-id="${inv.id}" class="h-8 px-3 rounded-full bg-[#D6FF5F] hover:bg-[#CBF052] text-[#201C19] font-[800] text-[10px] border border-[#201C19]/10 cursor-pointer">Issue (awaiting payment)</button>`);
+  if(s === 'awaiting_payment') actions.push(`<button type="button" data-inv="markSubmitted" data-id="${inv.id}" class="h-8 px-3 rounded-full bg-[#EDE8FF] text-[#3B2A9E] mono text-[10px] font-[700] cursor-pointer">Mark Submitted for Verification</button>`);
+  if(['awaiting_payment','submitted_for_verification','rejected','overdue','partially_paid'].includes(s)) actions.push(`<button type="button" data-inv="recordPayment" data-id="${inv.id}" class="h-8 px-3 rounded-full bg-[#E8F5D8] text-[#3F7019] border border-[#CFE8B5] mono text-[10px] font-[700] cursor-pointer">Record Verified Payment</button>`);
+  if(['awaiting_payment','submitted_for_verification','overdue','partially_paid'].includes(s)) actions.push(`<button type="button" data-inv="applyCredit" data-id="${inv.id}" class="h-8 px-3 rounded-full bg-white border border-[#EAE0D5] mono text-[10px] font-[700] cursor-pointer">Apply from Credit Balance</button>`);
+  if(s === 'submitted_for_verification') actions.push(`<button type="button" data-inv="reject" data-id="${inv.id}" class="h-8 px-3 rounded-full bg-[#FFE9E0] text-[#8C2C10] border border-[#FFC9B6] mono text-[10px] font-[700] cursor-pointer">Reject Proof</button>`);
+  if(s === 'rejected') actions.push(`<button type="button" data-inv="markSubmitted" data-id="${inv.id}" class="h-8 px-3 rounded-full bg-[#EDE8FF] text-[#3B2A9E] mono text-[10px] font-[700] cursor-pointer">Resubmit</button>`);
+  if(!['verified','waived','cancelled'].includes(s)) actions.push(`<button type="button" data-inv="waive" data-id="${inv.id}" class="h-8 px-3 rounded-full bg-white border border-[#EAE0D5] mono text-[10px] font-[700] cursor-pointer">Waive</button>`);
+  if(!['verified','cancelled'].includes(s)) actions.push(`<button type="button" data-inv="cancel" data-id="${inv.id}" class="h-8 px-3 rounded-full bg-white border border-[#EAE0D5] mono text-[10px] font-[700] cursor-pointer">Cancel Invoice</button>`);
+  return `
+  <div class="rounded-[24px] bg-white border border-[#EAE0D5] overflow-hidden" data-invoice-card="${inv.id}">
+    <div class="px-5 py-4 flex flex-wrap items-center justify-between gap-2 border-b border-[#F1E9DF]">
+      <div class="flex items-center gap-2.5 flex-wrap">
+        <span class="font-[750] text-[14px]">${escapeHtml(inv.tenantName || inv.tenantId)}</span>
+        <span class="mono text-[10px] opacity-60">${escapeHtml(inv.period)}</span>
+        <span class="mono text-[10px] font-[800] px-2.5 py-1 rounded-full" style="background:${meta.bg};color:${meta.fg}">${meta.label}</span>
+      </div>
+      <div class="text-right">
+        <div class="mono text-[15px] font-[800]">${fmtMoneySA(inv.total)}</div>
+        <div class="mono text-[9px] opacity-60">paid ${fmtMoneySA(paid)} · credit ${fmtMoneySA(credited)} · remaining ${fmtMoneySA(remaining)}</div>
+      </div>
+    </div>
+    <div class="px-5 py-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div>
+        <div class="mono text-[10px] uppercase tracking-widest opacity-60 mb-1.5">Line items (frozen at generation)</div>
+        <table class="w-full mono text-[10px]"><thead><tr class="opacity-50"><th class="text-left font-[700]">Description</th><th class="text-right font-[700]">Qty</th><th class="text-right font-[700]">Unit</th><th class="text-right font-[700]">Amount</th></tr></thead><tbody>${linesHtml}</tbody></table>
+        ${inv.snapshot ? `<div class="mono text-[9px] opacity-50 mt-2">Snapshot: ${inv.snapshot.confirmedBookings || 0} confirmed bookings · ${inv.snapshot.staffReserveHours || 0} staff-reserve hrs · included ${inv.snapshot.includedBookings || 0} · rate ${fmtMoneySA(inv.snapshot.perBookingRate)}${inv.snapshot.planId ? ' · plan ' + escapeHtml(inv.snapshot.planId) : ''}</div>` : ''}
+      </div>
+      <div class="space-y-3">
+        ${showInstructions ? `<div class="p-3 rounded-[14px] bg-[#FFFBF5] border border-[#EAE0D5]"><div class="mono text-[10px] uppercase tracking-widest opacity-60 mb-1">Payment instructions</div>${paymentInstructionsHtml()}</div>` : ''}
+        ${paysHtml ? `<div><div class="mono text-[10px] uppercase tracking-widest opacity-60 mb-1">Payments</div>${paysHtml}</div>` : ''}
+        ${adjHtml ? `<div><div class="mono text-[10px] uppercase tracking-widest opacity-60 mb-1">Adjustments</div>${adjHtml}</div>` : ''}
+        <div class="flex flex-wrap gap-1.5 pt-1">${actions.join('')}</div>
+        <div class="flex items-center gap-1.5 pt-1 border-t border-dashed border-[#EAE0D5]">
+          <span class="mono text-[9px] opacity-50">Override status:</span>
+          <select data-inv-status="${inv.id}" class="h-7 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-2 mono text-[9px] font-[700] outline-none focus:border-[#201C19]">
+            ${INVOICE_STATUSES.map(st => `<option value="${st}" ${st === s ? 'selected' : ''}>${INVOICE_STATUS_META[st].label}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+function wireInvoiceCard(inv){
+  const card = document.querySelector(`[data-invoice-card="${inv.id}"]`); if(!card) return;
+  const find = id => ALL_INVOICES.find(i => i.id === id);
+  card.querySelectorAll('[data-inv]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const live = find(inv.id) || inv;
+      const action = btn.dataset.inv;
+      btn.disabled = true;
+      try { await runInvoiceAction(live, action); }
+      catch(ex) { toast('Failed: ' + ex.message); }
+      finally { btn.disabled = false; }
+    });
+  });
+  const sel = card.querySelector(`[data-inv-status="${inv.id}"]`);
+  if(sel) sel.addEventListener('change', async () => {
+    const live = find(inv.id) || inv;
+    const next = sel.value;
+    if(next === live.status) return;
+    if(!confirm(`Set invoice ${live.tenantName || live.tenantId} (${live.period}) from "${(INVOICE_STATUS_META[live.status] || {}).label}" to "${(INVOICE_STATUS_META[next] || {}).label}"? The override is recorded in the audit log.`)) { sel.value = live.status; return; }
+    await invoiceApplyAction(live, { status: next }, 'override', `status override ${live.status} -> ${next}`, null, { type: 'status-override', note: `${live.status} -> ${next}` });
+  });
+}
+async function runInvoiceAction(inv, action){
+  const label = `${inv.tenantName || inv.tenantId} (${inv.period})`;
+  if(action === 'issue'){
+    if(!confirm(`Issue invoice for ${label}? It becomes awaiting_payment with the platform payment instructions attached.`)) return;
+    await invoiceApplyAction(inv, { status: 'awaiting_payment' }, 'issue', 'issued -> awaiting payment');
+    toast(`Invoice issued for ${label}`);
+  } else if(action === 'markSubmitted'){
+    await invoiceApplyAction(inv, { status: 'submitted_for_verification' }, 'submitted', 'payer reports payment submitted -- NOT verified yet');
+    toast(`${label}: submitted for verification (not verified yet)`);
+  } else if(action === 'recordPayment'){
+    const rem = invoiceTotals(inv).remaining;
+    const method = prompt(`Payment method for ${label} (gcash / maya / bank / cash):`, 'gcash');
+    if(method === null) return;
+    const reference = prompt('Reference / proof number:', '');
+    if(reference === null) return;
+    const amountRaw = prompt('Amount received:', rem.toFixed(2));
+    if(amountRaw === null) return;
+    const amount = parseFloat(amountRaw);
+    if(!Number.isFinite(amount) || amount <= 0){ toast('Enter a positive amount'); return; }
+    const totalsBefore = invoiceTotals(inv);
+    const fullyPaid = totalsBefore.paid + amount + totalsBefore.credited >= (Number(inv.total) || 0) - 0.005;
+    const ok = await invoiceApplyAction(inv, { status: fullyPaid ? 'verified' : 'partially_paid' }, 'payment', `verified payment ${fmtMoneySA(amount)} via ${method.trim()} ref ${reference.trim() || 'n/a'}`, { method: method.trim().toLowerCase(), reference: reference.trim(), amount });
+    if(ok) toast(`${label}: ${fullyPaid ? 'verified — invoice fully paid' : 'partial payment recorded'}`);
+  } else if(action === 'applyCredit'){
+    const t = TENANT_INDEX[inv.tenantId] || {};
+    const balance = Number(t.creditBalance) || 0;
+    const remaining = invoiceTotals(inv).remaining;
+    const amount = Math.min(balance, remaining);
+    if(amount <= 0){ toast('No credit balance available for this tenant'); return; }
+    if(!confirm(`Apply ${fmtMoneySA(amount)} from ${label}'s prepaid credit balance to this invoice? Balance goes from ${fmtMoneySA(balance)} to ${fmtMoneySA(balance - amount)}.`)) return;
+    await db.doc(`platformTenants/${inv.tenantId}`).update({ creditBalance: firebase.firestore.FieldValue.increment(-amount) });
+    TENANT_INDEX[inv.tenantId] = { ...t, creditBalance: balance - amount };
+    const totalsBefore = invoiceTotals(inv);
+    const fullyPaid = totalsBefore.paid + totalsBefore.credited + amount >= (Number(inv.total) || 0) - 0.005;
+    await invoiceApplyAction(inv, { status: fullyPaid ? 'verified' : 'partially_paid', creditsApplied: totalsBefore.credited + amount }, 'credit-applied', `applied ${fmtMoneySA(amount)} from credit balance`, { method: 'credit_balance', reference: 'prepaid ledger', amount });
+    toast(`${label}: ${fmtMoneySA(amount)} applied from credit balance`);
+  } else if(action === 'reject'){
+    const note = prompt(`Rejection reason for ${label} (kept in adjustments):`, '');
+    if(note === null) return;
+    await invoiceApplyAction(inv, { status: 'rejected' }, 'reject', `proof rejected: ${note.trim()}`, null, { type: 'rejection', note: note.trim() });
+    toast(`${label}: proof rejected`);
+  } else if(action === 'waive'){
+    const note = prompt(`Waive invoice for ${label}? Reason:`, '');
+    if(note === null) return;
+    await invoiceApplyAction(inv, { status: 'waived' }, 'waive', `waived: ${note.trim()}`, null, { type: 'waiver', note: note.trim() });
+    toast(`${label}: invoice waived`);
+  } else if(action === 'cancel'){
+    if(!confirm(`Cancel invoice for ${label}? Cancelled invoices stay on record for audit.`)) return;
+    await invoiceApplyAction(inv, { status: 'cancelled' }, 'cancel', 'cancelled', null, { type: 'cancellation', note: 'cancelled by superadmin' });
+    toast(`${label}: invoice cancelled`);
+  }
+}
+document.getElementById('genInvoicesBtn').addEventListener('click', async (e) => {
+  e.target.disabled = true;
+  try { await generateDraftInvoices(); } catch(ex) { toast('Failed: ' + ex.message); }
+  finally { e.target.disabled = false; }
+});
+document.getElementById('reloadInvoicesBtn').addEventListener('click', async () => { await loadInvoices(); toast('Invoices refreshed'); });
+document.getElementById('invoiceStatusFilter').innerHTML = '<option value="">All statuses</option>' + INVOICE_STATUSES.map(s => `<option value="${s}">${INVOICE_STATUS_META[s].label}</option>`).join('');
+document.getElementById('invoiceStatusFilter').addEventListener('change', () => renderInvoicesTab(ALL_INVOICES));
+document.getElementById('invoiceTenantFilter').addEventListener('change', () => renderInvoicesTab(ALL_INVOICES));
+loadInvoices().then(() => renderOverview());
 
 /* ---------- Dashboard sidebar tabs ---------- */
 function showSaTab(tab){
@@ -304,7 +1354,7 @@ function showSaTab(tab){
 document.querySelectorAll('.sa-tab-btn').forEach(btn => {
   btn.addEventListener('click', () => showSaTab(btn.dataset.saTab));
 });
-showSaTab('directory');
+showSaTab('overview');
 
 auth.onAuthStateChanged(async (user) => {
   if(!user){ showScreen('signInScreen'); return; }
@@ -315,6 +1365,8 @@ auth.onAuthStateChanged(async (user) => {
     loadTenants();
     loadFeatureIdeas();
     loadSecurityPanel();
+    loadPlans();
+    loadPaymentSettings();
   } else {
     document.getElementById('notAuthorizedEmail').textContent = user.email;
     document.getElementById('notAuthorizedUid').textContent = user.uid;
@@ -407,7 +1459,8 @@ async function loadTenants(){
     snap.forEach(doc => {
       const d = doc.data();
       entries.push({ id: doc.id, data: d });
-      tenants.push({ slug: doc.id, businessName: d.businessName || doc.id, billing: d.billing || {}, creditBalance: d.creditBalance || 0 });
+      TENANT_INDEX[doc.id] = d;
+      tenants.push({ slug: doc.id, businessName: d.businessName || doc.id, billing: d.billing || {}, creditBalance: d.creditBalance || 0, planName: (d.subscription && d.subscription.planName) || '', billingStatus: d.billingStatus || 'current', lifecycle: d.lifecycle || (d.status === 'suspended' ? 'suspended' : 'active') });
     });
     try { localStorage.setItem(LS_TENANT_CACHE, JSON.stringify(entries)); } catch(e) { /* storage full/unavailable -- just skip caching */ }
 
@@ -417,14 +1470,23 @@ async function loadTenants(){
     // on a placeholder until someone happens to click Manage on that one
     // row. Not cached like the tenant list itself -- entitlement state is
     // exactly the kind of thing that should always read live.
+    // Since the control-plane restructure this also resolves the full
+    // entitlement entities (trial/active/suspended/cancelled + pause hold)
+    // into ENT_STATE, with legacy runtime booleans as migration fallback.
     const statusSnaps = await Promise.all(entries.map(e => db.doc(`clients/${e.id}/status/state`).get().catch(() => null)));
     const statusMap = {};
     entries.forEach((e, i) => {
       const s = statusSnaps[i];
       statusMap[e.id] = (s && s.exists && s.data().data) || {};
     });
+    const entSnaps = await Promise.all(entries.map(e => loadEntitlementsFor(e.id, statusMap[e.id]).catch(() => null)));
+    entries.forEach((e, i) => { ENT_STATE[e.id] = entSnaps[i] || { booking: null, store: null, tournament: null }; });
 
+    _lastEntries = entries;
+    _lastStatusMap = statusMap;
+    populateTenantSelects();
     renderTenantList(entries, statusMap);
+    renderEntitlementsTab();
     loadReporting(tenants);
     populateRbcTenantSelect(tenants);
   } catch(ex) {
@@ -653,6 +1715,7 @@ async function loadReporting(tenants){
     catch(ex) { rows.push({ ...t, error: ex.message }); }
   }
   _lastReportingRows = rows;
+  renderOverview();
 
   const maxBookings = Math.max(1, ...rows.map(r => (r.thisM && r.thisM.confirmedBookings) || 0));
   const chartHtml = `
@@ -722,14 +1785,15 @@ async function loadReporting(tenants){
 
 function exportReportingCsv(){
   const rows = _lastReportingRows;
-  const header = ['Tenant','Slug','Confirmed Bookings','Cancelled Bookings','Cancellation Rate %','Court-Hours','Unique Players','Returning Players','Queue Sessions','Open Play Sessions','Open Play Court-Hours','Staff-Reserved Hours (MTD)','Staff Reserve Charge (Half Rate)','Utilization % (MTD)','Views','Suggested Charge','Prepaid Balance'];
+  const header = ['Tenant','Slug','Plan','Lifecycle','Billing Status','Confirmed Bookings','Cancelled Bookings','Cancellation Rate %','Court-Hours','Unique Players','Returning Players','Queue Sessions','Open Play Sessions','Open Play Court-Hours','Staff-Reserved Hours (MTD)','Staff Reserve Charge (Half Rate)','Utilization % (MTD)','Views','Suggested Charge','Prepaid Balance'];
   const csvEscape = v => `"${String(v).replace(/"/g,'""')}"`;
   const lines = [header.map(csvEscape).join(',')];
   rows.forEach(r => {
     if(r.error) return;
     const m = r.thisM;
     lines.push([
-      r.businessName, r.slug, m.confirmedBookings, m.cancelledBookings, r.cancellationRate.toFixed(1),
+      r.businessName, r.slug, r.planName || '', r.lifecycle || '', r.billingStatus || 'current',
+      m.confirmedBookings, m.cancelledBookings, r.cancellationRate.toFixed(1),
       m.courtHours, m.uniquePlayers.size, r.returningPlayers, m.queueSessions, m.openPlaySessions,
       m.openPlayCourtHours, r.staffHours, r.staffReserveCharge.toFixed(2), r.utilizationPct.toFixed(1), r.thisViews,
       r.suggestedCharge.toFixed(2), (r.creditBalance||0).toFixed(2)
@@ -1133,8 +2197,14 @@ function compactStatusPill(label, status){
 function renderTenantRow(slug, data, status, isVisible){
   const list = document.getElementById('tenantList');
   const isActive = data.status !== 'suspended';
-  const storeStatus = status ? { enabled: !!status.storeEnabled, paused: !!status.storePaused } : null;
-  const tournamentStatus = status ? { enabled: !!status.tournamentEnabled, paused: !!status.tournamentPaused } : null;
+  const ents = ENT_STATE[slug] || {};
+  const storeEnt = ents.store, tournamentEnt = ents.tournament;
+  const storeStatus = storeEnt ? { enabled: isEntOnline(storeEnt), paused: entRuntime(storeEnt).paused } : (status ? { enabled: !!status.storeEnabled, paused: !!status.storePaused } : null);
+  const tournamentStatus = tournamentEnt ? { enabled: isEntOnline(tournamentEnt), paused: entRuntime(tournamentEnt).paused } : (status ? { enabled: !!status.tournamentEnabled, paused: !!status.tournamentPaused } : null);
+  const sub = data.subscription || null;
+  const lifecycle = data.lifecycle || (isActive ? 'active' : 'suspended');
+  const lcMeta = LIFECYCLE_META[lifecycle] || LIFECYCLE_META.active;
+  const billStatus = data.billingStatus || 'current';
   const row = document.createElement('div');
   row.className = isVisible ? 'p-4' : 'p-4 hidden';
   row.dataset.tenantRow = slug;
@@ -1144,7 +2214,7 @@ function renderTenantRow(slug, data, status, isVisible){
         <div class="w-9 h-9 rounded-full shrink-0 border border-[#EAE0D5] grid place-items-center mono text-[10px] font-[800]" style="background:${escapeHtml(data.theme?.primary || '#D6FF5F')}">${escapeHtml((data.businessName||slug).slice(0,2).toUpperCase())}</div>
         <div class="min-w-0">
           <div class="font-[750] text-[14px] truncate">${escapeHtml(data.businessName || slug)}</div>
-          <div class="mono text-[10px] opacity-60">?client=${escapeHtml(slug)} • <span class="${isActive?'text-[#3F7019]':'text-[#8A5A00]'} font-[700]">${isActive?'ACTIVE':'SUSPENDED'}</span></div>
+          <div class="mono text-[10px] opacity-60">?client=${escapeHtml(slug)} • <span class="${isActive?'text-[#3F7019]':'text-[#8A5A00]'} font-[700]">${isActive?'ACTIVE':'SUSPENDED'}</span> • <span class="px-1.5 py-0.5 rounded-full" style="background:${lcMeta.bg};color:${lcMeta.fg}">${lcMeta.label}</span>${sub ? ` • <span class="font-[700]" title="pricing v${escapeHtml(sub.pricingVersion || 'n/a')}">${escapeHtml(sub.planName || sub.planId)}</span>` : ' • <span class="opacity-50">no plan</span>'}</div>
         </div>
       </div>
       <div class="flex items-center gap-2 shrink-0">
@@ -1192,6 +2262,28 @@ function renderTenantRow(slug, data, status, isVisible){
           <button type="button" data-remove-watermark="${slug}" class="hidden h-9 px-3 rounded-full bg-[#FFE9E0] text-[#8C2C10] border border-[#FFC9B6] mono text-[10px] font-[700] cursor-pointer shrink-0">Remove</button>
         </div>
       </label>
+      <label class="flex flex-col gap-1.5">
+        <span class="mono text-[10px] uppercase tracking-widest opacity-60">Tenant Lifecycle</span>
+        <div class="flex gap-1.5">
+          <select id="lifecycle-${cssId(slug)}" class="flex-1 min-w-0 h-9 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-2 mono text-[11px] font-[700] outline-none focus:border-[#201C19]">
+            ${TENANT_LIFECYCLE.map(s => `<option value="${s}" ${s === lifecycle ? 'selected' : ''}>${LIFECYCLE_META[s] ? LIFECYCLE_META[s].label : s}</option>`).join('')}
+          </select>
+          <button type="button" data-save-lifecycle="${slug}" class="h-9 px-3 rounded-full bg-[#201C19] text-white mono text-[10px] font-[700] cursor-pointer">Set</button>
+        </div>
+      </label>
+      <label class="flex flex-col gap-1.5">
+        <span class="mono text-[10px] uppercase tracking-widest opacity-60">Billing Status (separate from access)</span>
+        <div class="flex gap-1.5">
+          <select id="billstatus-${cssId(slug)}" class="flex-1 min-w-0 h-9 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-2 mono text-[11px] font-[700] outline-none focus:border-[#201C19]">
+            ${BILLING_STATUSES.map(s => `<option value="${s}" ${s === billStatus ? 'selected' : ''}>${s.replace(/_/g, ' ')}</option>`).join('')}
+          </select>
+          <button type="button" data-save-billstatus="${slug}" class="h-9 px-3 rounded-full bg-[#201C19] text-white mono text-[10px] font-[700] cursor-pointer">Set</button>
+        </div>
+      </label>
+      <div class="md:col-span-2 lg:col-span-4 rounded-[14px] bg-[#FFFBF5] border border-[#EAE0D5] p-3">
+        <div class="mono text-[10px] uppercase tracking-widest opacity-60 mb-1">Subscription</div>
+        <div class="mono text-[11px]">${sub ? `<span class="font-[800]">${escapeHtml(sub.planName || sub.planId)}</span> • status <span class="font-[700]">${escapeHtml(sub.status || 'active')}</span> • pricing v${escapeHtml(sub.pricingVersion || 'n/a')} • started ${sub.startedAt && sub.startedAt.toDate ? sub.startedAt.toDate().toLocaleDateString() : '—'}` : `No plan assigned — manual billing formula below. Assign one under <span class="font-[700]">Plans &amp; Pricing</span>.`}</div>
+      </div>
     </div>
     <div class="p-4 pt-0 md:p-0 md:mt-4 md:pt-4 md:border-t md:border-[#F1E9DF]" id="billingWrap-${cssId(slug)}">
       <div class="mono text-[10px] uppercase tracking-widest opacity-60 mb-2">Billing — base subscription + confirmed-booking overage</div>
@@ -1276,19 +2368,28 @@ function renderTenantRow(slug, data, status, isVisible){
   row.querySelector(`[data-toggle-status="${cssAttr(slug)}"]`).addEventListener('click', async (e) => {
     const wasActive = e.target.dataset.current === 'true';
     try {
-      await db.doc(`platformTenants/${slug}`).update({ status: wasActive ? 'suspended' : 'active' });
-      // Mirror status to public tenantDirectory
-      await db.doc(`tenantDirectory/${slug}`).set({ status: wasActive ? 'suspended' : 'active' }, { merge: true });
-      // Mirrored onto clients/{slug}/status/state -- a separate doc from
-      // the open-write config/state, locked in firestore.rules to
-      // superadmin-only writes, since this is the one flag where "which
-      // tenant" isn't enough of a check; "who is asking" matters here too.
-      await db.doc(`clients/${slug}/status/state`).set({
-        data: { bookingPaused: wasActive },
-        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-      }, { merge: true });
+      // Lifecycle is the single control plane now: it flips the operational
+      // status, re-derives the runtime pause flags, and mirrors the public
+      // directory -- one path instead of three scattered writes.
+      await setTenantLifecycle(slug, wasActive ? 'suspended' : 'active');
       await logAudit(wasActive ? 'suspend' : 'activate', slug, `${data.businessName || slug} Booking ${wasActive ? 'suspended' : 'activated'}`);
       toast(`${data.businessName || slug} ${wasActive ? 'suspended' : 'activated'}`);
+      loadTenants();
+    } catch(ex) { toast('Failed: ' + ex.message); }
+  });
+  row.querySelector(`[data-save-lifecycle="${cssAttr(slug)}"]`).addEventListener('click', async (e) => {
+    const lifecycle = document.getElementById(`lifecycle-${cssId(slug)}`).value;
+    try {
+      await setTenantLifecycle(slug, lifecycle);
+      toast(`${data.businessName || slug} lifecycle -> ${LIFECYCLE_META[lifecycle] ? LIFECYCLE_META[lifecycle].label : lifecycle}`);
+      loadTenants();
+    } catch(ex) { toast('Failed: ' + ex.message); }
+  });
+  row.querySelector(`[data-save-billstatus="${cssAttr(slug)}"]`).addEventListener('click', async (e) => {
+    const billingStatus = document.getElementById(`billstatus-${cssId(slug)}`).value;
+    try {
+      await setTenantBillingStatus(slug, billingStatus);
+      toast(`${data.businessName || slug} billing status -> ${billingStatus.replace(/_/g,' ')}`);
       loadTenants();
     } catch(ex) { toast('Failed: ' + ex.message); }
   });
@@ -1567,6 +2668,8 @@ document.getElementById('createTenantForm').addEventListener('submit', async (e)
   const color = document.getElementById('ctColor').value.trim();
   const pin = document.getElementById('ctPin').value.trim();
   const watermarkFile = document.getElementById('ctWatermark').files[0] || null;
+  const planId = document.getElementById('ctPlan').value || null;
+  const startTrial = document.getElementById('ctTrial').checked;
 
   if(!isValidSlug(slug)){ errEl.textContent = 'Slug must be lowercase letters, numbers, and hyphens only.'; errEl.classList.remove('hidden'); return; }
   if(!name){ errEl.textContent = 'Business name is required.'; errEl.classList.remove('hidden'); return; }
@@ -1600,6 +2703,7 @@ document.getElementById('createTenantForm').addEventListener('submit', async (e)
       if(watermarkUrl){
         await db.doc(`clients/${slug}/config/state`).update({ 'data.branding.watermarkUrl': watermarkUrl, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
       }
+      await initializeTenantCommercial(slug, planId, startTrial);
       await logAudit('register-tenant', slug, `Registered existing tenant "${existingName}" (data already present)`);
       toast(`"${slug}" already had data -- registered existing tenant "${existingName}"`);
     } else {
@@ -1616,7 +2720,8 @@ document.getElementById('createTenantForm').addEventListener('submit', async (e)
         status: 'active',
         createdAt: firebase.firestore.FieldValue.serverTimestamp()
       }, { merge: true });
-      await logAudit('create-tenant', slug, `Created tenant "${name}"`);
+      await initializeTenantCommercial(slug, planId, startTrial);
+      await logAudit('create-tenant', slug, `Created tenant "${name}"${planId ? ` on plan ${planId}` : ''}${startTrial ? ' (trial)' : ''}`);
       toast(`Tenant "${name}" created`);
     }
     document.getElementById('createTenantForm').reset();
@@ -1703,33 +2808,21 @@ function renderStoreWidget(slug, data, status){
     e.target.disabled = true;
     try {
       await provisionStoreDefaults(slug, pin);
-      await db.doc(`clients/${slug}/status/state`).set({
-        data: { storeEnabled: true, storePaused: false },
-        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-      }, { merge: true });
-      await logAudit('store-add', slug, `Store added for ${data.businessName || slug}`);
+      await setEntitlement(slug, 'store', { status: 'active', paused: false }, 'grant', 'Store added');
       toast(`Store added for ${data.businessName || slug}`);
       renderStoreWidget(slug, data, { storeEnabled: true, storePaused: false });
     } catch(ex) { toast('Failed: ' + ex.message); e.target.disabled = false; }
   });
   wrap.querySelector(`[data-store-pause="${cssAttr(slug)}"]`)?.addEventListener('click', async () => {
     try {
-      await db.doc(`clients/${slug}/status/state`).set({
-        data: { storePaused: true },
-        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-      }, { merge: true });
-      await logAudit('store-pause', slug, `Store paused for ${data.businessName || slug} (Booking unaffected)`);
+      await setEntitlement(slug, 'store', { paused: true }, 'pause', 'Store paused (Booking unaffected)');
       toast(`Store paused for ${data.businessName || slug}`);
       renderStoreWidget(slug, data, { storeEnabled: true, storePaused: true });
     } catch(ex) { toast('Failed: ' + ex.message); }
   });
   wrap.querySelector(`[data-store-resume="${cssAttr(slug)}"]`)?.addEventListener('click', async () => {
     try {
-      await db.doc(`clients/${slug}/status/state`).set({
-        data: { storePaused: false },
-        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-      }, { merge: true });
-      await logAudit('store-resume', slug, `Store resumed for ${data.businessName || slug}`);
+      await setEntitlement(slug, 'store', { paused: false }, 'unpause', 'Store resumed');
       toast(`Store resumed for ${data.businessName || slug}`);
       renderStoreWidget(slug, data, { storeEnabled: true, storePaused: false });
     } catch(ex) { toast('Failed: ' + ex.message); }
@@ -1737,11 +2830,7 @@ function renderStoreWidget(slug, data, status){
   wrap.querySelector(`[data-store-remove="${cssAttr(slug)}"]`)?.addEventListener('click', async () => {
     if(!confirm(`Remove the Store add-on for ${data.businessName || slug}? Their product/inventory/sales data is kept, not deleted -- this only revokes access. Re-adding later restores it.`)) return;
     try {
-      await db.doc(`clients/${slug}/status/state`).set({
-        data: { storeEnabled: false, storePaused: false },
-        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-      }, { merge: true });
-      await logAudit('store-remove', slug, `Store removed for ${data.businessName || slug}`);
+      await setEntitlement(slug, 'store', { status: 'cancelled', paused: false }, 'cancel', 'Store revoked (data kept)');
       toast(`Store removed for ${data.businessName || slug}`);
       renderStoreWidget(slug, data, { storeEnabled: false, storePaused: false });
     } catch(ex) { toast('Failed: ' + ex.message); }
@@ -1826,33 +2915,21 @@ function renderTournamentWidget(slug, data, status){
   wrap.querySelector(`[data-tournament-add="${cssAttr(slug)}"]`)?.addEventListener('click', async (e) => {
     e.target.disabled = true;
     try {
-      await db.doc(`clients/${slug}/status/state`).set({
-        data: { tournamentEnabled: true, tournamentPaused: false },
-        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-      }, { merge: true });
-      await logAudit('tournament-add', slug, `Tournaments added for ${data.businessName || slug}`);
+      await setEntitlement(slug, 'tournament', { status: 'active', paused: false }, 'grant', 'Tournaments added');
       toast(`Tournaments added for ${data.businessName || slug}`);
       renderTournamentWidget(slug, data, { tournamentEnabled: true, tournamentPaused: false });
     } catch(ex) { toast('Failed: ' + ex.message); e.target.disabled = false; }
   });
   wrap.querySelector(`[data-tournament-pause="${cssAttr(slug)}"]`)?.addEventListener('click', async () => {
     try {
-      await db.doc(`clients/${slug}/status/state`).set({
-        data: { tournamentPaused: true },
-        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-      }, { merge: true });
-      await logAudit('tournament-pause', slug, `Tournaments paused for ${data.businessName || slug} (Booking/Store unaffected; already-published tournaments stay visible)`);
+      await setEntitlement(slug, 'tournament', { paused: true }, 'pause', 'Tournaments paused (Booking/Store unaffected)');
       toast(`Tournaments paused for ${data.businessName || slug}`);
       renderTournamentWidget(slug, data, { tournamentEnabled: true, tournamentPaused: true });
     } catch(ex) { toast('Failed: ' + ex.message); }
   });
   wrap.querySelector(`[data-tournament-resume="${cssAttr(slug)}"]`)?.addEventListener('click', async () => {
     try {
-      await db.doc(`clients/${slug}/status/state`).set({
-        data: { tournamentPaused: false },
-        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-      }, { merge: true });
-      await logAudit('tournament-resume', slug, `Tournaments resumed for ${data.businessName || slug}`);
+      await setEntitlement(slug, 'tournament', { paused: false }, 'unpause', 'Tournaments resumed');
       toast(`Tournaments resumed for ${data.businessName || slug}`);
       renderTournamentWidget(slug, data, { tournamentEnabled: true, tournamentPaused: false });
     } catch(ex) { toast('Failed: ' + ex.message); }
@@ -1860,11 +2937,7 @@ function renderTournamentWidget(slug, data, status){
   wrap.querySelector(`[data-tournament-remove="${cssAttr(slug)}"]`)?.addEventListener('click', async () => {
     if(!confirm(`Remove the Tournaments add-on for ${data.businessName || slug}? Existing tournament data is kept, not deleted -- this only revokes access to create/manage new ones. Re-adding later restores it.`)) return;
     try {
-      await db.doc(`clients/${slug}/status/state`).set({
-        data: { tournamentEnabled: false, tournamentPaused: false },
-        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-      }, { merge: true });
-      await logAudit('tournament-remove', slug, `Tournaments removed for ${data.businessName || slug}`);
+      await setEntitlement(slug, 'tournament', { status: 'cancelled', paused: false }, 'cancel', 'Tournaments revoked (data kept)');
       toast(`Tournaments removed for ${data.businessName || slug}`);
       renderTournamentWidget(slug, data, { tournamentEnabled: false, tournamentPaused: false });
     } catch(ex) { toast('Failed: ' + ex.message); }
@@ -2089,6 +3162,17 @@ const AUDIT_ACTION_LABELS = {
   'store-seed-products': 'Loaded sample Store products', 'store-wipe-products': 'Wiped sample Store products',
   'tournament-add': 'Added Tournaments add-on', 'tournament-pause': 'Paused Tournaments add-on',
   'tournament-resume': 'Resumed Tournaments add-on', 'tournament-remove': 'Removed Tournaments add-on',
+  // Control-plane restructure actions
+  'ent-grant': 'Granted entitlement', 'ent-trial': 'Started entitlement trial', 'ent-activate': 'Activated entitlement',
+  'ent-pause': 'Paused entitlement', 'ent-unpause': 'Unpaused entitlement', 'ent-suspend': 'Suspended entitlement',
+  'ent-cancel': 'Revoked entitlement', 'lifecycle-change': 'Changed tenant lifecycle',
+  'billing-status-change': 'Changed billing status', 'provision-entitlements': 'Provisioned entitlements',
+  'plans-seed': 'Seeded starter plans', 'plan-create': 'Created plan', 'plan-update': 'Updated plan',
+  'plan-assign': 'Assigned plan to tenant', 'payment-settings': 'Updated platform payment instructions',
+  'invoices-generate': 'Generated draft invoices', 'invoice-issue': 'Issued invoice',
+  'invoice-submitted': 'Payment submitted for verification', 'invoice-payment': 'Verified invoice payment',
+  'invoice-credit-applied': 'Applied credit balance to invoice', 'invoice-reject': 'Rejected payment proof',
+  'invoice-waive': 'Waived invoice', 'invoice-cancel': 'Cancelled invoice', 'invoice-override': 'Overrode invoice status',
 };
 async function loadAuditLog(){
   const list = document.getElementById('auditLogList');

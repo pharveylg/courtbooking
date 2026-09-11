@@ -31,18 +31,69 @@ There is no in-app "forgot password" link. Reset a superadmin's password from Fi
 
 ## 3. Layout
 
-The console is a single page with a left sidebar (top bar on mobile) and four tabs:
+The console is a single page with a left sidebar (top bar on mobile) and nine tabs, organized as a platform control plane — the same shape the DulaHQ platform roadmap prescribes (Overview → Tenants → Entitlements → Plans & Billing → Usage → Support → Audit):
 
 | Tab | Purpose |
 |---|---|
-| Tenant Directory | Every registered tenant, quick actions, and the full per-tenant Manage panel |
-| Provisioning | Create a brand-new tenant |
-| Reports & Billing | Usage metrics and the billing formula per tenant, with CSV export |
+| Overview | Platform health at a glance: tenants by state, live entitlements per product, month-to-date projected billing, open-invoice exposure, a "needs attention" list (suspended tenants, non-current billing, expiring trials, unverified invoices), and the latest audit entries |
+| Tenants | Every registered tenant, quick actions, and the full per-tenant Manage panel (lifecycle, billing status, subscription, branding, PIN, retention, watermark, billing formula, prepaid balance, demo data) |
+| Provision Tenant | Create a brand-new tenant — now with plan selection and a 7-day-trial option |
+| Entitlements | The tenant × product entitlement matrix (Court Booking core / Store / Tournaments): grant, start trial, activate, pause, suspend, revoke — with per-entitlement history |
+| Plans & Pricing | The plan catalog (base fee, included bookings, overage rate, court limits, add-on fees, pricing version), plan assignment to tenants, and the platform's manual payment instructions (GCash/bank) |
+| Invoices | The billing domain: generate draft invoices for the current month with frozen line items, issue them, record/verify manual payments, apply credit balance, waive, reject, cancel |
+| Usage Reports | Usage metrics and the billing formula per tenant (the Reporting & Billing Center deep dive + all-tenants usage), with CSV export |
 | Feature Ideas | A running, superadmin-only scratchpad of ideas worth scoping before building |
+| Audit & Security | Known risk areas and the append-only audit log of every mutating console action |
+
+### 3.1 The entitlement model (what "entitlement" now means)
+
+Each tenant owns **product entitlements** — one per product: `booking` (the core product, every tenant has it), `store`, and `tournament`. An entitlement is a lifecycle entity, not a switch:
+
+```text
+not added → trial → active → suspended → cancelled        (+ independent PAUSED hold)
+```
+
+- **Trial** — a 7-day evaluation window (end date tracked; the Overview flags trials ending within 2 days).
+- **Active** — the product is entitled and live.
+- **Suspended** — the product is offline for that tenant; other products are unaffected.
+- **Cancelled (revoke)** — entitlement removed; the tenant's product data is kept, and re-granting restores it. History is preserved on the entitlement record.
+- **Paused** — a temporary hold that does *not* change the lifecycle status (the "closed for today, not fired" lever).
+
+Every change writes an entry to that entitlement's history (who, when, from → to, why) and is audited.
+
+### 3.2 Two layers: what the platform decides vs. what tenants read
+
+The entitlement documents live under `platformTenants/{slug}/entitlements/` and are superadmin-only. The tenant-facing sites don't read those directly — they read the same runtime flags as always (`clients/{slug}/status/state`: `bookingPaused`, `storeEnabled/storePaused`, `tournamentEnabled/tournamentPaused`). The console re-derives and re-mirrors those flags automatically on every entitlement or lifecycle change. Consequence: **you never edit `status/state` by hand anymore** — grant/revoke/pause/suspend through the console and the runtime follows.
+
+### 3.3 Tenant lifecycle and billing status (three separate statuses)
+
+A tenant now carries three independent statuses, per the roadmap's "access status ≠ billing status ≠ product status" rule:
+
+- **Lifecycle** (access): `provisioning → trial → active → grace → restricted → suspended → cancelled → archived`. Lifecycle states outside {provisioning, trial, active, grace} take the tenant's booking site offline. The old Suspend/Activate button is now just the fast path between `active` and `suspended`.
+- **Billing status**: `current / grace / overdue / suspended_notify_only` — metadata for the money conversation. It does **not** block anything by itself (consistent with this platform's no-automatic-suspension policy); it feeds the Overview "needs attention" list and the Entitlements matrix.
+- **Product status**: each entitlement's own trial/active/suspended/cancelled/paused state (3.1).
+
+### 3.4 Plans and subscriptions
+
+A plan bundles pricing: monthly base fee, included confirmed bookings per month, per-booking overage rate, max courts, and monthly add-on fees for Store and Tournaments. Plans carry a **pricing version**; assigning a plan to a tenant stamps a subscription (`planId`, version, status, start date) and overwrites the tenant's billing formula from the plan. Editing the plan later never rewrites a tenant's subscription history. The three starter plans (seedable in one click from the tab) mirror `CLIENTS.md`: **Demo/Validation** (free), **Plan A — Monthly** (₱500/mo after setup, 100 included bookings, ₱15/booking over), **Plan C — Annual** (₱0/mo, 200 included, ₱10/booking). The numbers are editable defaults, not commercial commitments.
+
+### 3.5 Invoices (the billing domain)
+
+**Generate Draft Invoices (this month)** materializes each tenant's usage into an invoice document with **frozen line items** — base subscription, confirmed bookings over the included allowance, staff-reserved hours at half rate, and any plan add-on fees for live Store/Tournament entitlements. Every line carries its source (`subscription` / `usage_event` / `entitlement` + source id), so any amount is explainable; the generation snapshot (counts + formula) is stored on the invoice, so later usage changes never alter an existing draft. Issued invoices are never rewritten.
+
+Invoices then walk the manual payment states:
+
+```text
+draft → awaiting payment → submitted for verification → verified
+                        ↘ rejected → (resubmit)         ↘ partially paid
+any pre-verified state → overdue / waived / cancelled (with reason, audited)
+```
+
+A payer reporting payment ("Mark Submitted for Verification") **never** verifies anything — verification is always a human action here ("Record Verified Payment" with method + reference, or "Apply from Credit Balance"). Payment instructions come from Plans & Pricing → Platform Payment Instructions (`platformSettings/billing`). Tenants with nothing to bill (zero formula, no live add-ons) are skipped and reported.
 
 ## 4. Provisioning a New Tenant
 
-Go to **Provisioning**. Fields:
+Go to **Provision Tenant**. Fields:
 
 | Field | Notes |
 |---|---|
@@ -50,7 +101,9 @@ Go to **Provisioning**. Fields:
 | Business Name | Shown in the header, footer, and browser tab title. |
 | Starter Color | The tenant's primary accent color. Sets both the swatch and a slightly darker hover shade automatically. |
 | Initial Admin PIN | The 4+ digit PIN tenant staff will use to unlock their Admin Console. Defaults to `1234` in the form — change it before handing off to the tenant, or have them change it themselves under Admin → Security on day one. |
-| Watermark Image (optional) | An image file uploaded to Firebase Storage and shown as a faint (14% opacity) background layer behind the booking page's hero card, for a personal touch. Can be skipped and added later from Manage. |
+| Plan | Optional. Picks the plan that sets the tenant's billing formula and subscription (with pricing version) at creation time. Leave as "No plan" for a manual billing formula. |
+| Start in Trial | Starts the tenant in a 7-day trial — the booking entitlement begins as Trial and the tenant's lifecycle is set to `trial`. |
+| Watermark Image (optional) | An image file uploaded to Firebase Storage and shown as a faint (14% opacity) background layer behind the booking page's hero card. Can be skipped and added later from Manage. |
 
 Click **Create / Register Tenant**. Two things can happen:
 
@@ -59,15 +112,15 @@ Click **Create / Register Tenant**. Two things can happen:
 
 Either way, this also writes a mirror doc to `tenantDirectory/{slug}` (business name + status only — no billing data) — that's the collection the public **facility picker** actually reads (Section 9), so the new tenant shows up there immediately, not just in this console.
 
-After creation, open the tenant from the Tenant Directory ("Open Site ↗") to verify it looks right, and hand the staff their PIN and URL.
+After creation, open the tenant from the Tenants tab ("Open Site ↗") to verify it looks right, hand the staff their PIN and URL, and grant any add-ons (Store / Tournaments) from the Entitlements tab.
 
-## 5. Tenant Directory & the Manage Panel
+## 5. Tenants (Directory) & the Manage Panel
 
-Each row shows the tenant's name, color swatch, slug, and active/suspended state, with three actions:
+Each row shows the tenant's name, color swatch, slug, operational state (ACTIVE/SUSPENDED), lifecycle chip, and plan (or "no plan"), with three actions:
 
 - **Open Site ↗** — opens the tenant's live booking page in a new tab, at the canonical `/?client=<slug>` URL. Because your superadmin sign-in session carries over to that new tab (same origin), the tenant's Admin Console **unlocks automatically** — you don't need their PIN.
 - **Manage** — expands an in-place panel (see below).
-- **Suspend / Activate** — actually takes the tenant's site offline (see below), and updates the status flag shown in this directory, in Reports, and on the public facility picker.
+- **Suspend / Activate** — the fast path between the `suspended` and `active` lifecycle states (Section 3.3). It takes the tenant's booking site offline and updates the status flag shown in this directory, in Reports, and on the public facility picker. The full lifecycle (trial, grace, restricted, cancelled, archived) is set from the Manage panel's Lifecycle control.
 
 Suspend sets `status` on the tenant's `platformTenants/{slug}` document (superadmin-only, for the directory/Reports display), mirrors that same status to `tenantDirectory/{slug}` (so a suspended tenant also disappears from the public facility picker — Section 9), **and** mirrors a `paused` flag onto the tenant's own `clients/{slug}/config/state` document, which the tenant-facing app actually reads. When paused, the tenant's site replaces its entire booking app with a "Booking Page Paused" screen (showing the facility's name/logo and contact info, if set) for every visitor — players and staff alike, with no PIN bypass. Realtime listeners, view counting, and the retention check are all skipped while paused, so nothing runs in the background either. A tenant that's already open in someone's browser when you suspend it will pick this up and reload within moments, the same way any other config change propagates (Section 9). Activating reverses all of this immediately.
 
@@ -76,6 +129,8 @@ Expanding **Manage** loads a few fields lazily (data-retention days and the curr
 | Control | What it does |
 |---|---|
 | Rename Business | Updates the display name everywhere on the tenant's site, and mirrors the new name to `tenantDirectory` so the facility picker reflects it too. |
+| Tenant Lifecycle | Sets the full lifecycle state (Section 3.3). Going outside {provisioning, trial, active, grace} pauses the booking site; coming back reactivates it. Mirrors to the picker automatically. |
+| Billing Status | Sets `current / grace / overdue / suspended_notify_only` — the money-conversation flag. Never blocks anything by itself; feeds Overview "needs attention". |
 | Primary Color | Updates the accent color and its hover shade on the tenant's own site. **Does not** mirror to `tenantDirectory` — the picker's tile color reflects whatever color was set at provisioning time only, so a later color change here won't show up there. |
 | Reset Admin PIN | Overwrites the tenant's PIN hash directly — use this if staff forgot their PIN. It does not require knowing the old PIN. |
 | Data Retention (days) | See Section 8. Defaults to 14 if never set. |
@@ -86,7 +141,9 @@ Expanding **Manage** loads a few fields lazily (data-retention days and the curr
 
 Every save button here writes directly to Firestore and takes effect for players/staff the next time their browser re-checks the config (near-instant on a fresh visit; existing open tabs pick it up via a background revalidation — see Section 9's note on caching).
 
-## 6. Reports & Billing
+## 6. Usage Reports & Invoices
+
+Invoice documents now live under the **Invoices** tab (Section 3.5). This section covers the usage metering and the per-tenant billing formula that feeds both the reports and the invoice lines.
 
 ### What's billed vs. what's tracked
 
@@ -126,9 +183,11 @@ Note two things not yet tracked (called out directly in the UI so it isn't mista
 
 Every tenant has a `creditBalance` field. **Top Up** adds an amount you tell it you received (there's no payment processor integration — this assumes you collected payment outside the app, e.g. bank transfer, and are just recording it). **Apply This Month's Charge** subtracts the currently-computed suggested charge from the balance, with a confirmation prompt, and does not block or restrict the tenant's site if the balance goes to zero or negative — it's "notify only" by design (you'll see the balance go negative in Reports and can follow up manually).
 
+The credit balance also plugs into the Invoices tab: **Apply from Credit Balance** on an open invoice moves the owed amount from the prepaid ledger onto the invoice as a recorded payment (method `credit_balance`), marking it verified or partially paid. The prepaid flow and the invoice flow now share one ledger without double-counting.
+
 ### CSV Export
 
-**Export CSV** on the Reports tab downloads every tenant's current-month numbers as `superadmin-reporting-{YYYY-MM}.csv`, including confirmed/cancelled bookings, cancellation rate, court-hours, unique/returning players, queue sessions, Open Play sessions/court-hours, staff-reserved hours **and their charge**, utilization %, views, suggested charge, and prepaid balance.
+**Export CSV** on the Usage Reports tab downloads every tenant's current-month numbers as `superadmin-reporting-{YYYY-MM}.csv`, including plan, lifecycle, billing status, confirmed/cancelled bookings, cancellation rate, court-hours, unique/returning players, queue sessions, Open Play sessions/court-hours, staff-reserved hours **and their charge**, utilization %, views, suggested charge, and prepaid balance.
 
 ## 7. Demo / Sample Data
 
@@ -182,6 +241,21 @@ That means `hours.queueStart` equals `hours.queueEnd` — no separate queue wind
 
 **I want to fully delete a tenant.**
 There's no "Delete Tenant" button in this console. It would need manual removal of `clients/{slug}/*` and `platformTenants/{slug}` (and its `usage`/`events` subcollections) directly in the Firebase Console, or a one-off admin-SDK script.
+
+**I suspended a tenant but their Store page still works.**
+That's preserved behavior, not a bug: tenant-level Suspend (the lifecycle) pauses the booking site; Store and Tournaments have their own entitlements with their own pause/suspend controls. If policy says a suspended tenant should lose everything, suspend the individual entitlements too (or change the one derivation in `syncTenantRuntime`) — it's a deliberate decision point, not an accident.
+
+**A tenant's entitlement chips show "Not Added" even though their store works.**
+Pre-restructure tenants have no entitlement documents yet — the console synthesizes their current state from the legacy runtime flags (migration-on-read, marked as legacy). The moment you make any change to that entitlement (pause, suspend, re-grant), a real entitlement document with history is materialized. Nothing to fix.
+
+**Generate Draft Invoices skipped a tenant.**
+Tenants with nothing to bill are skipped on purpose: zero base fee, no overage (bookings under the included allowance), no staff-reserve charge, and no live paid add-ons. The generation note lists exactly which tenants were skipped and why.
+
+**An invoice says "Submitted for verification" — is it paid?**
+No. A submission is the payer *claiming* they paid. Only "Record Verified Payment" (with method + reference) or "Apply from Credit Balance" actually verifies and settles it. This is deliberate: no invoice ever becomes paid from a user-submitted declaration.
+
+**I edited a plan but a tenant's charges didn't change.**
+Plan edits never rewrite an existing subscription or an already-generated invoice. The tenant's billing formula was copied from the plan at assignment time; re-assign the plan to push updated pricing, and next month's draft invoices pick it up. Each subscription keeps the pricing version it was signed at.
 
 **My login works but I still can't reach the console / I get a permissions error reading `platformTenants`.**
 The `superadmin` custom claim isn't on your token yet — either it was never granted (re-run `set-superadmin-claim.js`) or you haven't signed out and back in since it was granted. Custom claims are baked into the ID token at sign-in time; they don't apply retroactively to an already-open session.

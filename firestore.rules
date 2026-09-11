@@ -32,9 +32,42 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    // Plan catalog (platform commercial layer). Each plan is a priced,
+    // versioned bundle: which products it includes, the monthly base fee,
+    // the included confirmed-booking allowance, the per-booking overage
+    // rate, court limits, and per-add-on monthly fees. Assigning a plan to
+    // a tenant stamps its pricingVersion onto the tenant's subscription so
+    // a later plan edit never rewrites history (versioned pricing).
+    match /platformPlans/{planId} {
+      allow read, write: if request.auth != null && request.auth.token.superadmin == true;
+    }
+
+    // Platform invoices -- the billing domain's core document. Drafts are
+    // generated from the usage events ledger with FROZEN line items (the
+    // snapshot in each invoice explains every line), then walk the manual
+    // payment states: draft -> awaiting_payment -> submitted_for_verification
+    // -> verified / rejected / partially_paid / waived / cancelled. These
+    // are platform-billing-only (what a tenant owes the platform) -- a
+    // tenant's own revenue from its players is never written here.
+    match /platformInvoices/{invoiceId} {
+      allow read, write: if request.auth != null && request.auth.token.superadmin == true;
+    }
+
+    // Platform settings key-value docs (currently just billing/payment
+    // instructions: where tenants pay, GCash/bank details, QR image).
+    // Superadmin-only writes; reads stay superadmin-only too until a
+    // tenant-facing billing portal exists to expose them to.
+    match /platformSettings/{settingId} {
+      allow read, write: if request.auth != null && request.auth.token.superadmin == true;
+    }
+
+
     // Platform-level tenant registry, used by the superadmin console.
     // Only accounts with the "superadmin" custom claim (set via
     // set-superadmin-claim.js) may read or write this collection.
+    // The entitlements/ subcollection (one doc per product: booking,
+    // store, tournament) inherits this superadmin-only rule -- product
+    // entitlement lifecycle and history are platform-controlled state.
     match /platformTenants/{tenantId} {
       allow read, write: if request.auth != null && request.auth.token.superadmin == true;
 

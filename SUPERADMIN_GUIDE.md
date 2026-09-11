@@ -93,6 +93,8 @@ not added → trial → active → suspended → cancelled        (+ independent
 - **Active** — the product is entitled and live.
 - **Suspended** — the product is offline for that tenant; other products are unaffected.
 - **Cancelled (revoke)** — entitlement removed; the tenant's product data is kept, and re-granting restores it. History is preserved on the entitlement record.
+
+**When to use which (confirmed design decision — both stay):** **Suspend** is the operational lever — "this exists but is switched off right now": a non-payment dispute, maintenance, a trial that didn't convert. Use it when you expect to switch the product back on for the same tenant. **Revoke** is the commercial lever — the tenant no longer has the product on their plan (downgrade, off-boarding). Use it when the entitlement itself ends; the audit + entitlement history still records everything, and re-granting later starts a fresh lifecycle entry from `cancelled → active`. Both leave tenant data untouched.
 - **Paused** — a temporary hold that does *not* change the lifecycle status (the "closed for today, not fired" lever).
 
 Every change writes an entry to that entitlement's history (who, when, from → to, why) and is audited.

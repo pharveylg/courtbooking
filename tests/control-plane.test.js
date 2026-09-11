@@ -303,6 +303,32 @@ const C = globalThis.__makeCtx();
   C.MY_PERMS = C.computeMyPerms({ superadmin: true });   // restore owner for remaining tests
   check('B5: owner can() everything', C.can('manage_organizations') && C.can('issue_platform_credit'));
 
+  /* ===== Per-product suspension independence (operator scenario:
+     tenant stays ACTIVE, only ONE product is suspended) ===== */
+  // Suspend ONLY the Store, through the same service the Entitlements
+  // matrix and the Manage widgets use.
+  await C.setEntitlement('alpha', 'store', { status: 'suspended' }, 'suspend', 'product-only suspend');
+  let dX = C.deriveRuntimeExpectation('alpha');
+  let mX = store.get('clients/alpha/status/state').data;
+  check('PRODUCT: suspending Store leaves Booking online', dX.bookingPaused === false && mX.bookingPaused === false);
+  check('PRODUCT: Store gated in derivation AND mirror', dX.storeEnabled === false && mX.storeEnabled === false);
+  check('PRODUCT: Tournaments untouched by Store suspension', dX.tournamentEnabled === false && mX.tournamentEnabled === false);
+  check('PRODUCT: store.html sees storeEnabled=false (Not Available screen)', mX.storeEnabled === false);
+  // Reactivate the Store — same path, opposite direction.
+  await C.setEntitlement('alpha', 'store', { status: 'active', paused: false }, 'activate', 'product-only resume');
+  dX = C.deriveRuntimeExpectation('alpha'); mX = store.get('clients/alpha/status/state').data;
+  check('PRODUCT: Store reactivated, everything else still online', dX.storeEnabled === true && mX.storeEnabled === true && mX.bookingPaused === false);
+  // Pause hold: entitlement stays ACTIVE but runtime shows the paused screen.
+  await C.setEntitlement('alpha', 'store', { paused: true }, 'pause', 'pause-hold only');
+  dX = C.deriveRuntimeExpectation('alpha'); mX = store.get('clients/alpha/status/state').data;
+  check('PRODUCT: pause keeps status ACTIVE but shows paused screen', dX.storeEnabled === true && dX.storePaused === true && mX.storePaused === true);
+  // And the reverse: suspend TOURNAMENT only, Store + Booking unaffected.
+  await C.setEntitlement('alpha', 'store', { paused: false }, 'unpause', 'restore');
+  await C.setEntitlement('alpha', 'tournament', { status: 'active', paused: false }, 'grant', 'for isolation test');
+  await C.setEntitlement('alpha', 'tournament', { status: 'suspended' }, 'suspend', 'tournament-only suspend');
+  dX = C.deriveRuntimeExpectation('alpha'); mX = store.get('clients/alpha/status/state').data;
+  check('PRODUCT: suspending Tournaments leaves Store + Booking online', dX.bookingPaused === false && dX.storeEnabled === true && dX.tournamentEnabled === false && mX.tournamentEnabled === false);
+
   /* ===== B6: participation metrics ===== */
   const pEv = (daysAgo, type, extra) => ({ type, createdAt: d(daysAgo), ...extra });
   store.set('platformTenants/alpha/events/ev_op1', pEv(1, 'booking_confirmed', { source: 'openplay-join', linkedOpenGameId: 'og1', amountDue: 200, playerEmail: 'op1@x.com', durationHours: 2 }));

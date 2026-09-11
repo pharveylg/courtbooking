@@ -49,46 +49,86 @@ service cloud.firestore {
     // -> verified / rejected / partially_paid / waived / cancelled. These
     // are platform-billing-only (what a tenant owes the platform) -- a
     // tenant's own revenue from its players is never written here.
+    // Reads: superadmin anywhere; tenants may GET their own invoice by its
+    // exact id (inv_{slug}_{period} -- the id encodes the tenant, so the
+    // rule can bind resource to path), which is all billing.html needs.
+    // `list` stays superadmin-only so the collection can't be enumerated.
+    // Writes: superadmin-only -- a payer submission never mutates an
+    // invoice directly; verification happens through platformSubmissions.
     match /platformInvoices/{invoiceId} {
-      allow read, write: if request.auth != null && request.auth.token.superadmin == true;
+      allow get: if request.auth != null && request.auth.token.superadmin == true
+                 || (invoiceId.split('_')[0] == 'inv'
+                     && isValidTenantId(invoiceId.split('_')[1])
+                     && resource.data.tenantId == invoiceId.split('_')[1]);
+      allow list: if request.auth != null && request.auth.token.superadmin == true;
+      allow create, update, delete: if request.auth != null && request.auth.token.superadmin == true;
     }
 
     // Platform settings key-value docs (currently just billing/payment
     // instructions: where tenants pay, GCash/bank details, QR image).
-    // Superadmin-only writes; reads stay superadmin-only too until a
-    // tenant-facing billing portal exists to expose them to.
+    // Writes are superadmin-only. Reads are public by design: the
+    // tenant-facing billing portal (billing.html) has to show these
+    // instructions to the person paying -- same class of publicly
+    // readable business info as the tenantDirectory collection.
     match /platformSettings/{settingId} {
-      allow read, write: if request.auth != null && request.auth.token.superadmin == true;
+      allow read: if true;
+      allow write: if request.auth != null && request.auth.token.superadmin == true;
+    }
+
+    // Payer-submitted payment claims for platform invoices (the manual QR
+    // loop, roadmap-style payment_submissions). Anyone in a tenant's
+    // billing portal can SUBMIT a claim (method, reference, amount, proof
+    // URL) -- but a submission is only ever a claim: it never moves an
+    // invoice's status by itself. Only a superadmin review does, via the
+    // console's verification queue. Reads mirror the app's existing
+    // proofs/ posture (reference numbers are no more sensitive than the
+    // already-public payment-proof bucket); update/delete are superadmin-
+    // only so a claim can't be edited or withdrawn after the fact --
+    // rejection is recorded on the submission, not by deleting it.
+    match /platformSubmissions/{submissionId} {
+      allow read, create: if true;
+      allow update, delete: if request.auth != null && request.auth.token.superadmin == true;
     }
 
 
     // Platform-level tenant registry, used by the superadmin console.
-    // Only accounts with the "superadmin" custom claim (set via
-    // set-superadmin-claim.js) may read or write this collection.
+    // Writes are superadmin-only. Reads: superadmin anywhere; a tenant may
+    // GET its own registry doc (path-bound: the slug in the path is the
+    // only key), which is how billing.html shows the tenant its plan,
+    // subscription, billing formula, and prepaid balance. `list` stays
+    // superadmin-only.
     // The entitlements/ subcollection (one doc per product: booking,
-    // store, tournament) inherits this superadmin-only rule -- product
-    // entitlement lifecycle and history are platform-controlled state.
+    // store, tournament) inherits these rules -- product entitlement
+    // lifecycle and history are platform-controlled state.
     match /platformTenants/{tenantId} {
-      allow read, write: if request.auth != null && request.auth.token.superadmin == true;
+      allow get: if request.auth != null && request.auth.token.superadmin == true
+                 || isValidTenantId(tenantId);
+      allow list: if request.auth != null && request.auth.token.superadmin == true;
+      allow write: if request.auth != null && request.auth.token.superadmin == true;
 
       // Usage counters (page views, etc.) are written by every ordinary
       // tenant visitor as they use the app, not just the superadmin, so
-      // this subcollection needs its own, more open write rule. Reads
-      // stay superadmin-only -- this feeds billing/costing.
+      // this subcollection needs its own, more open write rule. Reads are
+      // superadmin OR the tenant's own portal (its own usage feeds the
+      // projected-charge view in billing.html).
       match /usage/{period} {
-        allow read: if request.auth != null && request.auth.token.superadmin == true;
+        allow read: if request.auth != null && request.auth.token.superadmin == true
+                    || isValidTenantId(tenantId);
         allow write: if isValidTenantId(tenantId);
       }
 
       // Append-only usage event ledger (booking confirmed/cancelled, queue
       // session created, open play created). Same reasoning as /usage:
-      // ordinary visitors write these as the app is used; only superadmin
-      // reads them. This is the source of truth for confirmed-bookings
-      // billing and every derived analytic, kept as discrete events (not
-      // just a running total) so history survives even after the
-      // originating booking is pruned from clients/{tenantId}/bookings.
+      // ordinary visitors write these as the app is used; superadmin reads
+      // them for billing, and the tenant's own billing portal reads its
+      // own ledger for the projected-charge view. This is the source of
+      // truth for confirmed-bookings billing and every derived analytic,
+      // kept as discrete events (not just a running total) so history
+      // survives even after the originating booking is pruned from
+      // clients/{tenantId}/bookings.
       match /events/{eventId} {
-        allow read: if request.auth != null && request.auth.token.superadmin == true;
+        allow read: if request.auth != null && request.auth.token.superadmin == true
+                    || isValidTenantId(tenantId);
         allow write: if isValidTenantId(tenantId);
       }
     }

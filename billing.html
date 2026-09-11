@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Billing &amp; Invoices</title>
+<link rel="stylesheet" href="tailwind.css">
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-storage-compat.js"></script>
+<script src="firebase-config.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+*{font-family:"Bricolage Grotesque",system-ui,sans-serif}
+.mono{font-family:"JetBrains Mono",monospace}
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-thumb{background:#e5ddd4;border-radius:999px}
+</style>
+</head>
+<body class="bg-[#FFFBF5] text-[#201C19] antialiased">
+
+<!-- Gate screen: loading / not found / PIN entry -->
+<div id="gateScreen" class="min-h-screen grid place-items-center p-6">
+  <div class="w-full max-w-[440px] rounded-[28px] bg-white border border-[#EAE0D5] shadow-[0_20px_60px_rgba(32,28,25,0.1)] p-7 md:p-9 text-center">
+    <div id="gateLogo" class="mx-auto w-14 h-14 rounded-full bg-[#201C19] text-white grid place-items-center font-black text-[16px] overflow-hidden">BP</div>
+    <div id="gateStateWrap">
+      <p class="mt-5 mono text-[12px] opacity-60">Loading Billing Portal...</p>
+    </div>
+  </div>
+</div>
+
+<!-- Main app: shown once the Admin PIN gate is passed -->
+<div id="appScreen" class="hidden">
+  <header class="sticky top-0 z-30 backdrop-blur-xl bg-[#FFFBF5]/90 border-b border-[#EAE0D5]">
+    <div class="max-w-[1100px] mx-auto px-4 h-16 flex items-center justify-between gap-3 flex-wrap">
+      <div class="flex items-center gap-2.5 shrink-0">
+        <div id="appLogo" class="w-9 h-9 rounded-full bg-[#201C19] text-white grid place-items-center font-black text-[13px] overflow-hidden">BP</div>
+        <div>
+          <div id="appBizName" class="font-[800] text-[14px] leading-none"></div>
+          <div class="mono text-[10px] opacity-60 mt-1">Billing &amp; Invoices — platform charges</div>
+        </div>
+      </div>
+      <button type="button" id="lockBtn" class="h-9 px-4 rounded-full bg-[#F1E9DF] border border-[#E9DDD0] mono text-[11px] font-[700] cursor-pointer hover:bg-[#E5DDD4] transition">Lock</button>
+    </div>
+  </header>
+
+  <main class="max-w-[1100px] mx-auto px-4 py-5 space-y-5">
+
+    <!-- Suspended banner: settle up to restore -->
+    <div id="suspendedBanner" class="hidden rounded-[20px] bg-[#FFE9E0] border border-[#FFC9B6] px-5 py-4">
+      <div class="font-[800] text-[14px] text-[#8C2C10]">Your booking site is currently suspended</div>
+      <div class="mono text-[11px] text-[#8C2C10]/80 mt-1">Outstanding platform charges are listed below. Once your invoices are settled, the platform operator can restore access — submitting a payment below notifies them for verification.</div>
+    </div>
+
+    <!-- Summary cards -->
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div class="rounded-[20px] bg-white border border-[#EAE0D5] p-4">
+        <div class="mono text-[9px] uppercase tracking-widest opacity-60">Prepaid balance</div>
+        <div id="sumBalance" class="text-[19px] font-[800] tracking-[-0.02em] mt-1">—</div>
+        <div class="mono text-[9px] opacity-50 mt-1">credit held with the platform</div>
+      </div>
+      <div class="rounded-[20px] bg-white border border-[#EAE0D5] p-4">
+        <div class="mono text-[9px] uppercase tracking-widest opacity-60">Current plan</div>
+        <div id="sumPlan" class="text-[14px] font-[800] tracking-[-0.02em] mt-1">—</div>
+        <div class="mono text-[9px] opacity-50 mt-1" id="sumPlanSub">no subscription on record</div>
+      </div>
+      <div class="rounded-[20px] bg-white border border-[#EAE0D5] p-4">
+        <div class="mono text-[9px] uppercase tracking-widest opacity-60">Billing status</div>
+        <div id="sumBillStatus" class="text-[14px] font-[800] tracking-[-0.02em] mt-1">—</div>
+        <div class="mono text-[9px] opacity-50 mt-1">set by the platform operator</div>
+      </div>
+      <div class="rounded-[20px] bg-white border border-[#EAE0D5] p-4">
+        <div class="mono text-[9px] uppercase tracking-widest opacity-60">Outstanding (unpaid invoices)</div>
+        <div id="sumOutstanding" class="text-[19px] font-[800] tracking-[-0.02em] mt-1">—</div>
+        <div class="mono text-[9px] opacity-50 mt-1">across all open invoices</div>
+      </div>
+    </div>
+
+    <!-- This month projection -->
+    <div class="rounded-[24px] bg-white border border-[#EAE0D5] overflow-hidden">
+      <div class="px-5 md:px-6 h-[52px] flex items-center justify-between border-b border-[#F1E9DF]">
+        <div class="font-[750] text-[14px]">This Month — Projected Platform Charges</div>
+        <button type="button" id="projRefreshBtn" class="h-8 px-3 rounded-full bg-white border border-[#EAE0D5] mono text-[10px] font-[700] cursor-pointer hover:border-[#201C19]">Refresh</button>
+      </div>
+      <div id="projBody" class="p-5 md:p-6"><div class="mono text-[11px] opacity-50 text-center py-4">Computing…</div></div>
+    </div>
+
+    <!-- Invoices -->
+    <div class="rounded-[24px] bg-white border border-[#EAE0D5] overflow-hidden">
+      <div class="px-5 md:px-6 h-[52px] flex items-center justify-between border-b border-[#F1E9DF]">
+        <div>
+          <div class="font-[750] text-[14px]">Invoices</div>
+          <div class="mono text-[10px] opacity-50">Official platform charges. Submit a payment below when you've paid — the operator verifies it; a submission alone never marks an invoice paid.</div>
+        </div>
+        <button type="button" id="invRefreshBtn" class="h-8 px-3 rounded-full bg-white border border-[#EAE0D5] mono text-[10px] font-[700] cursor-pointer hover:border-[#201C19]">Refresh</button>
+      </div>
+      <div id="invoiceList" class="divide-y divide-[#F5EDE4]"><div class="p-6 mono text-[11px] opacity-50 text-center">Loading…</div></div>
+    </div>
+
+    <div class="mono text-[10px] opacity-50 text-center pb-4">Questions about a charge? Contact your platform operator. Payment instructions appear on each open invoice.</div>
+  </main>
+</div>
+
+<!-- Submit-payment modal -->
+<div id="payModal" class="hidden fixed inset-0 z-50 bg-[#201C19]/40 backdrop-blur-sm p-4 overflow-y-auto">
+  <div class="max-w-[520px] mx-auto my-8 rounded-[24px] bg-white border border-[#EAE0D5] shadow-[0_24px_70px_rgba(32,28,25,0.25)] overflow-hidden">
+    <div class="px-6 py-4 border-b border-[#F1E9DF] flex items-center justify-between">
+      <div class="font-[800] text-[15px]">Submit Payment for Verification</div>
+      <button type="button" id="payModalClose" class="w-8 h-8 rounded-full bg-[#F1E9DF] mono text-[12px] font-[700] cursor-pointer">✕</button>
+    </div>
+    <div id="payModalBody" class="p-6"></div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast" class="fixed bottom-5 left-1/2 -translate-x-1/2 z-[60] hidden">
+  <div class="px-5 h-11 rounded-full bg-[#201C19] text-white shadow-[0_12px_30px_rgba(0,0,0,0.25)] mono text-[12px] font-[600] grid place-items-center">
+    <span id="toastText">Saved</span>
+  </div>
+</div>
+<script>
+/* ================================================================
+   TENANT BILLING PORTAL (payer side of platform billing)
+   ================================================================
+   The roadmap's manual-QR loop from the payer's chair: see what the
+   platform says you owe (invoices with frozen lines), see this month's
+   running projection, pay via the platform's GCash/bank instructions,
+   then SUBMIT the payment reference + proof for verification.
+
+   Trust model, matching the rest of this app: the gate is the tenant's
+   Admin PIN checked client-side (no per-person auth exists anywhere in
+   this system). Firestore rules expose exactly what this portal needs
+   -- the tenant's OWN invoice docs, registry doc, usage ledger, and the
+   public payment instructions -- and invoices can never be written from
+   here. A submission is a claim; only the platform's verification
+   (superadmin console -> Verification Queue) moves an invoice.
+   ================================================================ */
+
+function getCurrentTenant(){
+  const urlParams = new URLSearchParams(window.location.search);
+  const queryClient = urlParams.get('client');
+  if(queryClient && /^[a-z0-9-]+$/.test(queryClient)) return queryClient;
+  return null;
+}
+const currentClientId = getCurrentTenant();
+
+const FIREBASE_CFG = (window.FIREBASE_CONFIG && window.FIREBASE_CONFIG.apiKey && !String(window.FIREBASE_CONFIG.apiKey).startsWith('PASTE')) ? window.FIREBASE_CONFIG : null;
+const FB_ENABLED = !!(FIREBASE_CFG && FIREBASE_CFG.projectId);
+let db = null, storage = null;
+if (FB_ENABLED) {
+  try { firebase.initializeApp(FIREBASE_CFG); db = firebase.firestore(); storage = firebase.storage(); }
+  catch(e) { console.warn('[BillingPortal] Firebase init failed:', e.message); }
+}
+
+function escapeHtml(s){ return (s==null?'':String(s)).replace(/[&<>"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+function fmtMoney(n){ return '₱' + Number(n||0).toLocaleString('en-PH', {minimumFractionDigits:2, maximumFractionDigits:2}); }
+async function hashPin(pin){
+  const encoder = new TextEncoder();
+  const data = encoder.encode(pin + 'picklecourt-salt-2024');
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+function toast(msg){
+  const t = document.getElementById('toast');
+  document.getElementById('toastText').textContent = msg;
+  t.classList.remove('hidden');
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => t.classList.add('hidden'), 2800);
+}
+function usagePeriod(offsetMonths = 0){
+  const d = new Date();
+  d.setMonth(d.getMonth() - offsetMonths);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+}
+function monthStartDate(offsetMonths = 0){
+  const d = new Date();
+  d.setMonth(d.getMonth() - offsetMonths, 1);
+  d.setHours(0,0,0,0);
+  return d;
+}
+function datesInRange(startDate, endDate){
+  const out = [];
+  let cur = new Date(startDate); cur.setHours(12,0,0,0);
+  const end = new Date(endDate); end.setHours(12,0,0,0);
+  while(cur <= end){
+    out.push(cur.toISOString().slice(0,10));
+    cur = new Date(cur.getTime() + 86400000);
+  }
+  return out;
+}
+function invoiceIdFor(slug, period){ return `inv_${slug}_${period}`; }
+
+/* Invoice payment math (mirrors the console): verified payments + applied
+   credits against the frozen total. */
+function invoiceTotals(inv){
+  const paid = (inv.payments || []).reduce((s, p) => s + (Number(p.amount) || 0), 0);
+  const credited = Number(inv.creditsApplied) || 0;
+  const remaining = Math.max(0, (Number(inv.total) || 0) - paid - credited);
+  return { paid, credited, remaining };
+}
+const INVOICE_STATUS_META = {
+  draft:                        { label:'Draft',                        bg:'#F1E9DF', fg:'#201C19' },
+  awaiting_payment:             { label:'Awaiting payment',             bg:'#FFF0D6', fg:'#8A5A00' },
+  submitted_for_verification:   { label:'Submitted — awaiting verification', bg:'#EDE8FF', fg:'#3B2A9E' },
+  partially_paid:               { label:'Partially paid',               bg:'#FFF0D6', fg:'#8A5A00' },
+  verified:                     { label:'Verified / paid',              bg:'#E8F5D8', fg:'#3F7019' },
+  rejected:                     { label:'Payment rejected',             bg:'#FFE9E0', fg:'#8C2C10' },
+  overdue:                      { label:'Overdue',                      bg:'#FFE9E0', fg:'#8C2C10' },
+  waived:                       { label:'Waived',                       bg:'#F1E9DF', fg:'#201C19' },
+  cancelled:                    { label:'Cancelled',                    bg:'#F1E9DF', fg:'#201C19' },
+};
+/* Which invoice states can the payer act on (submit a payment claim). */
+function invoicePayable(inv){
+  return ['awaiting_payment','rejected','overdue','partially_paid'].includes(inv.status);
+}
+
+/* ---------- state ---------- */
+let TENANT = null;        // platformTenants/{slug} doc
+let PAY_SETTINGS = null;  // platformSettings/billing
+let MY_SUBMISSIONS = [];  // this tenant's payment claims, newest first
+
+/* ---------- staff-reserve walk (faithful copies of the console's
+   report helpers -- same shapes, same legacy migration) ---------- */
+const LEGACY_STAFF_HOURS = {"17":true,"18":true,"19":true,"20":true,"21":true};
+function migrateStaffReserveShape(raw, courtIds){
+  if(!raw || typeof raw !== 'object') return { template: {}, overrides: {} };
+  if(raw.template) return { template: raw.template, overrides: raw.overrides || {} };
+  const days = raw.days || {};
+  const isPerCourt = Object.keys(days).some(k => !/^[0-6]$/.test(k));
+  const template = {};
+  if(isPerCourt){
+    Object.entries(days).forEach(([courtId, dowMap]) => {
+      template[courtId] = {};
+      Object.entries(dowMap || {}).forEach(([dow, on]) => { if(on) template[courtId][dow] = {...LEGACY_STAFF_HOURS}; });
+    });
+  } else {
+    (courtIds||[]).forEach(id => {
+      template[id] = {};
+      Object.entries(days).forEach(([dow, on]) => { if(on) template[id][dow] = {...LEGACY_STAFF_HOURS}; });
+    });
+  }
+  return { template, overrides: {} };
+}
+function getEffectiveStaffHours(sr, courtId, dateISO){
+  const dow = new Date(dateISO+'T12:00:00').getDay();
+  const tmpl = (sr.template?.[courtId]?.[String(dow)]) || {};
+  const ov = sr.overrides?.[courtId]?.[dateISO];
+  return ov ? {...tmpl, ...ov} : tmpl;
+}
+const _hourDefaults = { queueStart:7, queueEnd:7, bookingStart:7, close:22 };
+function allOperatingHours(hoursCfg){
+  const h = { ..._hourDefaults, ...(hoursCfg||{}) };
+  const out = [];
+  for(let x=h.queueStart; x<h.queueEnd; x++) out.push(x);
+  for(let x=h.bookingStart; x<h.close; x++) out.push(x);
+  return out;
+}
+
+/* ---------- gate ---------- */
+function renderGateState(html){ document.getElementById('gateStateWrap').innerHTML = html; }
+function applyBranding(name, primary, logoUrl){
+  const initials = (name || 'BP').slice(0,2).toUpperCase();
+  ['gateLogo','appLogo'].forEach(id => {
+    const el = document.getElementById(id);
+    el.textContent = initials;
+    el.style.background = primary || '#201C19';
+    if(logoUrl){ el.style.backgroundImage = `url(${logoUrl})`; el.style.backgroundSize = 'cover'; el.textContent = ''; }
+  });
+  document.getElementById('appBizName').textContent = name || currentClientId;
+  document.title = `${name || 'Billing'} — Billing & Invoices`;
+}
+function enterApp(){
+  document.getElementById('gateScreen').classList.add('hidden');
+  document.getElementById('appScreen').classList.remove('hidden');
+  renderAll();
+}
+function renderPinGate(bizName){
+  renderGateState(`
+    <h1 class="mt-5 text-[20px] font-[800] tracking-[-0.02em]">${escapeHtml(bizName)} — Billing</h1>
+    <p class="mt-2.5 mono text-[12px] leading-[1.6] opacity-70">Enter the facility's Admin PIN to open the billing portal. This is the same PIN staff use on the booking page.</p>
+    <form id="portalPinForm" class="mt-5 space-y-3">
+      <input id="portalPinInput" type="password" inputmode="numeric" maxlength="8" placeholder="Admin PIN" class="w-full h-12 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-5 mono text-[16px] font-[700] tracking-widest outline-none focus:border-[#201C19] text-center"/>
+      <div id="portalPinError" class="hidden mono text-[12px] text-[#8C2C10] bg-[#FFE9E0] border border-[#FFC9B6] rounded-full px-4 py-2.5 text-center font-[600]"></div>
+      <button type="submit" class="w-full h-12 rounded-full bg-[#201C19] text-white font-[800] text-[14px] tracking-wide hover:opacity-90 active:scale-[0.98] transition">Open Billing Portal →</button>
+    </form>
+  `);
+  document.getElementById('portalPinForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const input = document.getElementById('portalPinInput');
+    const err = document.getElementById('portalPinError');
+    try {
+      const snap = await db.doc(`clients/${currentClientId}/settings/state`).get();
+      const storedHash = snap.exists && snap.data().data && snap.data().data.pin;
+      const inputHash = await hashPin(input.value.trim());
+      if(storedHash && inputHash === storedHash){
+        sessionStorage.setItem(`cb_billing_unlocked_${currentClientId}`, 'true');
+        enterApp();
+      } else {
+        err.textContent = 'Incorrect PIN.';
+        err.classList.remove('hidden');
+      }
+    } catch(ex) {
+      err.textContent = 'Failed to verify PIN: ' + ex.message;
+      err.classList.remove('hidden');
+    }
+  });
+}
+
+/* ---------- projections ---------- */
+async function renderProjection(){
+  const body = document.getElementById('projBody');
+  body.innerHTML = '<div class="mono text-[11px] opacity-50 text-center py-4">Computing…</div>';
+  try {
+    const monthStart = monthStartDate(0);
+    const [eventsSnap, courtsSnap, srSnap, cfgSnap] = await Promise.all([
+      db.collection(`platformTenants/${currentClientId}/events`).where('createdAt', '>=', monthStart).get(),
+      db.doc(`clients/${currentClientId}/courts/state`).get(),
+      db.doc(`clients/${currentClientId}/staffReserve/state`).get(),
+      db.doc(`clients/${currentClientId}/config/state`).get(),
+    ]);
+    let confirmed = 0;
+    eventsSnap.forEach(doc => { const e = doc.data(); if(e.type === 'booking_confirmed') confirmed++; });
+
+    let staffHours = 0;
+    const courts = ((courtsSnap.exists && courtsSnap.data().data) || []).filter(c => c.active !== false);
+    const sr = migrateStaffReserveShape((srSnap.exists && srSnap.data().data) || {}, courts.map(c => c.id));
+    const hoursCfg = (cfgSnap.exists && cfgSnap.data().data && cfgSnap.data().data.hours) || {};
+    const allHours = allOperatingHours(hoursCfg);
+    const today = new Date(); today.setHours(12,0,0,0);
+    datesInRange(monthStart, today).forEach(dateISO => {
+      courts.forEach(court => {
+        const hoursMap = getEffectiveStaffHours(sr, court.id, dateISO);
+        allHours.forEach(h => { if(hoursMap[String(h)] === true) staffHours++; });
+      });
+    });
+
+    const billing = (TENANT && TENANT.billing) || {};
+    const base = Number(billing.baseFee) || 0;
+    const included = Number(billing.freeBookings) || 0;
+    const rate = Number(billing.perBookingRate) || 0;
+    const overage = Math.max(0, confirmed - included);
+    const overageCharge = overage * rate;
+    const staffCharge = staffHours * (rate / 2);
+    const projected = base + overageCharge + staffCharge;
+
+    body.innerHTML = `
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mono text-[11px]">
+        <div class="p-3 rounded-[14px] bg-[#FFFBF5] border border-[#F1E9DF]">Base subscription <span class="font-[800] float-right">${fmtMoney(base)}</span></div>
+        <div class="p-3 rounded-[14px] bg-[#FFFBF5] border border-[#F1E9DF]">Confirmed bookings <span class="font-[800] float-right">${confirmed}</span><div class="opacity-50 mt-0.5">${included} included · ${overage} over</div></div>
+        <div class="p-3 rounded-[14px] bg-[#FFFBF5] border border-[#F1E9DF]">Booking overage <span class="font-[800] float-right">${fmtMoney(overageCharge)}</span><div class="opacity-50 mt-0.5">${fmtMoney(rate)} / booking</div></div>
+        <div class="p-3 rounded-[14px] bg-[#FFFBF5] border border-[#F1E9DF]">Staff-reserved hours <span class="font-[800] float-right">${fmtMoney(staffCharge)}</span><div class="opacity-50 mt-0.5">${staffHours} hrs · half rate</div></div>
+      </div>
+      <div class="mt-4 flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-[#F1E9DF]">
+        <div class="mono text-[10px] opacity-60">Projection only — your official charges are the invoices below. Add-on fees (if any) appear on invoices.</div>
+        <div class="mono text-[13px] font-[800]">Projected this month: ${fmtMoney(projected)}</div>
+      </div>`;
+  } catch(ex) {
+    body.innerHTML = `<div class="mono text-[11px] text-[#8C2C10] text-center py-4">Couldn't compute the projection: ${escapeHtml(ex.message)}</div>`;
+  }
+}
+
+/* ---------- invoices ---------- */
+function paymentInstructionsHtml(){
+  const p = PAY_SETTINGS || {};
+  const rows = [
+    p.gcashName || p.gcashNumber ? `<div class="mono text-[11px] font-[700]">GCash: ${escapeHtml([p.gcashName, p.gcashNumber].filter(Boolean).join(' · '))}</div>` : null,
+    p.bankName || p.bankAccount ? `<div class="mono text-[11px] font-[700]">Bank: ${escapeHtml([p.bankName, p.bankAccount].filter(Boolean).join(' · '))}</div>` : null,
+    p.notes ? `<div class="mono text-[10px] opacity-80 mt-1">${escapeHtml(p.notes)}</div>` : null,
+  ].filter(Boolean);
+  return rows.length ? rows.join('') : '<div class="mono text-[10px] opacity-60">The platform operator hasn\'t published payment instructions yet — contact them for how to pay.</div>';
+}
+function invoiceCard(inv){
+  const meta = INVOICE_STATUS_META[inv.status] || INVOICE_STATUS_META.draft;
+  const { paid, credited, remaining } = invoiceTotals(inv);
+  const lines = (inv.lines || []).map(l => `
+    <tr class="border-t border-[#F5EDE4]">
+      <td class="py-1.5 pr-2">${escapeHtml(l.description || '')}</td>
+      <td class="py-1.5 px-2 text-right">${Number(l.qty) || 0}</td>
+      <td class="py-1.5 pl-2 text-right font-[700]">${fmtMoney(l.amount)}</td>
+    </tr>`).join('');
+  const mySubs = MY_SUBMISSIONS.filter(s => s.invoiceId === inv.id);
+  const subsHtml = mySubs.map(s => {
+    const st = s.status === 'pending' ? ['Pending review', '#FFF0D6', '#8A5A00'] : s.status === 'verified' ? ['Verified ✓', '#E8F5D8', '#3F7019'] : ['Rejected', '#FFE9E0', '#8C2C10'];
+    return `<div class="mono text-[10px] leading-[1.7]">
+      <span class="px-1.5 py-0.5 rounded-full font-[700]" style="background:${st[1]};color:${st[2]}">${st[0]}</span>
+      ${escapeHtml(String(s.createdAt || '').slice(0,16).replace('T',' '))} · ${fmtMoney(s.amount)} via ${escapeHtml(s.method || 'manual')}${s.reference ? ' · ref ' + escapeHtml(s.reference) : ''}
+      ${s.rejectionReason ? `<div class="text-[#8C2C10] pl-1">Operator: ${escapeHtml(s.rejectionReason)}</div>` : ''}
+    </div>`;
+  }).join('');
+  const payable = invoicePayable(inv);
+  const rejectNote = inv.status === 'rejected' && (inv.adjustments || []).filter(a => a.type === 'rejection').slice(-1)[0];
+  return `<div class="p-5" data-inv="${inv.id}">
+    <div class="flex flex-wrap items-center justify-between gap-2">
+      <div class="flex items-center gap-2 flex-wrap">
+        <span class="font-[800] text-[14px]">Invoice · ${escapeHtml(inv.period)}</span>
+        <span class="mono text-[10px] font-[800] px-2.5 py-1 rounded-full" style="background:${meta.bg};color:${meta.fg}">${meta.label}</span>
+      </div>
+      <div class="text-right">
+        <div class="mono text-[15px] font-[800]">${fmtMoney(inv.total)}</div>
+        ${paid + credited > 0 ? `<div class="mono text-[9px] opacity-60">paid ${fmtMoney(paid)}${credited ? ' + credit ' + fmtMoney(credited) : ''} · remaining ${fmtMoney(remaining)}</div>` : ''}
+      </div>
+    </div>
+    ${rejectNote ? `<div class="mt-2 mono text-[11px] text-[#8C2C10] bg-[#FFE9E0] border border-[#FFC9B6] rounded-[12px] px-3 py-2">Last payment was rejected: ${escapeHtml(rejectNote.note || 'no reason given')}</div>` : ''}
+    <div class="mt-3 overflow-x-auto"><table class="w-full mono text-[11px] min-w-[420px]"><tbody>${lines}</tbody></table></div>
+    ${inv.snapshot ? `<div class="mono text-[9px] opacity-50 mt-1.5">${inv.snapshot.confirmedBookings || 0} confirmed bookings · ${inv.snapshot.staffReserveHours || 0} staff-reserve hrs · ${inv.snapshot.includedBookings || 0} included · rate ${fmtMoney(inv.snapshot.perBookingRate)}${inv.snapshot.planId ? ' · plan ' + escapeHtml(inv.snapshot.planId) : ''}</div>` : ''}
+    ${mySubs.length ? `<div class="mt-3 pt-2.5 border-t border-dashed border-[#EAE0D5]"><div class="mono text-[9px] uppercase tracking-widest opacity-60 mb-1">Your submissions</div>${subsHtml}</div>` : ''}
+    ${payable ? `<div class="mt-3 pt-3 border-t border-[#F1E9DF] flex flex-wrap items-center gap-2">
+      <button type="button" data-open-pay="${inv.id}" class="h-9 px-4 rounded-full bg-[#201C19] text-white mono text-[11px] font-[700] cursor-pointer hover:opacity-90">I've Paid — Submit for Verification</button>
+      <span class="mono text-[9px] opacity-50">Amount due: ${fmtMoney(remaining)}</span>
+    </div>` : ''}
+    ${['awaiting_payment','submitted_for_verification','rejected','overdue','partially_paid'].includes(inv.status) ? `<details class="mt-3"><summary class="mono text-[10px] opacity-60 cursor-pointer">How to pay</summary><div class="mt-2 p-3 rounded-[14px] bg-[#FFFBF5] border border-[#EAE0D5]">${paymentInstructionsHtml()}</div></details>` : ''}
+  </div>`;
+}
+async function renderInvoices(){
+  const list = document.getElementById('invoiceList');
+  list.innerHTML = '<div class="p-6 mono text-[11px] opacity-50 text-center">Loading…</div>';
+  try {
+    const periods = [];
+    for(let i = 0; i < 12; i++) periods.push(usagePeriod(i));
+    const snaps = await Promise.all(periods.map(p => db.doc(`platformInvoices/${invoiceIdFor(currentClientId, p)}`).get().catch(() => null)));
+    const invs = [];
+    snaps.forEach(s => { if(s && s.exists) invs.push({ id: s.id, ...s.data() }); });
+    invs.sort((a, b) => (b.period || '').localeCompare(a.period || ''));
+
+    let outstanding = 0;
+    invs.forEach(inv => { if(!['verified','waived','cancelled','draft'].includes(inv.status)) outstanding += invoiceTotals(inv).remaining; });
+    document.getElementById('sumOutstanding').textContent = fmtMoney(outstanding);
+
+    list.innerHTML = invs.length
+      ? invs.map(inv => invoiceCard(inv)).join('')
+      : '<div class="p-8 mono text-[11px] opacity-50 text-center">No invoices yet. Your platform operator generates invoices from your usage — check back later.</div>';
+    list.querySelectorAll('[data-open-pay]').forEach(btn => btn.addEventListener('click', () => {
+      const inv = invs.find(x => x.id === btn.dataset.openPay);
+      if(inv) openPayModal(inv);
+    }));
+  } catch(ex) {
+    list.innerHTML = `<div class="p-6 mono text-[11px] text-[#8C2C10] text-center">Failed to load invoices: ${escapeHtml(ex.message)}</div>`;
+  }
+}
+
+/* ---------- submit payment modal ---------- */
+function openPayModal(inv){
+  const { remaining } = invoiceTotals(inv);
+  document.getElementById('payModalBody').innerHTML = `
+    <div class="mono text-[11px] opacity-70">Invoice ${escapeHtml(inv.period)} · remaining <span class="font-[800]">${fmtMoney(remaining)}</span></div>
+    <div class="mt-3 p-3 rounded-[14px] bg-[#FFFBF5] border border-[#EAE0D5]">${paymentInstructionsHtml()}</div>
+    <form id="payForm" class="mt-4 space-y-3">
+      <div class="grid grid-cols-2 gap-3">
+        <label class="flex flex-col gap-1.5"><span class="mono text-[10px] uppercase tracking-widest opacity-60">Paid via</span>
+          <select id="pfMethod" class="h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-3 mono text-[12px] font-[700] outline-none focus:border-[#201C19]">
+            <option value="gcash">GCash</option><option value="maya">Maya</option><option value="bank">Bank transfer</option><option value="cash">Cash</option>
+          </select>
+        </label>
+        <label class="flex flex-col gap-1.5"><span class="mono text-[10px] uppercase tracking-widest opacity-60">Amount paid (₱)</span>
+          <input type="number" id="pfAmount" min="0.01" step="0.01" value="${remaining.toFixed(2)}" required class="h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-3 mono text-[12px] font-[700] outline-none focus:border-[#201C19]"/>
+        </label>
+      </div>
+      <label class="flex flex-col gap-1.5"><span class="mono text-[10px] uppercase tracking-widest opacity-60">Reference number</span>
+        <input type="text" id="pfReference" placeholder="e.g. GCash ref / transaction no." class="h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-4 mono text-[12px] font-[700] outline-none focus:border-[#201C19]"/>
+      </label>
+      <label class="flex flex-col gap-1.5"><span class="mono text-[10px] uppercase tracking-widest opacity-60">Proof of payment (photo/PDF, optional but recommended)</span>
+        <input type="file" id="pfProof" accept="image/*,application/pdf" class="h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-3 mono text-[11px] outline-none focus:border-[#201C19] file:mr-3 file:h-full file:border-0 file:rounded-full file:bg-[#201C19] file:text-white file:px-3 file:mono file:text-[10px] file:font-[700] file:cursor-pointer cursor-pointer"/>
+      </label>
+      <div class="mono text-[10px] opacity-60 leading-[1.7]">Submitting is a claim only — the platform operator verifies it against their records before your invoice is marked paid. You'll see the result here.</div>
+      <div id="payError" class="hidden mono text-[12px] text-[#8C2C10] bg-[#FFE9E0] border border-[#FFC9B6] rounded-[12px] px-4 py-2.5"></div>
+      <button type="submit" class="w-full h-11 rounded-full bg-[#201C19] text-white font-[800] text-[13px] hover:opacity-90 active:scale-[0.99] transition cursor-pointer">Submit for Verification</button>
+    </form>`;
+  document.getElementById('payModal').classList.remove('hidden');
+  document.getElementById('payModalClose').onclick = closePayModal;
+  document.getElementById('payForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const err = document.getElementById('payError');
+    err.classList.add('hidden');
+    const amount = parseFloat(document.getElementById('pfAmount').value);
+    const method = document.getElementById('pfMethod').value;
+    const reference = document.getElementById('pfReference').value.trim();
+    const file = document.getElementById('pfProof').files[0] || null;
+    if(!Number.isFinite(amount) || amount <= 0){ err.textContent = 'Enter the amount you actually paid.'; err.classList.remove('hidden'); return; }
+    const btn = e.target.querySelector('button[type="submit"]');
+    btn.disabled = true; btn.textContent = 'Submitting…';
+    try {
+      let proofUrl = '';
+      if(file && storage){
+        const path = `platformProofs/${currentClientId}/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+        const snap = await storage.ref(path).put(file);
+        proofUrl = await snap.ref.getDownloadURL();
+      }
+      await db.collection('platformSubmissions').add({
+        tenantId: currentClientId,
+        tenantName: (TENANT && TENANT.businessName) || currentClientId,
+        invoiceId: inv.id,
+        period: inv.period,
+        method, reference, amount, proofUrl,
+        status: 'pending',
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      });
+      toast('Payment submitted — the platform operator will verify it');
+      closePayModal();
+      await loadSubmissions();
+      await renderInvoices();
+    } catch(ex) {
+      err.textContent = 'Failed to submit: ' + ex.message;
+      err.classList.remove('hidden');
+      btn.disabled = false; btn.textContent = 'Submit for Verification';
+    }
+  });
+}
+function closePayModal(){ document.getElementById('payModal').classList.add('hidden'); }
+
+/* ---------- data loading ---------- */
+async function loadSubmissions(){
+  try {
+    const snap = await db.collection('platformSubmissions').where('tenantId', '==', currentClientId).orderBy('createdAt', 'desc').limit(50).get();
+    MY_SUBMISSIONS = [];
+    snap.forEach(d => MY_SUBMISSIONS.push({ id: d.id, ...d.data() }));
+  } catch(ex) { MY_SUBMISSIONS = []; }
+}
+function renderSummary(){
+  const t = TENANT || {};
+  document.getElementById('sumBalance').textContent = fmtMoney(Number(t.creditBalance) || 0);
+  document.getElementById('sumBalance').style.color = (Number(t.creditBalance) || 0) < 0 ? '#8C2C10' : '';
+  const sub = t.subscription;
+  document.getElementById('sumPlan').textContent = sub ? (sub.planName || sub.planId) : 'No plan';
+  document.getElementById('sumPlanSub').textContent = sub ? (sub.status === 'trial' ? `trial${sub.trialEndsAt ? ' until ' + String(sub.trialEndsAt).slice(0,10) : ''}` : `v${sub.pricingVersion || 'n/a'}`) : 'manual billing formula';
+  const bs = (t.billingStatus || 'current').replace(/_/g, ' ');
+  const bsEl = document.getElementById('sumBillStatus');
+  bsEl.textContent = bs;
+  bsEl.style.color = t.billingStatus && t.billingStatus !== 'current' ? '#8A5A00' : '';
+  const suspended = t.status === 'suspended' || ['suspended','cancelled','archived','restricted'].includes(t.lifecycle || '');
+  document.getElementById('suspendedBanner').classList.toggle('hidden', !suspended);
+}
+async function renderAll(){
+  renderSummary();
+  await Promise.all([renderProjection(), loadSubmissions().then(renderInvoices)]);
+}
+
+/* ---------- boot ---------- */
+(async function init(){
+  if(!FB_ENABLED){ renderGateState('<p class="mt-5 mono text-[12px] text-[#8C2C10]">Billing portal is not configured (missing Firebase config).</p>'); return; }
+  if(!currentClientId){ renderGateState('<p class="mt-5 mono text-[12px] text-[#8C2C10]">No tenant specified. Open this page as <span class="font-[700]">billing.html?client=your-facility</span>.</p>'); return; }
+  const LS_UNLOCKED = () => `cb_billing_unlocked_${currentClientId}`;
+  try {
+    const cfgSnap = await db.doc(`clients/${currentClientId}/config/state`).get();
+    let bizName = currentClientId, primary = '#201C19', logoUrl = '';
+    if(cfgSnap.exists){
+      const c = cfgSnap.data().data || {};
+      bizName = (c.business && c.business.name) || c.businessName || bizName;
+      primary = (c.theme && (c.theme.primary || c.theme.primaryColor)) || primary;
+      logoUrl = (c.branding && c.branding.logoUrl) || '';
+    }
+    const tenantSnap = await db.doc(`platformTenants/${currentClientId}`).get();
+    TENANT = tenantSnap.exists ? tenantSnap.data() : null;
+    const psSnap = await db.doc('platformSettings/billing').get();
+    PAY_SETTINGS = psSnap.exists ? psSnap.data() : {};
+    applyBranding(bizName, primary, logoUrl);
+    if(sessionStorage.getItem(LS_UNLOCKED()) === 'true'){ enterApp(); return; }
+    renderPinGate(bizName);
+  } catch(ex) {
+    renderGateState(`<p class="mt-5 mono text-[12px] text-[#8C2C10]">Failed to load: ${escapeHtml(ex.message)}</p>`);
+  }
+})();
+
+document.getElementById('lockBtn').addEventListener('click', () => {
+  sessionStorage.removeItem(`cb_billing_unlocked_${currentClientId}`);
+  location.reload();
+});
+document.getElementById('projRefreshBtn').addEventListener('click', () => { renderProjection(); toast('Projection refreshed'); });
+document.getElementById('invRefreshBtn').addEventListener('click', async () => { await loadSubmissions(); await renderInvoices(); toast('Invoices refreshed'); });
+</script>
+</body>
+</html>

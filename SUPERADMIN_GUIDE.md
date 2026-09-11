@@ -79,7 +79,7 @@ A plan bundles pricing: monthly base fee, included confirmed bookings per month,
 
 ### 3.5 Invoices (the billing domain)
 
-**Generate Draft Invoices (this month)** materializes each tenant's usage into an invoice document with **frozen line items** — base subscription, confirmed bookings over the included allowance, staff-reserved hours at half rate, and any plan add-on fees for live Store/Tournament entitlements. Every line carries its source (`subscription` / `usage_event` / `entitlement` + source id), so any amount is explainable; the generation snapshot (counts + formula) is stored on the invoice, so later usage changes never alter an existing draft. Issued invoices are never rewritten.
+**Generate Draft Invoices** materializes a period's usage into invoice documents with **frozen line items** — base subscription, confirmed bookings over the included allowance, staff-reserved hours at half rate, and any plan add-on fees for live Store/Tournament entitlements. Every line carries its source (`subscription` / `usage_event` / `entitlement` + source id), so any amount is explainable; the generation snapshot (counts + formula) is stored on the invoice, so later usage changes never alter an existing draft. Issued invoices are never rewritten. The **Invoice period** picker chooses the month: the current month bills month-to-date, any earlier month bills the full month (its staff-reserve hours apply the *current* weekly pattern retroactively — the note after generation reminds you).
 
 Invoices then walk the manual payment states:
 
@@ -89,7 +89,7 @@ draft → awaiting payment → submitted for verification → verified
 any pre-verified state → overdue / waived / cancelled (with reason, audited)
 ```
 
-A payer reporting payment ("Mark Submitted for Verification") **never** verifies anything — verification is always a human action here ("Record Verified Payment" with method + reference, or "Apply from Credit Balance"). Payment instructions come from Plans & Pricing → Platform Payment Instructions (`platformSettings/billing`). Tenants with nothing to bill (zero formula, no live add-ons) are skipped and reported.
+A payer reporting payment **never** verifies anything — verification is always a human action here. Since Phase B1, tenants can report payment themselves from the **billing portal** (`billing.html?client=<slug>`, same Admin PIN as the booking page): they pick the invoice, enter method/reference/amount, optionally attach proof, and the claim lands in this console's **Verification Queue** as a pending submission. From the queue you either **Verify & Apply** (records an attributed payment, marks the invoice verified or partially paid) or **Reject** (records your reason — the tenant sees it in their portal). Every invoice card also lists its payer submissions under "Payer submissions". The manual buttons (Record Verified Payment / Mark Submitted) still work for payments reported out-of-band. Payment instructions come from Plans & Pricing → Platform Payment Instructions (`platformSettings/billing`). Tenants with nothing to bill (zero formula, no live add-ons) are skipped and reported.
 
 ## 4. Provisioning a New Tenant
 
@@ -256,6 +256,12 @@ No. A submission is the payer *claiming* they paid. Only "Record Verified Paymen
 
 **I edited a plan but a tenant's charges didn't change.**
 Plan edits never rewrite an existing subscription or an already-generated invoice. The tenant's billing formula was copied from the plan at assignment time; re-assign the plan to push updated pricing, and next month's draft invoices pick it up. Each subscription keeps the pricing version it was signed at.
+
+**A tenant says they paid — where do I see it?**
+Invoices tab → **Verification Queue**. Submissions from their billing portal arrive there with method, reference, amount, and (usually) attached proof. Verify & Apply to settle the invoice, or Reject with a reason. A submission sitting in "pending" has not moved the invoice at all — that's by design.
+
+**Can a tenant pay or mark anything paid from their side?**
+They can *submit* a claim (billing.html → "I've Paid — Submit for Verification"), including proof upload. They can never mark an invoice paid — invoice writes are superadmin-only in the rules, and verification only happens from this console.
 
 **My login works but I still can't reach the console / I get a permissions error reading `platformTenants`.**
 The `superadmin` custom claim isn't on your token yet — either it was never granted (re-run `set-superadmin-claim.js`) or you haven't signed out and back in since it was granted. Custom claims are baked into the ID token at sign-in time; they don't apply retroactively to an already-open session.

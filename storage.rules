@@ -11,6 +11,17 @@ service firebase.storage {
       allow write: if true;
     }
 
+    // Platform payment proof uploads -- a tenant submitting payment
+    // evidence for a PLATFORM invoice via billing.html (the manual QR
+    // loop). Same posture as the per-tenant proofs/ bucket above, plus
+    // size/type hygiene: photos or PDFs only, capped at 8MB.
+    match /platformProofs/{clientId}/{allPaths=**} {
+      allow read: if true;
+      allow write: if request.resource.size < 8 * 1024 * 1024
+                   && (request.resource.contentType.matches('image/.*')
+                       || request.resource.contentType.matches('application/pdf'));
+    }
+
     // Per-tenant branding assets (e.g. hero watermark image), uploaded from
     // the superadmin console during provisioning or tenant management.
     match /clients/{clientId}/branding/{allPaths=**} {

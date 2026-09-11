@@ -261,7 +261,10 @@ body{background:#FFFBF5;color:#201C19}
           <h2 class="mt-1.5 text-[17px] font-[800] tracking-[-0.02em]">Platform Invoices</h2>
           <p class="mono text-[11px] opacity-60 mt-0.5">Draft invoices materialize this month's usage with frozen line items (base subscription, booking overage, staff-reserve hours, add-on fees), then walk the manual payment states. A submitted payment is never auto-verified — verification is always a human action here.</p>
           <div class="mt-3 flex flex-wrap items-end gap-2">
-            <button type="button" id="genInvoicesBtn" class="h-10 px-4 rounded-full bg-[#D6FF5F] hover:bg-[#CBF052] text-[#201C19] font-[800] text-[12px] border border-[#201C19]/10 transition cursor-pointer">Generate Draft Invoices (this month)</button>
+            <label class="flex flex-col gap-1"><span class="mono text-[10px] uppercase tracking-widest opacity-60">Invoice period</span>
+              <input type="month" id="invoicePeriodPick" class="h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-3 mono text-[11px] font-[700] outline-none focus:border-[#201C19]"/>
+            </label>
+            <button type="button" id="genInvoicesBtn" class="h-10 px-4 rounded-full bg-[#D6FF5F] hover:bg-[#CBF052] text-[#201C19] font-[800] text-[12px] border border-[#201C19]/10 transition cursor-pointer">Generate Draft Invoices</button>
             <button type="button" id="reloadInvoicesBtn" class="h-10 px-4 rounded-full bg-white border border-[#EAE0D5] mono text-[11px] font-[700] cursor-pointer hover:border-[#201C19]">Refresh</button>
             <label class="flex flex-col gap-1"><span class="mono text-[10px] uppercase tracking-widest opacity-60">Filter status</span>
               <select id="invoiceStatusFilter" class="h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-3 mono text-[11px] font-[700] outline-none focus:border-[#201C19]">
@@ -273,6 +276,16 @@ body{background:#FFFBF5;color:#201C19}
             </label>
           </div>
           <div id="invoiceGenNote" class="hidden mt-3 mono text-[11px] px-4 py-2.5 rounded-[14px] bg-[#FFFBF5] border border-[#EAE0D5]"></div>
+        </div>
+        <div class="rounded-[24px] bg-white border border-[#EAE0D5] overflow-hidden mb-5">
+          <div class="px-6 h-[56px] flex items-center justify-between border-b border-[#F1E9DF]">
+            <div>
+              <div class="font-[750] text-[15px]">Verification Queue</div>
+              <div class="mono text-[10px] opacity-50">Payer-submitted payment claims from billing.html, awaiting a human decision. A submission never verifies itself — approve or reject each one; the invoice only moves when you act.</div>
+            </div>
+            <button type="button" id="refreshQueueBtn" class="h-9 px-4 rounded-full bg-white border border-[#EAE0D5] mono text-[11px] font-[700] cursor-pointer hover:border-[#201C19] transition shrink-0">Refresh</button>
+          </div>
+          <div id="invoiceQueue" class="divide-y divide-[#F5EDE4]"></div>
         </div>
         <div id="invoiceList" class="space-y-3"></div>
       </div>
@@ -772,11 +785,15 @@ function invoiceTotals(inv){
   const remaining = Math.max(0, (Number(inv.total) || 0) - paid - credited);
   return { paid, credited, remaining };
 }
-/* Freeze this month's usage into draft invoices with explainable lines.
+/* Freeze a period's usage into draft invoices with explainable lines.
    Idempotent per tenant+period: existing drafts are refreshed, anything
-   already issued or beyond is never rewritten (snapshot semantics). */
-async function generateDraftInvoices(){
-  const period = usagePeriod(0);
+   already issued or beyond is never rewritten (snapshot semantics).
+   Phase B2: periodOffset selects the month (0 = current month-to-date,
+   1 = last month, ...) -- historical drafts walk the full month. */
+async function generateDraftInvoices(periodOffset = 0){
+  const offset = Number(periodOffset) || 0;
+  if(offset < 0){ toast('Cannot generate invoices for a future period'); return; }
+  const period = usagePeriod(offset);
   const slugs = Object.keys(TENANT_INDEX);
   if(slugs.length === 0){ toast('No tenants to invoice'); return; }
   let created = 0, refreshed = 0, skippedNoCharge = 0, skippedIssued = 0;
@@ -787,7 +804,7 @@ async function generateDraftInvoices(){
       const existingSnap = await db.doc(`platformInvoices/${invoiceDocId(slug, period)}`).get();
       const existing = existingSnap.exists ? existingSnap.data() : null;
       if(existing && existing.status && existing.status !== 'draft'){ skippedIssued++; continue; }
-      const rep = await computeTenantReport({ slug, businessName: t.businessName || slug, billing: t.billing || {} });
+      const rep = await computeTenantReport({ slug, businessName: t.businessName || slug, billing: t.billing || {} }, offset);
       const billing = t.billing || {};
       const plan = t.subscription && t.subscription.planId ? PLANS_CACHE[t.subscription.planId] : null;
       const baseFee = Number(billing.baseFee) || 0;
@@ -828,7 +845,8 @@ async function generateDraftInvoices(){
   await logAudit('invoices-generate', null, `period ${period}: ${created} created, ${refreshed} refreshed, ${skippedIssued} already issued, ${skippedNoCharge} nothing to bill`);
   const note = document.getElementById('invoiceGenNote');
   note.classList.remove('hidden');
-  note.innerHTML = `Period <span class="font-[700]">${period}</span> — <span class="font-[700]">${created}</span> draft(s) created, ${refreshed} refreshed, ${skippedIssued} left untouched (already issued), ${skippedNoCharge} with nothing to bill${skippedList.length ? ' — ' + escapeHtml(skippedList.slice(0, 5).join(', ')) : ''}.`;
+  const retroNote = offset > 0 ? ' Staff-reserved hours apply the CURRENT weekly pattern retroactively across the full month.' : '';
+  note.innerHTML = `Period <span class="font-[700]">${period}</span>${offset > 0 ? ' (historical — full month)' : ' (month-to-date)'} — <span class="font-[700]">${created}</span> draft(s) created, ${refreshed} refreshed, ${skippedIssued} left untouched (already issued), ${skippedNoCharge} with nothing to bill${skippedList.length ? ' — ' + escapeHtml(skippedList.slice(0, 5).join(', ')) : ''}.${retroNote}`;
   await loadInvoices();
   renderOverview();
 }
@@ -839,6 +857,8 @@ async function loadInvoices(){
     snap.forEach(d => invs.push({ id: d.id, ...d.data() }));
     invs.sort((a, b) => (b.period || '').localeCompare(a.period || '') || (a.tenantName || '').localeCompare(b.tenantName || ''));
     renderInvoicesTab(invs);
+    PENDING_SUBMISSIONS = await loadPendingSubmissions();
+    renderInvoiceQueue();
     return invs;
   } catch(ex) {
     document.getElementById('invoiceList').innerHTML = `<div class="p-6 text-center mono text-[11px] text-[#8C2C10]">Failed to load invoices: ${escapeHtml(ex.message)}</div>`;
@@ -860,6 +880,66 @@ async function invoiceApplyAction(inv, patch, action, details, paymentEntry, adj
   } catch(ex) { toast('Failed: ' + ex.message); return false; }
 }
 
+/* ---------- Payer submissions (manual QR loop, payer side) ----------
+   billing.html writes claims here (method/reference/amount/proof URL).
+   A submission NEVER moves an invoice by itself -- the queue below is
+   where a human verifies or rejects each one; only those actions touch
+   the invoice. Submission docs are append-only from the payer side;
+   review stamps status/reviewedBy on the submission. */
+async function loadPendingSubmissions(){
+  try {
+    const snap = await db.collection('platformSubmissions')
+      .where('status', '==', 'pending')
+      .orderBy('createdAt', 'desc')
+      .limit(50).get();
+    const out = [];
+    snap.forEach(d => out.push({ id: d.id, ...d.data() }));
+    return out;
+  } catch(ex) {
+    console.warn('[Submissions] pending load failed:', ex.message);
+    return [];
+  }
+}
+async function loadInvoiceSubmissions(invoiceId){
+  try {
+    const snap = await db.collection('platformSubmissions')
+      .where('invoiceId', '==', invoiceId)
+      .orderBy('createdAt', 'desc').limit(20).get();
+    const out = [];
+    snap.forEach(d => out.push({ id: d.id, ...d.data() }));
+    return out;
+  } catch(ex) { return []; }
+}
+async function verifySubmission(inv, sub){
+  const amount = Number(sub.amount) || 0;
+  const totalsBefore = invoiceTotals(inv);
+  const fullyPaid = totalsBefore.paid + totalsBefore.credited + amount >= (Number(inv.total) || 0) - 0.005;
+  const ok = await invoiceApplyAction(inv, { status: fullyPaid ? 'verified' : 'partially_paid' }, 'payment',
+    `verified payer submission ${sub.id}: ${fmtMoneySA(amount)} via ${sub.method || 'manual'} ref ${sub.reference || 'n/a'}`,
+    { method: sub.method || 'manual', reference: sub.reference || '', amount, submissionId: sub.id });
+  if(ok){
+    try {
+      await db.doc(`platformSubmissions/${sub.id}`).update({
+        status: 'verified', reviewedBy: actorEmail(), reviewedAt: new Date().toISOString(),
+      });
+    } catch(ex) { console.warn('[Submissions] status stamp failed:', ex.message); }
+  }
+  return ok;
+}
+async function rejectSubmission(inv, sub, reason){
+  const ok = await invoiceApplyAction(inv, { status: 'rejected' }, 'reject',
+    `rejected payer submission ${sub.id}: ${reason}`, null,
+    { type: 'rejection', note: reason, submissionId: sub.id });
+  if(ok){
+    try {
+      await db.doc(`platformSubmissions/${sub.id}`).update({
+        status: 'rejected', rejectionReason: reason, reviewedBy: actorEmail(), reviewedAt: new Date().toISOString(),
+      });
+    } catch(ex) { console.warn('[Submissions] status stamp failed:', ex.message); }
+  }
+  return ok;
+}
+
 /* ---------- Screens ---------- */
 function showScreen(id){
   ['signInScreen','notAuthorizedScreen','dashboard'].forEach(s => {
@@ -874,6 +954,14 @@ function showScreen(id){
    loadTenants() and the services above maintain.
    ================================================================ */
 let ALL_INVOICES = [];
+let PENDING_SUBMISSIONS = [];   // payer payment claims awaiting review (platformSubmissions, status pending)
+function monthInputToOffset(v){
+  if(!v) return 0;
+  const [y, m] = v.split('-').map(Number);
+  if(!y || !m) return 0;
+  const now = new Date();
+  return (now.getFullYear() - y) * 12 + (now.getMonth() + 1 - m);
+}
 
 function populateTenantSelects(){
   const entries = _lastEntries;
@@ -1196,6 +1284,67 @@ function renderInvoicesTab(invs){
   list.innerHTML = rows.map(inv => invoiceCardHtml(inv)).join('');
   rows.forEach(inv => wireInvoiceCard(inv));
 }
+/* Verification queue: every pending payer claim, oldest UI promise in
+   the manual QR loop -- decide each one; the invoice moves only here. */
+function renderInvoiceQueue(){
+  const wrap = document.getElementById('invoiceQueue'); if(!wrap) return;
+  if(PENDING_SUBMISSIONS.length === 0){
+    wrap.innerHTML = '<div class="p-6 text-center mono text-[11px] opacity-50">No pending payer submissions. Claims submitted from a tenant\'s billing portal appear here for verify/reject.</div>';
+    return;
+  }
+  wrap.innerHTML = PENDING_SUBMISSIONS.map(sub => {
+    const inv = ALL_INVOICES.find(i => i.id === sub.invoiceId);
+    const remaining = inv ? invoiceTotals(inv).remaining : (Number(sub.amount) || 0);
+    return `<div class="px-5 py-3.5 flex flex-wrap items-center gap-3" data-queue-row="${sub.id}">
+      <div class="min-w-0">
+        <div class="font-[750] text-[13px]">${escapeHtml(sub.tenantName || sub.tenantId || '')} <span class="mono text-[10px] opacity-60 font-[400]">· ${escapeHtml(sub.period || '')}</span></div>
+        <div class="mono text-[10px] opacity-70">${escapeHtml(String(sub.createdAt || '').slice(0,16).replace('T',' '))} · <span class="font-[700]">${fmtMoneySA(sub.amount)}</span> via ${escapeHtml(sub.method || 'manual')}${sub.reference ? ' · ref ' + escapeHtml(sub.reference) : ''}${sub.proofUrl ? ` · <a href="${escapeHtml(sub.proofUrl)}" target="_blank" rel="noopener" class="underline">view proof ↗</a>` : ''}</div>
+      </div>
+      <div class="flex-1"></div>
+      <div class="mono text-[10px] opacity-60">invoice remaining ${fmtMoneySA(remaining)}</div>
+      <button type="button" data-qs-verify="${sub.id}" class="h-8 px-3 rounded-full bg-[#E8F5D8] text-[#3F7019] border border-[#CFE8B5] mono text-[10px] font-[700] cursor-pointer">Verify &amp; Apply</button>
+      <button type="button" data-qs-reject="${sub.id}" class="h-8 px-3 rounded-full bg-[#FFE9E0] text-[#8C2C10] border border-[#FFC9B6] mono text-[10px] font-[700] cursor-pointer">Reject</button>
+    </div>`;
+  }).join('');
+  wrap.querySelectorAll('[data-qs-verify]').forEach(btn => btn.addEventListener('click', async () => {
+    const sub = PENDING_SUBMISSIONS.find(s => s.id === btn.dataset.qsVerify); if(!sub) return;
+    let inv = ALL_INVOICES.find(i => i.id === sub.invoiceId);
+    if(!inv){
+      try { const snap = await db.doc(`platformInvoices/${sub.invoiceId}`).get(); if(snap.exists) inv = { id: snap.id, ...snap.data() }; } catch(ex) {}
+    }
+    if(!inv){ toast('Invoice document not found for this submission'); return; }
+    btn.disabled = true;
+    try {
+      if(await verifySubmission(inv, sub)){
+        toast(`Verified ${fmtMoneySA(sub.amount)} for ${inv.tenantName || inv.tenantId} (${sub.period})`);
+        await loadInvoices();
+        renderOverview();
+      }
+    } catch(ex) { toast('Failed: ' + ex.message); }
+    finally { btn.disabled = false; }
+  }));
+  wrap.querySelectorAll('[data-qs-reject]').forEach(btn => btn.addEventListener('click', async () => {
+    const sub = PENDING_SUBMISSIONS.find(s => s.id === btn.dataset.qsReject); if(!sub) return;
+    let inv = ALL_INVOICES.find(i => i.id === sub.invoiceId);
+    if(!inv){
+      try { const snap = await db.doc(`platformInvoices/${sub.invoiceId}`).get(); if(snap.exists) inv = { id: snap.id, ...snap.data() }; } catch(ex) {}
+    }
+    if(!inv){ toast('Invoice document not found for this submission'); return; }
+    const reason = prompt(`Reject this submission for ${inv.tenantName || inv.tenantId} (${sub.period})? Reason:`, '');
+    if(reason === null) return;
+    btn.disabled = true;
+    try {
+      if(await rejectSubmission(inv, sub, reason.trim())){
+        toast('Submission rejected — the payer sees the rejection in their portal');
+        await loadInvoices();
+        renderOverview();
+      }
+    } catch(ex) { toast('Failed: ' + ex.message); }
+    finally { btn.disabled = false; }
+  }));
+}
+document.getElementById('refreshQueueBtn').addEventListener('click', async () => { PENDING_SUBMISSIONS = await loadPendingSubmissions(); renderInvoiceQueue(); toast('Queue refreshed'); });
+
 function invoiceCardHtml(inv){
   const meta = INVOICE_STATUS_META[inv.status] || INVOICE_STATUS_META.draft;
   const { paid, credited, remaining } = invoiceTotals(inv);
@@ -1242,6 +1391,10 @@ function invoiceCardHtml(inv){
         ${showInstructions ? `<div class="p-3 rounded-[14px] bg-[#FFFBF5] border border-[#EAE0D5]"><div class="mono text-[10px] uppercase tracking-widest opacity-60 mb-1">Payment instructions</div>${paymentInstructionsHtml()}</div>` : ''}
         ${paysHtml ? `<div><div class="mono text-[10px] uppercase tracking-widest opacity-60 mb-1">Payments</div>${paysHtml}</div>` : ''}
         ${adjHtml ? `<div><div class="mono text-[10px] uppercase tracking-widest opacity-60 mb-1">Adjustments</div>${adjHtml}</div>` : ''}
+        <div>
+          <button type="button" data-inv-subs="${inv.id}" class="mono text-[10px] opacity-60 hover:opacity-100 underline cursor-pointer">Payer submissions</button>
+          <div id="invsubs-${inv.id}" class="hidden mt-1.5 p-2.5 rounded-[12px] bg-[#FFFBF5] border border-[#F1E9DF] max-h-[200px] overflow-y-auto"><div class="mono text-[10px] opacity-50">Loading…</div></div>
+        </div>
         <div class="flex flex-wrap gap-1.5 pt-1">${actions.join('')}</div>
         <div class="flex items-center gap-1.5 pt-1 border-t border-dashed border-[#EAE0D5]">
           <span class="mono text-[9px] opacity-50">Override status:</span>
@@ -1265,6 +1418,32 @@ function wireInvoiceCard(inv){
       catch(ex) { toast('Failed: ' + ex.message); }
       finally { btn.disabled = false; }
     });
+  });
+  const subsBtn = card.querySelector(`[data-inv-subs="${inv.id}"]`);
+  if(subsBtn) subsBtn.addEventListener('click', async () => {
+    const box = document.getElementById(`invsubs-${inv.id}`);
+    box.classList.toggle('hidden');
+    if(box.dataset.loaded) return;
+    const subs = await loadInvoiceSubmissions(inv.id);
+    box.innerHTML = subs.length ? subs.map(s => {
+      const stMeta = s.status === 'pending' ? 'bg-[#FFF0D6] text-[#8A5A00]' : s.status === 'verified' ? 'bg-[#E8F5D8] text-[#3F7019]' : 'bg-[#FFE9E0] text-[#8C2C10]';
+      return `<div class="mono text-[10px] leading-[1.7] py-1 border-b border-dashed border-[#F1E9DF] last:border-0">
+        <span class="px-1.5 py-0.5 rounded-full font-[700]" style="background:${stMeta}">${escapeHtml(s.status || 'pending')}</span>
+        ${escapeHtml(String(s.createdAt || '').slice(0,16).replace('T',' '))} · <span class="font-[700]">${fmtMoneySA(s.amount)}</span> via ${escapeHtml(s.method || 'manual')}${s.reference ? ' · ref ' + escapeHtml(s.reference) : ''}${s.proofUrl ? ` · <a href="${escapeHtml(s.proofUrl)}" target="_blank" rel="noopener" class="underline">proof ↗</a>` : ''}${s.rejectionReason ? ` · <span class="text-[#8C2C10]">reason: ${escapeHtml(s.rejectionReason)}</span>` : ''}
+        ${s.status === 'pending' ? `<span class="ml-1"><button type="button" data-sub-verify="${s.id}" class="underline font-[700] cursor-pointer">verify</button> · <button type="button" data-sub-reject="${s.id}" class="underline font-[700] cursor-pointer text-[#8C2C10]">reject</button></span>` : ''}
+      </div>`;
+    }).join('') : '<div class="mono text-[10px] opacity-50">No payer submissions for this invoice yet.</div>';
+    box.dataset.loaded = '1';
+    box.querySelectorAll('[data-sub-verify]').forEach(b => b.addEventListener('click', async () => {
+      const sub = subs.find(x => x.id === b.dataset.subVerify); if(!sub) return;
+      if(await verifySubmission(inv, sub)){ toast('Submission verified'); await loadInvoices(); renderOverview(); }
+    }));
+    box.querySelectorAll('[data-sub-reject]').forEach(b => b.addEventListener('click', async () => {
+      const sub = subs.find(x => x.id === b.dataset.subReject); if(!sub) return;
+      const reason = prompt('Rejection reason (the payer sees this in their portal):', '');
+      if(reason === null) return;
+      if(await rejectSubmission(inv, sub, reason.trim())){ toast('Submission rejected'); await loadInvoices(); renderOverview(); }
+    }));
   });
   const sel = card.querySelector(`[data-inv-status="${inv.id}"]`);
   if(sel) sel.addEventListener('change', async () => {
@@ -1328,11 +1507,14 @@ async function runInvoiceAction(inv, action){
   }
 }
 document.getElementById('genInvoicesBtn').addEventListener('click', async (e) => {
+  const offset = monthInputToOffset(document.getElementById('invoicePeriodPick').value);
+  if(offset < 0){ toast('Pick the current month or an earlier one'); return; }
   e.target.disabled = true;
-  try { await generateDraftInvoices(); } catch(ex) { toast('Failed: ' + ex.message); }
+  try { await generateDraftInvoices(offset); } catch(ex) { toast('Failed: ' + ex.message); }
   finally { e.target.disabled = false; }
 });
 document.getElementById('reloadInvoicesBtn').addEventListener('click', async () => { await loadInvoices(); toast('Invoices refreshed'); });
+document.getElementById('invoicePeriodPick').value = usagePeriod(0);
 document.getElementById('invoiceStatusFilter').innerHTML = '<option value="">All statuses</option>' + INVOICE_STATUSES.map(s => `<option value="${s}">${INVOICE_STATUS_META[s].label}</option>`).join('');
 document.getElementById('invoiceStatusFilter').addEventListener('change', () => renderInvoicesTab(ALL_INVOICES));
 document.getElementById('invoiceTenantFilter').addEventListener('change', () => renderInvoicesTab(ALL_INVOICES));
@@ -1610,18 +1792,28 @@ function allOperatingHours(hoursCfg){
 
 let _lastReportingRows = [];
 
-async function computeTenantReport(t){
+async function computeTenantReport(t, offsetMonths = 0){
   const slug = t.slug;
-  const thisMonthStart = monthStartDate(0);
-  const lastMonthStart = monthStartDate(1);
-  const now = new Date();
+  // Period-parameterized (Phase B2): offset 0 = current month-to-date
+  // (walk ends today); offset N = that full historical month (walk ends
+  // on its last day). Staff-reserve hours always reflect the CURRENT
+  // weekly pattern applied retroactively across the walked range -- same
+  // caveat the live reports already carry, now true for history too.
+  const periodOffset = Number(offsetMonths) || 0;
+  const thisMonthStart = monthStartDate(periodOffset);
+  const lastMonthStart = monthStartDate(periodOffset + 1);
+  const periodEnd = periodOffset > 0 ? new Date(monthStartDate(periodOffset - 1).getTime() - 1) : new Date();
+  const periodEndPlus = periodOffset > 0 ? monthStartDate(periodOffset - 1) : null; // exclusive upper bound
 
   const usageSnap = await db.collection(`platformTenants/${slug}/usage`).get();
   let thisViews = 0;
-  usageSnap.forEach(doc => { if(doc.id === usagePeriod(0)) thisViews = doc.data().views || 0; });
+  usageSnap.forEach(doc => { if(doc.id === usagePeriod(periodOffset)) thisViews = doc.data().views || 0; });
 
-  // One range query covers this month + last month (single-field range,
-  // no composite index needed).
+  // One range query covers the target period + the one before it
+  // (single-field range, no composite index needed). Bucketing is
+  // offset-aware: the TARGET period is [monthStart(offset), monthStart(offset-1))
+  // for historical months, or month-to-date for offset 0; anything newer
+  // than the target (only possible when offset > 0) is dropped.
   const eventsSnap = await db.collection(`platformTenants/${slug}/events`)
     .where('createdAt', '>=', lastMonthStart)
     .get();
@@ -1630,7 +1822,8 @@ async function computeTenantReport(t){
     const e = doc.data();
     const at = e.createdAt && e.createdAt.toDate ? e.createdAt.toDate() : null;
     if(!at) return;
-    (at >= thisMonthStart ? thisMonthEvents : lastMonthEvents).push(e);
+    if(at < thisMonthStart) lastMonthEvents.push(e);
+    else if(periodOffset === 0 || at < periodEndPlus) thisMonthEvents.push(e);
   });
 
   const bucket = (events) => {
@@ -1672,9 +1865,10 @@ async function computeTenantReport(t){
   } catch(ex) { /* composite index still building, or none yet -- leave at 0 */ }
 
   // Staff reserve + utilization: a config snapshot walked over the days
-  // elapsed this month, not an event stream (there's no "event" for a
-  // recurring template rule existing -- it's a standing config, not
-  // something that fires).
+  // elapsed in the target period (month-to-date for the current month,
+  // the full month for historical periods), not an event stream (there's
+  // no "event" for a recurring template rule existing -- it's a standing
+  // config, not something that fires).
   let staffHours = 0, availableCapacity = 0, utilizationPct = 0;
   try {
     const [courtsSnap, srSnap, cfgSnap] = await Promise.all([
@@ -1687,7 +1881,7 @@ async function computeTenantReport(t){
     const sr = migrateStaffReserveShapeSA((srSnap.exists && srSnap.data().data) || {}, activeCourts.map(c=>c.id));
     const hoursCfg = (cfgSnap.exists && cfgSnap.data().data && cfgSnap.data().data.hours) || {};
     const allHours = allOperatingHours(hoursCfg);
-    const dates = datesInRange(thisMonthStart, now);
+    const dates = datesInRange(thisMonthStart, periodEnd);
     activeCourts.forEach(court => {
       dates.forEach(dateISO => {
         const hoursMap = getEffectiveStaffHoursSA(sr, court.id, dateISO);

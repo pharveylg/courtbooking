@@ -71,7 +71,7 @@ Statuses: **CLOSED** (shipped in this restructure) · **PARTIAL** (foundation sh
 | G-09 | Usage meters + events (§4 P2) | Already present: `platformTenants/{slug}/events` ledger + `usage/{period}` views | Unchanged (already roadmap-conformant); invoices now consume the ledger with frozen snapshots | CLOSED (pre-existing) |
 | G-10 | Historical usage immutable when current data changes (§4 P2 exit) | Reporting recomputed live; no snapshot | Invoice `lines[]` + `snapshot{}` freeze confirmed bookings / staff hours / formula at generation; issued invoices are never rewritten by regeneration | CLOSED |
 | G-11 | Draft invoices with explainable lines (§4 P2) | None | `platformInvoices/inv_{slug}_{period}` with per-line `sourceType/sourceId/description/qty/unitAmount/amount` — base subscription, overage, staff-reserve, add-on fees | CLOSED |
-| G-12 | Manual QR payment states + verification (§5, §11) | Only prepaid top-up/apply; no states | Full state machine: `draft → awaiting_payment → submitted_for_verification → verified/rejected/partially_paid/overdue/waived/cancelled`; submission never auto-verifies; payments[] and adjustments[] recorded on the invoice; status overrides audited | CLOSED |
+| G-12 | Manual QR payment states + verification (§5, §11) | Only prepaid top-up/apply; no states | Full state machine: `draft → awaiting_payment → submitted_for_verification → verified/rejected/partially_paid/overdue/waived/cancelled`; submission never auto-verifies; payments[] and adjustments[] recorded on the invoice; status overrides audited. **Extended (Phase B1):** payer claims arrive as `platformSubmissions` docs (method/reference/amount/proof) and are decided in the console's Verification Queue — verify applies an attributed payment, reject stamps the reason visible in the tenant portal | CLOSED |
 | G-13 | Payment instructions / platform QR config (§5) | None | `platformSettings/billing` (GCash / bank / notes), editable in Plans & Pricing, rendered on every unverified invoice | CLOSED |
 | G-14 | Credits and manual adjustments (§4 P2) | `creditBalance` increment + "apply month's charge" | Kept, and integrated: "Apply from Credit Balance" decrements the ledger, records a `credit_balance` payment, and marks the invoice verified/partially_paid; waivers/rejections/cancellations recorded as adjustments | CLOSED |
 | G-15 | Billing events audit (§4 P2) | Generic platform audit only | Every invoice action, plan change, entitlement change, and lifecycle change is a distinct audited action with labels | CLOSED |
@@ -80,8 +80,8 @@ Statuses: **CLOSED** (shipped in this restructure) · **PARTIAL** (foundation sh
 | G-18 | Platform overview / health (§5 Overview; §7) | None — no landing surface | Overview tab: tenants by state, live entitlements per product, MTD projected billing, open-invoice exposure, verified MTD, "needs attention" list (suspended tenants, non-current billing, expiring trials, unverified invoices), recent audit | PARTIAL (no background-job health — there are no jobs; no uptime surface) |
 | G-19 | Platform Admin permission groups (`manage_organizations`, `manage_entitlements`, … §4 P1) | Single `superadmin` claim for everything | Not implemented — one role remains. The audit log + append-only rules bound the blast radius. Blocked on real multi-admin need | OPEN (P1) |
 | G-20 | Support queue & diagnostics / "explain why" access (§4 P1) | Feature Ideas scratchpad doubles as support scoping; troubleshooting FAQ | Unchanged; Feature Ideas tab retained as the support/scoping surface | OPEN (P1) |
-| G-21 | Organization-facing billing portal (§5 org view: see invoices, submit proof, track verification) | None (platform-side only) | Not built — tenant apps untouched by this restructure. The console covers the platform side of the loop (mark submitted → verify/reject); the payer-side submission flow is the natural next slice | OPEN (next slice, §11 flow) |
-| G-22 | Invoices for historical periods (§10 source references) | Generation is current-month only (`computeTenantReport` is month-bound) | Deferred — the invoice shape already carries `period` + source refs; period-parameterized reporting is the unlock | OPEN |
+| G-21 | Organization-facing billing portal (§5 org view: see invoices, submit proof, track verification) | None (platform-side only) | **CLOSED (Phase B1):** `billing.html` — PIN-gated tenant portal showing plan/balance/billing status, this-month projection, all invoices with frozen lines, platform payment instructions, and payment-claim submission (method + reference + proof upload). Claims land in the console's Verification Queue; a submission never mutates the invoice | CLOSED |
+| G-22 | Invoices for historical periods (§10 source references) | Generation is current-month only (`computeTenantReport` is month-bound) | **CLOSED (Phase B2):** `computeTenantReport(t, offset)` is period-parameterized (month-to-date now, full-month for history); the Invoices tab has a month picker and generation notes the retroactive staff-reserve caveat for historical months | CLOSED |
 | G-23 | Automated payment provider (§4 P7, B5) | None | Deliberately deferred per the roadmap's core decision: *build the billing domain now, defer the processor*. `platformSettings/billing` + invoice states are provider-ready | OPEN (P4/B5) |
 | G-24 | Suspension blocks only the intended product scope (§6 cross-tenant tests) | Suspend = booking page only; Store/Tournament pages stay reachable when tenant suspended | Behavior preserved exactly (no tenant-app change). Lifecycle policy should decide whether tenant suspension should also gate add-ons — one-line change in `syncTenantRuntime` when decided | OPEN (policy decision) |
 | G-25 | Free-tier operating rules (§6) | Already followed: no paid infra, no payment credentials, manual jobs | Unchanged; new collections are free-tier-neutral (reads bounded by console use) | CLOSED (pre-existing) |
@@ -123,8 +123,16 @@ platformInvoices/inv_{slug}_{YYYY-MM}               NEW  superadmin-only
   snapshot: { confirmedBookings, staffReserveHours, includedBookings,
               perBookingRate, planId, generatedAt, note }     ← frozen inputs
 
-platformSettings/billing                            NEW  superadmin-only
+platformSettings/billing                            NEW  read: public (payers need it) · write: superadmin
   gcashName, gcashNumber, bankName, bankAccount, notes
+
+platformSubmissions/{autoId}                        NEW  create: payer (billing.html) · review: superadmin
+  tenantId, tenantName, invoiceId, period
+  method, reference, amount, proofUrl
+  status: pending|verified|rejected
+  reviewedBy, reviewedAt, rejectionReason?
+
+storage: platformProofs/{slug}/{file}               NEW  payment-proof uploads from billing.html (image/pdf, <8MB)
 ```
 
 ### 4.2 Two-layer entitlement flow
@@ -173,24 +181,28 @@ Derivation: site online ⇔ `lifecycle ∈ {provisioning, trial, active, grace}`
 
 ## 6. Verification
 
-- `node --check` on the full console script — clean.
+- `node --check` on the full console script and the billing portal script — clean.
 - Static ID audit: every `getElementById` target, `data-sa-tab` ↔ panel pairing, duplicate-ID check — clean.
-- Runtime smoke test (stubbed DOM/Firebase): top-level wiring executes and settles without throwing.
-- **In-memory Firestore integration suite — 29/29 passed**, covering: platform-state building with legacy migration fallbacks; entitlement grant → doc materialization + mirror + audit; lifecycle suspend/reactivate → runtime pause + `platformTenants`/`tenantDirectory` mirrors; suspend-preserves-Store behavior; starter-plan seeding; plan assignment → subscription + billing overwrite; draft invoice generation (base 500 + store add-on 250, overage correctly absent at 5/100 included, frozen snapshot with confirmedBookings=5, zero-formula tenant skipped); issued → submitted → verified (never auto-verified) with payment recorded; credit application → partially_paid; all new renderers + CSV export.
+- **`tests/control-plane.test.js` — in-memory Firestore integration suite, 40/40 passed.** Covers: platform-state building with legacy migration fallbacks; entitlement grant → doc materialization + mirror + audit; lifecycle suspend/reactivate → runtime pause + `platformTenants`/`tenantDirectory` mirrors; suspend-preserves-Store behavior; starter-plan seeding; plan assignment → subscription + billing overwrite; draft invoice generation (frozen lines, overage math, add-on fees, zero-formula skip); issued → submitted → verified (never auto-verified); **B2:** historical-month generation buckets the right month's events (this test caught and fixed an offset bug) + month-offset math; **B1:** submission → queue → verify (attributed payment + reviewer stamp) and reject (reason stamped, visible to tenant); credit application; renderers; CSV export.
+- **`tests/billing-portal.test.js`** — portal boot smoke: tenant resolution, branding application, PIN gate render.
+- Rule changes ship with matching exposures: tenants `get` their own invoice docs (id-bound: `inv_{slug}_{period}` encodes the tenant, `list` stays superadmin-only), their own registry doc, and their own usage/events ledger; `platformSettings/billing` and `platformSubmissions` are publicly readable (payment instructions must reach payers; submissions are claims — same posture as the existing public `proofs/` bucket, flagged for the Security tab); invoice writes and submission reviews remain superadmin-only.
 
 **Deployment note:** run `firebase deploy --only firestore:rules` with this branch. No indexes are required by the new queries (single-field ordering + client-side filtering). No data migration is required — entitlement docs materialize on first management action, and a one-time "Seed Starter Plans" click populates the catalog.
 
 ---
 
-## 7. Deferred work, prioritized (roadmap-referenced)
+## 7. Phased build status (roadmap-referenced)
 
-1. **Payer-side billing portal (§11 org view)** — tenant admin sees own invoices, submits proof/reference, tracks verification status. The console-side review loop is done; this completes the manual-QR loop. *(Highest value next slice; needs a small auth story for tenant admins.)*
-2. **Historical-period invoicing (G-22)** — period-parameterize `computeTenantReport`, then allow drafting any past month.
-3. **Lifecycle policy for add-ons on tenant suspension (G-24)** — one-line decision in `syncTenantRuntime`.
-4. **Platform Admin permission groups (G-19, §4 P1)** — split the single claim into `manage_organizations` / `manage_entitlements` / `view_platform_billing` / … when a second admin exists.
-5. **Support + diagnostics workspace (G-20, §4 P1)** — effective-access explainer ("booking paused because lifecycle = suspended since …"), org-level troubleshooting.
-6. **Usage meters expansion** — queue→booking conversion and Open Play participation are already flagged in-app as untracked.
-7. **Automated payments (§4 P7/B5)** — only when confirmed customers justify it; the invoice/payment state machine is the integration surface.
+| Phase | Scope | Status |
+|---|---|---|
+| **B0 — Control-plane restructure** | Tenants, entitlements, plans, invoices, console navigation (this document §3–§5) | ✅ Shipped 11 Sep 2026 |
+| **B1 — Tenant billing portal** | `billing.html` (payer side of the manual-QR loop): PIN-gated, shows plan/balance/status + this-month projection + all invoices; payment-claim submission with proof upload → `platformSubmissions`; console **Verification Queue** (verify applies an attributed payment, reject stamps a reason the tenant sees); rules expose own invoices/registry/usage to the tenant and payment instructions publicly | ✅ Shipped 11 Sep 2026 |
+| **B2 — Historical-period invoicing** | `computeTenantReport(t, offset)` full-month walks for past periods; month picker on invoice generation with retroactive-staff-pattern caveat; offset-aware event bucketing (newer months excluded from historical invoices) | ✅ Shipped 11 Sep 2026 |
+| B3 — Lifecycle policy engine | Trial-expiry one-click actions; suspension × add-ons policy decision (G-24); invoice-driven billing-status suggestions | Next |
+| B4 — Diagnostics workspace | "Explain access" panel (why is X paused, since when, by whom), org troubleshooting (G-20) | Queued |
+| B5 — Permission groups | Split single `superadmin` claim into roadmap permission families (G-19) — when a second admin exists | Queued |
+| B6 — Usage meter expansion | Queue→booking conversion, Open Play participation (touches tenant app; event-schema change) | Queued |
+| P4 — Automated payments | Provider adapter behind the manual loop — deferred per the roadmap's core decision until customers justify it | Deferred (deliberate) |
 
 ---
 

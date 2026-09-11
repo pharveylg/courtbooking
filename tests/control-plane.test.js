@@ -1,0 +1,259 @@
+/* ================================================================
+   Control-plane integration tests (no Firebase project needed).
+   Runs the superadmin console's inline script against an in-memory
+   Firestore + stubbed DOM, then drives real flows: entitlements,
+   lifecycle, plans, invoices, submissions, historical periods.
+
+   Usage:  node tests/control-plane.test.js
+   ================================================================ */
+const fs = require('fs');
+const path = require('path');
+
+/* ---------- in-memory Firestore ---------- */
+const TS = () => ({ __ts: true });
+const store = new Map();
+function resolveFields(data, current) {
+  const out = { ...data };
+  for (const [k, v] of Object.entries(data)) {
+    if (v && v.__ts) out[k] = new Date();
+    else if (v && typeof v === 'object' && '__inc' in v) out[k] = (Number((current || {})[k]) || 0) + v.__inc;
+    else if (v && typeof v === 'object' && '__au' in v) out[k] = [...((current || {})[k] || []), ...v.__au.filter(x => !((current || {})[k] || []).some(y => JSON.stringify(y) === JSON.stringify(x)))];
+  }
+  return out;
+}
+function childDocs(prefix) {
+  const res = [];
+  for (const [p, data] of store) {
+    if (p.startsWith(prefix + '/') && !p.slice(prefix.length + 1).includes('/')) res.push({ id: p.slice(prefix.length + 1), data() { return data; } });
+  }
+  return res;
+}
+function cmp(a, op, b) { if (op === '==') return a === b; if (op === '>=') return a >= b; if (op === '<') return a < b; if (op === '<=') return a <= b; if (op === '>') return a > b; throw new Error('op ' + op); }
+function unwrap(v) { return v && v.toDate ? v.toDate() : v; }
+function snap(docs) { return { empty: docs.length === 0, size: docs.length, docs, forEach(cb) { docs.forEach(cb); } }; }
+function chainQ(path, filters) {
+  return {
+    where: (f, op, v) => chainQ(path, [...filters, { f, op, v }]),
+    orderBy: () => chainQ(path, filters),
+    limit: () => chainQ(path, filters),
+    get: async () => {
+      let docs = childDocs(path);
+      for (const fl of filters) docs = docs.filter(d => cmp(unwrap(d.data()[fl.f]), fl.op, unwrap(fl.v)));
+      return snap(docs);
+    },
+  };
+}
+function makeCollection(path) {
+  return {
+    doc: (id) => makeDoc(path + '/' + id),
+    add: async (data) => { const id = 'auto_' + Math.random().toString(36).slice(2, 9); store.set(path + '/' + id, resolveFields(data, {})); return { id }; },
+    where: (f, op, v) => chainQ(path, [{ f, op, v }]),
+    orderBy: () => chainQ(path, []),
+    limit: () => chainQ(path, []),
+    get: async () => snap(childDocs(path)),
+  };
+}
+function makeDoc(path) {
+  return {
+    get: async () => ({ exists: store.has(path), data: () => store.get(path) || {}, id: path.split('/').pop() }),
+    set: async (data, opts) => { const cur = store.get(path) || {}; store.set(path, opts && opts.merge ? { ...cur, ...resolveFields(data, cur) } : resolveFields(data, {})); },
+    update: async (data) => { if (!store.has(path)) throw new Error('update on missing doc ' + path); const cur = store.get(path); store.set(path, { ...cur, ...resolveFields(data, cur) }); },
+    delete: async () => store.delete(path),
+    collection: (sub) => makeCollection(path + '/' + sub),
+  };
+}
+
+/* ---------- DOM stubs (persistent elements) ---------- */
+const elements = new Map();
+function makeEl(id) {
+  const el = {
+    id, innerHTML: '', value: '', textContent: '', disabled: false, checked: false, files: [],
+    dataset: {},
+    classList: { toggle(){}, add(){}, remove(){}, contains(){ return false; } },
+    addEventListener(){}, removeAttribute(){}, setAttribute(k, v){ el['_attr_' + k] = v; }, getAttribute(k){ return el['_attr_' + k] || null; },
+    appendChild(){}, querySelector(){ return makeEl(id + '-q-' + Math.random()); }, querySelectorAll(){ return []; },
+    scrollIntoView(){}, reset(){}, focus(){}, click(){}, href: '', download: '',
+  };
+  return el;
+}
+global.document = {
+  getElementById: (id) => { if (!elements.has(id)) elements.set(id, makeEl(id)); return elements.get(id); },
+  querySelector: () => makeEl('docq'), querySelectorAll: () => [], createElement: (t) => makeEl('created-' + t),
+};
+
+/* ---------- Firebase global ---------- */
+global.firebase = (() => {
+  const FV = { serverTimestamp: TS, increment: (n) => ({ __inc: n }), arrayUnion: (...a) => ({ __au: a }) };
+  const inst = { doc: (p) => makeDoc(p), collection: (p) => makeCollection(p), FieldValue: FV };
+  const FS = () => inst; FS.FieldValue = FV;
+  return {
+    initializeApp() { return {}; },
+    auth() { return { onAuthStateChanged(cb){ if (global.__signedIn) cb({ email: 'owner@test', uid: 'u1', getIdTokenResult: async () => ({ claims: { superadmin: true } }) }); }, currentUser: { email: 'owner@test' }, signInWithEmailAndPassword(){ return Promise.resolve(); }, signOut(){} }; },
+    firestore: FS,
+    storage() { return { ref(){ return { put(){ return { snapshot: { ref: { getDownloadURL(){ return Promise.resolve('http://proof'); } } } }; } }; } }; },
+  };
+})();
+global.window = global;
+global.__signedIn = true;
+global.confirm = () => true;
+global.prompt = () => '1234';
+global.localStorage = { getItem() { return null; }, setItem() {}, removeItem() {} };
+global.sessionStorage = { getItem() { return null; }, setItem() {}, removeItem() {} };
+global.crypto = { subtle: { digest() { return Promise.resolve(new ArrayBuffer(32)); } } };
+global.TextEncoder = require('util').TextEncoder;
+global.FileReader = class { readAsDataURL(){} };
+global.URL = { createObjectURL: () => 'blob:test', revokeObjectURL() {} }; global.Blob = class {}; global.alert = () => {};
+
+/* ---------- seed data ---------- */
+const now = new Date();
+const d = (daysAgo, h = 10) => { const x = new Date(now); x.setDate(x.getDate() - daysAgo); x.setHours(h, 0, 0, 0); return { toDate: () => x }; };
+store.set('platformTenants/alpha', { businessName: 'Alpha Club', status: 'active', billing: { baseFee: 0, freeBookings: 0, perBookingRate: 0 }, creditBalance: 100, createdAt: d(30) });
+store.set('platformTenants/beta', { businessName: 'Beta Sports', status: 'suspended', createdAt: d(20) });
+store.set('clients/alpha/status/state', { data: { bookingPaused: false, storeEnabled: true, storePaused: false, tournamentEnabled: false, tournamentPaused: false } });
+store.set('clients/alpha/courts/state', { data: [{ id: 'court1', name: 'C1', startHour: 8, active: true }] });
+store.set('clients/alpha/staffReserve/state', { data: {} });
+store.set('clients/alpha/config/state', { data: { business: { name: 'Alpha Club' }, hours: { queueStart: 8, queueEnd: 22 } } });
+for (let i = 0; i < 5; i++) store.set(`platformTenants/alpha/events/ev_c${i}`, { type: 'booking_confirmed', createdAt: d(i), durationHours: 1, playerEmail: `p${i % 3}@x.com`, sample: false });
+store.set('platformTenants/alpha/events/ev_x1', { type: 'booking_cancelled', createdAt: d(1), durationHours: 1, sample: false });
+store.set('platformTenants/alpha/events/ev_q1', { type: 'queue_session_created', createdAt: d(2), sample: false });
+
+/* ---------- load the console script ---------- */
+const html = fs.readFileSync(path.join(__dirname, '..', 'superadmin.html'), 'utf8');
+const scripts = html.match(/<script>([\s\S]*?)<\/script>/g);
+const inline = scripts.map(s => s.replace(/^<script>/, '').replace(/<\/script>$/, ''));
+const code = inline[inline.length - 1];
+const EXPOSE = `
+globalThis.__makeCtx = () => ({ get TENANT_INDEX(){return TENANT_INDEX}, get ENT_STATE(){return ENT_STATE}, get PLANS_CACHE(){return PLANS_CACHE},
+  setEntitlement, setTenantLifecycle, setTenantBillingStatus, seedStarterPlans, assignPlanToTenant, generateDraftInvoices, invoiceApplyAction,
+  loadPendingSubmissions, loadInvoiceSubmissions, verifySubmission, rejectSubmission, renderInvoiceQueue, monthInputToOffset, computeTenantReport,
+  renderEntitlementsTab, renderPlansTab, renderInvoicesTab, renderOverview, exportReportingCsv, usagePeriod, monthStartDate, invoiceDocId, loadTenants, db });
+`;
+eval(code + EXPOSE);
+const C = globalThis.__makeCtx();
+
+(async () => {
+  const results = [];
+  const check = (name, cond) => { results.push([name, !!cond]); if (!cond) console.error('FAIL:', name); };
+
+  /* ===== control plane: state, entitlements, lifecycle ===== */
+  await C.loadTenants();
+  check('TENANT_INDEX has alpha+beta', C.TENANT_INDEX.alpha && C.TENANT_INDEX.beta);
+  check('alpha booking ent virtual active', C.ENT_STATE.alpha.booking && C.ENT_STATE.alpha.booking.status === 'active');
+  check('alpha store ent legacy active', C.ENT_STATE.alpha.store && C.ENT_STATE.alpha.store.status === 'active' && C.ENT_STATE.alpha.store.legacy === true);
+  check('alpha tournament ent not added', C.ENT_STATE.alpha.tournament === null);
+  check('beta booking ent suspended (tenant suspended)', C.ENT_STATE.beta.booking.status === 'suspended');
+
+  await C.setEntitlement('beta', 'tournament', { status: 'active', paused: false }, 'grant', 'test grant');
+  const betaEntDoc = store.get('platformTenants/beta/entitlements/tournament');
+  check('beta tournament ent doc materialized', betaEntDoc && betaEntDoc.status === 'active' && Array.isArray(betaEntDoc.history) && betaEntDoc.history.length === 1);
+  check('beta mirror tournamentEnabled true', store.get('clients/beta/status/state').data.tournamentEnabled === true);
+  check('beta mirror bookingPaused true (tenant suspended)', store.get('clients/beta/status/state').data.bookingPaused === true);
+  check('audit logged ent-grant', [...store.keys()].some(k => k.startsWith('platformAuditLog/') && store.get(k).action === 'ent-grant'));
+
+  await C.setTenantLifecycle('beta', 'active');
+  check('beta platformTenants.status active', store.get('platformTenants/beta').status === 'active');
+  check('beta tenantDirectory mirrored', store.get('tenantDirectory/beta').status === 'active');
+  check('beta bookingPaused false after reactivate', store.get('clients/beta/status/state').data.bookingPaused === false);
+
+  await C.setTenantLifecycle('alpha', 'suspended');
+  const alphaMirror = store.get('clients/alpha/status/state');
+  check('alpha bookingPaused true on suspend', alphaMirror.data.bookingPaused === true);
+  check('alpha storeEnabled still true on suspend', alphaMirror.data.storeEnabled === true);
+  await C.setTenantLifecycle('alpha', 'active');
+
+  /* ===== plans ===== */
+  await C.seedStarterPlans();
+  check('3 starter plans', Object.keys(C.PLANS_CACHE).length === 3);
+  document.getElementById('assignTenant').value = 'alpha';
+  document.getElementById('assignPlan').value = 'plan-a';
+  await C.assignPlanToTenant();
+  const alphaDoc = store.get('platformTenants/alpha');
+  check('alpha subscription stamped', alphaDoc.subscription && alphaDoc.subscription.planId === 'plan-a' && alphaDoc.subscription.pricingVersion === '2026-09');
+  check('alpha billing formula overwritten from plan', alphaDoc.billing.baseFee === 500 && alphaDoc.billing.freeBookings === 100 && alphaDoc.billing.perBookingRate === 15);
+
+  /* ===== invoices: current month ===== */
+  await C.generateDraftInvoices(0);
+  const period = C.usagePeriod(0);
+  const inv = store.get(`platformInvoices/inv_alpha_${period}`);
+  check('alpha draft invoice created', !!inv && inv.status === 'draft');
+  check('invoice total = 750 (500 base + 250 store add-on)', inv && inv.total === 750);
+  check('invoice has subscription line with sourceId plan-a', inv && inv.lines.some(l => l.sourceType === 'subscription' && l.sourceId === 'plan-a' && l.amount === 500));
+  check('invoice has entitlement line for store', inv && inv.lines.some(l => l.sourceType === 'entitlement' && l.sourceId === 'store' && l.amount === 250));
+  check('snapshot frozen with confirmedBookings=5', inv && inv.snapshot && inv.snapshot.confirmedBookings === 5);
+  check('beta skipped (no billing formula)', store.get(`platformInvoices/inv_beta_${period}`) === undefined);
+
+  /* ===== manual payment states (console-side) ===== */
+  let live = { id: `inv_alpha_${period}`, ...store.get(`platformInvoices/inv_alpha_${period}`) };
+  await C.invoiceApplyAction(live, { status: 'awaiting_payment' }, 'issue', 'issued');
+  check('issued -> awaiting_payment', store.get(`platformInvoices/inv_alpha_${period}`).status === 'awaiting_payment');
+  await C.invoiceApplyAction(live, { status: 'submitted_for_verification' }, 'submitted', 'payer says paid');
+  check('submitted_for_verification is NOT verified', store.get(`platformInvoices/inv_alpha_${period}`).status === 'submitted_for_verification');
+
+  /* ===== B2: historical-period invoicing ===== */
+  const lmStart = C.monthStartDate(1);
+  for (let i = 0; i < 3; i++) {
+    const dt = new Date(lmStart); dt.setDate(dt.getDate() + 3 + i);
+    store.set(`platformTenants/alpha/events/ev_lm${i}`, { type: 'booking_confirmed', createdAt: { toDate: () => dt }, durationHours: 2, playerEmail: `lm${i}@x.com`, sample: false });
+  }
+  await C.generateDraftInvoices(1);
+  const lmPeriod = C.usagePeriod(1);
+  const lmInv = store.get(`platformInvoices/inv_alpha_${lmPeriod}`);
+  check('B2: last-month invoice created with correct period id', !!lmInv && lmInv.period === lmPeriod);
+  check('B2: last-month confirmed = 3 (not this month\'s 5)', !!(lmInv && lmInv.snapshot && lmInv.snapshot.confirmedBookings === 3));
+  check('B2: last-month total = 750 (500 base + 250 store add-on, 3<100 included)', !!lmInv && lmInv.total === 750);
+  check('B2: monthInputToOffset math', C.monthInputToOffset(lmPeriod) === 1 && C.monthInputToOffset(C.usagePeriod(0)) === 0);
+
+  /* ===== B1: payer submissions + verification queue ===== */
+  live = { id: `inv_alpha_${lmPeriod}`, ...store.get(`platformInvoices/inv_alpha_${lmPeriod}`) };
+  await C.invoiceApplyAction(live, { status: 'awaiting_payment' }, 'issue', 'issued');
+  await makeCollection('platformSubmissions').add({
+    tenantId: 'alpha', tenantName: 'Alpha Club', invoiceId: `inv_alpha_${lmPeriod}`, period: lmPeriod,
+    method: 'gcash', reference: 'GC-777', amount: 750, proofUrl: 'http://proof/1', status: 'pending', createdAt: { toDate: () => new Date() },
+  });
+  const pending = await C.loadPendingSubmissions();
+  check('B1: pending submission visible in queue', pending.length === 1 && pending[0].reference === 'GC-777');
+  const subsForInv = await C.loadInvoiceSubmissions(`inv_alpha_${lmPeriod}`);
+  check('B1: invoice-scoped submission lookup works', subsForInv.length === 1);
+
+  live = { id: `inv_alpha_${lmPeriod}`, ...store.get(`platformInvoices/inv_alpha_${lmPeriod}`) };
+  const vOk = await C.verifySubmission(live, pending[0]);
+  const vInv = store.get(`platformInvoices/inv_alpha_${lmPeriod}`);
+  const allSubs1 = [...store.entries()].filter(([k]) => k.startsWith('platformSubmissions/')).map(([, v]) => v);
+  check('B1: verifySubmission ok', vOk === true);
+  check('B1: invoice verified with attributed payment', vInv.status === 'verified' && vInv.payments.length === 1 && vInv.payments[0].submissionId === pending[0].id && vInv.payments[0].reference === 'GC-777');
+  check('B1: submission stamped verified by reviewer', allSubs1.some(s => s.status === 'verified' && s.reviewedBy === 'owner@test'));
+
+  await makeCollection('platformSubmissions').add({
+    tenantId: 'alpha', tenantName: 'Alpha Club', invoiceId: `inv_alpha_${lmPeriod}`, period: lmPeriod,
+    method: 'bank', reference: 'BK-1', amount: 750, proofUrl: '', status: 'pending', createdAt: { toDate: () => new Date() },
+  });
+  const pending2 = await C.loadPendingSubmissions();
+  live = { id: `inv_alpha_${lmPeriod}`, ...store.get(`platformInvoices/inv_alpha_${lmPeriod}`) };
+  const rOk = await C.rejectSubmission(live, pending2[0], 'wrong amount');
+  const rInv = store.get(`platformInvoices/inv_alpha_${lmPeriod}`);
+  const allSubs2 = [...store.entries()].filter(([k]) => k.startsWith('platformSubmissions/')).map(([, v]) => v);
+  const rejSub = allSubs2.find(s => s.reference === 'BK-1');
+  check('B1: rejectSubmission ok', rOk === true);
+  check('B1: invoice moved to rejected with adjustment', rInv.status === 'rejected' && (rInv.adjustments || []).some(a => a.type === 'rejection' && a.submissionId === pending2[0].id));
+  check('B1: submission stamped rejected with reason', !!(rejSub && rejSub.status === 'rejected' && rejSub.rejectionReason === 'wrong amount'));
+
+  /* ===== credit application path ===== */
+  store.set(`platformInvoices/inv_alpha2_${period}`, { tenantId: 'alpha2', tenantName: 'Alpha2', period, status: 'awaiting_payment', total: 300, lines: [], creditsApplied: 0, payments: [], adjustments: [] });
+  C.TENANT_INDEX.alpha2 = { businessName: 'Alpha2', creditBalance: 200, status: 'active' };
+  live = { id: `inv_alpha2_${period}`, ...store.get(`platformInvoices/inv_alpha2_${period}`) };
+  await C.db.doc(`platformInvoices/inv_alpha2_${period}`).update({});
+  await C.invoiceApplyAction(live, { status: 'partially_paid', creditsApplied: 200 }, 'credit-applied', 'applied 200', { method: 'credit_balance', reference: 'prepaid ledger', amount: 200 });
+  const inv2 = store.get(`platformInvoices/inv_alpha2_${period}`);
+  check('credit applied recorded', inv2.creditsApplied === 200 && inv2.payments[0].method === 'credit_balance' && inv2.status === 'partially_paid');
+
+  /* ===== renderers ===== */
+  C.renderEntitlementsTab(); C.renderPlansTab(); C.renderInvoicesTab([{ id: 'x', ...vInv }]); C.renderInvoiceQueue(); await C.renderOverview();
+  check('renderers executed without throw', true);
+  C.exportReportingCsv();
+  check('CSV export executed', true);
+
+  const passed = results.filter(r => r[1]).length;
+  console.log(`\n=== CONTROL-PLANE TESTS: ${passed}/${results.length} passed ===`);
+  results.filter(r => !r[1]).forEach(r => console.log('  FAILED:', r[0]));
+  process.exit(passed === results.length ? 0 : 1);
+})().catch(e => { console.error('TEST CRASHED:', e); process.exit(1); });

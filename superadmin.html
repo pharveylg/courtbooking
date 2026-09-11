@@ -62,6 +62,7 @@ body{background:#FFFBF5;color:#201C19}
       <div>
         <h1 class="text-[20px] font-[800] tracking-[-0.02em] leading-tight">Superadmin Console</h1>
         <div class="mono text-[11px] opacity-60" id="signedInAsLabel"></div>
+        <div id="permChips" class="flex flex-wrap gap-1 mt-1"></div>
       </div>
     </div>
     <button id="signOutBtn" class="h-9 px-4 rounded-full bg-[#F1E9DF] border border-[#E9DDD0] mono text-[11px] font-[700] cursor-pointer hover:bg-[#E5DDD4] transition">Sign Out</button>
@@ -546,6 +547,68 @@ let PLANS_CACHE = {};        // planId -> plan doc
 let PAY_SETTINGS = null;     // platformSettings/billing doc data
 let POLICY = {};             // platformSettings/policy doc (B3 lifecycle policy engine)
 
+/* ---------- B5: Platform Admin permission groups (roadmap §4 P1 + §12) ----------
+   One role historically: the `superadmin` custom claim = everything. That
+   stays valid (grandfathered owner access). Finer-grained staff accounts
+   carry a `platformPerms` ARRAY claim instead (set via
+   set-superadmin-claim.js <email> --perms a,b,c); firestore.rules checks
+   the same registry per collection, and the console hides tabs and guards
+   mutating services through requirePerm(). Single registry here + rules =
+   one vocabulary everywhere. */
+const PLATFORM_PERMISSIONS = {
+  manage_organizations:         'Provision tenants, set lifecycle, rename/re-brand, reset PINs, retention, watermarks',
+  manage_entitlements:          'Grant / trial / pause / suspend / revoke per-tenant product entitlements',
+  manage_plans:                 'Create and edit plans + pricing versions, assign plans, edit billing formulas',
+  view_platform_billing:        'See invoices, suggested charges, and prepaid balances (read-only billing)',
+  verify_platform_payment:      'Generate/issue invoices, record/verify/reject payments, review payer submissions',
+  issue_platform_credit:        'Top up prepaid balances and apply credit to invoices',
+  view_platform_usage:          'See usage reports and the usage events ledger',
+  view_platform_audit:          'Read the platform audit log',
+  manage_platform_configuration:'Platform payment instructions and lifecycle policies',
+  manage_support:               'Feature Ideas / support scoping notes',
+  diagnose_access:              'Access diagnostics and runtime mirror re-sync',
+};
+let MY_PERMS = null; // Set of permission keys for the signed-in platform user
+function computeMyPerms(claims){
+  claims = claims || {};
+  if(claims.superadmin === true) return new Set(Object.keys(PLATFORM_PERMISSIONS));
+  const list = Array.isArray(claims.platformPerms) ? claims.platformPerms : [];
+  return new Set(list.filter(p => Object.prototype.hasOwnProperty.call(PLATFORM_PERMISSIONS, p)));
+}
+function can(perm){ return !!MY_PERMS && MY_PERMS.has(perm); }
+function requirePerm(perm){
+  if(!can(perm)) throw new Error(`Not permitted: ${perm} (ask the platform owner to grant this via set-superadmin-claim.js --perms)`);
+}
+/* Which existing tabs a permission set can VIEW (any-of; empty = all staff). */
+const TAB_PERMS = {
+  overview: [],
+  directory: ['manage_organizations', 'view_platform_usage', 'view_platform_billing', 'diagnose_access'],
+  provisioning: ['manage_organizations'],
+  entitlements: ['manage_entitlements', 'manage_organizations'],
+  plans: ['manage_plans', 'view_platform_billing'],
+  invoices: ['verify_platform_payment', 'view_platform_billing'],
+  reports: ['view_platform_usage', 'manage_plans'],
+  diagnostics: ['diagnose_access', 'manage_organizations'],
+  ideas: ['manage_support'],
+  security: ['view_platform_audit'],
+};
+function applyTabPermissions(){
+  document.querySelectorAll('.sa-tab-btn').forEach(btn => {
+    const needed = TAB_PERMS[btn.dataset.saTab] || [];
+    const allowed = needed.length === 0 || needed.some(p => can(p));
+    btn.classList.toggle('hidden', !allowed);
+  });
+}
+function renderPermChips(){
+  const wrap = document.getElementById('permChips');
+  if(!wrap) return;
+  if(MY_PERMS && MY_PERMS.has('manage_organizations') && MY_PERMS.size === Object.keys(PLATFORM_PERMISSIONS).length){
+    wrap.innerHTML = '<span class="mono text-[9px] font-[800] px-2 py-0.5 rounded-full bg-[#201C19] text-[#D6FF5F]">OWNER — full access</span>';
+    return;
+  }
+  wrap.innerHTML = [...(MY_PERMS || [])].map(p => `<span class="mono text-[9px] font-[700] px-2 py-0.5 rounded-full bg-[#F1E9DF] text-[#201C19]/70">${escapeHtml(p)}</span>`).join('');
+}
+
 function actorEmail(){ return (auth.currentUser && auth.currentUser.email) || 'unknown'; }
 function isEntOnline(ent){ return !!ent && (ent.status === 'trial' || ent.status === 'active'); }
 function entRuntime(ent){
@@ -613,11 +676,17 @@ async function syncTenantRuntime(slug){
     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
   }, { merge: true });
   // Keep the legacy operational flag aligned so picker/reports keep working.
+  // Best-effort: an operator with only manage_entitlements can't write the
+  // registry (B5 permission separation) -- the entitlement change itself
+  // still applies; the legacy status flip only matters for lifecycle
+  // changes, which those operators can't perform anyway.
   const legacyStatus = x.siteOnline ? 'active' : 'suspended';
   if(t.status !== legacyStatus){
-    await db.doc(`platformTenants/${slug}`).set({ status: legacyStatus }, { merge: true });
-    await db.doc(`tenantDirectory/${slug}`).set({ status: legacyStatus }, { merge: true });
-    TENANT_INDEX[slug] = { ...(TENANT_INDEX[slug] || {}), status: legacyStatus };
+    try {
+      await db.doc(`platformTenants/${slug}`).set({ status: legacyStatus }, { merge: true });
+      await db.doc(`tenantDirectory/${slug}`).set({ status: legacyStatus }, { merge: true });
+      TENANT_INDEX[slug] = { ...(TENANT_INDEX[slug] || {}), status: legacyStatus };
+    } catch(ex) { console.warn('[Platform] legacy status mirror skipped (permissions):', ex.message); }
   }
 }
 
@@ -627,6 +696,7 @@ async function syncTenantRuntime(slug){
    for a first-ever change on a virtual/legacy entitlement -- that's the
    moment the entity is materialized. */
 async function setEntitlement(slug, product, patch, action, note){
+  requirePerm('manage_entitlements');
   const prev = (ENT_STATE[slug] || {})[product] || null;
   const nextStatus = patch.status !== undefined ? patch.status : (prev ? prev.status : null);
   const nextPaused = patch.paused !== undefined ? patch.paused : (prev ? !!prev.paused : false);
@@ -660,6 +730,7 @@ async function setEntitlement(slug, product, patch, action, note){
    are deliberately separate fields). Lifecycle drives the runtime site
    gate; billing status is policy metadata -- notify-only by design. */
 async function setTenantLifecycle(slug, lifecycle){
+  requirePerm('manage_organizations');
   const t = TENANT_INDEX[slug] || {};
   const prev = t.lifecycle || (t.status === 'suspended' ? 'suspended' : 'active');
   const opStatus = LIFECYCLE_ONLINE.includes(lifecycle) ? 'active' : 'suspended';
@@ -675,6 +746,7 @@ async function setTenantLifecycle(slug, lifecycle){
   await logAudit('lifecycle-change', slug, `${t.businessName || slug}: ${prev} -> ${lifecycle}`);
 }
 async function setTenantBillingStatus(slug, billingStatus){
+  requirePerm('manage_organizations');
   const t = TENANT_INDEX[slug] || {};
   await db.doc(`platformTenants/${slug}`).set({ billingStatus }, { merge: true });
   TENANT_INDEX[slug] = { ...t, billingStatus };
@@ -705,6 +777,7 @@ const STARTER_PLANS = {
   'plan-c': { name: 'Plan C — Annual', monthlyBase: 0, includedBookings: 200, perBookingRate: 10, maxCourts: 4, addonFees: { store: 200, tournament: 200 }, products: ['booking'], features: ['Setup + 12 months all-in (₱10,000 setup)', 'Optional ₱500/mo after month 12; else export & sunset'], pricingVersion: '2026-09' },
 };
 async function seedStarterPlans(){
+  requirePerm('manage_plans');
   const missing = Object.keys(STARTER_PLANS).filter(id => !PLANS_CACHE[id]);
   if(missing.length === 0){ toast('Starter plans already exist'); return; }
   for(const id of missing){
@@ -718,6 +791,7 @@ async function seedStarterPlans(){
   renderPlansTab();
 }
 async function savePlanFromForm(){
+  requirePerm('manage_plans');
   const editing = document.getElementById('planForm').getAttribute('data-editing');
   const id = (editing || document.getElementById('pfId').value.trim().toLowerCase());
   const name = document.getElementById('pfName').value.trim();
@@ -751,6 +825,7 @@ async function savePlanFromForm(){
   } catch(ex) { toast('Failed: ' + ex.message); }
 }
 async function assignPlanToTenant(){
+  requirePerm('manage_plans');
   const slug = document.getElementById('assignTenant').value;
   const planId = document.getElementById('assignPlan').value;
   if(!slug || !planId){ toast('Pick a tenant and a plan'); return; }
@@ -801,6 +876,7 @@ async function loadPolicySettings(){
   if(cb) cb.checked = POLICY.suspendTenantAffectsAddons === true;
 }
 async function updatePlatformPolicy(patch){
+  requirePerm('manage_platform_configuration');
   POLICY = { ...(POLICY || {}), ...patch };
   await db.doc('platformSettings/policy').set(POLICY, { merge: true });
   await logAudit('policy-change', null, Object.entries(patch).map(([k, v]) => `${k}=${v}`).join(', '));
@@ -853,6 +929,7 @@ function invoiceTotals(inv){
    Phase B2: periodOffset selects the month (0 = current month-to-date,
    1 = last month, ...) -- historical drafts walk the full month. */
 async function generateDraftInvoices(periodOffset = 0){
+  requirePerm('verify_platform_payment');
   const offset = Number(periodOffset) || 0;
   if(offset < 0){ toast('Cannot generate invoices for a future period'); return; }
   const period = usagePeriod(offset);
@@ -928,6 +1005,7 @@ async function loadInvoices(){
   }
 }
 async function invoiceApplyAction(inv, patch, action, details, paymentEntry, adjustment){
+  requirePerm(action === 'credit-applied' ? 'issue_platform_credit' : 'verify_platform_payment');
   try {
     const update = { ...patch, updatedAt: firebase.firestore.FieldValue.serverTimestamp() };
     if(paymentEntry) update.payments = firebase.firestore.FieldValue.arrayUnion({ at: new Date().toISOString(), by: actorEmail(), ...paymentEntry });
@@ -973,6 +1051,7 @@ async function loadInvoiceSubmissions(invoiceId){
   } catch(ex) { return []; }
 }
 async function verifySubmission(inv, sub){
+  requirePerm('verify_platform_payment');
   const amount = Number(sub.amount) || 0;
   const totalsBefore = invoiceTotals(inv);
   const fullyPaid = totalsBefore.paid + totalsBefore.credited + amount >= (Number(inv.total) || 0) - 0.005;
@@ -989,6 +1068,7 @@ async function verifySubmission(inv, sub){
   return ok;
 }
 async function rejectSubmission(inv, sub, reason){
+  requirePerm('verify_platform_payment');
   const ok = await invoiceApplyAction(inv, { status: 'rejected' }, 'reject',
     `rejected payer submission ${sub.id}: ${reason}`, null,
     { type: 'rejection', note: reason, submissionId: sub.id });
@@ -1504,6 +1584,7 @@ document.getElementById('planForm').addEventListener('submit', (e) => { e.preven
 document.getElementById('assignPlanBtn').addEventListener('click', () => assignPlanToTenant());
 document.getElementById('paySettingsForm').addEventListener('submit', async (e) => {
   e.preventDefault();
+    requirePerm('manage_platform_configuration');
   try {
     const doc = {
       gcashName: document.getElementById('psGcashName').value.trim(),
@@ -1793,8 +1874,11 @@ showSaTab('overview');
 auth.onAuthStateChanged(async (user) => {
   if(!user){ showScreen('signInScreen'); return; }
   const tokenResult = await user.getIdTokenResult(true);
-  if(tokenResult.claims && tokenResult.claims.superadmin === true){
+  MY_PERMS = computeMyPerms(tokenResult.claims);
+  if((tokenResult.claims && tokenResult.claims.superadmin === true) || MY_PERMS.size > 0){
     document.getElementById('signedInAsLabel').textContent = `Signed in as ${user.email}`;
+    renderPermChips();
+    applyTabPermissions();
     showScreen('dashboard');
     loadTenants();
     loadFeatureIdeas();
@@ -2096,6 +2180,14 @@ async function computeTenantReport(t, offsetMonths = 0){
       openPlayCourtHours: openPlay.reduce((sum,e) => sum + (e.durationHours||0), 0),
       openGamesCreated: openGamesCreated.length,
       openGamesJoined: openGamesJoined.length,
+      // B6 participation metrics: Open Play joins confirmed (paid, admin-
+      // confirmed bookings sourced from openplay-join), unique participants
+      // among them, and queue walk-in volume (joins + match player-slots).
+      openPlayJoins: confirmed.filter(e => e.source === 'openplay-join').length,
+      openPlayParticipants: new Set(confirmed.filter(e => e.source === 'openplay-join').map(e => e.playerEmail).filter(Boolean)).size,
+      openPlayParticipationRevenue: confirmed.filter(e => e.source === 'openplay-join').reduce((s, e) => s + (Number(e.amountDue) || 0), 0),
+      queueJoins: events.filter(e => e.type === 'queue_player_joined').length,
+      queueMatchPlayers: events.filter(e => e.type === 'queue_match_completed').reduce((s, e) => s + (Number(e.playerCount) || 0), 0),
     };
   };
   const thisM = bucket(thisMonthEvents);
@@ -2205,7 +2297,7 @@ async function loadReporting(tenants){
           </div>
           <div class="mt-2 pt-3 border-t border-[#EAE0D5] mono text-[11px] space-y-0.5">
             <div>Cancellation rate: <b>${r.cancellationRate.toFixed(1)}%</b> • Returning players: <b>${r.returningPlayers}</b> • Court utilization (MTD): <b>${r.utilizationPct.toFixed(1)}%</b> (${m.courtHours}/${r.availableCapacity} court-hrs)</div>
-            <div class="opacity-40 text-[10px] leading-tight">Staff-reserved hours (MTD, billed at half the per-booking rate): ${r.staffHours} • Queue conversion and Open Play participants aren't tracked yet -- need a queue&harr;booking link and Open Play signup capture, respectively</div>
+            <div class="opacity-40 text-[10px] leading-tight">Staff-reserved hours (MTD, billed at half the per-booking rate): ${r.staffHours} • Participation: ${r.thisM.openPlayJoins || 0} Open Play joins confirmed (${r.thisM.openPlayParticipants || 0} unique players), ${r.thisM.queueJoins || 0} queue walk-in joins, ${r.thisM.queueMatchPlayers || 0} queue match player-slots • events predate participation tracking</div>
           </div>
           <div class="mt-3 pt-3 border-t border-dashed border-[#EAE0D5] mono text-[12px]">
             <b>Billing usage:</b> ${m.confirmedBookings} confirmed bookings + ${r.staffHours} staff-reserved hrs (half rate) → suggested charge <b>${fmtNum(r.suggestedCharge)}</b> (${fmtNum(r.staffReserveCharge)} of that from staff reserve) • page views (${r.thisViews}) tracked but never billed
@@ -2232,7 +2324,7 @@ async function loadReporting(tenants){
 
 function exportReportingCsv(){
   const rows = _lastReportingRows;
-  const header = ['Tenant','Slug','Plan','Lifecycle','Billing Status','Confirmed Bookings','Cancelled Bookings','Cancellation Rate %','Court-Hours','Unique Players','Returning Players','Queue Sessions','Open Play Sessions','Open Play Court-Hours','Staff-Reserved Hours (MTD)','Staff Reserve Charge (Half Rate)','Utilization % (MTD)','Views','Suggested Charge','Prepaid Balance'];
+  const header = ['Tenant','Slug','Plan','Lifecycle','Billing Status','Confirmed Bookings','Cancelled Bookings','Cancellation Rate %','Court-Hours','Unique Players','Returning Players','Queue Sessions','Open Play Sessions','Open Play Court-Hours','Open Play Joins (confirmed)','Open Play Participants','Queue Walk-in Joins','Queue Match Player-Slots','Staff-Reserved Hours (MTD)','Staff Reserve Charge (Half Rate)','Utilization % (MTD)','Views','Suggested Charge','Prepaid Balance'];
   const csvEscape = v => `"${String(v).replace(/"/g,'""')}"`;
   const lines = [header.map(csvEscape).join(',')];
   rows.forEach(r => {
@@ -2242,7 +2334,8 @@ function exportReportingCsv(){
       r.businessName, r.slug, r.planName || '', r.lifecycle || '', r.billingStatus || 'current',
       m.confirmedBookings, m.cancelledBookings, r.cancellationRate.toFixed(1),
       m.courtHours, m.uniquePlayers.size, r.returningPlayers, m.queueSessions, m.openPlaySessions,
-      m.openPlayCourtHours, r.staffHours, r.staffReserveCharge.toFixed(2), r.utilizationPct.toFixed(1), r.thisViews,
+      m.openPlayCourtHours, m.openPlayJoins || 0, m.openPlayParticipants || 0, m.queueJoins || 0, m.queueMatchPlayers || 0,
+      r.staffHours, r.staffReserveCharge.toFixed(2), r.utilizationPct.toFixed(1), r.thisViews,
       r.suggestedCharge.toFixed(2), (r.creditBalance||0).toFixed(2)
     ].map(csvEscape).join(','));
   });
@@ -2841,6 +2934,7 @@ function renderTenantRow(slug, data, status, isVisible){
     } catch(ex) { toast('Failed: ' + ex.message); }
   });
   row.querySelector(`[data-save-name="${cssAttr(slug)}"]`).addEventListener('click', async () => {
+    requirePerm('manage_organizations');
     const newName = document.getElementById(`rename-${cssId(slug)}`).value.trim();
     if(!newName) { toast('Business name is required'); return; }
     try {
@@ -2859,6 +2953,7 @@ function renderTenantRow(slug, data, status, isVisible){
   colorPickEl.addEventListener('input', () => { colorHexEl.value = colorPickEl.value; });
   colorHexEl.addEventListener('change', () => { if(isValidHex(colorHexEl.value.trim())) colorPickEl.value = colorHexEl.value.trim(); });
   row.querySelector(`[data-save-color="${cssAttr(slug)}"]`).addEventListener('click', async () => {
+    requirePerm('manage_organizations');
     const hex = colorHexEl.value.trim();
     if(!isValidHex(hex)) { toast('Enter a valid hex color'); return; }
     try {
@@ -2874,6 +2969,7 @@ function renderTenantRow(slug, data, status, isVisible){
     } catch(ex) { toast('Failed: ' + ex.message); }
   });
   row.querySelector(`[data-save-pin="${cssAttr(slug)}"]`).addEventListener('click', async () => {
+    requirePerm('manage_organizations');
     const newPin = document.getElementById(`pin-${cssId(slug)}`).value.trim();
     if(!newPin) { toast('Enter a new PIN'); return; }
     try {
@@ -2885,6 +2981,7 @@ function renderTenantRow(slug, data, status, isVisible){
     } catch(ex) { toast('Failed: ' + ex.message); }
   });
   row.querySelector(`[data-save-retention="${cssAttr(slug)}"]`).addEventListener('click', async () => {
+    requirePerm('manage_organizations');
     const raw = document.getElementById(`retention-${cssId(slug)}`).value.trim();
     const days = parseInt(raw, 10);
     if(!raw || !Number.isFinite(days) || days < 1) { toast('Enter a whole number of days (1 or more)'); return; }
@@ -2895,6 +2992,7 @@ function renderTenantRow(slug, data, status, isVisible){
     } catch(ex) { toast('Failed: ' + ex.message); }
   });
   row.querySelector(`[data-save-watermark="${cssAttr(slug)}"]`).addEventListener('click', async (e) => {
+    requirePerm('manage_organizations');
     const file = document.getElementById(`watermark-${cssId(slug)}`).files[0];
     if(!file){ toast('Choose an image file first'); return; }
     e.target.disabled = true;
@@ -2912,6 +3010,7 @@ function renderTenantRow(slug, data, status, isVisible){
     finally { e.target.disabled = false; }
   });
   row.querySelector(`[data-remove-watermark="${cssAttr(slug)}"]`).addEventListener('click', async (e) => {
+    requirePerm('manage_organizations');
     try {
       await db.doc(`clients/${slug}/config/state`).update({ 'data.branding.watermarkUrl': '', updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
       const img = document.getElementById(`wmPreview-${cssId(slug)}`);
@@ -2923,6 +3022,7 @@ function renderTenantRow(slug, data, status, isVisible){
     } catch(ex) { toast('Failed: ' + ex.message); }
   });
   row.querySelector(`[data-save-billing="${cssAttr(slug)}"]`).addEventListener('click', async () => {
+    requirePerm('manage_plans');
     const billing = {
       baseFee: parseFloat(document.getElementById(`billBase-${cssId(slug)}`).value) || 0,
       freeBookings: parseFloat(document.getElementById(`billFreeB-${cssId(slug)}`).value) || 0,
@@ -2936,6 +3036,7 @@ function renderTenantRow(slug, data, status, isVisible){
     } catch(ex) { toast('Failed: ' + ex.message); }
   });
   row.querySelector(`[data-top-up="${cssAttr(slug)}"]`).addEventListener('click', async () => {
+    requirePerm('issue_platform_credit');
     const amount = parseFloat(document.getElementById(`topUpAmount-${cssId(slug)}`).value);
     if(!Number.isFinite(amount) || amount <= 0){ toast('Enter a positive top-up amount'); return; }
     try {
@@ -2950,6 +3051,7 @@ function renderTenantRow(slug, data, status, isVisible){
     } catch(ex) { toast('Failed: ' + ex.message); }
   });
   row.querySelector(`[data-apply-charge="${cssAttr(slug)}"]`).addEventListener('click', async () => {
+    requirePerm('verify_platform_payment');
     const rowData = _lastReportingRows.find(r => r.slug === slug);
     const charge = rowData ? rowData.suggestedCharge : 0;
     if(!charge){ toast('No suggested charge to apply this month'); return; }
@@ -3107,6 +3209,7 @@ async function uploadBrandingImage(slug, file, kind){
 /* ---------- Create / Register Tenant ---------- */
 document.getElementById('createTenantForm').addEventListener('submit', async (e) => {
   e.preventDefault();
+    requirePerm('manage_organizations');
   const errEl = document.getElementById('createTenantError');
   errEl.classList.add('hidden');
 

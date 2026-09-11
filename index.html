@@ -2400,7 +2400,10 @@ function setBookingStatus(bookingId, newStatus){
       bookingId: b.id,
       court: b.court || null,
       durationHours: b.end - b.start,
-      playerEmail: b.email || null
+      playerEmail: b.email || null,
+      source: b.source || null,                 // B6: participation attribution (e.g. 'openplay-join')
+      linkedOpenGameId: b.linkedOpenGameId || null,
+      amountDue: b.amountDue != null ? b.amountDue : null
     });
     if(b.source === 'openplay-join' && b.linkedOpenGameId && db && currentClientId){
       const gameRef = db.doc(`clients/${currentClientId}/openGames/${b.linkedOpenGameId}`);
@@ -5648,7 +5651,7 @@ async function ogJoinFacilityOpenPlay(gameId, name, email){
   };
   bookings.unshift(booking);
   saveBookings(bookings);
-  logUsageEvent('open_play_join_pending', { court: game.court || null, amountDue }); // analytics only, billed on admin confirm
+  logUsageEvent('open_play_join_pending', { court: game.court || null, amountDue, playerEmail: email || null, openGameId: gameId }); // B6: participation capture; billed on admin confirm
 
   document.getElementById('ogDetailModal').classList.add('hidden');
   _currentProofBookingId = booking.id;
@@ -6930,6 +6933,14 @@ document.getElementById('joinQueueForm')?.addEventListener('submit', (e) => {
   }
   checkAndFillActiveMatch(session);
   saveQueues(sessions);
+  // B6: queue participation is now a per-player event (analytics; gives
+  // superadmin reporting real walk-in volume instead of just session counts).
+  logUsageEvent('queue_player_joined', {
+    court: session.court || null,
+    sessionId: session.id || null,
+    playersInTeam: waitingObj.names.length,
+    waitingCount: session.waiting.length
+  });
   renderActiveQueueDashboard();
 
   document.getElementById('joinQueueForm').reset();
@@ -6979,6 +6990,13 @@ document.getElementById('submitScoreBtn')?.addEventListener('click', () => {
     scoreB,
     winner,
     timestamp: Date.now()
+  });
+  // B6: per-match participation event (analytics) -- how many players a
+  // rotation actually put on court, across the session's lifetime.
+  logUsageEvent('queue_match_completed', {
+    court: session.court || null,
+    sessionId: session.id || null,
+    playerCount: (match.teamA || []).length + (match.teamB || []).length
   });
 
   // Rotate based on rules

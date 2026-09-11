@@ -17,10 +17,30 @@ service cloud.firestore {
              request.resource.data.keys().hasAny(['__tenant__']) == false; // Prevent tenant field injection
     }
     
-    // Superadmin-only planning notes ("Feature Ideas" tab). Not tenant
-    // data at all -- no visitor of any tenant ever reads or writes this.
+    /* ---------- B5: Platform Admin permission groups ----------
+       Two account shapes exist:
+       - superadmin custom claim  = platform owner, every permission
+         (grandfathered -- all original accounts keep working unchanged)
+       - platformPerms ARRAY claim = scoped staff; each entry is one
+         permission from the registry documented in superadmin.html
+         (PLATFORM_PERMISSIONS) and SUPERADMIN_GUIDE.md. Grant via
+         `node set-superadmin-claim.js <email> --perms a,b,c`.
+       Rules and the console share this single vocabulary. */
+    function isPlatformStaff() {
+      return request.auth != null &&
+             (request.auth.token.superadmin == true ||
+              ('platformPerms' in request.auth.token));
+    }
+    function platformPerm(perm) {
+      return request.auth != null &&
+             (request.auth.token.superadmin == true ||
+              (('platformPerms' in request.auth.token) &&
+               (perm in request.auth.token.platformPerms)));
+    }
+
+    // Support/planning notes ("Feature Ideas" tab) -- manage_support.
     match /platformFeatureIdeas/{ideaId} {
-      allow read, write: if request.auth != null && request.auth.token.superadmin == true;
+      allow read, write: if platformPerm('manage_support');
     }
 
     // Superadmin action audit log. Append-only from the app's perspective --
@@ -28,7 +48,10 @@ service cloud.firestore {
     // but update/delete are explicitly denied so a logged entry can't later
     // be edited or removed through the client.
     match /platformAuditLog/{entryId} {
-      allow read, create: if request.auth != null && request.auth.token.superadmin == true;
+      // Any platform staff action can log itself; reading the log is its
+      // own permission so auditees aren't automatically auditors.
+      allow create: if isPlatformStaff();
+      allow read: if platformPerm('view_platform_audit');
       allow update, delete: if false;
     }
 
@@ -39,7 +62,8 @@ service cloud.firestore {
     // a tenant stamps its pricingVersion onto the tenant's subscription so
     // a later plan edit never rewrites history (versioned pricing).
     match /platformPlans/{planId} {
-      allow read, write: if request.auth != null && request.auth.token.superadmin == true;
+      allow read: if isPlatformStaff();
+      allow write: if platformPerm('manage_plans');
     }
 
     // Platform invoices -- the billing domain's core document. Drafts are
@@ -56,12 +80,13 @@ service cloud.firestore {
     // Writes: superadmin-only -- a payer submission never mutates an
     // invoice directly; verification happens through platformSubmissions.
     match /platformInvoices/{invoiceId} {
-      allow get: if request.auth != null && request.auth.token.superadmin == true
+      allow get: if platformPerm('view_platform_billing')
+                 || platformPerm('verify_platform_payment')
                  || (invoiceId.split('_')[0] == 'inv'
                      && isValidTenantId(invoiceId.split('_')[1])
                      && resource.data.tenantId == invoiceId.split('_')[1]);
-      allow list: if request.auth != null && request.auth.token.superadmin == true;
-      allow create, update, delete: if request.auth != null && request.auth.token.superadmin == true;
+      allow list: if platformPerm('view_platform_billing') || platformPerm('verify_platform_payment');
+      allow create, update, delete: if platformPerm('verify_platform_payment');
     }
 
     // Platform settings key-value docs (currently just billing/payment
@@ -72,7 +97,7 @@ service cloud.firestore {
     // readable business info as the tenantDirectory collection.
     match /platformSettings/{settingId} {
       allow read: if true;
-      allow write: if request.auth != null && request.auth.token.superadmin == true;
+      allow write: if platformPerm('manage_platform_configuration');
     }
 
     // Payer-submitted payment claims for platform invoices (the manual QR
@@ -87,7 +112,7 @@ service cloud.firestore {
     // rejection is recorded on the submission, not by deleting it.
     match /platformSubmissions/{submissionId} {
       allow read, create: if true;
-      allow update, delete: if request.auth != null && request.auth.token.superadmin == true;
+      allow update, delete: if platformPerm('verify_platform_payment');
     }
 
 
@@ -101,10 +126,16 @@ service cloud.firestore {
     // store, tournament) inherits these rules -- product entitlement
     // lifecycle and history are platform-controlled state.
     match /platformTenants/{tenantId} {
-      allow get: if request.auth != null && request.auth.token.superadmin == true
-                 || isValidTenantId(tenantId);
-      allow list: if request.auth != null && request.auth.token.superadmin == true;
-      allow write: if request.auth != null && request.auth.token.superadmin == true;
+      allow get: if isPlatformStaff() || isValidTenantId(tenantId);
+      allow list: if isPlatformStaff();
+      allow write: if platformPerm('manage_organizations');
+
+      // Product entitlements are their own permission family (B5): an
+      // entitlements operator doesn't need full organization management.
+      match /entitlements/{productId} {
+        allow read: if isPlatformStaff();
+        allow write: if platformPerm('manage_entitlements');
+      }
 
       // Usage counters (page views, etc.) are written by every ordinary
       // tenant visitor as they use the app, not just the superadmin, so
@@ -112,8 +143,7 @@ service cloud.firestore {
       // superadmin OR the tenant's own portal (its own usage feeds the
       // projected-charge view in billing.html).
       match /usage/{period} {
-        allow read: if request.auth != null && request.auth.token.superadmin == true
-                    || isValidTenantId(tenantId);
+        allow read: if isPlatformStaff() || isValidTenantId(tenantId);
         allow write: if isValidTenantId(tenantId);
       }
 
@@ -127,8 +157,7 @@ service cloud.firestore {
       // survives even after the originating booking is pruned from
       // clients/{tenantId}/bookings.
       match /events/{eventId} {
-        allow read: if request.auth != null && request.auth.token.superadmin == true
-                    || isValidTenantId(tenantId);
+        allow read: if isPlatformStaff() || isValidTenantId(tenantId);
         allow write: if isValidTenantId(tenantId);
       }
     }
@@ -339,7 +368,7 @@ service cloud.firestore {
     // superadmin can write (add/remove/update tenants in the directory).
     match /tenantDirectory/{tenantId} {
       allow read: if true;
-      allow write: if request.auth != null && request.auth.token.superadmin == true;
+      allow write: if platformPerm('manage_organizations');
     }
 
     // Cross-tenant player identity, keyed by a phone-derived id -- reused

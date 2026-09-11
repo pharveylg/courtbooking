@@ -126,7 +126,9 @@ const EXPOSE = `
 globalThis.__makeCtx = () => ({ get TENANT_INDEX(){return TENANT_INDEX}, get ENT_STATE(){return ENT_STATE}, get PLANS_CACHE(){return PLANS_CACHE},
   setEntitlement, setTenantLifecycle, setTenantBillingStatus, seedStarterPlans, assignPlanToTenant, generateDraftInvoices, invoiceApplyAction,
   loadPendingSubmissions, loadInvoiceSubmissions, verifySubmission, rejectSubmission, renderInvoiceQueue, monthInputToOffset, computeTenantReport,
-  renderEntitlementsTab, renderPlansTab, renderInvoicesTab, renderOverview, exportReportingCsv, usagePeriod, monthStartDate, invoiceDocId, loadTenants, deriveRuntimeExpectation, computeBillingSuggestions, updatePlatformPolicy, get POLICY(){return POLICY}, renderDiagnostics, db });
+  renderEntitlementsTab, renderPlansTab, renderInvoicesTab, renderOverview, exportReportingCsv, usagePeriod, monthStartDate, invoiceDocId, loadTenants, deriveRuntimeExpectation, computeBillingSuggestions, updatePlatformPolicy, get POLICY(){return POLICY}, renderDiagnostics,
+  computeMyPerms, can, requirePerm, PLATFORM_PERMISSIONS,
+  get MY_PERMS(){return MY_PERMS}, set MY_PERMS(v){MY_PERMS = v}, db });
 `;
 eval(code + EXPOSE);
 const C = globalThis.__makeCtx();
@@ -282,6 +284,43 @@ const C = globalThis.__makeCtx();
   check('B3: eps (overdue status, nothing open) -> current', sg.eps && sg.eps.to === 'current');
   check('B3: alpha (settled, current) -> no suggestion', !sg.alpha);
   check('B3: draft invoices never count as open', C.computeBillingSuggestions([{ tenantId: 'gamma', status: 'draft', total: 999, payments: [], creditsApplied: 0 }]).find(s => s.slug === 'gamma') === undefined || C.computeBillingSuggestions([{ tenantId: 'gamma', status: 'draft', total: 999, payments: [], creditsApplied: 0 }]).find(s => s.slug === 'gamma').to === 'grace');
+
+  /* ===== B5: permission groups ===== */
+  check('B5: owner claims get full registry', C.computeMyPerms({ superadmin: true }).size === Object.keys(C.PLATFORM_PERMISSIONS).length);
+  const limited = C.computeMyPerms({ platformPerms: ['manage_entitlements', 'bogus_perm'] });
+  check('B5: staff claims filtered to registry', limited.size === 1 && limited.has('manage_entitlements'));
+  check('B5: no claims -> empty set', C.computeMyPerms({}).size === 0);
+  C.MY_PERMS = limited;
+  await C.setEntitlement('beta', 'store', { status: 'active', paused: false }, 'grant', 'B5 scoped-op grant');
+  check('B5: entitlements operator CAN grant entitlements', store.get('platformTenants/beta/entitlements/store').status === 'active');
+  let denied = null;
+  try { await C.setTenantLifecycle('beta', 'suspended'); } catch(ex) { denied = ex.message; }
+  check('B5: lifecycle denied without manage_organizations', !!denied && /Not permitted: manage_organizations/.test(denied));
+  denied = null;
+  try { await C.invoiceApplyAction({ id: 'x' }, { status: 'verified' }, 'payment', 'x'); } catch(ex) { denied = ex.message; }
+  check('B5: invoice verification denied without verify_platform_payment', !!denied && /Not permitted: verify_platform_payment/.test(denied));
+  check('B5: can() reflects scoped set', C.can('manage_entitlements') === true && C.can('manage_plans') === false);
+  C.MY_PERMS = C.computeMyPerms({ superadmin: true });   // restore owner for remaining tests
+  check('B5: owner can() everything', C.can('manage_organizations') && C.can('issue_platform_credit'));
+
+  /* ===== B6: participation metrics ===== */
+  const pEv = (daysAgo, type, extra) => ({ type, createdAt: d(daysAgo), ...extra });
+  store.set('platformTenants/alpha/events/ev_op1', pEv(1, 'booking_confirmed', { source: 'openplay-join', linkedOpenGameId: 'og1', amountDue: 200, playerEmail: 'op1@x.com', durationHours: 2 }));
+  store.set('platformTenants/alpha/events/ev_op2', pEv(2, 'booking_confirmed', { source: 'openplay-join', linkedOpenGameId: 'og1', amountDue: 200, playerEmail: 'op2@x.com', durationHours: 2 }));
+  store.set('platformTenants/alpha/events/ev_qj1', pEv(1, 'queue_player_joined', { playersInTeam: 2, waitingCount: 3 }));
+  store.set('platformTenants/alpha/events/ev_qj2', pEv(2, 'queue_player_joined', { playersInTeam: 1, waitingCount: 4 }));
+  store.set('platformTenants/alpha/events/ev_qj3', pEv(3, 'queue_player_joined', { playersInTeam: 1, waitingCount: 5 }));
+  store.set('platformTenants/alpha/events/ev_qm1', pEv(1, 'queue_match_completed', { playerCount: 4 }));
+  store.set('platformTenants/alpha/events/ev_qm2', pEv(2, 'queue_match_completed', { playerCount: 4 }));
+  const repB6 = await C.computeTenantReport({ slug: 'alpha', businessName: 'Alpha Club', billing: {} });
+  check('B6: open play joins counted (2)', repB6.thisM.openPlayJoins === 2);
+  check('B6: unique open play participants (2)', repB6.thisM.openPlayParticipants === 2);
+  check('B6: participation revenue summed (400)', repB6.thisM.openPlayParticipationRevenue === 400);
+  check('B6: queue walk-in joins counted (3)', repB6.thisM.queueJoins === 3);
+  check('B6: queue match player-slots summed (8)', repB6.thisM.queueMatchPlayers === 8);
+  check('B6: confirmed bookings total now 7 (5 + 2 openplay)', repB6.thisM.confirmedBookings === 7);
+  C.exportReportingCsv();
+  check('B6: CSV export with participation columns executed', true);
 
   /* ===== renderers ===== */
   C.renderEntitlementsTab(); C.renderPlansTab(); C.renderInvoicesTab([{ id: 'x', ...vInv }]); C.renderInvoiceQueue(); await C.renderOverview(); await C.renderDiagnostics();

@@ -29,6 +29,41 @@ Superadmin access requires three things to exist together: a Firebase Auth accou
 
 There is no in-app "forgot password" link. Reset a superadmin's password from Firebase Console → Authentication → Users → (select user) → Reset password, the same way as any other Firebase Auth account. Revoking/re-granting the claim is unaffected by password resets since the claim is tied to the account's UID.
 
+### 2.1 Platform access: owner vs scoped staff (B5 permission groups)
+
+Two account shapes exist:
+
+| Shape | Claim | Access |
+|---|---|---|
+| **Owner** | `superadmin: true` | Everything — the historical shape, unchanged. The console shows an **OWNER — full access** badge. |
+| **Staff** | `platformPerms: [...]` array | Only the listed permissions. The console shows one chip per permission, hides tabs outside the scope, and refuses out-of-scope actions. |
+
+The registry (also printed by `node set-superadmin-claim.js --list-perms`):
+
+| Permission | Unlocks |
+|---|---|
+| `manage_organizations` | Provisioning, lifecycle, rename/re-brand, PIN resets, retention, watermarks |
+| `manage_entitlements` | Grant / trial / pause / suspend / revoke products per tenant (matrix + widgets) |
+| `manage_plans` | Plan catalog, pricing versions, plan assignment, billing-formula edits |
+| `view_platform_billing` | See invoices, suggested charges, prepaid balances |
+| `verify_platform_payment` | Generate/issue invoices, verify/reject payments, review payer submissions |
+| `issue_platform_credit` | Prepaid top-ups and credit application |
+| `view_platform_usage` | Usage reports and the usage events ledger |
+| `view_platform_audit` | Read the audit log (any staff action can still *write* audit entries) |
+| `manage_platform_configuration` | Platform payment instructions and lifecycle policies |
+| `manage_support` | Feature Ideas / support scoping notes |
+| `diagnose_access` | Diagnostics tab and runtime-mirror re-sync |
+
+Granting:
+
+```bash
+node set-superadmin-claim.js staff@example.com --perms manage_entitlements,verify_platform_payment
+node set-superadmin-claim.js staff@example.com --list-perms
+node set-superadmin-claim.js staff@example.com --revoke   # removes all platform access
+```
+
+`--perms` **replaces** the account's permission set (re-run with the full desired list) and removes an owner claim if one existed. Claim changes need a fresh sign-in to take effect. Enforcement is three-layered from one vocabulary: Firestore rules (per collection), tab visibility (per view), and guards on every mutating action — so a scoped account can't be talked past the UI by an out-of-scope action anyway.
+
 ## 3. Layout
 
 The console is a single page with a left sidebar (top bar on mobile) and ten tabs, organized as a platform control plane — the same shape the DulaHQ platform roadmap prescribes (Overview → Tenants → Entitlements → Plans & Billing → Usage → Support → Audit):
@@ -180,7 +215,7 @@ Each card shows this-month vs. last-month bar comparisons for: Confirmed Booking
 - The full billing usage line with the computed suggested charge, and how much of it came from staff reserve specifically — so the number is never opaque.
 - Page views, tracked but explicitly called out as never billed.
 
-Note two things not yet tracked (called out directly in the UI so it isn't mistaken for a bug): queue sessions aren't linked to whether they ever converted into a real booking, and Open Play/Open Games don't currently capture who actually showed up as a participant. Both would need additional event capture to build.
+Participation tracking (B6): the report card now shows **Open Play joins confirmed** (paid, admin-confirmed bookings that came from an Open Play sign-up), **unique participants**, **queue walk-in joins**, and **queue match player-slots** — and the CSV export carries all four. Billing is deliberately unchanged: participation is analytics only; confirmed bookings remain the meter. Events older than this feature predate participation capture, so counts reflect the event ledger's actual history.
 
 ### Prepaid balance
 
@@ -259,6 +294,9 @@ No. A submission is the payer *claiming* they paid. Only "Record Verified Paymen
 
 **I edited a plan but a tenant's charges didn't change.**
 Plan edits never rewrite an existing subscription or an already-generated invoice. The tenant's billing formula was copied from the plan at assignment time; re-assign the plan to push updated pricing, and next month's draft invoices pick it up. Each subscription keeps the pricing version it was signed at.
+
+**Some tabs are missing from my sidebar / I get "Not permitted: …" everywhere.**
+That's the B5 permission model working: your account has a scoped `platformPerms` claim rather than the owner claim, and the console hides what you can't use. Ask the platform owner to re-run `set-superadmin-claim.js your@email --perms …` with the full list you need (it replaces, not adds), then sign out and back in.
 
 **Diagnostics says "Mirror drift" — what does that mean and is it dangerous?**
 The runtime doc (`clients/{slug}/status/state`) no longer matches what the platform would derive from the tenant's lifecycle and entitlements — usually because someone edited the doc by hand in the Firebase Console, or because a policy (like suspension-affects-add-ons) changed after the mirror was last written. Tenant apps read that doc, so what players see may not match what you intended. Click **Re-sync now** (or Diagnostics → Re-sync All Mirrors for every tenant) — it rewrites the doc from platform state and logs the action. Nothing else is touched.

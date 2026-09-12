@@ -83,12 +83,25 @@ service cloud.firestore {
     // with the Admin SDK before returning anything, so this rule no
     // longer needs a client-readable path at all.
     // `list` stays superadmin-only so the collection can't be enumerated.
-    // Writes: superadmin-only -- a payer submission never mutates an
-    // invoice directly; verification happens through platformSubmissions.
+    // Writes: creating/deleting an invoice (issuing it, or removing one
+    // entirely) is verify_platform_payment-only. Updates additionally
+    // accept issue_platform_credit, but ONLY for the exact fields the
+    // console's "apply credit to invoice" action touches (status,
+    // creditsApplied, payments, verifiedAt) -- a credit-only holder still
+    // can't touch `lines`, `total`, `tenantId`, etc., or use `update` to
+    // do the things verify_platform_payment actually gates (recording a
+    // cash payment, rejecting, waiving, cancelling). This mirrors
+    // issue_platform_credit's own stated purpose ("apply credit to
+    // invoices") -- see the platformTenants comment below for why this
+    // field-scoping exists at all.
     match /platformInvoices/{invoiceId} {
       allow get: if platformPerm('view_platform_billing') || platformPerm('verify_platform_payment');
       allow list: if platformPerm('view_platform_billing') || platformPerm('verify_platform_payment');
-      allow create, update, delete: if platformPerm('verify_platform_payment');
+      allow create, delete: if platformPerm('verify_platform_payment');
+      allow update: if platformPerm('verify_platform_payment')
+                   || (platformPerm('issue_platform_credit')
+                       && request.resource.data.diff(resource.data).affectedKeys()
+                          .hasOnly(['status', 'creditsApplied', 'payments', 'updatedAt', 'verifiedAt']));
     }
 
     // Platform settings key-value docs (currently just billing/payment
@@ -137,7 +150,30 @@ service cloud.firestore {
     match /platformTenants/{tenantId} {
       allow get: if isPlatformStaff();
       allow list: if isPlatformStaff();
-      allow write: if platformPerm('manage_organizations');
+      // Creating or deleting a tenant registry doc entirely (provisioning,
+      // offboarding) stays manage_organizations-only -- but a plain
+      // `allow write` here made every OTHER permission that names this
+      // doc a lie: manage_plans's own description says "assign plans,
+      // edit billing formulas" and issue_platform_credit's says "top up
+      // prepaid balances and apply credit to invoices", yet a staff
+      // member holding ONLY that permission (no manage_organizations)
+      // got a clean permission-denied from Firestore the moment the
+      // console tried to write `subscription`/`billing` or
+      // `creditBalance` here -- console requirePerm() checks and these
+      // rules were checking two different vocabularies for the same
+      // write. Field-scoping each permission to the exact keys its own
+      // console action touches (assignPlanToTenant/data-save-billing for
+      // manage_plans; data-top-up/apply-charge/apply-credit-to-invoice
+      // for issue_platform_credit and verify_platform_payment) closes
+      // that gap without widening what any of them can touch beyond it.
+      allow create, delete: if platformPerm('manage_organizations');
+      allow update: if platformPerm('manage_organizations')
+                   || (platformPerm('manage_plans')
+                       && request.resource.data.diff(resource.data).affectedKeys()
+                          .hasOnly(['subscription', 'billing', 'updatedAt']))
+                   || ((platformPerm('issue_platform_credit') || platformPerm('verify_platform_payment'))
+                       && request.resource.data.diff(resource.data).affectedKeys()
+                          .hasOnly(['creditBalance', 'updatedAt']));
 
       // Product entitlements are their own permission family (B5): an
       // entitlements operator doesn't need full organization management.

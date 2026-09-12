@@ -433,7 +433,7 @@
           <h2 class="text-[20px] md:text-[22px] font-[800] tracking-[-0.02em]">Confirmed Bookings</h2>
           <div class="hidden md:flex items-center gap-2">
             <span id="bookingsCount" class="mono text-[11px] px-2.5 h-6 grid place-items-center rounded-full bg-[#F1E9DF]"></span>
-            <span class="mono text-[11px] opacity-60">Pending • Reserved • Open Play</span>
+            <span class="mono text-[11px] opacity-60">Pending • Reserved • Paid • Open Play</span>
           </div>
         </div>
         <div class="flex items-center gap-2">
@@ -441,6 +441,7 @@
             <option value="all">All status</option>
             <option value="Pending">Pending</option>
             <option value="Reserved">Reserved</option>
+            <option value="Paid">Paid</option>
             <option value="OpenPlay">Open Play</option>
           </select>
           <select id="filterDate" class="h-9 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-4 mono text-[12px] font-[600]">
@@ -2394,7 +2395,7 @@ function setBookingStatus(bookingId, newStatus){
   if(idx < 0) return null;
   const b = bookings[idx];
   b.status = newStatus;
-  if(newStatus === 'Reserved' && !b._billedConfirmed){
+  if((newStatus === 'Reserved' || newStatus === 'Paid') && !b._billedConfirmed){
     b._billedConfirmed = true;
     logUsageEvent('booking_confirmed', {
       bookingId: b.id,
@@ -2829,6 +2830,7 @@ function renderPaymentProofsQueue() {
           <select data-verify="${b.id}" class="h-9 rounded-full border border-[#EAE0D5] bg-white pl-3 pr-2 mono text-[11px] font-[800] cursor-pointer">
             <option value="Pending" selected>Pending</option>
             <option value="Reserved">Reserved ✓</option>
+            <option value="Paid">Paid ✓</option>
           </select>
         </div>
       </div>
@@ -2847,7 +2849,9 @@ function renderPaymentProofsQueue() {
   list.querySelectorAll('select[data-verify]').forEach(sel => {
     sel.addEventListener('change', () => {
       const b = setBookingStatus(sel.getAttribute('data-verify'), sel.value);
-      if(b) toast(sel.value === 'Reserved' ? `${b.name} marked as Reserved — slot confirmed.` : 'Status set to Pending.');
+      if(b) toast(sel.value === 'Reserved' ? `${b.name} marked as Reserved — slot confirmed.`
+                 : sel.value === 'Paid' ? `${b.name} marked as Paid — slot confirmed.`
+                 : 'Status set to Pending.');
     });
   });
 }
@@ -4023,10 +4027,13 @@ function renderScheduleSlots(container, dateISO, courtFilter){
       actionHtml=`<span class="mono text-[11px] text-[#201C19]/60 px-3.5 h-8 grid place-items-center rounded-full bg-[#F1E9DF] border border-[#E9DDD0]">Blocked</span>`;
     } else if(bookingMatch){
       const isPending = bookingMatch.status==='Pending';
+      const isPaid = bookingMatch.status==='Paid';
       statusChip = isPending
         ? `<span class="inline-flex items-center gap-1.5 px-3.5 h-8 rounded-full bg-[#FFF0D6] border border-[#FFE0A3] text-[#92400E] mono text-[11px] font-[700]">PENDING — ${escapeHtml(bookingMatch.name)}</span>`
+        : isPaid
+        ? `<span class="inline-flex items-center gap-1.5 px-3.5 h-8 rounded-full bg-[#1D4ED8] text-white mono text-[11px] font-[700]">PAID — ${escapeHtml(bookingMatch.name)}</span>`
         : `<span class="inline-flex items-center gap-1.5 px-3.5 h-8 rounded-full bg-[#201C19] text-white mono text-[11px] font-[700]">RESERVED — ${escapeHtml(bookingMatch.name)}</span>`;
-      leftDot = isPending ? `<span class="w-2 h-2 rounded-full bg-[#FDBA74]"></span>` : `<span class="w-2 h-2 rounded-full bg-[#201C19]"></span>`;
+      leftDot = isPending ? `<span class="w-2 h-2 rounded-full bg-[#FDBA74]"></span>` : isPaid ? `<span class="w-2 h-2 rounded-full bg-[#60A5FA]"></span>` : `<span class="w-2 h-2 rounded-full bg-[#201C19]"></span>`;
       actionHtml = isPending
         ? `<div class="flex items-center gap-2"><button data-pay-pending="${bookingMatch.id}" class="pay-pending-btn h-8 px-4 rounded-full bg-[#201C19] text-[#D6FF5F] mono text-[11px] font-[700] hover:opacity-90 cursor-pointer active:scale-[0.97] transition flex items-center gap-1"><span>Pay Now</span><span>→</span></button><button data-cancel-booking="${bookingMatch.id}" class="cancel-booking-btn h-8 px-4 rounded-full bg-white border border-[#FFC9B6] text-[#8C2C10] mono text-[11px] font-[700] hover:bg-[#FFE9E0] cursor-pointer active:scale-[0.97] transition">Cancel</button></div>`
         : `<span class="mono text-[11px] text-[#201C19] px-4 h-8 grid place-items-center rounded-full bg-white border border-[#EAE0D5]">Booked • ${bookingMatch.start===bookingMatch.end-1? `${fmtTime(bookingMatch.start)}–${fmtTime(bookingMatch.end)}` : `${bookingMatch.start}-${bookingMatch.end}h`}</span>`;
@@ -4484,6 +4491,7 @@ function renderBookingsList(){
     const isOpenPlay = b.status==='OpenPlay';
     const chip = isOpenPlay ? `<span class="px-3 h-7 rounded-full bg-[#EDE8FF] border border-[#D8D0FF] text-[#5B21B6] mono text-[10px] font-[700] inline-flex items-center">OPEN PLAY</span>`
                : b.status==='Pending' ? `<span class="px-3 h-7 rounded-full bg-[#FFF0D6] border border-[#FFE0A3] text-[#92400E] mono text-[10px] font-[700] inline-flex items-center">PENDING</span>`
+               : b.status==='Paid' ? `<span class="px-3 h-7 rounded-full bg-[#1D4ED8] text-white mono text-[10px] font-[700] inline-flex items-center">PAID</span>`
                : `<span class="px-3 h-7 rounded-full bg-[#201C19] text-white mono text-[10px] font-[700] inline-flex items-center">RESERVED</span>`;
 
     const row = document.createElement('div');
@@ -4901,6 +4909,7 @@ function renderAdminBookings(){
       : `<select data-status="${b.id}" class="h-8 rounded-full border border-[#EAE0D5] bg-white px-3 mono text-[11px] font-[700]">
            <option value="Pending" ${b.status==='Pending'?'selected':''}>Pending</option>
            <option value="Reserved" ${b.status==='Reserved'?'selected':''}>Reserved</option>
+           <option value="Paid" ${b.status==='Paid'?'selected':''}>Paid</option>
          </select>`;
     const courtLabel = b.court ? `<span class="mono text-[9px] px-1.5 py-0.5 rounded-full bg-[#F1E9DF] text-[#201C19]/70 font-[600]">${escapeHtml(getCourtName(b.court))}</span>` : '';
     wrap.innerHTML=`
@@ -5694,7 +5703,7 @@ async function ogCancelGame(gameId, token){
 async function ogLinkReservation(gameId, token, pin){
   const game = openGames.find(g => g.id === gameId);
   if(!game || game.creatorToken !== token) return { ok:false, error:'Only the organizer can link a reservation.' };
-  const booking = bookings.find(b => b.pin === pin && b.status === 'Reserved');
+  const booking = bookings.find(b => b.pin === pin && (b.status === 'Reserved' || b.status === 'Paid'));
   if(!booking) return { ok:false, error:'No confirmed reservation matches that PIN.' };
   if(booking.date !== game.date || booking.start > game.startHour || booking.end <= game.startHour){
     return { ok:false, error:"That reservation doesn't match this game's date/time." };

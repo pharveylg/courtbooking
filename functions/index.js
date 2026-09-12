@@ -48,6 +48,21 @@ function requireString(value, field) {
   }
 }
 
+/* Recursively converts Firestore Timestamp values (anything with a
+   .toDate()) into ISO strings so a Firestore doc can pass through an
+   onCall callable's JSON response without throwing. */
+function sanitizeForClient(value) {
+  if (value == null) return value;
+  if (typeof value.toDate === 'function') return value.toDate().toISOString();
+  if (Array.isArray(value)) return value.map(sanitizeForClient);
+  if (typeof value === 'object') {
+    const out = {};
+    for (const key of Object.keys(value)) out[key] = sanitizeForClient(value[key]);
+    return out;
+  }
+  return value;
+}
+
 function tournamentRef(clientId, tournamentId) {
   return db.doc(`clients/${clientId}/tournaments/${tournamentId}`);
 }
@@ -480,3 +495,59 @@ async function recomputeAndWriteStandings(tRef, divRef, divisionId) {
     }
   }
 }
+
+/* ---------------- billing portal ---------------- */
+
+/* billing.html's gate is the same shared Admin PIN as the rest of the
+   app, hashed client-side with a fixed, publicly-visible salt -- that
+   hash was never meant to be a real secret, only a UI speed bump. The
+   problem was never the hash's strength: it's that firestore.rules had
+   started trusting ANY caller who could format-match a tenant slug
+   (`isValidTenantId`) as if that were proof of PIN knowledge, on
+   platformTenants/{slug} (credit balance, billing formula), its
+   events ledger (contains real player emails), and platformInvoices --
+   none of which require knowing the PIN at all, since slugs are public.
+   This callable is the one place that data is reachable from now: it
+   verifies the submitted hash against the tenant's real stored hash
+   with the Admin SDK (which isn't gated by firestore.rules) before
+   returning anything, and it deliberately returns a booking COUNT
+   instead of the raw events themselves so the PII in that ledger never
+   has to leave the server at all. */
+exports.getBillingPortalData = onCall({ region: REGION }, async (request) => {
+  const { clientId, pinHash } = request.data || {};
+  assertValidTenantId(clientId);
+  requireString(pinHash, 'pinHash');
+
+  const settingsSnap = await db.doc(`clients/${clientId}/settings/state`).get();
+  const storedHash = settingsSnap.exists && settingsSnap.data().data && settingsSnap.data().data.pin;
+  if (!storedHash || storedHash !== pinHash) {
+    throw new HttpsError('permission-denied', 'Incorrect PIN.');
+  }
+
+  const tenantSnap = await db.doc(`platformTenants/${clientId}`).get();
+  const tenant = tenantSnap.exists ? sanitizeForClient(tenantSnap.data()) : null;
+
+  const monthStart = new Date();
+  monthStart.setDate(1);
+  monthStart.setHours(0, 0, 0, 0);
+  const eventsSnap = await db.collection(`platformTenants/${clientId}/events`)
+    .where('createdAt', '>=', monthStart)
+    .get();
+  let confirmedBookingsThisMonth = 0;
+  eventsSnap.forEach((doc) => { if (doc.data().type === 'booking_confirmed') confirmedBookingsThisMonth++; });
+
+  const periods = [];
+  const d = new Date();
+  for (let i = 0; i < 12; i++) {
+    periods.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+    d.setMonth(d.getMonth() - 1);
+  }
+  const invoiceSnaps = await Promise.all(
+    periods.map((p) => db.doc(`platformInvoices/inv_${clientId}_${p}`).get())
+  );
+  const invoices = invoiceSnaps
+    .filter((s) => s.exists)
+    .map((s) => sanitizeForClient({ id: s.id, ...s.data() }));
+
+  return { tenant, confirmedBookingsThisMonth, invoices };
+});

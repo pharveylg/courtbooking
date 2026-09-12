@@ -73,18 +73,20 @@ service cloud.firestore {
     // -> verified / rejected / partially_paid / waived / cancelled. These
     // are platform-billing-only (what a tenant owes the platform) -- a
     // tenant's own revenue from its players is never written here.
-    // Reads: superadmin anywhere; tenants may GET their own invoice by its
-    // exact id (inv_{slug}_{period} -- the id encodes the tenant, so the
-    // rule can bind resource to path), which is all billing.html needs.
+    // Reads: superadmin/platform-staff only. A tenant-self-access branch
+    // used to live here (`invoiceId.split('_')... == tenantId`), on the
+    // theory that the id encoding the tenant was enough of a check -- but
+    // slugs are public, so that let anyone who knew a facility's slug read
+    // its invoices with no PIN, no auth, nothing. billing.html now gets
+    // its own invoices through the getBillingPortalData callable
+    // (functions/index.js), which verifies the tenant's PIN server-side
+    // with the Admin SDK before returning anything, so this rule no
+    // longer needs a client-readable path at all.
     // `list` stays superadmin-only so the collection can't be enumerated.
     // Writes: superadmin-only -- a payer submission never mutates an
     // invoice directly; verification happens through platformSubmissions.
     match /platformInvoices/{invoiceId} {
-      allow get: if platformPerm('view_platform_billing')
-                 || platformPerm('verify_platform_payment')
-                 || (invoiceId.split('_')[0] == 'inv'
-                     && isValidTenantId(invoiceId.split('_')[1])
-                     && resource.data.tenantId == invoiceId.split('_')[1]);
+      allow get: if platformPerm('view_platform_billing') || platformPerm('verify_platform_payment');
       allow list: if platformPerm('view_platform_billing') || platformPerm('verify_platform_payment');
       allow create, update, delete: if platformPerm('verify_platform_payment');
     }
@@ -117,16 +119,23 @@ service cloud.firestore {
 
 
     // Platform-level tenant registry, used by the superadmin console.
-    // Writes are superadmin-only. Reads: superadmin anywhere; a tenant may
-    // GET its own registry doc (path-bound: the slug in the path is the
-    // only key), which is how billing.html shows the tenant its plan,
-    // subscription, billing formula, and prepaid balance. `list` stays
+    // Writes are superadmin-only. Reads are superadmin/platform-staff
+    // only. A tenant-self `get` branch (`isValidTenantId(tenantId)`) used
+    // to live here so billing.html could show a tenant its own plan,
+    // subscription, billing formula, and prepaid balance -- but that
+    // condition only checks the SLUG'S FORMAT, not that the caller ever
+    // proved PIN knowledge, and slugs are public. Proven live: an
+    // unauthenticated REST call to this path returned another tenant's
+    // real creditBalance and billing formula. billing.html now reaches
+    // this data through the getBillingPortalData callable
+    // (functions/index.js), which checks the tenant's PIN server-side
+    // (Admin SDK, not gated by these rules) first. `list` stays
     // superadmin-only.
     // The entitlements/ subcollection (one doc per product: booking,
     // store, tournament) inherits these rules -- product entitlement
     // lifecycle and history are platform-controlled state.
     match /platformTenants/{tenantId} {
-      allow get: if isPlatformStaff() || isValidTenantId(tenantId);
+      allow get: if isPlatformStaff();
       allow list: if isPlatformStaff();
       allow write: if platformPerm('manage_organizations');
 
@@ -139,25 +148,27 @@ service cloud.firestore {
 
       // Usage counters (page views, etc.) are written by every ordinary
       // tenant visitor as they use the app, not just the superadmin, so
-      // this subcollection needs its own, more open write rule. Reads are
-      // superadmin OR the tenant's own portal (its own usage feeds the
-      // projected-charge view in billing.html).
+      // this subcollection needs its own, more open write rule. A
+      // tenant-self read branch used to live here for the same reason
+      // (and with the same flaw) as platformTenants/{tenantId} and
+      // events/ below -- reads are superadmin/platform-staff only now.
       match /usage/{period} {
-        allow read: if isPlatformStaff() || isValidTenantId(tenantId);
+        allow read: if isPlatformStaff();
         allow write: if isValidTenantId(tenantId);
       }
 
       // Append-only usage event ledger (booking confirmed/cancelled, queue
-      // session created, open play created). Same reasoning as /usage:
-      // ordinary visitors write these as the app is used; superadmin reads
-      // them for billing, and the tenant's own billing portal reads its
-      // own ledger for the projected-charge view. This is the source of
-      // truth for confirmed-bookings billing and every derived analytic,
-      // kept as discrete events (not just a running total) so history
-      // survives even after the originating booking is pruned from
-      // clients/{tenantId}/bookings.
+      // session created, open play created) -- contains real player
+      // emails (see index.html's logUsageEvent calls). Ordinary visitors
+      // still write these as the app is used, but reads were the other
+      // half of the proven exposure: an unauthenticated REST query
+      // against this path returned live events with a player's email.
+      // The tenant's own billing portal now gets a booking COUNT from
+      // getBillingPortalData (functions/index.js) instead of reading
+      // these documents directly, so the PII in this ledger never has to
+      // leave the server. Reads are superadmin/platform-staff only.
       match /events/{eventId} {
-        allow read: if isPlatformStaff() || isValidTenantId(tenantId);
+        allow read: if isPlatformStaff();
         allow write: if isValidTenantId(tenantId);
       }
     }

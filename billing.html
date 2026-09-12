@@ -8,6 +8,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-storage-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-functions-compat.js"></script>
 <script src="firebase-config.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -130,13 +131,23 @@
    then SUBMIT the payment reference + proof for verification.
 
    Trust model, matching the rest of this app: the gate is the tenant's
-   Admin PIN checked client-side (no per-person auth exists anywhere in
-   this system). Firestore rules expose exactly what this portal needs
-   -- the tenant's OWN invoice docs, registry doc, usage ledger, and the
-   public payment instructions -- and invoices can never be written from
-   here. A submission is a claim; only the platform's verification
-   (superadmin console -> Verification Queue) moves an invoice.
+   Admin PIN (no per-person auth exists anywhere in this system) --
+   but that PIN is now checked server-side by the getBillingPortalData
+   callable (functions/index.js), not just compared client-side. It used
+   to be checked here against a doc read directly off Firestore, while
+   firestore.rules separately let ANYONE who knew the tenant's public
+   slug read that same registry doc, its usage/events ledger (real
+   player emails), and its invoices -- no PIN required at all, since
+   `isValidTenantId(slug)` only checks the slug's FORMAT. Proven live via
+   unauthenticated REST calls against production. The callable verifies
+   the PIN against the Admin SDK (not gated by firestore.rules) and only
+   then returns the tenant doc, a booking count, and invoices; the raw
+   events ledger never reaches the client at all now. A submission is a
+   claim; only the platform's verification (superadmin console ->
+   Verification Queue) moves an invoice.
    ================================================================ */
+
+function pinStorageKey(){ return `cb_billing_unlocked_${currentClientId}`; }
 
 function getCurrentTenant(){
   const urlParams = new URLSearchParams(window.location.search);
@@ -148,11 +159,12 @@ const currentClientId = getCurrentTenant();
 
 const FIREBASE_CFG = (window.FIREBASE_CONFIG && window.FIREBASE_CONFIG.apiKey && !String(window.FIREBASE_CONFIG.apiKey).startsWith('PASTE')) ? window.FIREBASE_CONFIG : null;
 const FB_ENABLED = !!(FIREBASE_CFG && FIREBASE_CFG.projectId);
-let db = null, storage = null;
+let db = null, storage = null, fns = null;
 if (FB_ENABLED) {
-  try { firebase.initializeApp(FIREBASE_CFG); db = firebase.firestore(); storage = firebase.storage(); }
+  try { firebase.initializeApp(FIREBASE_CFG); db = firebase.firestore(); storage = firebase.storage(); fns = firebase.app().functions('asia-southeast1'); }
   catch(e) { console.warn('[BillingPortal] Firebase init failed:', e.message); }
 }
+function callEngine(name, data){ return fns.httpsCallable(name)(data); }
 
 function escapeHtml(s){ return (s==null?'':String(s)).replace(/[&<>"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
 function fmtMoney(n){ return '₱' + Number(n||0).toLocaleString('en-PH', {minimumFractionDigits:2, maximumFractionDigits:2}); }
@@ -168,11 +180,6 @@ function toast(msg){
   t.classList.remove('hidden');
   clearTimeout(toast._t);
   toast._t = setTimeout(() => t.classList.add('hidden'), 2800);
-}
-function usagePeriod(offsetMonths = 0){
-  const d = new Date();
-  d.setMonth(d.getMonth() - offsetMonths);
-  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
 }
 function monthStartDate(offsetMonths = 0){
   const d = new Date();
@@ -190,8 +197,6 @@ function datesInRange(startDate, endDate){
   }
   return out;
 }
-function invoiceIdFor(slug, period){ return `inv_${slug}_${period}`; }
-
 /* Invoice payment math (mirrors the console): verified payments + applied
    credits against the frozen total. */
 function invoiceTotals(inv){
@@ -217,8 +222,10 @@ function invoicePayable(inv){
 }
 
 /* ---------- state ---------- */
-let TENANT = null;        // platformTenants/{slug} doc
-let PAY_SETTINGS = null;  // platformSettings/billing
+let TENANT = null;        // platformTenants/{slug} doc -- via getBillingPortalData
+let PORTAL_INVOICES = []; // this tenant's invoices -- via getBillingPortalData
+let PORTAL_CONFIRMED_BOOKINGS = 0; // this-month confirmed count -- via getBillingPortalData
+let PAY_SETTINGS = null;  // platformSettings/billing (publicly readable, unaffected)
 let MY_SUBMISSIONS = [];  // this tenant's payment claims, newest first
 
 /* ---------- staff-reserve walk (faithful copies of the console's
@@ -290,12 +297,13 @@ function renderPinGate(bizName){
     e.preventDefault();
     const input = document.getElementById('portalPinInput');
     const err = document.getElementById('portalPinError');
+    err.classList.add('hidden');
+    const submitBtn = e.target.querySelector('button[type="submit"]');
+    submitBtn.disabled = true;
     try {
-      const snap = await db.doc(`clients/${currentClientId}/settings/state`).get();
-      const storedHash = snap.exists && snap.data().data && snap.data().data.pin;
       const inputHash = await hashPin(input.value.trim());
-      if(storedHash && inputHash === storedHash){
-        sessionStorage.setItem(`cb_billing_unlocked_${currentClientId}`, 'true');
+      if(await loadPortalData(inputHash)){
+        sessionStorage.setItem(pinStorageKey(), inputHash);
         enterApp();
       } else {
         err.textContent = 'Incorrect PIN.';
@@ -304,8 +312,27 @@ function renderPinGate(bizName){
     } catch(ex) {
       err.textContent = 'Failed to verify PIN: ' + ex.message;
       err.classList.remove('hidden');
+    } finally {
+      submitBtn.disabled = false;
     }
   });
+}
+
+/* Calls the server-side PIN check + data fetch (functions/index.js:
+   getBillingPortalData). Returns true and populates TENANT/
+   PORTAL_INVOICES/PORTAL_CONFIRMED_BOOKINGS on success, false on a
+   wrong PIN, and rethrows any other error (network, misconfiguration). */
+async function loadPortalData(pinHash){
+  try {
+    const res = await callEngine('getBillingPortalData', { clientId: currentClientId, pinHash });
+    TENANT = res.data.tenant;
+    PORTAL_INVOICES = res.data.invoices || [];
+    PORTAL_CONFIRMED_BOOKINGS = res.data.confirmedBookingsThisMonth || 0;
+    return true;
+  } catch(ex) {
+    if(ex.code === 'functions/permission-denied') return false;
+    throw ex;
+  }
 }
 
 /* ---------- projections ---------- */
@@ -314,14 +341,12 @@ async function renderProjection(){
   body.innerHTML = '<div class="mono text-[11px] opacity-50 text-center py-4">Computing…</div>';
   try {
     const monthStart = monthStartDate(0);
-    const [eventsSnap, courtsSnap, srSnap, cfgSnap] = await Promise.all([
-      db.collection(`platformTenants/${currentClientId}/events`).where('createdAt', '>=', monthStart).get(),
+    const [courtsSnap, srSnap, cfgSnap] = await Promise.all([
       db.doc(`clients/${currentClientId}/courts/state`).get(),
       db.doc(`clients/${currentClientId}/staffReserve/state`).get(),
       db.doc(`clients/${currentClientId}/config/state`).get(),
     ]);
-    let confirmed = 0;
-    eventsSnap.forEach(doc => { const e = doc.data(); if(e.type === 'booking_confirmed') confirmed++; });
+    const confirmed = PORTAL_CONFIRMED_BOOKINGS;
 
     let staffHours = 0;
     const courts = ((courtsSnap.exists && courtsSnap.data().data) || []).filter(c => c.active !== false);
@@ -417,11 +442,7 @@ async function renderInvoices(){
   const list = document.getElementById('invoiceList');
   list.innerHTML = '<div class="p-6 mono text-[11px] opacity-50 text-center">Loading…</div>';
   try {
-    const periods = [];
-    for(let i = 0; i < 12; i++) periods.push(usagePeriod(i));
-    const snaps = await Promise.all(periods.map(p => db.doc(`platformInvoices/${invoiceIdFor(currentClientId, p)}`).get().catch(() => null)));
-    const invs = [];
-    snaps.forEach(s => { if(s && s.exists) invs.push({ id: s.id, ...s.data() }); });
+    const invs = [...PORTAL_INVOICES];
     invs.sort((a, b) => (b.period || '').localeCompare(a.period || ''));
 
     let outstanding = 0;
@@ -540,7 +561,6 @@ async function renderAll(){
 (async function init(){
   if(!FB_ENABLED){ renderGateState('<p class="mt-5 mono text-[12px] text-[#8C2C10]">Billing portal is not configured (missing Firebase config).</p>'); return; }
   if(!currentClientId){ renderGateState('<p class="mt-5 mono text-[12px] text-[#8C2C10]">No tenant specified. Open this page as <span class="font-[700]">billing.html?client=your-facility</span>.</p>'); return; }
-  const LS_UNLOCKED = () => `cb_billing_unlocked_${currentClientId}`;
   try {
     const cfgSnap = await db.doc(`clients/${currentClientId}/config/state`).get();
     let bizName = currentClientId, primary = '#201C19', logoUrl = '';
@@ -550,12 +570,12 @@ async function renderAll(){
       primary = (c.theme && (c.theme.primary || c.theme.primaryColor)) || primary;
       logoUrl = (c.branding && c.branding.logoUrl) || '';
     }
-    const tenantSnap = await db.doc(`platformTenants/${currentClientId}`).get();
-    TENANT = tenantSnap.exists ? tenantSnap.data() : null;
     const psSnap = await db.doc('platformSettings/billing').get();
     PAY_SETTINGS = psSnap.exists ? psSnap.data() : {};
     applyBranding(bizName, primary, logoUrl);
-    if(sessionStorage.getItem(LS_UNLOCKED()) === 'true'){ enterApp(); return; }
+    const storedHash = sessionStorage.getItem(pinStorageKey());
+    if(storedHash && await loadPortalData(storedHash)){ enterApp(); return; }
+    if(storedHash) sessionStorage.removeItem(pinStorageKey());
     renderPinGate(bizName);
   } catch(ex) {
     renderGateState(`<p class="mt-5 mono text-[12px] text-[#8C2C10]">Failed to load: ${escapeHtml(ex.message)}</p>`);
@@ -563,11 +583,26 @@ async function renderAll(){
 })();
 
 document.getElementById('lockBtn').addEventListener('click', () => {
-  sessionStorage.removeItem(`cb_billing_unlocked_${currentClientId}`);
+  sessionStorage.removeItem(pinStorageKey());
   location.reload();
 });
-document.getElementById('projRefreshBtn').addEventListener('click', () => { renderProjection(); toast('Projection refreshed'); });
-document.getElementById('invRefreshBtn').addEventListener('click', async () => { await loadSubmissions(); await renderInvoices(); toast('Invoices refreshed'); });
+/* Refresh re-runs the PIN-gated callable (not just a re-render) so
+   invoices/projection reflect anything the platform operator changed
+   since the portal was unlocked -- the stored value IS the pinHash,
+   not a boolean, precisely so refreshes can re-authenticate silently. */
+document.getElementById('projRefreshBtn').addEventListener('click', async () => {
+  const storedHash = sessionStorage.getItem(pinStorageKey());
+  if(storedHash) await loadPortalData(storedHash).catch(() => {});
+  await renderProjection();
+  toast('Projection refreshed');
+});
+document.getElementById('invRefreshBtn').addEventListener('click', async () => {
+  const storedHash = sessionStorage.getItem(pinStorageKey());
+  if(storedHash) await loadPortalData(storedHash).catch(() => {});
+  await loadSubmissions();
+  await renderInvoices();
+  toast('Invoices refreshed');
+});
 </script>
 </body>
 </html>

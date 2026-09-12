@@ -37,6 +37,27 @@ service cloud.firestore {
               (('platformPerms' in request.auth.token) &&
                (perm in request.auth.token.platformPerms)));
     }
+    /* Tenant registry/usage/events reads used to be gated by isPlatformStaff()
+       alone -- true for ANY signed-in staff member holding even one unrelated
+       permission (e.g. manage_support, whose entire job is the Feature Ideas
+       scratchpad, or view_platform_audit, whose job is the audit log) -- so
+       a support-scoped or audit-only account could still read every
+       tenant's credit balance, billing formula, and usage/events ledger. The
+       console's own tab-visibility model (TAB_PERMS in superadmin.html) says
+       who actually needs this: every tab except Feature Ideas and Security
+       reads the shared tenant list, so every permission below it lists a
+       tab is included here; manage_support, view_platform_audit, and
+       manage_platform_configuration (which has no tab at all) are not. */
+    function canReadTenantData() {
+      return platformPerm('manage_organizations') ||
+             platformPerm('manage_entitlements') ||
+             platformPerm('manage_plans') ||
+             platformPerm('view_platform_billing') ||
+             platformPerm('verify_platform_payment') ||
+             platformPerm('issue_platform_credit') ||
+             platformPerm('view_platform_usage') ||
+             platformPerm('diagnose_access');
+    }
 
     // Support/planning notes ("Feature Ideas" tab) -- manage_support.
     match /platformFeatureIdeas/{ideaId} {
@@ -148,8 +169,8 @@ service cloud.firestore {
     // store, tournament) inherits these rules -- product entitlement
     // lifecycle and history are platform-controlled state.
     match /platformTenants/{tenantId} {
-      allow get: if isPlatformStaff();
-      allow list: if isPlatformStaff();
+      allow get: if canReadTenantData();
+      allow list: if canReadTenantData();
       // Creating or deleting a tenant registry doc entirely (provisioning,
       // offboarding) stays manage_organizations-only -- but a plain
       // `allow write` here made every OTHER permission that names this
@@ -178,7 +199,7 @@ service cloud.firestore {
       // Product entitlements are their own permission family (B5): an
       // entitlements operator doesn't need full organization management.
       match /entitlements/{productId} {
-        allow read: if isPlatformStaff();
+        allow read: if canReadTenantData();
         allow write: if platformPerm('manage_entitlements');
       }
 
@@ -187,9 +208,10 @@ service cloud.firestore {
       // this subcollection needs its own, more open write rule. A
       // tenant-self read branch used to live here for the same reason
       // (and with the same flaw) as platformTenants/{tenantId} and
-      // events/ below -- reads are superadmin/platform-staff only now.
+      // events/ below -- reads require actual platform-staff scope now
+      // (canReadTenantData()), not just any signed-in staff member.
       match /usage/{period} {
-        allow read: if isPlatformStaff();
+        allow read: if canReadTenantData();
         allow write: if isValidTenantId(tenantId);
       }
 
@@ -202,9 +224,10 @@ service cloud.firestore {
       // The tenant's own billing portal now gets a booking COUNT from
       // getBillingPortalData (functions/index.js) instead of reading
       // these documents directly, so the PII in this ledger never has to
-      // leave the server. Reads are superadmin/platform-staff only.
+      // leave the server. Reads require actual platform-staff scope
+      // (canReadTenantData()), not just any signed-in staff member.
       match /events/{eventId} {
-        allow read: if isPlatformStaff();
+        allow read: if canReadTenantData();
         allow write: if isValidTenantId(tenantId);
       }
     }

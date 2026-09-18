@@ -1011,6 +1011,41 @@
               <input type="email" id="ogCreatorEmail" required class="h-11 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-4 mono text-[13px] outline-none focus:border-[#201C19]"/>
             </label>
           </div>
+
+          <!-- Organizer can pre-add known players at creation time (or later,
+               from the game's detail view) -- these never go through the
+               free self-join step, so they're tagged "added by organizer"
+               in the roster to stay honest about who actually opted in. -->
+          <div class="pt-1">
+            <div class="flex items-center justify-between">
+              <span class="mono text-[10px] uppercase tracking-widest opacity-60">Add players now (optional)</span>
+              <button type="button" id="ogAddExtraPlayerBtn" class="mono text-[10px] font-[700] text-[#201C19] underline cursor-pointer">+ Add another player</button>
+            </div>
+            <div id="ogExtraPlayersList" class="space-y-2 mt-2"></div>
+          </div>
+
+          <!-- Peer-to-peer only: no payment processing exists here (no
+               wallet, no facility involvement, no verification). This is a
+               consent/expectation-setting step, not an enforced gate --
+               joiners see the organizer's terms and explicitly acknowledge
+               before joining, same trust level as the rest of this app. -->
+          <div class="pt-1 space-y-2.5">
+            <label class="flex items-center gap-2.5 mono text-[12px] cursor-pointer select-none">
+              <input type="checkbox" id="ogPayBeforeJoin" class="w-4 h-4 accent-[#201C19] cursor-pointer"/>
+              <span>Require payment before joining <span class="opacity-50">(peer-to-peer — the facility doesn't process this)</span></span>
+            </label>
+            <div id="ogPayFields" class="hidden grid grid-cols-2 gap-3">
+              <label class="flex flex-col gap-1.5">
+                <span class="mono text-[10px] uppercase tracking-widest opacity-60">Amount per player (optional)</span>
+                <input type="number" id="ogPayAmount" min="0" step="1" placeholder="e.g. 150" class="h-11 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-4 mono text-[13px] outline-none focus:border-[#201C19]"/>
+              </label>
+              <label class="flex flex-col gap-1.5">
+                <span class="mono text-[10px] uppercase tracking-widest opacity-60">How to pay (optional)</span>
+                <input type="text" id="ogPayNote" maxlength="140" placeholder="e.g. GCash 0917-xxx or cash on court" class="h-11 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-4 mono text-[13px] outline-none focus:border-[#201C19]"/>
+              </label>
+            </div>
+          </div>
+
           <div id="ogCreateError" class="hidden mono text-[12px] text-[#8C2C10] bg-[#FFE9E0] border border-[#FFC9B6] rounded-[14px] px-4 py-2.5"></div>
           <button type="submit" class="w-full h-12 rounded-full bg-[#201C19] text-white font-[800] text-[14px] hover:opacity-90 transition cursor-pointer">Create Game</button>
         </form>
@@ -5322,6 +5357,7 @@ let openGames = [];
 let _ogUnsub = null;
 let _ogActiveGameId = null; // game currently shown in the detail modal
 let _ogPendingCreateConfirmed = false; // set once "join existing instead?" has been dismissed
+let _ogAckPendingGameId = null; // gameId currently showing the pay-before-join acknowledgment panel
 
 function ogIdentity(){
   try { return JSON.parse(localStorage.getItem(lsKey('cb_og_identity_v1'))) || {}; }
@@ -5451,7 +5487,8 @@ function renderOpenGames(){
                  <span class="mono text-[10px] px-3 py-1 rounded-full bg-[#F1E9DF] text-[#201C19] font-[700]">${rotationRuleLabel(g.rotationRule)}</span>
                  <span class="mono text-[10px] px-3 py-1 rounded-full font-[700] ${g.allowJoin===false ? 'bg-[#F1E9DF] text-[#201C19]/80' : 'bg-[#E8F5D8] text-[#3F7019]'}">${g.allowJoin===false ? 'Walk-ins only' : 'Public Joining'}</span>`
               : `<span class="mono text-[10px] px-3 py-1 rounded-full bg-[#EDE8FF] text-[#3B2A9E] font-[700] uppercase">${escapeHtml(g.skillLevel)}</span>
-                 <span class="mono text-[10px] px-3 py-1 rounded-full bg-[#F1E9DF] text-[#201C19] font-[700]">${escapeHtml(g.format)}</span>`}
+                 <span class="mono text-[10px] px-3 py-1 rounded-full bg-[#F1E9DF] text-[#201C19] font-[700]">${escapeHtml(g.format)}</span>
+                 ${g.payBeforeJoin ? `<span class="mono text-[10px] px-3 py-1 rounded-full bg-[#FFF0D6] text-[#92400E] font-[700]">Pay to Join${g.payAmount != null ? ` · ${fmtMoney(g.payAmount)}/head` : ''}</span>` : ''}`}
             <span class="font-[700] text-[14px]">${fmtDateLabel(g.date)} · ${timeLabel}</span>
           </div>
           <div class="mono text-[11px] opacity-60 mt-1">${isFacility ? `${g.players.length} joined so far${g.allowJoin!==false && g.perPersonRate ? ` · ${fmtMoney(g.perPersonRate)}/head` : ''}` : `${g.players.length} / ${g.playersNeeded} players • ${needed} needed`}${g.notes ? ' · '+escapeHtml(g.notes) : ''}</div>
@@ -5510,7 +5547,29 @@ function ogPopulateCreateForm(){
   document.getElementById('ogCreateError').classList.add('hidden');
   document.querySelector('#ogCreateForm button[type=submit]').textContent = 'Create Game';
   _ogPendingCreateConfirmed = false;
+  document.getElementById('ogExtraPlayersList').innerHTML = '';
+  document.getElementById('ogPayBeforeJoin').checked = false;
+  document.getElementById('ogPayFields').classList.add('hidden');
+  document.getElementById('ogPayAmount').value = '';
+  document.getElementById('ogPayNote').value = '';
 }
+/* One name+email row per pre-added player. Read back on submit; a row left
+   fully empty is silently ignored, a half-filled row is rejected. */
+function ogAddExtraPlayerRow(){
+  const row = document.createElement('div');
+  row.className = 'og-extra-player-row grid grid-cols-[1fr_1fr_auto] gap-2';
+  row.innerHTML = `
+    <input type="text" placeholder="Name" class="og-extra-name h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-3 mono text-[12px] outline-none focus:border-[#201C19]"/>
+    <input type="email" placeholder="Email" class="og-extra-email h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-3 mono text-[12px] outline-none focus:border-[#201C19]"/>
+    <button type="button" class="og-extra-remove w-10 h-10 rounded-full bg-[#F1E9DF] grid place-items-center cursor-pointer hover:bg-[#E5DDD4]">✕</button>
+  `;
+  row.querySelector('.og-extra-remove').addEventListener('click', () => row.remove());
+  document.getElementById('ogExtraPlayersList').appendChild(row);
+}
+document.getElementById('ogAddExtraPlayerBtn')?.addEventListener('click', ogAddExtraPlayerRow);
+document.getElementById('ogPayBeforeJoin')?.addEventListener('change', (e) => {
+  document.getElementById('ogPayFields').classList.toggle('hidden', !e.target.checked);
+});
 document.getElementById('ogCreateBtn')?.addEventListener('click', () => {
   if(!db){ toast('Find a Game needs this site connected to Firebase.'); return; }
   ogPopulateCreateForm();
@@ -5544,17 +5603,44 @@ document.getElementById('ogCreateForm')?.addEventListener('submit', async (e) =>
   const notes = document.getElementById('ogNotes').value.trim();
   const name = document.getElementById('ogCreatorName').value.trim();
   const email = document.getElementById('ogCreatorEmail').value.trim();
+  const payBeforeJoin = document.getElementById('ogPayBeforeJoin').checked;
+  const payAmountRaw = document.getElementById('ogPayAmount').value;
+  const payAmount = payBeforeJoin && payAmountRaw !== '' ? Math.max(0, parseFloat(payAmountRaw) || 0) : null;
+  const payNote = payBeforeJoin ? document.getElementById('ogPayNote').value.trim() : '';
 
   if(!date || isNaN(startHour)){ errEl.textContent = 'Pick a date and start time.'; errEl.classList.remove('hidden'); return; }
   if(!name || !email){ errEl.textContent = 'Your name and email are required.'; errEl.classList.remove('hidden'); return; }
   if(ogGameStartsAt({date, startHour}) < Date.now() - 3600000){ errEl.textContent = 'That date/time has already passed.'; errEl.classList.remove('hidden'); return; }
+
+  // Read back the organizer's pre-added players. A row with either field
+  // filled must have both; a fully empty row is just an unused blank and
+  // is skipped rather than rejected.
+  const extraPlayers = [];
+  for(const row of document.querySelectorAll('#ogExtraPlayersList .og-extra-player-row')){
+    const pName = row.querySelector('.og-extra-name').value.trim();
+    const pEmail = row.querySelector('.og-extra-email').value.trim();
+    if(!pName && !pEmail) continue;
+    if(!pName || !pEmail){ errEl.textContent = 'Fill in both name and email for each added player, or remove the empty row.'; errEl.classList.remove('hidden'); return; }
+    extraPlayers.push({ name: pName, email: pEmail });
+  }
+  const seenEmails = new Set([email.toLowerCase()]);
+  for(const p of extraPlayers){
+    const key = p.email.toLowerCase();
+    if(seenEmails.has(key)){ errEl.textContent = `${p.email} is already in this game (or was entered twice).`; errEl.classList.remove('hidden'); return; }
+    seenEmails.add(key);
+  }
+  if(1 + extraPlayers.length > playersNeeded){
+    errEl.textContent = `You've added ${1 + extraPlayers.length} players but this game only needs ${playersNeeded} — increase Players Needed or remove some.`;
+    errEl.classList.remove('hidden');
+    return;
+  }
 
   if(!_ogPendingCreateConfirmed){
     const match = ogFindCompatibleOpenGame(date, startHour, skillLevel, format);
     if(match){
       const box = document.getElementById('ogSuggestBox');
       box.classList.remove('hidden');
-      box.innerHTML = `You already have a compatible open game at ${fmtTime(match.startHour)} on ${fmtDateLabel(match.date)} (${match.players.length}/${match.playersNeeded} players). Join that one instead of splitting the group?<div class="mt-2 flex gap-2"><button type="button" id="ogJoinSuggested" class="h-9 px-3.5 rounded-full bg-[#201C19] text-white mono text-[11px] font-[700] cursor-pointer">Join Existing Game</button></div>`;
+      box.innerHTML = `You already have a compatible open game at ${fmtTime(match.startHour)} on ${fmtDateLabel(match.date)} (${match.players.length}/${match.playersNeeded} players)${match.payBeforeJoin ? ' · pay before joining' : ''}. Join that one instead of splitting the group?<div class="mt-2 flex gap-2"><button type="button" id="ogJoinSuggested" class="h-9 px-3.5 rounded-full bg-[#201C19] text-white mono text-[11px] font-[700] cursor-pointer">Join Existing Game</button></div>`;
       document.getElementById('ogJoinSuggested').addEventListener('click', async () => {
         document.getElementById('ogCreateModal').classList.add('hidden');
         await ogJoinGame(match.id, name, email);
@@ -5574,11 +5660,17 @@ document.getElementById('ogCreateForm')?.addEventListener('submit', async (e) =>
   try {
     const ref = db.collection(`clients/${currentClientId}/openGames`).doc();
     const creatorToken = 'ct_' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+    const players = [
+      { name, email, joinedAt: Date.now(), addedBy: 'self' },
+      ...extraPlayers.map(p => ({ ...p, joinedAt: Date.now(), addedBy: 'organizer' })),
+    ];
     const game = {
       creatorName: name, creatorEmail: email, creatorToken,
-      status: 'OPEN', date, startHour, skillLevel, format, playersNeeded,
+      status: players.length >= playersNeeded ? 'FULL' : 'OPEN',
+      date, startHour, skillLevel, format, playersNeeded,
       court, notes,
-      players: [{ name, email, joinedAt: Date.now() }],
+      payBeforeJoin, payAmount, payNote,
+      players,
       reservationId: null,
       createdAt: firebase.firestore.FieldValue.serverTimestamp(),
       updatedAt: firebase.firestore.FieldValue.serverTimestamp()
@@ -5600,7 +5692,7 @@ document.getElementById('ogCreateForm')?.addEventListener('submit', async (e) =>
 /* ---------- Join / Leave (transactional -- race-safe on the last slot,
    atomic against Firestore's own servers even though this app has no
    backend of its own) ---------- */
-async function ogJoinGame(gameId, name, email){
+async function ogJoinGame(gameId, name, email, opts={}){
   const ref = db.doc(`clients/${currentClientId}/openGames/${gameId}`);
   try {
     await db.runTransaction(async (tx) => {
@@ -5610,7 +5702,9 @@ async function ogJoinGame(gameId, name, email){
       if(ogEffectiveStatus(g) !== 'OPEN') throw new Error('This game is no longer open.');
       if(g.players.some(p => p.email.toLowerCase() === email.toLowerCase())) throw new Error('You already joined this game.');
       if(g.players.length >= g.playersNeeded) throw new Error('Sorry, that last spot was just taken.');
-      const players = [...g.players, { name, email, joinedAt: Date.now() }];
+      const player = { name, email, joinedAt: Date.now(), addedBy: 'self' };
+      if(opts.ackPay) player.ackPay = true; // acknowledged the organizer's pay-before-join terms (informational only -- never enforced/verified)
+      const players = [...g.players, player];
       const status = players.length >= g.playersNeeded ? 'FULL' : 'OPEN';
       tx.update(ref, { players, status, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
     });
@@ -5620,6 +5714,32 @@ async function ogJoinGame(gameId, name, email){
     toast('Joined the game!');
   } catch(ex){
     toast(ex.message || 'Could not join this game.');
+  }
+}
+/* ---------- Organizer pre-adding a known player, at creation or any time
+   after (from the game's detail view). Distinct from ogJoinGame: no
+   self-service opt-in happened here, so these are tagged addedBy:
+   'organizer' rather than 'self', and -- since the organizer is vouching
+   for them -- they skip the pay-before-join acknowledgment a stranger
+   joining themselves has to see. ---------- */
+async function ogOrganizerAddPlayer(gameId, token, name, email){
+  const ref = db.doc(`clients/${currentClientId}/openGames/${gameId}`);
+  try {
+    await db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if(!snap.exists) throw new Error('This game no longer exists.');
+      const g = snap.data();
+      if(g.creatorToken !== token) throw new Error('Only the organizer can add players.');
+      if(ogEffectiveStatus(g) === 'CANCELLED') throw new Error('This game was cancelled.');
+      if(g.players.some(p => p.email.toLowerCase() === email.toLowerCase())) throw new Error('That player is already in this game.');
+      if(g.players.length >= g.playersNeeded) throw new Error('This game is already full.');
+      const players = [...g.players, { name, email, joinedAt: Date.now(), addedBy: 'organizer' }];
+      const status = players.length >= g.playersNeeded ? 'FULL' : g.status;
+      tx.update(ref, { players, status, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+    });
+    toast(`${name} added to the game.`);
+  } catch(ex){
+    toast(ex.message || 'Could not add that player.');
   }
 }
 /* ---------- Join a facility-hosted Open Play block. Unlike ogJoinGame
@@ -5716,15 +5836,18 @@ async function ogLinkReservation(gameId, token, pin){
 /* ---------- Detail modal ---------- */
 function openOgDetailModal(gameId){
   _ogActiveGameId = gameId;
+  _ogAckPendingGameId = null;
   document.getElementById('ogDetailModal').classList.remove('hidden');
   renderOgDetailModal(gameId);
 }
 document.getElementById('ogDetailCloseBtn')?.addEventListener('click', () => {
   _ogActiveGameId = null;
+  _ogAckPendingGameId = null;
   document.getElementById('ogDetailModal').classList.add('hidden');
 });
 document.getElementById('ogDetailBackdrop')?.addEventListener('click', () => {
   _ogActiveGameId = null;
+  _ogAckPendingGameId = null;
   document.getElementById('ogDetailModal').classList.add('hidden');
 });
 
@@ -5740,8 +5863,45 @@ function renderOgDetailModal(gameId){
 
   const isFacility = game.source === 'facility';
   document.getElementById('ogDetailTitle').textContent = isFacility ? 'Open Play' : `${game.skillLevel} Game`;
-  const playersHtml = game.players.map(p => `<div class="flex items-center gap-2 mono text-[12px]"><span class="text-[#3F7019]">✓</span>${escapeHtml(p.name)}</div>`).join('')
+  const playersHtml = game.players.map(p => `<div class="flex items-center gap-2 mono text-[12px]"><span class="text-[#3F7019]">✓</span>${escapeHtml(p.name)}${p.addedBy==='organizer' ? '<span class="opacity-45">· added by organizer</span>' : ''}</div>`).join('')
     + (isFacility ? '' : Array.from({length: Math.max(0, game.playersNeeded - game.players.length)}).map(() => `<div class="flex items-center gap-2 mono text-[12px] opacity-50"><span>○</span>spot available</div>`).join(''));
+
+  // Peer games only, self-joiners only -- the organizer isn't a payment
+  // processor, this is just expectation-setting. Visible to everyone
+  // viewing the game (not just at join time) so it's never a surprise.
+  const payInfoHtml = (!isFacility && game.payBeforeJoin) ? `
+    <div class="mono text-[12px] leading-[1.5] p-3.5 rounded-[16px] bg-[#FFF8F0] border border-[#FFE0A3]">
+      <span class="font-[700]">Pay before joining</span> — collected by the organizer, not the facility.
+      ${game.payAmount != null ? `<div class="mt-1 font-[700]">${fmtMoney(game.payAmount)} / player</div>` : ''}
+      ${game.payNote ? `<div class="opacity-70 mt-1">${escapeHtml(game.payNote)}</div>` : ''}
+    </div>` : '';
+
+  // Only the organizer, only on a live peer game with room left -- a
+  // pre-add never goes through the pay-before-join acknowledgment a
+  // stranger joining themselves has to see, since the organizer is
+  // vouching for (and presumably has already squared up with) them.
+  const canOrganizerAdd = isCreator && !isFacility && status === 'OPEN' && game.players.length < game.playersNeeded;
+  const addPlayerHtml = canOrganizerAdd ? `
+    <div class="pt-2">
+      <div class="mono text-[10px] uppercase tracking-widest opacity-60 mb-1.5">Add a player</div>
+      <form id="ogAddPlayerForm" class="flex flex-wrap gap-2">
+        <input type="text" id="ogAddPlayerName" placeholder="Name" class="flex-1 min-w-[100px] h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-4 mono text-[12px] outline-none focus:border-[#201C19]"/>
+        <input type="email" id="ogAddPlayerEmail" placeholder="Email" class="flex-1 min-w-[120px] h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-4 mono text-[12px] outline-none focus:border-[#201C19]"/>
+        <button type="submit" class="h-10 px-4 rounded-full bg-[#201C19] text-white mono text-[11px] font-[700] cursor-pointer">+ Add</button>
+      </form>
+    </div>` : '';
+
+  const payAckPending = !isFacility && game.payBeforeJoin && _ogAckPendingGameId === game.id;
+  const payAckHtml = payAckPending ? `
+    <div class="p-3.5 rounded-[16px] bg-[#FFF8F0] border border-[#FFE0A3] mono text-[12px] leading-[1.5]">
+      <div class="font-[700]">Confirm before joining</div>
+      ${game.payAmount != null ? `<div class="mt-1">${fmtMoney(game.payAmount)} per player, paid to the organizer directly.</div>` : `<div class="mt-1">Paid to the organizer directly — not processed by the facility.</div>`}
+      ${game.payNote ? `<div class="opacity-70 mt-1">${escapeHtml(game.payNote)}</div>` : ''}
+      <div class="flex gap-2 mt-3">
+        <button type="button" id="ogAckPayConfirm" class="flex-1 h-10 rounded-full bg-[#D6FF5F] hover:bg-[#CBF052] text-[#201C19] font-[800] text-[12px] border border-[#201C19]/10 cursor-pointer">Join & I'll Pay</button>
+        <button type="button" id="ogAckPayCancel" class="h-10 px-4 rounded-full bg-white border border-[#EAE0D5] mono text-[11px] font-[700] cursor-pointer">Cancel</button>
+      </div>
+    </div>` : '';
 
   let reservationHtml;
   if(game.reservationId){
@@ -5759,8 +5919,8 @@ function renderOgDetailModal(gameId){
   }
 
   const actions = [];
-  if(status === 'OPEN' && !alreadyJoined && !(isFacility && game.allowJoin === false)){
-    actions.push(`<button type="button" id="ogActionJoin" class="flex-1 h-11 rounded-full bg-[#D6FF5F] hover:bg-[#CBF052] text-[#201C19] font-[800] text-[13px] border border-[#201C19]/10 transition cursor-pointer">${isFacility ? 'Join & Pay' : 'Join Game'}</button>`);
+  if(status === 'OPEN' && !alreadyJoined && !(isFacility && game.allowJoin === false) && !payAckPending){
+    actions.push(`<button type="button" id="ogActionJoin" class="flex-1 h-11 rounded-full bg-[#D6FF5F] hover:bg-[#CBF052] text-[#201C19] font-[800] text-[13px] border border-[#201C19]/10 transition cursor-pointer">${isFacility ? 'Join & Pay' : (game.payBeforeJoin ? 'Join Game →' : 'Join Game')}</button>`);
   }
   if(status === 'OPEN' && !alreadyJoined && isFacility && game.allowJoin === false){
     actions.push(`<div class="flex-1 h-11 rounded-full bg-[#F1E9DF] grid place-items-center mono text-[11px] font-[700] opacity-70">Walk-ins only — join in person</div>`);
@@ -5784,18 +5944,29 @@ function renderOgDetailModal(gameId){
     </div>
     ${isFacility && game.allowJoin !== false && game.perPersonRate ? `<div class="mono text-[12px] font-[700]">${fmtMoney(game.perPersonRate)} / person</div>` : ''}
     ${game.notes ? `<div class="mono text-[12px] opacity-70">${escapeHtml(game.notes)}</div>` : ''}
+    ${payInfoHtml}
     <div>
       <div class="mono text-[10px] uppercase tracking-widest opacity-60 mb-1.5">Players</div>
       <div class="space-y-1">${playersHtml}</div>
     </div>
+    ${addPlayerHtml}
     <div class="pt-3 border-t border-[#EAE0D5]">
       <div class="mono text-[10px] uppercase tracking-widest opacity-60 mb-1.5">Reservation</div>
       ${reservationHtml}
     </div>
+    ${payAckHtml}
     ${actions.length ? `<div class="flex gap-2 pt-2">${actions.join('')}</div>` : ''}
   `;
 
   document.getElementById('ogActionJoin')?.addEventListener('click', async () => {
+    if(!isFacility && game.payBeforeJoin){
+      // First click on a pay-before-join game just reveals the organizer's
+      // terms -- it doesn't join yet. Actually joining happens from the
+      // ack panel's own "Join & I'll Pay" button below.
+      _ogAckPendingGameId = game.id;
+      renderOgDetailModal(game.id);
+      return;
+    }
     let id = ogIdentity();
     if(!id.name || !id.email){
       const name = prompt('Your name?'); if(!name) return;
@@ -5807,6 +5978,29 @@ function renderOgDetailModal(gameId){
       return;
     }
     await ogJoinGame(game.id, id.name, id.email);
+    renderOgDetailModal(game.id);
+  });
+  document.getElementById('ogAckPayConfirm')?.addEventListener('click', async () => {
+    let id = ogIdentity();
+    if(!id.name || !id.email){
+      const name = prompt('Your name?'); if(!name) return;
+      const email = prompt('Your email?'); if(!email) return;
+      id = { name, email };
+    }
+    await ogJoinGame(game.id, id.name, id.email, { ackPay: true });
+    _ogAckPendingGameId = null;
+    renderOgDetailModal(game.id);
+  });
+  document.getElementById('ogAckPayCancel')?.addEventListener('click', () => {
+    _ogAckPendingGameId = null;
+    renderOgDetailModal(game.id);
+  });
+  document.getElementById('ogAddPlayerForm')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const name = document.getElementById('ogAddPlayerName').value.trim();
+    const email = document.getElementById('ogAddPlayerEmail').value.trim();
+    if(!name || !email) return;
+    await ogOrganizerAddPlayer(game.id, mine.token, name, email);
     renderOgDetailModal(game.id);
   });
   document.getElementById('ogActionLeave')?.addEventListener('click', async () => {

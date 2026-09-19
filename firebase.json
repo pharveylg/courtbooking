@@ -25,7 +25,18 @@
       "node_modules/**",
       "package.json",
       "package-lock.json",
-      "public/**"
+      "public/**",
+      "serviceAccountKey.json",
+      "**/serviceAccountKey*.json",
+      "**/*.pem",
+      "**/.env*",
+      "tests/**",
+      "functions/**",
+      "setup-*.js",
+      "seed-tenant-directory.js",
+      "set-superadmin-claim.js",
+      "generate-pwa-assets.js",
+      "*.md"
     ],
     "cleanUrls": false,
     "rewrites": [

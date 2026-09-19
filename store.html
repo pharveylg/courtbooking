@@ -55,7 +55,7 @@
 
   <main class="max-w-[1200px] mx-auto px-4 py-6">
     <!-- POS -->
-    <section id="view-pos" class="store-view grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-5">
+    <section id="view-pos" class="store-view grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-5 pb-24 lg:pb-0">
       <div id="shiftBanner" class="col-span-full rounded-[20px] border p-4"></div>
       <div class="rounded-[24px] bg-white border border-[#EAE0D5] p-5">
         <input id="posSearch" placeholder="Search products..." class="w-full h-11 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-4 mono text-[13px] outline-none focus:border-[#201C19]"/>
@@ -91,6 +91,25 @@
           <div class="mono text-[9px] opacity-50 px-1">This sale will need sign-off from the Credit tab before it counts as approved.</div>
         </div>
         <button id="posCompleteBtn" class="mt-3 w-full h-12 rounded-full bg-[#201C19] text-white font-[800] text-[13px] cursor-pointer hover:opacity-90 active:scale-[0.98] transition">Complete Sale</button>
+      </div>
+
+      <!-- Mobile-only sticky cart bar. On a narrow screen the cart card sits
+           below the whole product grid, so after tapping products the total
+           and Complete Sale were a long scroll away with no sign of what was
+           picked. This keeps the running total + a one-line item summary in
+           view, and its button jumps to the cart. It hides itself while the
+           Complete Sale button is on screen so it never covers it. -->
+      <div id="posMobileBar" class="hidden lg:hidden fixed bottom-0 inset-x-0 z-40 px-3 pt-2 pb-[max(12px,env(safe-area-inset-bottom))] pointer-events-none">
+        <div class="pointer-events-auto max-w-[520px] mx-auto rounded-[22px] bg-[#201C19] text-white shadow-[0_12px_30px_rgba(0,0,0,0.3)] p-3 flex items-center gap-3">
+          <div class="min-w-0 flex-1">
+            <div id="posMobileBarItems" class="mono text-[10px] opacity-70 truncate"></div>
+            <div class="flex items-baseline gap-2">
+              <span id="posMobileBarCount" class="mono text-[10px] uppercase tracking-widest opacity-60"></span>
+              <span id="posMobileBarTotal" class="text-[18px] font-[800]"></span>
+            </div>
+          </div>
+          <button type="button" id="posMobileBarBtn" class="h-11 px-4 rounded-full bg-[#D6FF5F] text-[#201C19] font-[800] text-[13px] shrink-0 cursor-pointer active:scale-[0.97] transition">Review &amp; Pay ↓</button>
+        </div>
       </div>
     </section>
 
@@ -621,7 +640,33 @@ function renderCart(){
   }
   const total = CART.reduce((s,l) => s + l.unitPrice*l.qty, 0);
   document.getElementById('posTotal').textContent = fmtMoney(total);
+  updatePosMobileBar(total);
 }
+
+/* Sticky mobile cart bar (see the comment on #posMobileBar in the markup). */
+let _posCompleteVisible = false;
+function updatePosMobileBar(total){
+  const bar = document.getElementById('posMobileBar');
+  if(!bar) return;
+  const count = CART.reduce((s,l) => s + l.qty, 0);
+  if(total === undefined) total = CART.reduce((s,l) => s + l.unitPrice*l.qty, 0);
+  bar.classList.toggle('hidden', count === 0 || _posCompleteVisible);
+  if(count === 0) return;
+  document.getElementById('posMobileBarCount').textContent = `${count} item${count === 1 ? '' : 's'}`;
+  document.getElementById('posMobileBarTotal').textContent = fmtMoney(total);
+  document.getElementById('posMobileBarItems').textContent = CART.map(l => `${l.qty}× ${l.name}`).join(' · ');
+}
+if('IntersectionObserver' in window){
+  new IntersectionObserver((entries) => {
+    _posCompleteVisible = entries[0].isIntersecting;
+    updatePosMobileBar();
+  }, { threshold: 0.6 }).observe(document.getElementById('posCompleteBtn'));
+}
+// Aligns Complete Sale to the bottom of the screen so the cart lines, total,
+// and payment method the bar is summarizing are on screen above it.
+document.getElementById('posMobileBarBtn').addEventListener('click', () => {
+  document.getElementById('posCompleteBtn').scrollIntoView({ behavior: 'smooth', block: 'end' });
+});
 document.getElementById('posCompleteBtn').addEventListener('click', completeSale);
 document.getElementById('posPaymentMethod').addEventListener('change', () => {
   const isCredit = document.getElementById('posPaymentMethod').value === 'Credit / Pay Later';

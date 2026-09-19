@@ -180,7 +180,7 @@
           <button data-nav="book" class="nav-btn active px-5 h-8 rounded-full text-[13px] font-[650] tracking-[-0.01em] bg-[#201C19] text-white shadow-sm transition mp-magnetic" data-magnetic-strength="0.15">Book</button>
           <button data-nav="queue" class="nav-btn px-5 h-8 rounded-full text-[13px] font-[550] opacity-70 hover:opacity-100 transition mp-magnetic" data-magnetic-strength="0.15">Queue</button>
           <button data-nav="stats" class="nav-btn px-5 h-8 rounded-full text-[13px] font-[550] opacity-70 hover:opacity-100 transition mp-magnetic" data-magnetic-strength="0.15">Match Stats</button>
-          <button data-nav="opengames" class="nav-btn px-5 h-8 rounded-full text-[13px] font-[550] opacity-70 hover:opacity-100 transition mp-magnetic" data-magnetic-strength="0.15">Find a Game</button>
+          <button data-nav="opengames" class="nav-btn px-5 h-8 rounded-full text-[13px] font-[550] opacity-70 hover:opacity-100 transition mp-magnetic" data-magnetic-strength="0.15">Find a Game<span class="og-need-badge hidden ml-1.5 px-1.5 py-0.5 rounded-full bg-[#D6FF5F] text-[#201C19] text-[10px] font-[800]">0</span></button>
           <button data-nav="payment" class="nav-btn px-5 h-8 rounded-full text-[13px] font-[550] opacity-70 hover:opacity-100 transition mp-magnetic" data-magnetic-strength="0.15">Payment</button>
           <button data-nav="bookings" class="nav-btn admin-only-tab hidden px-5 h-8 rounded-full text-[13px] font-[550] opacity-70 hover:opacity-100 transition">
             Bookings <span id="hdrBookingsBadge" class="ml-1 px-1.5 py-0.5 rounded-full bg-[#201C19]/10 text-[10px]">0</span>
@@ -214,7 +214,7 @@
         <button data-nav="book" class="nav-btn active flex-1 h-8 rounded-full text-[12px] font-[650] tracking-[-0.01em] bg-[#201C19] text-white shadow-sm transition whitespace-nowrap">Book</button>
         <button data-nav="queue" class="nav-btn flex-1 h-8 rounded-full text-[12px] font-[550] opacity-70 hover:opacity-100 transition whitespace-nowrap">Queue</button>
         <button data-nav="stats" class="nav-btn flex-1 h-8 rounded-full text-[12px] font-[550] opacity-70 hover:opacity-100 transition whitespace-nowrap">Stats</button>
-        <button data-nav="opengames" class="nav-btn flex-1 h-8 rounded-full text-[12px] font-[550] opacity-70 hover:opacity-100 transition whitespace-nowrap">Find a Game</button>
+        <button data-nav="opengames" class="nav-btn flex-1 h-8 rounded-full text-[12px] font-[550] opacity-70 hover:opacity-100 transition whitespace-nowrap">Find a Game<span class="og-need-badge hidden ml-1 px-1.5 py-0.5 rounded-full bg-[#D6FF5F] text-[#201C19] text-[9px] font-[800]">0</span></button>
         <button data-nav="payment" class="nav-btn flex-1 h-8 rounded-full text-[12px] font-[550] opacity-70 hover:opacity-100 transition whitespace-nowrap">Payment</button>
         <button data-nav="bookings" class="nav-btn admin-only-tab hidden flex-1 h-8 rounded-full text-[12px] font-[550] opacity-70 hover:opacity-100 transition whitespace-nowrap">Bookings</button>
         <button data-nav="admin" class="nav-btn admin-only-tab hidden flex-1 h-8 rounded-full text-[12px] font-[550] opacity-70 hover:opacity-100 transition whitespace-nowrap">Admin</button>
@@ -1789,6 +1789,20 @@
       </div>
 
     </div>
+  </div>
+</div>
+
+<!-- In-app notification: an open game needs players. Slides in over the top
+     of the page, tappable (jumps to the game), dismissible, auto-fades. -->
+<div id="ogNotifBanner" class="fixed top-3 inset-x-3 z-[45] hidden pointer-events-none">
+  <div class="pointer-events-auto max-w-[480px] mx-auto rounded-[22px] bg-[#201C19] text-white shadow-[0_16px_40px_rgba(0,0,0,0.35)] p-3.5 flex items-center gap-3">
+    <div class="w-9 h-9 rounded-full bg-[#D6FF5F] text-[#201C19] grid place-items-center text-[16px] shrink-0">🏓</div>
+    <div class="min-w-0 flex-1">
+      <div id="ogNotifTitle" class="font-[800] text-[13px] leading-[1.2]"></div>
+      <div id="ogNotifDetail" class="mono text-[10px] opacity-70 mt-0.5 truncate"></div>
+    </div>
+    <button type="button" id="ogNotifView" class="h-9 px-3.5 rounded-full bg-[#D6FF5F] text-[#201C19] font-[800] text-[12px] shrink-0 cursor-pointer">View</button>
+    <button type="button" id="ogNotifClose" aria-label="Dismiss" class="w-8 h-8 rounded-full bg-white/10 text-[12px] shrink-0 cursor-pointer">✕</button>
   </div>
 </div>
 
@@ -5422,6 +5436,7 @@ function startOpenGamesListener(){
     const prevById = new Map(openGames.map(g => [g.id, g]));
     openGames = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     ogNotifyMyGameChanges(prevById);
+    ogNotifyNeedingPlayers(prevById);
     const view = document.getElementById('view-opengames');
     if(view && !view.classList.contains('hidden')) renderOpenGames();
     if(_ogActiveGameId) renderOgDetailModal(_ogActiveGameId);
@@ -5453,6 +5468,83 @@ function ogNotifyMyGameChanges(prevById){
   });
 }
 
+/* ---------- "Games needing players" in-app notifications ----------
+   Fires off the same live openGames listener that already runs from boot, so
+   it costs no extra reads. Two surfaces: a count badge on the Find a Game
+   tab (always accurate), and a one-shot tappable banner when something new
+   needs players. "New" is per device -- announced game ids are remembered in
+   localStorage so a reload doesn't re-announce the same game. This is
+   in-app only: it can't reach someone who has the app closed (that would
+   need real web push -- FCM plus a server-side sender). */
+function ogNeedsPlayers(g){
+  return g.source !== 'facility' && ogEffectiveStatus(g) === 'OPEN'
+    && g.players.length < g.playersNeeded && ogGameStartsAt(g) > Date.now();
+}
+function ogIsMineOrJoined(g){
+  const email = (ogIdentity().email || '').toLowerCase();
+  return !!ogMyGames()[g.id] || !!(email && g.players.some(p => (p.email || '').toLowerCase() === email));
+}
+function ogOpenNeedingMe(){ return openGames.filter(g => ogNeedsPlayers(g) && !ogIsMineOrJoined(g)); }
+function ogUpdateNeedBadge(){
+  const n = ogOpenNeedingMe().length;
+  document.querySelectorAll('.og-need-badge').forEach(b => { b.textContent = n; b.classList.toggle('hidden', n === 0); });
+}
+function ogNotifiedIds(){
+  try { return new Set(JSON.parse(localStorage.getItem(lsKey('cb_og_notified_v1'))) || []); }
+  catch { return new Set(); }
+}
+function ogSaveNotifiedIds(set){
+  try { localStorage.setItem(lsKey('cb_og_notified_v1'), JSON.stringify([...set].slice(-200))); } catch {}
+}
+let _ogBannerTimer = null, _ogBannerGameId = null;
+function ogHideNeedBanner(){
+  clearTimeout(_ogBannerTimer);
+  document.getElementById('ogNotifBanner').classList.add('hidden');
+}
+function ogShowNeedBanner(title, detail, gameId){
+  _ogBannerGameId = gameId || null;
+  document.getElementById('ogNotifTitle').textContent = title;
+  document.getElementById('ogNotifDetail').textContent = detail;
+  document.getElementById('ogNotifBanner').classList.remove('hidden');
+  clearTimeout(_ogBannerTimer);
+  _ogBannerTimer = setTimeout(ogHideNeedBanner, 9000);
+}
+document.getElementById('ogNotifClose')?.addEventListener('click', ogHideNeedBanner);
+document.getElementById('ogNotifView')?.addEventListener('click', () => {
+  const gameId = _ogBannerGameId;
+  ogHideNeedBanner();
+  document.querySelector('.nav-btn[data-nav="opengames"]').click();
+  if(gameId) openOgDetailModal(gameId);
+});
+function ogNotifyNeedingPlayers(prevById){
+  ogUpdateNeedBadge();
+  const need = ogOpenNeedingMe();
+  const notified = ogNotifiedIds();
+  // A game that was full and has a spot again counts as news even if the
+  // device already heard about the game once.
+  const reopened = new Set(need.filter(g => { const before = prevById.get(g.id); return before && before.status === 'FULL'; }).map(g => g.id));
+  const fresh = need.filter(g => !notified.has(g.id) || reopened.has(g.id));
+  if(!fresh.length) return;
+  need.forEach(g => notified.add(g.id));
+  ogSaveNotifiedIds(notified);
+  // Already looking at the list -- it's updating live in front of them.
+  if(!document.getElementById('view-opengames').classList.contains('hidden')) return;
+
+  fresh.sort((a, b) => ogGameStartsAt(a) - ogGameStartsAt(b));
+  const first = fresh[0];
+  if(fresh.length === 1){
+    const left = first.playersNeeded - first.players.length;
+    const skill = first.skillLevel && first.skillLevel !== 'Open' ? ` · ${first.skillLevel}` : '';
+    ogShowNeedBanner(
+      reopened.has(first.id) ? 'A spot just opened up' : `A game needs ${left} more player${left === 1 ? '' : 's'}`,
+      `${fmtDateLabel(first.date)} · ${fmtTime(first.startHour)} · ${first.format}${skill}${first.payBeforeJoin ? ' · Pay to join' : ''}`,
+      first.id
+    );
+  } else {
+    ogShowNeedBanner(`${fresh.length} games need players`, `Next: ${fmtDateLabel(first.date)} · ${fmtTime(first.startHour)}`, null);
+  }
+}
+
 /* ---------- Discovery + My Games rendering ---------- */
 function renderOpenGames(){
   const discoverEl = document.getElementById('ogDiscoverList');
@@ -5464,6 +5556,8 @@ function renderOpenGames(){
     return;
   }
   startOpenGamesListener();
+  ogHideNeedBanner(); // they're on the list now -- the banner has done its job
+  ogUpdateNeedBadge();
 
   const discoverable = openGames
     .map(g => ({ ...g, _status: ogEffectiveStatus(g) }))

@@ -33,7 +33,12 @@
 <!-- Main app: shown once the PIN gate is passed -->
 <div id="appScreen" class="hidden">
   <header class="sticky top-0 z-30 backdrop-blur-xl bg-[#FFFBF5]/90 border-b border-[#EAE0D5]">
-    <div class="max-w-[1200px] mx-auto px-4 h-16 flex items-center justify-between gap-3 flex-wrap">
+    <!-- Phone: logo + Lock share the first row and the tab nav drops to its
+         own full-width row (the header grows to fit). md+: the original
+         single fixed-height row. It used to be h-16 + flex-wrap at every
+         width, so on a phone the wrapped rows overflowed the 64px and the
+         Lock button spilled onto the page below. -->
+    <div class="max-w-[1200px] mx-auto px-4 py-2.5 md:py-0 md:h-16 flex items-center justify-between gap-x-3 gap-y-2 flex-wrap md:flex-nowrap">
       <div class="flex items-center gap-2.5 shrink-0">
         <div class="w-9 h-9 rounded-full bg-[#201C19] text-white grid place-items-center font-black text-[13px]">PS</div>
         <div>
@@ -41,7 +46,7 @@
           <div class="mono text-[9px] uppercase tracking-widest opacity-50">Pickle Court Store</div>
         </div>
       </div>
-      <nav class="flex items-center gap-1 bg-[#F1E9DF] p-1 rounded-full overflow-x-auto no-scrollbar">
+      <nav class="order-last w-full md:order-none md:w-auto min-w-0 flex items-center gap-1 bg-[#F1E9DF] p-1 rounded-full overflow-x-auto no-scrollbar">
         <button data-store-tab="pos" class="store-tab-btn shrink-0 px-3.5 h-8 rounded-full mono text-[11px] font-[700] transition cursor-pointer">POS</button>
         <button data-store-tab="products" class="store-tab-btn shrink-0 px-3.5 h-8 rounded-full mono text-[11px] font-[700] transition cursor-pointer">Products</button>
         <button data-store-tab="inventory" class="store-tab-btn shrink-0 px-3.5 h-8 rounded-full mono text-[11px] font-[700] transition cursor-pointer">Inventory</button>

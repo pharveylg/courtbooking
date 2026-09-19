@@ -28,7 +28,10 @@
       "purpose": "maskable"
     }
   ],
-  "categories": ["sports", "productivity"],
+  "categories": [
+    "sports",
+    "productivity"
+  ],
   "shortcuts": [
     {
       "name": "Book Court",
@@ -37,16 +40,10 @@
       "url": "/?tab=book&source=shortcut"
     },
     {
-      "name": "Queue",
-      "short_name": "Queue",
-      "description": "Join the walk-in queue",
-      "url": "/?tab=queue&source=shortcut"
-    },
-    {
-      "name": "Match Stats",
-      "short_name": "Stats",
-      "description": "View match statistics",
-      "url": "/?tab=stats&source=shortcut"
+      "name": "Find a Game",
+      "short_name": "Games",
+      "description": "Join or create a game",
+      "url": "/?tab=opengames&source=shortcut"
     }
   ]
 }

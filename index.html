@@ -24,6 +24,8 @@
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="motion.css">
 <style>
+.nav-shell{display:none!important}
+body:not(.staff-mode) .staff-link{display:none!important}
 *{font-family:"Bricolage Grotesque",system-ui,sans-serif}
 .mono{font-family:"JetBrains Mono",monospace}
 ::-webkit-scrollbar{width:6px;height:6px}
@@ -176,12 +178,13 @@
 
       <!-- Desktop nav (hidden on mobile) -->
       <div class="hidden md:flex items-center gap-2">
-        <nav class="flex items-center gap-1 p-1 rounded-full bg-[#F1E9DF] border border-[#E9DDD0] mp-in-view-scale">
-          <button data-nav="book" class="nav-btn active px-5 h-8 rounded-full text-[13px] font-[650] tracking-[-0.01em] bg-[#201C19] text-white shadow-sm transition mp-magnetic" data-magnetic-strength="0.15">Book</button>
+        <nav class="nav-shell flex items-center gap-1 p-1 rounded-full bg-[#F1E9DF] border border-[#E9DDD0] mp-in-view-scale">
+          <button data-nav="home" class="nav-btn active px-5 h-8 rounded-full text-[13px] font-[650] tracking-[-0.01em] bg-[#201C19] text-white shadow-sm transition mp-magnetic" data-magnetic-strength="0.15">Home</button>
+          <button data-nav="book" class="nav-btn px-5 h-8 rounded-full text-[13px] font-[550] opacity-70 hover:opacity-100 transition mp-magnetic" data-magnetic-strength="0.15">Book</button>
           <button data-nav="queue" class="nav-btn px-5 h-8 rounded-full text-[13px] font-[550] opacity-70 hover:opacity-100 transition mp-magnetic" data-magnetic-strength="0.15">Queue</button>
           <button data-nav="stats" class="nav-btn px-5 h-8 rounded-full text-[13px] font-[550] opacity-70 hover:opacity-100 transition mp-magnetic" data-magnetic-strength="0.15">Match Stats</button>
           <button data-nav="opengames" class="nav-btn px-5 h-8 rounded-full text-[13px] font-[550] opacity-70 hover:opacity-100 transition mp-magnetic" data-magnetic-strength="0.15">Find a Game<span class="og-need-badge hidden ml-1.5 px-1.5 py-0.5 rounded-full bg-[#D6FF5F] text-[#201C19] text-[10px] font-[800]">0</span></button>
-          <button data-nav="payment" class="nav-btn px-5 h-8 rounded-full text-[13px] font-[550] opacity-70 hover:opacity-100 transition mp-magnetic" data-magnetic-strength="0.15">Payment</button>
+          <button data-nav="payment" class="nav-btn px-5 h-8 rounded-full text-[13px] font-[550] opacity-70 hover:opacity-100 transition mp-magnetic" data-magnetic-strength="0.15">How to Pay</button>
           <button data-nav="bookings" class="nav-btn admin-only-tab hidden px-5 h-8 rounded-full text-[13px] font-[550] opacity-70 hover:opacity-100 transition">
             Bookings <span id="hdrBookingsBadge" class="ml-1 px-1.5 py-0.5 rounded-full bg-[#201C19]/10 text-[10px]">0</span>
           </button>
@@ -209,9 +212,10 @@
     </div>
 
     <!-- Mobile tab bar (below brand, full width, scrollable) -->
-    <div class="md:hidden flex items-center gap-1 pb-2.5 -mx-1 px-1 overflow-x-auto no-scrollbar">
+    <div class="nav-shell md:hidden flex items-center gap-1 pb-2.5 -mx-1 px-1 overflow-x-auto no-scrollbar">
       <nav class="flex items-center gap-1 p-1 rounded-full bg-[#F1E9DF] border border-[#E9DDD0] flex-1 min-w-0">
-        <button data-nav="book" class="nav-btn active flex-1 h-8 rounded-full text-[12px] font-[650] tracking-[-0.01em] bg-[#201C19] text-white shadow-sm transition whitespace-nowrap">Book</button>
+        <button data-nav="home" class="nav-btn active flex-1 h-8 px-2 rounded-full text-[12px] font-[650] tracking-[-0.01em] bg-[#201C19] text-white shadow-sm transition whitespace-nowrap">Home</button>
+        <button data-nav="book" class="nav-btn flex-1 h-8 px-2 rounded-full text-[12px] font-[550] opacity-70 hover:opacity-100 transition whitespace-nowrap">Book</button>
         <button data-nav="queue" class="nav-btn flex-1 h-8 rounded-full text-[12px] font-[550] opacity-70 hover:opacity-100 transition whitespace-nowrap">Queue</button>
         <button data-nav="stats" class="nav-btn flex-1 h-8 rounded-full text-[12px] font-[550] opacity-70 hover:opacity-100 transition whitespace-nowrap">Stats</button>
         <button data-nav="opengames" class="nav-btn flex-1 h-8 rounded-full text-[12px] font-[550] opacity-70 hover:opacity-100 transition whitespace-nowrap">Find a Game<span class="og-need-badge hidden ml-1 px-1.5 py-0.5 rounded-full bg-[#D6FF5F] text-[#201C19] text-[9px] font-[800]">0</span></button>
@@ -225,8 +229,51 @@
 
 <main class="max-w-[1320px] mx-auto px-3.5 md:px-6 py-4 md:py-8">
 
+  <!-- Flow bar: shown to players inside Book / Find a Game / Payment -->
+  <div id="flowBar" class="hidden max-w-[720px] mx-auto mb-3 flex items-center justify-between gap-3">
+    <button type="button" id="flowBackBtn" class="h-10 px-4 rounded-full bg-white border border-[#EAE0D5] hover:border-[#201C19] text-[13px] font-[700] flex items-center gap-1.5 cursor-pointer transition shrink-0">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+      <span id="flowBackLabel">Home</span>
+    </button>
+    <div id="flowTitle" class="font-[800] text-[15px] tracking-[-0.01em] truncate"></div>
+    <span class="w-[84px] shrink-0"></span>
+  </div>
+
+  <!-- VIEW: HOME (player landing after choosing a facility) -->
+  <section id="view-home" class="view" data-mp-panel="home">
+    <div class="max-w-[720px] mx-auto">
+      <div class="rounded-[28px] bg-[#201C19] text-[#FFFBF5] p-6 md:p-8 relative overflow-hidden">
+        <div class="absolute -right-12 -top-12 w-[240px] h-[240px] rounded-full bg-[#D6FF5F] opacity-[0.16]"></div>
+        <div class="relative z-10">
+          <div class="flex items-center gap-2 flex-wrap">
+            <span class="inline-flex items-center gap-2 px-3 h-7 rounded-full bg-white/10 border border-white/10 mono text-[11px] tracking-widest uppercase"><i id="homeOpenDot" class="w-2 h-2 rounded-full block bg-[#4ADE80]"></i><span id="homeOpenText">Court open</span></span>
+            <span id="homeLocation" class="mono text-[11px] opacity-70"></span>
+          </div>
+          <h1 id="homeName" class="mt-4 text-[30px] md:text-[40px] font-[800] leading-[0.95] tracking-[-0.04em]">Welcome</h1>
+          <p id="homeSub" class="mt-2 mono text-[11px] tracking-widest uppercase opacity-60"></p>
+        </div>
+      </div>
+
+      <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+        <button type="button" data-go="book" class="text-left rounded-[24px] bg-[#D6FF5F] hover:bg-[#CBF052] border border-[#201C19]/10 p-5 min-h-[128px] flex flex-col justify-between cursor-pointer active:scale-[0.99] transition">
+          <span class="flex items-center justify-between"><span class="text-[22px] font-[800] tracking-[-0.03em] leading-none">Book the court</span><span class="text-[22px]" aria-hidden="true">→</span></span>
+          <span><span class="block mono text-[11px] font-[700] opacity-70">Reserve a time slot</span><span id="homeBookHint" class="block mono text-[12px] font-[700] mt-1"></span></span>
+        </button>
+        <button type="button" data-go="opengames" class="text-left rounded-[24px] bg-white hover:border-[#201C19] border border-[#EAE0D5] p-5 min-h-[128px] flex flex-col justify-between cursor-pointer active:scale-[0.99] transition">
+          <span class="flex items-center justify-between"><span class="text-[22px] font-[800] tracking-[-0.03em] leading-none">Find a game</span><span class="text-[22px]" aria-hidden="true">→</span></span>
+          <span><span class="block mono text-[11px] font-[700] opacity-70">Join or create a game</span><span id="homeGamesHint" class="block mono text-[12px] font-[700] mt-1"></span></span>
+        </button>
+      </div>
+
+      <div class="mt-5">
+        <div class="mono text-[10px] uppercase tracking-widest opacity-50 mb-2">Also here</div>
+        <div id="homeTiles" class="grid grid-cols-1 sm:grid-cols-2 gap-2"></div>
+      </div>
+    </div>
+  </section>
+
   <!-- VIEW: BOOK -->
-  <section id="view-book" class="view" data-mp-panel="book">
+  <section id="view-book" class="view hidden" data-mp-panel="book">
     <!-- Mobile Segment Switcher (< lg breakpoint only) -->
     <div class="lg:hidden flex p-1.5 rounded-full bg-[#F1E9DF] border border-[#EAE0D5] mb-4">
       <button id="mobTabSchedule" class="flex-1 py-2 rounded-full text-[13px] font-[700] bg-[#201C19] text-white shadow-xs transition">Today's Schedule</button>
@@ -1703,7 +1750,14 @@
       </div>
     </div>
 
-    <div class="mt-10 pt-6 border-t border-white/10 flex flex-col md:flex-row items-center justify-between gap-3">
+    <nav id="footLinks" aria-label="More" class="mt-10 pt-6 border-t border-white/10 flex flex-wrap items-center gap-x-6 gap-y-2.5 mono text-[12px]">
+      <button type="button" data-go="payment" class="underline-offset-4 hover:underline opacity-80 hover:opacity-100 cursor-pointer">How to Pay</button>
+      <button type="button" data-go="bookings" class="staff-link underline-offset-4 hover:underline opacity-80 hover:opacity-100 cursor-pointer">Bookings <span id="footBookingsBadge" class="ml-0.5 px-1.5 py-0.5 rounded-full bg-white/15 text-[10px]">0</span></button>
+      <button type="button" data-go="queue" class="staff-link underline-offset-4 hover:underline opacity-80 hover:opacity-100 cursor-pointer">Queue</button>
+      <button type="button" data-go="stats" class="staff-link underline-offset-4 hover:underline opacity-80 hover:opacity-100 cursor-pointer">Match Stats</button>
+      <button type="button" data-go="admin" class="staff-link underline-offset-4 hover:underline opacity-80 hover:opacity-100 cursor-pointer">Admin</button>
+    </nav>
+    <div class="mt-6 pt-6 border-t border-white/10 flex flex-col md:flex-row items-center justify-between gap-3">
       <div class="mono text-[10px] opacity-45">© <span id="footYear"></span> <span id="footCopyName">Pickleball Court Booking</span>. All rights reserved.</div>
       <div class="mono text-[10px] opacity-45">Reservations held Pending until payment verified.</div>
     </div>
@@ -3270,12 +3324,16 @@ function updateStaffNote(){
 updateStaffNote();
 
 /* ---------- Nav & Public Portal vs Admin Access ---------- */
-const views = {book:document.getElementById('view-book'), queue:document.getElementById('view-queue'), stats:document.getElementById('view-stats'), opengames:document.getElementById('view-opengames'), bookings:document.getElementById('view-bookings'), payment:document.getElementById('view-payment'), admin:document.getElementById('view-admin')};
+const views = {home:document.getElementById('view-home'), book:document.getElementById('view-book'), queue:document.getElementById('view-queue'), stats:document.getElementById('view-stats'), opengames:document.getElementById('view-opengames'), bookings:document.getElementById('view-bookings'), payment:document.getElementById('view-payment'), admin:document.getElementById('view-admin')};
 let adminUnlocked = sessionStorage.getItem(LS.adminUnlocked) === 'true';
 
 function updateAdminTabsVisibility(){
+  document.body.classList.toggle('staff-mode', adminUnlocked);
+  if(typeof syncFlowBar === 'function') syncFlowBar(document.body.dataset.route || 'home');
   const badge = document.getElementById('hdrBookingsBadge');
   if(badge) badge.textContent = bookings.length;
+  const footBadge = document.getElementById('footBookingsBadge');
+  if(footBadge) footBadge.textContent = bookings.length;
 
   const adminTabs = document.querySelectorAll('.admin-only-tab');
   const toggleBtn = document.getElementById('headerAdminToggle');
@@ -3306,9 +3364,9 @@ function updateAdminTabsVisibility(){
 
     // If currently viewing admin or bookings tab, redirect to book tab
     const activeBtn = document.querySelector('.nav-btn.active');
-    if(activeBtn && (activeBtn.dataset.nav === 'bookings' || activeBtn.dataset.nav === 'admin')){
-      const bookBtn = document.querySelector('.nav-btn[data-nav="book"]');
-      if(bookBtn) bookBtn.click();
+    if(activeBtn && STAFF_ONLY_VIEWS.includes(activeBtn.dataset.nav)){
+      const homeBtn = document.querySelector('.nav-btn[data-nav="home"]');
+      if(homeBtn) homeBtn.click();
     }
 
     const lock = document.getElementById('adminLock');
@@ -3322,9 +3380,15 @@ document.querySelectorAll('.nav-btn').forEach(btn=>{
   btn.addEventListener('click', ()=>{
     const id=btn.dataset.nav;
     // Protect admin-only tabs if not unlocked
-    if((id==='bookings' || id==='admin') && !adminUnlocked){
+    if(STAFF_ONLY_VIEWS.includes(id) && !adminUnlocked){
       document.getElementById('adminLoginModal').classList.remove('hidden');
       setTimeout(()=> document.getElementById('modalPinInput').focus(), 50);
+      if(_navFromPop){
+        // A link or Back/Forward landed on a staff-only page: show Home and keep the URL honest.
+        try { history.replaceState(null, '', location.pathname + location.search); } catch(e){}
+        _navFromPop = false;
+        routeTo('home');
+      }
       return;
     }
     Object.values(views).forEach(v=>{
@@ -3340,6 +3404,7 @@ document.querySelectorAll('.nav-btn').forEach(btn=>{
     // Re-initialize motion primitives for the new view
     if(typeof MP !== 'undefined') MP.observeNew();
     if(id==='bookings') renderBookingsList();
+    if(id==='home') renderHome();
     if(id==='book') renderSchedule();
     if(id==='queue') renderQueueModule();
     if(id==='stats') renderStatsView();
@@ -3350,9 +3415,147 @@ document.querySelectorAll('.nav-btn').forEach(btn=>{
       renderAdminCourts();
       populateCourtSelectors();
     }
+    syncRoute(id);
     window.scrollTo({top: 0, behavior: 'smooth'});
   });
 });
+
+/* ---------- Player Home + routing ----------
+   After picking a facility, players land on Home: two big actions (Book the
+   court / Find a game) and a few small tiles. Book, Find a Game and Payment
+   are "flows" that show a Back-to-Home bar; Queue, Stats, Bookings and Admin
+   belong to staff and only appear once the Staff PIN has been entered. Each
+   route is a URL hash so the phone's Back button and shared links work. */
+const STAFF_ONLY_VIEWS = ['queue', 'stats', 'bookings', 'admin'];
+const FLOW_TITLES = { book: 'Book the court', opengames: 'Find a game', payment: 'How to Pay', queue: 'Queue & scoreboard', stats: 'Match stats', bookings: 'Bookings', admin: 'Admin' };
+let _navFromPop = false;
+let HOME_TOURNAMENTS = [];
+
+function syncFlowBar(id){
+  const bar = document.getElementById('flowBar');
+  const inFlow = !!FLOW_TITLES[id];
+  if(bar){
+    bar.classList.toggle('hidden', !inFlow);
+    if(inFlow) document.getElementById('flowTitle').textContent = FLOW_TITLES[id];
+  }
+}
+function syncRoute(id){
+  document.body.dataset.route = id;
+  syncFlowBar(id);
+  if(!_navFromPop){
+    const h = id === 'home' ? '' : '#' + id;
+    if(location.hash !== h && !(id === 'home' && !location.hash)){
+      try { history.pushState({ nav: id }, '', h || (location.pathname + location.search)); } catch(e){}
+    }
+  }
+}
+function routeTo(id, fromPop){
+  const btn = document.querySelector(`.nav-btn[data-nav="${id}"]`) || document.querySelector('.nav-btn[data-nav="home"]');
+  if(!btn) return;
+  _navFromPop = !!fromPop;
+  try { btn.click(); } finally { _navFromPop = false; }
+}
+window.addEventListener('popstate', () => routeTo((location.hash || '#home').slice(1), true));
+document.getElementById('flowBackBtn').addEventListener('click', () => routeTo('home'));
+['brandLogo', 'brandName'].forEach(id => { const el = document.getElementById(id); if(el){ el.style.cursor = 'pointer'; el.addEventListener('click', () => routeTo('home')); } });
+document.addEventListener('click', (e) => {
+  const go = e.target.closest && e.target.closest('[data-go]');
+  if(go) routeTo(go.dataset.go);
+});
+
+/* Soonest hour still free today on any court, using the same rules the
+   schedule list applies (staff blocks, open play, existing bookings). */
+function nextOpenSlotToday(){
+  const dateISO = todayISO();
+  const now = new Date();
+  const from = Math.ceil(now.getHours() + now.getMinutes() / 60 - 0.0001);
+  const ops = getOpenPlayForDate(dateISO), bks = getBookingsForDate(dateISO);
+  let best = null;
+  getActiveCourts().forEach(c => {
+    const hrs = getEffectiveHours(c.id);
+    for(let h = Math.max(hrs.bookStart, from); h < hrs.close; h++){
+      if(isStaffBlocked(dateISO, h, h + 1, c.id)) continue;
+      if(ops.some(op => (!op.court || op.court === c.id) && h < op.end && h + 1 > op.start)) continue;
+      if(bks.some(b => b.status !== 'OpenPlay' && (!b.court || b.court === c.id) && h < b.end && h + 1 > b.start)) continue;
+      if(best === null || h < best) best = h;
+      break;
+    }
+  });
+  return best;
+}
+
+function renderHomeHints(){
+  const bookHint = document.getElementById('homeBookHint');
+  const gamesHint = document.getElementById('homeGamesHint');
+  if(!bookHint || !gamesHint) return;
+  try {
+    const slot = nextOpenSlotToday();
+    bookHint.textContent = slot !== null ? `Next open: ${fmtTime(slot)} today` : 'See open times';
+  } catch(e){ bookHint.textContent = 'See open times'; }
+  try {
+    const n = ogOpenNeedingMe().length;
+    gamesHint.textContent = n ? `${n} game${n === 1 ? '' : 's'} need${n === 1 ? 's' : ''} players` : 'Start one or join in';
+  } catch(e){ gamesHint.textContent = 'Start one or join in'; }
+  const dot = document.getElementById('homeOpenDot'), txt = document.getElementById('homeOpenText');
+  if(dot && txt){
+    const now = new Date(), h = now.getHours() + now.getMinutes() / 60;
+    const open = (h >= SCHED.queueStart && h < SCHED.queueEnd) || (h >= SCHED.bookStart && h < SCHED.close);
+    dot.style.background = open ? '#4ADE80' : '#F87171';
+    txt.textContent = open ? 'Court open now' : `Closed • Opens ${fmtTime(h < SCHED.queueStart ? SCHED.queueStart : SCHED.bookStart)}`;
+  }
+}
+
+function renderHomeTiles(){
+  const wrap = document.getElementById('homeTiles');
+  if(!wrap) return;
+  const tile = (attrs, title, sub) => `<${attrs.href ? 'a' : 'button type="button"'} ${attrs.href ? `href="${attrs.href}"` : `data-go="${attrs.go}"`} class="text-left rounded-[18px] bg-white border border-[#EAE0D5] hover:border-[#201C19] px-4 py-3.5 flex items-center justify-between gap-3 cursor-pointer transition"><span class="min-w-0"><span class="block text-[14px] font-[800] tracking-[-0.01em] truncate">${title}</span><span class="block mono text-[10.5px] opacity-60 mt-0.5 truncate">${sub}</span></span><span class="opacity-40 shrink-0" aria-hidden="true">→</span></${attrs.href ? 'a' : 'button'}>`;
+  const tiles = [];
+  HOME_TOURNAMENTS.forEach(t => {
+    tiles.push(tile({ href: `tournament.html?client=${encodeURIComponent(currentClientId)}&t=${encodeURIComponent(t.id)}#my` }, escapeHtml(t.name || 'Tournament'), t.status === 'live' ? 'Live now · your matches and alerts' : 'Schedule, brackets and your matches'));
+  });
+  const phone = CLIENT && CLIENT.contact && CLIENT.contact.phone;
+  if(phone) tiles.push(tile({ href: 'tel:' + escapeHtml(phone.replace(/[^\d+]/g, '')) }, 'Call the facility', escapeHtml(phone)));
+  wrap.innerHTML = tiles.join('');
+}
+
+async function loadHomeTournaments(){
+  if(!db || !currentClientId) return;
+  try {
+    const snap = await db.collection(`clients/${currentClientId}/tournaments`).where('status', 'in', ['published', 'live']).get();
+    const today = todayISO();
+    HOME_TOURNAMENTS = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+      .filter(t => !t.endDate || t.endDate >= today)
+      .sort((a, b) => String(a.startDate || '').localeCompare(String(b.startDate || '')))
+      .slice(0, 2);
+    renderHomeTiles();
+  } catch(e){ /* tournaments are optional; Home works without them */ }
+}
+
+function renderHome(){
+  const b = (typeof CLIENT !== 'undefined' && CLIENT.business) || {};
+  const name = document.getElementById('homeName');
+  if(name) name.textContent = b.name ? titleCase(b.name) : 'Welcome';
+  const sub = document.getElementById('homeSub'); if(sub) sub.textContent = b.sub || '';
+  const loc = document.getElementById('homeLocation'); if(loc) loc.textContent = b.location ? '📍 ' + b.location : '';
+  renderHomeHints();
+  renderHomeTiles();
+}
+
+/* Keep Home's live hints current without touching the code that changes bookings/games. */
+(function hookHome(){
+  const wrap = (fnName) => {
+    const orig = window[fnName];
+    if(typeof orig !== 'function') return;
+    window[fnName] = function(){ const r = orig.apply(this, arguments); try { renderHomeHints(); } catch(e){} return r; };
+  };
+  wrap('ogUpdateNeedBadge');
+  wrap('renderSchedule');
+  const origBrand = window.applyBranding;
+  if(typeof origBrand === 'function') window.applyBranding = function(){ const r = origBrand.apply(this, arguments); try { renderHome(); } catch(e){} return r; };
+  document.body.dataset.route = 'home';
+  setInterval(() => { if(document.body.dataset.route === 'home' && !document.hidden) renderHomeHints(); }, 60000);
+})();
+
 
 /* Staff / Admin Lock Header Button (desktop + mobile) */
 function handleAdminToggleClick(){
@@ -8004,6 +8207,8 @@ async function initializeApp() {
 }
 
 initializeApp();
+loadHomeTournaments();
+if(location.hash && location.hash !== '#home') setTimeout(() => routeTo(location.hash.slice(1), true), 350);
 
 // Re-render schedule on window resize to switch between multi-column (desktop) and tabs (mobile)
 let _resizeTimer;
@@ -8157,6 +8362,7 @@ document.getElementById('modalGoUpload')?.addEventListener('click', () => {
     // Wait for nav to be ready, then click the right tab
     const tryClick = () => {
       const btn = document.querySelector(`.nav-btn[data-nav="${tabParam}"]`);
+      if (btn && STAFF_ONLY_VIEWS.includes(tabParam) && !adminUnlocked) return;
       if (btn) btn.click();
       else setTimeout(tryClick, 200);
     };

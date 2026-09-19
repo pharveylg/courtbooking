@@ -103,38 +103,8 @@
           </label>
 
           <div class="md:col-span-2 mt-2 pt-4 border-t border-dashed border-[#EAE0D5]">
-            <div class="mono text-[10px] uppercase tracking-widest opacity-60 mb-2">Premium Pricing (₱ PHP -- charged to this club, settled the same way Store/Booking billing is)</div>
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <label class="flex flex-col gap-1.5">
-                <span class="mono text-[10px] uppercase tracking-widest opacity-50">Base Fee</span>
-                <input id="tfBaseFee" type="number" min="0" step="0.01" value="5000" class="h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-4 mono text-[12px] outline-none focus:border-[#201C19]"/>
-              </label>
-              <label class="flex flex-col gap-1.5">
-                <span class="mono text-[10px] uppercase tracking-widest opacity-50">Per Participant</span>
-                <input id="tfPerParticipantFee" type="number" min="0" step="0.01" value="250" class="h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-4 mono text-[12px] outline-none focus:border-[#201C19]"/>
-              </label>
-              <label class="flex flex-col gap-1.5">
-                <span class="mono text-[10px] uppercase tracking-widest opacity-50">Per Day</span>
-                <input id="tfPerDayFee" type="number" min="0" step="0.01" value="2000" class="h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-4 mono text-[12px] outline-none focus:border-[#201C19]"/>
-              </label>
-            </div>
-            <label class="flex flex-col gap-1.5 mt-3 max-w-[240px]">
-              <span class="mono text-[10px] uppercase tracking-widest opacity-50">Expected Participants (for this preview only)</span>
-              <input id="tfExpectedParticipants" type="number" min="0" step="1" value="0" class="h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-4 mono text-[12px] outline-none focus:border-[#201C19]"/>
-            </label>
-
-            <div class="mt-4 rounded-[16px] bg-[#F1E9DF] p-4">
-              <div id="pricingBreakdown" class="mono text-[11px] leading-[1.8] opacity-70"></div>
-              <div class="flex items-center justify-between mt-2 pt-2 border-t border-[#E4D8C6]">
-                <span class="mono text-[10px] uppercase tracking-widest opacity-60">Total Before Publish</span>
-                <span id="pricingTotal" class="text-[20px] font-[800]">₱0.00</span>
-              </div>
-            </div>
-          </div>
-
-          <div class="md:col-span-2 mt-2 pt-4 border-t border-dashed border-[#EAE0D5]">
-            <div class="mono text-[10px] uppercase tracking-widest opacity-60 mb-1">Tournament Finances (₱ PHP -- your own budget, separate from the premium pricing above)</div>
-            <p class="mono text-[9.5px] opacity-45 mb-2">Entry fees are set per division (below). This is the tenant's own event budget, not a platform charge.</p>
+            <div class="mono text-[10px] uppercase tracking-widest opacity-60 mb-1">Tournament Finances (₱ PHP -- your own budget)</div>
+            <p class="mono text-[9.5px] opacity-45 mb-2">Entry fees are set per division (below). This is your own event budget.</p>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-3 max-w-[480px]">
               <label class="flex flex-col gap-1.5">
                 <span class="mono text-[10px] uppercase tracking-widest opacity-50">Admin/Officiating Fee</span>
@@ -364,7 +334,7 @@
 
       <div id="financialsWrap" class="hidden mt-5 rounded-[24px] bg-white border border-[#EAE0D5] p-5 md:p-6">
         <h3 class="text-[16px] font-[800] tracking-[-0.02em] mb-1">Tournament Financials</h3>
-        <p class="mono text-[10px] opacity-50 mb-3">Your own event budget -- entry fees collected from players, minus admin/officiating costs and the prize pool. Separate from the platform's premium pricing above.</p>
+        <p class="mono text-[10px] opacity-50 mb-3">Your own event budget -- entry fees collected from players, minus admin/officiating costs and the prize pool.</p>
         <div id="financialsSummary" class="grid grid-cols-2 md:grid-cols-4 gap-3"></div>
       </div>
 
@@ -652,33 +622,6 @@ function renderTournamentList(){
 }
 document.getElementById('newTournamentBtn').addEventListener('click', () => openTournament(null));
 
-function daysBetween(startISO, endISO){
-  if(!startISO || !endISO) return 1;
-  const start = new Date(startISO + 'T00:00:00');
-  const end = new Date(endISO + 'T00:00:00');
-  const diff = Math.round((end - start) / 86400000);
-  return Math.max(1, diff + 1);
-}
-function recomputePricing(){
-  const base = parseFloat(document.getElementById('tfBaseFee').value) || 0;
-  const perParticipant = parseFloat(document.getElementById('tfPerParticipantFee').value) || 0;
-  const perDay = parseFloat(document.getElementById('tfPerDayFee').value) || 0;
-  const expected = parseInt(document.getElementById('tfExpectedParticipants').value) || 0;
-  const days = daysBetween(document.getElementById('tfStartDate').value, document.getElementById('tfEndDate').value);
-  const participantTotal = expected * perParticipant;
-  const dayTotal = days * perDay;
-  const total = base + participantTotal + dayTotal;
-  document.getElementById('pricingBreakdown').innerHTML = `
-    <div class="flex justify-between"><span>Base fee</span><span>${fmtMoney(base)}</span></div>
-    <div class="flex justify-between"><span>${expected} participants × ${fmtMoney(perParticipant)}</span><span>${fmtMoney(participantTotal)}</span></div>
-    <div class="flex justify-between"><span>${days} day${days===1?'':'s'} × ${fmtMoney(perDay)}</span><span>${fmtMoney(dayTotal)}</span></div>
-  `;
-  document.getElementById('pricingTotal').textContent = fmtMoney(total);
-  return { baseFee: base, perParticipantFee: perParticipant, perDayFee: perDay, expectedParticipants: expected, computedTotal: total };
-}
-['tfBaseFee','tfPerParticipantFee','tfPerDayFee','tfExpectedParticipants','tfStartDate','tfEndDate'].forEach(id => {
-  document.getElementById(id).addEventListener('input', recomputePricing);
-});
 document.getElementById('tfEventType').addEventListener('change', (e) => {
   document.getElementById('tfDualWrap').classList.toggle('hidden', e.target.value !== 'dual');
 });
@@ -708,13 +651,8 @@ async function openTournament(tournamentId){
   if(!tournamentId){
     document.getElementById('detailTitle').textContent = 'New Tournament';
     document.getElementById('detailStatusBadge').innerHTML = '';
-    document.getElementById('tfBaseFee').value = 5000;
-    document.getElementById('tfPerParticipantFee').value = 250;
-    document.getElementById('tfPerDayFee').value = 2000;
-    document.getElementById('tfExpectedParticipants').value = 0;
     document.getElementById('tfAdminFee').value = 0;
     document.getElementById('tfPrizePool').value = 0;
-    recomputePricing();
     return;
   }
 
@@ -729,14 +667,8 @@ async function openTournament(tournamentId){
   document.getElementById('tfDualWrap').classList.toggle('hidden', t.eventType !== 'dual');
   document.getElementById('tfStartDate').value = t.startDate || '';
   document.getElementById('tfEndDate').value = t.endDate || '';
-  const p = t.pricing || {};
-  document.getElementById('tfBaseFee').value = p.baseFee ?? 5000;
-  document.getElementById('tfPerParticipantFee').value = p.perParticipantFee ?? 250;
-  document.getElementById('tfPerDayFee').value = p.perDayFee ?? 2000;
-  document.getElementById('tfExpectedParticipants').value = p.expectedParticipants ?? 0;
   document.getElementById('tfAdminFee').value = t.adminFee ?? 0;
   document.getElementById('tfPrizePool').value = t.prizePool ?? 0;
-  recomputePricing();
 
   document.getElementById('divisionsWrap').classList.remove('hidden');
   document.getElementById('registrationWrap').classList.remove('hidden');
@@ -775,7 +707,6 @@ document.getElementById('tournamentForm').addEventListener('submit', async (e) =
   const startDate = document.getElementById('tfStartDate').value;
   const endDate = document.getElementById('tfEndDate').value || startDate;
   if(endDate < startDate){ toast('End date is before start date'); return; }
-  const pricing = recomputePricing();
   const eventType = document.getElementById('tfEventType').value;
   const payload = {
     name,
@@ -783,7 +714,6 @@ document.getElementById('tournamentForm').addEventListener('submit', async (e) =
     venue: document.getElementById('tfVenue').value.trim(),
     otherClubsText: eventType === 'dual' ? document.getElementById('tfOtherClubs').value.trim() : '',
     startDate, endDate,
-    pricing,
     adminFee: parseFloat(document.getElementById('tfAdminFee').value) || 0,
     prizePool: parseFloat(document.getElementById('tfPrizePool').value) || 0,
   };

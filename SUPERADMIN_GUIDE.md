@@ -131,6 +131,24 @@ any pre-verified state → overdue / waived / cancelled (with reason, audited)
 
 A payer reporting payment **never** verifies anything — verification is always a human action here. Since Phase B1, tenants can report payment themselves from the **billing portal** (`billing.html?client=<slug>`, same Admin PIN as the booking page): they pick the invoice, enter method/reference/amount, optionally attach proof, and the claim lands in this console's **Verification Queue** as a pending submission. From the queue you either **Verify & Apply** (records an attributed payment, marks the invoice verified or partially paid) or **Reject** (records your reason — the tenant sees it in their portal). Every invoice card also lists its payer submissions under "Payer submissions". The manual buttons (Record Verified Payment / Mark Submitted) still work for payments reported out-of-band. Payment instructions come from Plans & Pricing → Platform Payment Instructions (`platformSettings/billing`). Tenants with nothing to bill (zero formula, no live add-ons) are skipped and reported.
 
+### 3.6 Tournament fees
+
+Tournament fees are set **only here**, per tenant, on the Tenants tab under the club's *Pickle Court Tournaments* card (needs `manage_plans`). Clubs never see or edit them; the only fee a club sets is the entry fee on each of its divisions.
+
+| Rate | Charged |
+|---|---|
+| Per tournament | once for each tournament |
+| Per day | each tournament day (the scheduled days, else the start–end dates) |
+| Per division | each division that has players |
+| Per player | each unique player beyond the free allowance |
+| Free players | players per tournament before the per-player fee starts |
+
+Any rate left at 0 is not charged, and every club starts at 0, so nothing is billed until you set rates. This is separate from the plan's monthly Tournament add-on fee, which is unchanged.
+
+How a charge is built: a tournament shows as an **Estimate** while it runs. Once it ends (the day after its last day, or when marked completed) it is **finalized** into that month's draft invoice as one itemized line, and a final charge is never recalculated, so later rate changes cannot alter it. A tournament cancelled after publishing is charged the per-tournament fee only; one cancelled before publishing, or still a draft, costs nothing. Charges are refreshed daily at 3 AM Manila time, and **Recalculate charges** does it on demand.
+
+To not charge a tournament, use **Waive** on its charge, or **Set amount** to adjust it. A reason is required and is written to the audit log with your email. **Clear override** restores the computed amount. Changing a charge whose invoice was already issued does not alter that invoice, so record it as an invoice adjustment as well.
+
 ## 4. Provisioning a New Tenant
 
 Go to **Provision Tenant**. Fields:

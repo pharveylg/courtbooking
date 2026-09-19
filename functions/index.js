@@ -40,6 +40,7 @@ const poolPlanner = require('./engines/poolPlanner');
 const scheduler = require('./engines/scheduler');
 const notifier = require('./engines/notifier');
 const notifyRunner = require('./notifyRunner');
+const tournamentCharges = require('./tournamentCharges');
 
 const ADVANCE_PER_GROUP = 2; // legacy divisions generated before poolPlanner (no bracketMeta.advancePlan)
 
@@ -1029,4 +1030,53 @@ exports.tournamentNotifier = onSchedule({
 }, async () => {
   const result = await notifyRunner.runNotifier({ db, send: makePushSender(), log: (m) => console.warn('[notify]', m) });
   if (result.sent || result.errors) console.log('[notify] run', JSON.stringify(result));
+});
+
+/* ================================================================
+   PLATFORM TOURNAMENT CHARGES
+   What a tenant owes the platform for tournaments. Rates are set by the
+   superadmin (platformTenants.billing.tournament); charges are computed here
+   from real data, finalized when a tournament ends, and read by the console
+   and the invoice generator. Tenants never see or write any of it.
+   These are the first callables in this file that check WHO is calling: the
+   caller must hold a platform permission (custom claim) -- see the rules
+   header in firestore.rules for the permission vocabulary.
+   ================================================================ */
+function assertPlatformPerm(request, perms) {
+  const tok = request.auth && request.auth.token;
+  if (!tok) throw new HttpsError('unauthenticated', 'Sign in as platform staff.');
+  const ok = tok.superadmin === true || (Array.isArray(tok.platformPerms) && perms.some((p) => tok.platformPerms.includes(p)));
+  if (!ok) throw new HttpsError('permission-denied', `Needs one of: ${perms.join(', ')}.`);
+  return tok;
+}
+
+exports.syncTournamentCharges = onCall({ region: REGION }, async (request) => {
+  assertPlatformPerm(request, ['manage_plans', 'view_platform_billing', 'verify_platform_payment', 'manage_entitlements']);
+  const { tenantId } = request.data || {};
+  if (tenantId != null) {
+    assertValidTenantId(tenantId);
+    return tournamentCharges.syncTenant({ db, slug: tenantId, nowMs: Date.now() });
+  }
+  return tournamentCharges.syncAll({ db, nowMs: Date.now() });
+});
+
+exports.setTournamentChargeOverride = onCall({ region: REGION }, async (request) => {
+  const tok = assertPlatformPerm(request, ['verify_platform_payment', 'issue_platform_credit', 'manage_plans']);
+  const { tenantId, tournamentId, mode, amount, reason } = request.data || {};
+  assertValidTenantId(tenantId);
+  requireString(tournamentId, 'tournamentId');
+  try {
+    return await tournamentCharges.setOverride({
+      db, tenantId, tournamentId, mode, amount, reason, actorEmail: tok.email || null,
+      stamp: () => admin.firestore.FieldValue.serverTimestamp(),
+    });
+  } catch (e) { throw asHttpsError(e); }
+});
+
+/* Keeps live estimates current and finalizes tournaments that have ended. */
+exports.tournamentChargesJob = onSchedule({
+  schedule: 'every day 03:00', timeZone: 'Asia/Manila', region: REGION, timeoutSeconds: 300, memory: '256MiB', retryCount: 0,
+}, async () => {
+  const r = await tournamentCharges.syncAll({ db, nowMs: Date.now() });
+  console.log('[charges] daily sync', JSON.stringify(r));
 });

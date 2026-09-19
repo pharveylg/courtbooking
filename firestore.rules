@@ -445,6 +445,17 @@ service cloud.firestore {
       }
     }
 
+    // What a tenant owes the platform for a tournament (rate card is set by
+    // the superadmin on platformTenants.billing.tournament). Written only by
+    // the Cloud Functions (sync job + override callable), read by the
+    // console and the invoice generator. Never readable by tenants.
+    match /platformTournamentCharges/{chargeId} {
+      allow get, list: if platformPerm('view_platform_billing')
+                       || platformPerm('verify_platform_payment')
+                       || platformPerm('manage_plans');
+      allow write: if false;
+    }
+
     // Tournaments the alert job scans -- server-only.
     match /platformLiveTournaments/{document} {
       allow read, write: if false;

@@ -9,6 +9,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-storage-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-functions-compat.js"></script>
 <script src="firebase-config.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -429,6 +430,7 @@ body{background:#FFFBF5;color:#201C19}
 const fbApp = firebase.initializeApp(window.FIREBASE_CONFIG);
 const auth = firebase.auth();
 const db = firebase.firestore();
+const fns = { httpsCallable: (name) => firebase.app().functions('asia-southeast1').httpsCallable(name) }; // callables that check who is calling (tournament charges); built lazily
 const fbStorage = firebase.storage();
 
 function toast(msg){
@@ -930,6 +932,8 @@ function invoiceTotals(inv){
    1 = last month, ...) -- historical drafts walk the full month. */
 async function generateDraftInvoices(periodOffset = 0){
   requirePerm('verify_platform_payment');
+  try { await fns.httpsCallable('syncTournamentCharges')({}); } // finalize tournaments that have ended
+  catch(ex) { console.warn('[Invoices] tournament charge sync failed, using existing charges:', ex.message); }
   const offset = Number(periodOffset) || 0;
   if(offset < 0){ toast('Cannot generate invoices for a future period'); return; }
   const period = usagePeriod(offset);
@@ -954,12 +958,18 @@ async function generateDraftInvoices(periodOffset = 0){
       const overage = Math.max(0, confirmed - included);
       const staffCharge = staffHours * (rate / 2);
       const ents = ENT_STATE[slug] || {};
+      let tournamentLines = [];
+      try {
+        const cs = await db.collection('platformTournamentCharges').where('tenantId', '==', slug).where('period', '==', period).get();
+        tournamentLines = cs.docs.map(d => ({ id: d.id, ...d.data() })).filter(c => c.status === 'final' && Number(c.effectiveTotal) > 0).map(chargeInvoiceLine);
+      } catch(ex) { console.warn('[Invoices] tournament charges unavailable for', slug, ex.message); }
       const lines = [
         { sourceType: 'subscription', sourceId: plan ? plan.id : 'manual-formula', description: plan ? `Base subscription — ${plan.name} (v${plan.pricingVersion || 'n/a'})` : 'Base fee (manual billing formula)', qty: 1, unitAmount: baseFee, amount: baseFee },
         ...(overage > 0 ? [{ sourceType: 'usage_event', sourceId: 'booking_confirmed_overage', description: `Confirmed bookings over included allowance (${confirmed} − ${included})`, qty: overage, unitAmount: rate, amount: overage * rate }] : []),
         ...(staffCharge > 0 ? [{ sourceType: 'usage_event', sourceId: 'staff_reserve_hours', description: 'Staff-reserved hours (MTD), billed at half the per-booking rate', qty: staffHours, unitAmount: rate / 2, amount: staffCharge }] : []),
         ...PRODUCT_KEYS.filter(k => k !== 'booking' && isEntOnline(ents[k]) && plan && Number((plan.addonFees || {})[k]) > 0)
           .map(k => ({ sourceType: 'entitlement', sourceId: k, description: `${PRODUCTS[k].label} add-on — monthly (v${plan.pricingVersion || 'n/a'})`, qty: 1, unitAmount: Number(plan.addonFees[k]) || 0, amount: Number(plan.addonFees[k]) || 0 })),
+        ...tournamentLines,
       ];
       const subtotal = lines.reduce((s, l) => s + (Number(l.amount) || 0), 0);
       if(subtotal <= 0 && !lines.some(l => l.amount > 0)){ skippedNoCharge++; skippedList.push(t.businessName || slug); continue; }
@@ -2476,10 +2486,12 @@ async function loadDeepDive(){
     let platformTournamentFees = 0;
     const drawCategoryCounts = {};
     let tournamentParticipants = new Set();
+    const chargeByTid = {};
+    try { (await db.collection('platformTournamentCharges').where('tenantId', '==', slug).get()).forEach(d => { chargeByTid[d.data().tournamentId] = d.data(); }); } catch(e) { /* needs a billing permission */ }
     for(const tt of tournamentsInRange){
       adminFees += tt.adminFee || 0;
       prizePools += tt.prizePool || 0;
-      platformTournamentFees += (tt.pricing && tt.pricing.computedTotal) || 0;
+      platformTournamentFees += chargeByTid[tt.id] ? (Number(chargeByTid[tt.id].effectiveTotal) || 0) : 0;
       const [divsSnap, regsSnap] = await Promise.all([
         db.collection(`clients/${slug}/tournaments/${tt.id}/divisions`).get(),
         db.collection(`clients/${slug}/tournaments/${tt.id}/registrations`).get(),
@@ -2692,7 +2704,7 @@ function renderDeepDive(d){
     </div>
     <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mono text-[11px]">
       <div><div class="opacity-50 text-[9.5px] uppercase tracking-widest mb-0.5">Booking Charge</div><div class="font-[700]">${fmtMoneySA(d.platformBookingCharge)}</div></div>
-      <div><div class="opacity-50 text-[9.5px] uppercase tracking-widest mb-0.5">Tournament Premium Fees</div><div class="font-[700]">${fmtMoneySA(d.platformTournamentFees)}</div></div>
+      <div><div class="opacity-50 text-[9.5px] uppercase tracking-widest mb-0.5">Tournament Fees (platform)</div><div class="font-[700]">${fmtMoneySA(d.platformTournamentFees)}</div></div>
       <div><div class="opacity-50 text-[9.5px] uppercase tracking-widest mb-0.5">Store (not metered yet)</div><div class="font-[700] opacity-40">--</div></div>
       <div><div class="opacity-50 text-[9.5px] uppercase tracking-widest mb-0.5">Prepaid Balance Applied</div><div class="font-[700]">-${fmtMoneySA(Math.max(0,balance))}</div></div>
     </div>
@@ -3030,7 +3042,7 @@ function renderTenantRow(slug, data, status, isVisible){
     };
     try {
       await db.doc(`platformTenants/${slug}`).set({ billing }, { merge: true });
-      data.billing = billing;
+      data.billing = { ...(data.billing || {}), ...billing };
       await logAudit('billing-change', slug, `${data.businessName || slug} billing -> base ${billing.baseFee}, free ${billing.freeBookings}, rate ${billing.perBookingRate}`);
       toast(`Billing formula saved for ${data.businessName || slug}`);
     } catch(ex) { toast('Failed: ' + ex.message); }
@@ -3435,6 +3447,117 @@ async function loadTournamentWidget(slug, data){
     wrap.innerHTML = `<div class="mono text-[11px] text-[#8C2C10]">Failed to load Tournament status: ${escapeHtml(ex.message)}</div>`;
   }
 }
+/* ---------- Tournament fees (platform) ----------
+   Rates live on platformTenants/{slug}.billing.tournament and are edited only
+   here. The Cloud Functions compute each tournament's charge from real usage,
+   freeze it when the tournament ends, and the invoice generator adds it to
+   that month's draft. Tenants never see any of this. */
+const TF_FIELDS = [
+  ['baseFee', 'Per tournament', 'Charged once for each tournament'],
+  ['perDayFee', 'Per day', 'Each tournament day'],
+  ['perDivisionFee', 'Per division', 'Divisions that have players'],
+  ['perParticipantFee', 'Per player', 'Unique players beyond the free allowance'],
+  ['freeParticipants', 'Free players', 'Players per tournament before the per-player fee starts'],
+];
+function tournamentFeesHtml(slug, data){
+  const rates = (data.billing && data.billing.tournament) || {};
+  const id = cssId(slug);
+  const inputCls = 'h-9 w-full rounded-full border border-[#EAE0D5] bg-white px-3 mono text-[12px] outline-none focus:border-[#201C19]';
+  return `
+    <div class="mt-3 pt-3 border-t border-[#FFD9A8]">
+      <div class="mono text-[10px] uppercase tracking-widest opacity-60">Tournament fees <span class="opacity-60 normal-case">(charged to this club and added to its invoice automatically; 0 = not charged)</span></div>
+      <div class="mt-2 grid grid-cols-2 md:grid-cols-5 gap-2">
+        ${TF_FIELDS.map(([key, label, hint]) => `
+          <label class="flex flex-col gap-1" title="${escapeHtml(hint)}">
+            <span class="mono text-[9px] uppercase tracking-widest opacity-60">${label}</span>
+            <input id="tf-${key}-${id}" type="number" min="0" step="${key === 'freeParticipants' ? '1' : '0.01'}" value="${Number(rates[key]) || 0}" class="${inputCls}"/>
+          </label>`).join('')}
+      </div>
+      <div class="mt-2 flex flex-wrap items-center gap-2">
+        <button type="button" data-tf-save="${slug}" class="h-9 px-4 rounded-full bg-[#201C19] text-white mono text-[10px] font-[700] cursor-pointer">Save tournament fees</button>
+        <button type="button" data-tf-sync="${slug}" class="h-9 px-3.5 rounded-full bg-white border border-[#EAE0D5] mono text-[10px] font-[700] cursor-pointer hover:border-[#201C19]">Recalculate charges</button>
+        <span class="mono text-[10px] opacity-50">Rates apply to charges not yet finalized; a finalized charge keeps the rates it was made with.</span>
+      </div>
+      <div id="tfCharges-${id}" class="mt-3"></div>
+    </div>`;
+}
+
+async function loadTournamentCharges(slug){
+  const box = document.getElementById(`tfCharges-${cssId(slug)}`);
+  if(!box) return;
+  try {
+    const snap = await db.collection('platformTournamentCharges').where('tenantId', '==', slug).get();
+    const rows = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (b.updatedAtMs || 0) - (a.updatedAtMs || 0));
+    if(!rows.length){ box.innerHTML = `<div class="mono text-[10.5px] opacity-50">No tournament charges yet. They appear once a tournament is published.</div>`; return; }
+    const total = rows.filter(r => r.status === 'final').reduce((s, r) => s + (Number(r.effectiveTotal) || 0), 0);
+    box.innerHTML = `
+      <div class="mono text-[10px] uppercase tracking-widest opacity-60 mb-1.5">Tournament charges <span class="opacity-60 normal-case">(final total ${fmtMoneySA(total)})</span></div>
+      <div class="space-y-1.5">${rows.map(r => {
+        const u = r.usage || {};
+        const ov = r.override;
+        const badge = r.status === 'final'
+          ? `<span class="mono text-[9px] uppercase tracking-widest font-[800] px-2 py-0.5 rounded-full bg-[#E8F5D8] text-[#3F7019]">Final · ${escapeHtml(r.period || '')}</span>`
+          : `<span class="mono text-[9px] uppercase tracking-widest font-[800] px-2 py-0.5 rounded-full bg-[#FFF0D6] text-[#8A5A00]">Estimate</span>`;
+        const amount = ov
+          ? `<span class="line-through opacity-50">${fmtMoneySA(r.computedTotal)}</span> <b>${fmtMoneySA(r.effectiveTotal)}</b> <span class="opacity-60">(${ov.mode === 'waive' ? 'waived' : 'adjusted'}: ${escapeHtml(ov.reason || '')})</span>`
+          : `<b>${fmtMoneySA(r.effectiveTotal)}</b>`;
+        return `<div class="p-2.5 rounded-[12px] bg-white border border-[#F1E9DF]">
+          <div class="flex items-center justify-between gap-2 flex-wrap">
+            <span class="font-[700] text-[12px]">${escapeHtml(r.tournamentName || r.tournamentId)}</span>${badge}
+          </div>
+          <div class="mono text-[10.5px] opacity-70 mt-1">${u.days || 0} day${u.days === 1 ? '' : 's'} · ${u.divisions || 0} division${u.divisions === 1 ? '' : 's'} · ${u.participants || 0} player${u.participants === 1 ? '' : 's'}${r.reason === 'cancelled_after_publish' ? ' · cancelled after publishing (base fee only)' : ''}</div>
+          <div class="mono text-[11px] mt-1">${amount}</div>
+          <div class="mt-1.5 flex flex-wrap gap-1.5">
+            <button type="button" data-tc-waive="${escapeHtml(r.tournamentId)}" class="h-7 px-2.5 rounded-full bg-white border border-[#EAE0D5] mono text-[10px] font-[700] cursor-pointer hover:border-[#201C19]">Waive</button>
+            <button type="button" data-tc-custom="${escapeHtml(r.tournamentId)}" class="h-7 px-2.5 rounded-full bg-white border border-[#EAE0D5] mono text-[10px] font-[700] cursor-pointer hover:border-[#201C19]">Set amount</button>
+            ${ov ? `<button type="button" data-tc-clear="${escapeHtml(r.tournamentId)}" class="h-7 px-2.5 rounded-full bg-white border border-[#EAE0D5] mono text-[10px] font-[700] cursor-pointer hover:border-[#201C19]">Clear override</button>` : ''}
+          </div></div>`;
+      }).join('')}</div>`;
+    box.querySelectorAll('[data-tc-waive]').forEach(b => b.addEventListener('click', () => overrideTournamentCharge(slug, b.dataset.tcWaive, 'waive', rows)));
+    box.querySelectorAll('[data-tc-custom]').forEach(b => b.addEventListener('click', () => overrideTournamentCharge(slug, b.dataset.tcCustom, 'custom', rows)));
+    box.querySelectorAll('[data-tc-clear]').forEach(b => b.addEventListener('click', () => overrideTournamentCharge(slug, b.dataset.tcClear, 'clear', rows)));
+  } catch(ex) {
+    box.innerHTML = `<div class="mono text-[10.5px] text-[#8C2C10]">Couldn't load tournament charges: ${escapeHtml(ex.message)}</div>`;
+  }
+}
+
+async function overrideTournamentCharge(slug, tournamentId, mode, rows){
+  try {
+    if(!(can('verify_platform_payment') || can('issue_platform_credit') || can('manage_plans'))) throw new Error('Not permitted to change charges');
+    const row = rows.find(r => r.tournamentId === tournamentId) || {};
+    let reason = '', amount;
+    if(mode !== 'clear'){
+      if(mode === 'custom'){
+        const raw = prompt(`New charge for "${row.tournamentName || tournamentId}" (currently ${fmtMoneySA(row.effectiveTotal)}). Enter 0 or more:`);
+        if(raw === null) return;
+        amount = Number(raw);
+        if(!Number.isFinite(amount) || amount < 0){ toast('Enter an amount of 0 or more'); return; }
+      }
+      reason = prompt(mode === 'waive' ? 'Reason for waiving this charge (kept in the audit log):' : 'Reason for the new amount (kept in the audit log):');
+      if(!reason || !reason.trim()) return;
+    }
+    if(row.status === 'final' && row.period){
+      const inv = await db.doc(`platformInvoices/${invoiceDocId(slug, row.period)}`).get();
+      if(inv.exists && inv.data().status && inv.data().status !== 'draft' &&
+         !confirm(`The ${row.period} invoice for this club has already been issued, so this change will not alter it. Record it as an invoice adjustment too. Continue?`)) return;
+    }
+    const res = await fns.httpsCallable('setTournamentChargeOverride')({ tenantId: slug, tournamentId, mode, amount, reason });
+    toast(`Charge is now ${fmtMoneySA(res.data.effectiveTotal)}`);
+    loadTournamentCharges(slug);
+  } catch(ex) { toast('Failed: ' + (ex.message || ex)); }
+}
+
+/* One tournament charge as an invoice line -- mirrors invoiceLine() in
+   functions/engines/tournamentBilling.js (a test keeps the two in step). */
+function chargeInvoiceLine(c){
+  const o = c.override;
+  const total = o && o.mode === 'waive' ? 0 : (o && o.mode === 'custom' && Number.isFinite(Number(o.amount)) && Number(o.amount) >= 0) ? Math.round(Number(o.amount) * 100) / 100 : Math.round((Number(c.computedTotal) || 0) * 100) / 100;
+  const usage = c.usage || {};
+  const bits = [`${usage.days || 0} day${usage.days === 1 ? '' : 's'}`, `${usage.divisions || 0} division${usage.divisions === 1 ? '' : 's'}`, `${usage.participants || 0} player${usage.participants === 1 ? '' : 's'}`];
+  const note = o && o.mode === 'custom' ? ' (adjusted)' : c.reason === 'cancelled_after_publish' ? ' (cancelled after publishing: base fee only)' : '';
+  return { sourceType: 'tournament', sourceId: c.id, description: `Tournament: ${c.tournamentName || c.tournamentId} — ${bits.join(', ')}${note}`, qty: 1, unitAmount: total, amount: total };
+}
+
 function renderTournamentWidget(slug, data, status){
   const wrap = document.getElementById(`tournamentWrap-${cssId(slug)}`);
   if(!wrap) return;
@@ -3460,7 +3583,30 @@ function renderTournamentWidget(slug, data, status){
     </div>
     ${tournamentEnabled ? `<a href="tournament-admin.html?client=${encodeURIComponent(slug)}" target="_blank" rel="noopener" class="inline-block mt-2 mono text-[10px] opacity-60 hover:opacity-100 underline">Open Tournaments ↗</a>` : ''}
     <div class="mt-2 mono text-[10px] opacity-50">${tournamentEnabled ? 'Uses the tenant\'s existing Admin PIN -- no separate PIN to manage here.' : 'Uses the tenant\'s existing Admin PIN once added -- no separate PIN to provision.'}</div>
+    ${tournamentEnabled ? tournamentFeesHtml(slug, data) : ''}
   `;
+
+  wrap.querySelector(`[data-tf-save="${cssAttr(slug)}"]`)?.addEventListener('click', async () => {
+    try {
+      requirePerm('manage_plans');
+      const num = (key) => parseFloat(document.getElementById(`tf-${key}-${cssId(slug)}`).value) || 0;
+      const rates = { baseFee: num('baseFee'), perDayFee: num('perDayFee'), perDivisionFee: num('perDivisionFee'), perParticipantFee: num('perParticipantFee'), freeParticipants: Math.floor(num('freeParticipants')) };
+      if(Object.values(rates).some(v => v < 0)){ toast('Fees cannot be negative'); return; }
+      await db.doc(`platformTenants/${slug}`).set({ billing: { tournament: rates } }, { merge: true });
+      data.billing = { ...(data.billing || {}), tournament: rates };
+      await logAudit('tournament-rates', slug, `${data.businessName || slug}: base ${rates.baseFee}, day ${rates.perDayFee}, division ${rates.perDivisionFee}, player ${rates.perParticipantFee}, free players ${rates.freeParticipants}`);
+      toast(`Tournament fees saved for ${data.businessName || slug}`);
+      try { await fns.httpsCallable('syncTournamentCharges')({ tenantId: slug }); } catch(e) { /* the daily job will catch up */ }
+      loadTournamentCharges(slug);
+    } catch(ex) { toast('Failed: ' + ex.message); }
+  });
+  wrap.querySelector(`[data-tf-sync="${cssAttr(slug)}"]`)?.addEventListener('click', async (e) => {
+    e.target.disabled = true;
+    try { await fns.httpsCallable('syncTournamentCharges')({ tenantId: slug }); toast('Charges recalculated'); loadTournamentCharges(slug); }
+    catch(ex) { toast('Failed: ' + (ex.message || ex)); }
+    e.target.disabled = false;
+  });
+  if(tournamentEnabled) loadTournamentCharges(slug);
 
   wrap.querySelector(`[data-tournament-add="${cssAttr(slug)}"]`)?.addEventListener('click', async (e) => {
     e.target.disabled = true;

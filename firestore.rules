@@ -431,6 +431,23 @@ service cloud.firestore {
         allow create: if isValidTenantId(clientId);
         allow update, delete: if false;
       }
+
+      // Match-alert plumbing, server-only (Admin SDK bypasses rules). pushSubs
+      // holds device push endpoints and keys, so it must never be readable.
+      match /tournaments/{tournamentId}/pushSubs/{document} {
+        allow read, write: if false;
+      }
+      match /tournaments/{tournamentId}/notifyOutbox/{document} {
+        allow read, write: if false;
+      }
+      match /tournaments/{tournamentId}/notifyState/{document} {
+        allow read, write: if false;
+      }
+    }
+
+    // Tournaments the alert job scans -- server-only.
+    match /platformLiveTournaments/{document} {
+      allow read, write: if false;
     }
 
     // Public tenant directory -- used by the tenant picker on first launch.

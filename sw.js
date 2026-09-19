@@ -6,7 +6,7 @@
 // Bump this whenever a deploy changes tailwind.css / motion.* / other
 // cache-first assets -- those are served from cache without revalidation, so
 // returning visitors keep the old copy until the cache name changes.
-const CACHE_NAME = 'courtbooking-v6';
+const CACHE_NAME = 'courtbooking-v7';
 
 // App shell: everything needed to render the app offline
 const APP_SHELL = [
@@ -147,3 +147,39 @@ async function networkFirst(request, cacheName) {
     return cached || new Response('Offline', { status: 503, statusText: 'Service Unavailable' });
   }
 }
+
+// ── Match alerts (web push) ─────────────────────────────────
+// Payload: { title, body, tag, url }. Sent by the tournament notifier job.
+self.addEventListener('push', (event) => {
+  let d = {};
+  try { d = event.data ? event.data.json() : {}; }
+  catch { d = { body: event.data ? event.data.text() : '' }; }
+  event.waitUntil(self.registration.showNotification(d.title || 'Tournament update', {
+    body: d.body || '',
+    tag: d.tag || undefined,
+    renotify: !!d.tag,
+    icon: '/icons/icon-192.png',
+    badge: '/icons/icon-192.png',
+    data: { url: d.url || '/' },
+  }));
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  // Only ever open this site's own pages, whatever the payload says.
+  let target = new URL('/', self.location.origin);
+  try {
+    const u = new URL((event.notification.data && event.notification.data.url) || '/', self.location.origin);
+    if (u.origin === self.location.origin) target = u;
+  } catch { /* keep the home page */ }
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((wins) => {
+      for (const w of wins) {
+        if (new URL(w.url).pathname === target.pathname && 'focus' in w) {
+          return w.navigate(target.href).then(() => w.focus()).catch(() => w.focus());
+        }
+      }
+      return self.clients.openWindow(target.href);
+    })
+  );
+});

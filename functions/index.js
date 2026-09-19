@@ -23,6 +23,9 @@
    ================================================================ */
 
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
+const { onSchedule } = require('firebase-functions/v2/scheduler');
+const { defineSecret } = require('firebase-functions/params');
+const webpush = require('web-push');
 const admin = require('firebase-admin');
 
 admin.initializeApp();
@@ -35,6 +38,8 @@ const singleElim = require('./engines/singleElim');
 const groupKnockout = require('./engines/groupKnockout');
 const poolPlanner = require('./engines/poolPlanner');
 const scheduler = require('./engines/scheduler');
+const notifier = require('./engines/notifier');
+const notifyRunner = require('./notifyRunner');
 
 const ADVANCE_PER_GROUP = 2; // legacy divisions generated before poolPlanner (no bracketMeta.advancePlan)
 
@@ -244,7 +249,7 @@ exports.advanceToKnockout = onCall({ region: REGION }, async (request) => {
   requireString(divisionId, 'divisionId');
 
   const tRef = tournamentRef(clientId, tournamentId);
-  await assertTournamentIsActive(tRef);
+  const tournamentDoc = await assertTournamentIsActive(tRef);
   const divRef = tRef.collection('divisions').doc(divisionId);
   const divSnap = await divRef.get();
   if (!divSnap.exists) throw new HttpsError('not-found', 'Division not found.');
@@ -298,6 +303,11 @@ exports.advanceToKnockout = onCall({ region: REGION }, async (request) => {
 
   await recomputeAndWriteStandings(tRef, divRef, divisionId);
   await logAudit(tRef, 'advance-to-knockout', `Advanced ${advancers.length} participant(s) from groups to the knockout bracket for "${division.name}"`);
+  if (isSchedulePublished(tournamentDoc)) {
+    await notifyRunner.enqueueEvents(db, clientId, tournamentId, [{ id: `q_${cleanIdStr(divisionId) || 'division'}`, data: {
+      type: 'qualified', divisionId, divisionName: division.name || '', advancerCount: advancers.length, participantIds: advancers.map((a) => a.participantId),
+    } }]).catch((e) => console.warn('[notify] enqueue qualified failed:', e.message));
+  }
   return { matchCount: matches.length };
 });
 
@@ -674,6 +684,27 @@ function toSchedMatch(m, ctx) {
 
 const isOwnScheduleBlock = (tournamentId) => (b) => b && b.source === 'tournament' && b.tournamentId === tournamentId && b.kind === 'schedule-block';
 const isPlayed = (m) => ['completed', 'walkover', 'forfeit'].includes(m.status);
+const isSchedulePublished = (t) => !!(t && t.schedule && t.schedule.status === 'published');
+const scheduledDates = (list) => [...new Set(list.filter((m) => m.sched && !isPlayed(m)).map((m) => m.sched.date))];
+
+/* After an organizer change to a LIVE schedule: keep the notifier's day list
+   current and queue one alert per match whose court/time actually changed.
+   Alerts are best-effort -- a failure here must never fail the schedule edit. */
+async function notifyAfterScheduleChange(ctx, finalList, before) {
+  try {
+    await notifyRunner.syncRegistry(db, ctx.clientId, ctx.tournamentId, scheduledDates(finalList));
+    const events = [];
+    finalList.forEach((m) => {
+      if (!before.has(m.id)) return;
+      const prev = before.get(m.id);
+      if (notifier.schedFingerprint(prev) === notifier.schedFingerprint(m.sched)) return;
+      events.push({ id: `m_${m.id}`, data: { type: 'match_change', matchId: m.id, prevKnown: !!prev } });
+    });
+    await notifyRunner.enqueueEvents(db, ctx.clientId, ctx.tournamentId, events);
+  } catch (e) {
+    console.warn('[notify] could not queue schedule alerts:', e.message);
+  }
+}
 
 function validateContext(ctx, matchesWithSched) {
   const busy = scheduler.busyFromBookings(ctx.bookings, ctx.venues, isOwnScheduleBlock(ctx.tournamentId));
@@ -802,7 +833,10 @@ exports.generateSchedule = onCall({ region: REGION }, async (request) => {
   });
   const wasPublished = !!(ctx.tournament.schedule && ctx.tournament.schedule.status === 'published');
   await tRef.set({ schedule: { status: wasPublished ? 'published' : 'draft', generatedAt: admin.firestore.FieldValue.serverTimestamp(), ...(wasPublished ? { publishedAt: ctx.tournament.schedule.publishedAt || null } : {}) } }, { merge: true });
-  if (wasPublished) await syncCourtBlocks(ctx, final, true);
+  if (wasPublished) {
+    await syncCourtBlocks(ctx, final, true);
+    await notifyAfterScheduleChange(ctx, final, new Map(toPlace.map((m) => [m.id, m.sched || null])));
+  }
 
   const label = Object.fromEntries(ctx.matches.map((m) => [m.id, (m.participantNames || []).join(' vs ')]));
   const validation = validateContext(ctx, final);
@@ -851,7 +885,10 @@ exports.moveMatch = onCall({ region: REGION }, async (request) => {
   if (blocking.length) throw new HttpsError('failed-precondition', blocking.map((c) => c.message).join(' '), { conflicts: blocking });
 
   await tRef.collection('matches').doc(matchId).update({ sched: next || admin.firestore.FieldValue.delete() });
-  if (wasPublished) await syncCourtBlocks(ctx, list, true);
+  if (wasPublished) {
+    await syncCourtBlocks(ctx, list, true);
+    await notifyAfterScheduleChange(ctx, list, new Map([[matchId, match.sched || null]]));
+  }
   const label = (match.participantNames || []).join(' vs ');
   await logAudit(tRef, next ? 'match-moved' : 'match-unscheduled', `${label}${next ? ` -> ${next.date} ${scheduler.fmtMin(next.startMin)}` : ''}`);
   return { applied: true, published: wasPublished, conflicts: mine };
@@ -886,6 +923,7 @@ exports.publishSchedule = onCall({ region: REGION }, async (request) => {
   if (publish === false) {
     await tRef.set({ schedule: { status: 'draft', unpublishedAt: admin.firestore.FieldValue.serverTimestamp() } }, { merge: true });
     const removed = await syncCourtBlocks(ctx, list, false);
+    await notifyRunner.removeRegistry(db, clientId, tournamentId).catch((e) => console.warn('[notify] registry cleanup failed:', e.message));
     await logAudit(tRef, 'schedule-unpublished', 'Schedule taken back to draft; club court blocks removed');
     return { status: 'draft', blocks: removed };
   }
@@ -902,7 +940,93 @@ exports.publishSchedule = onCall({ region: REGION }, async (request) => {
   }
   const playable = list.filter((m) => !isPlayed(m));
   const blocks = await syncCourtBlocks(ctx, list, true);
+  const firstPublish = !isSchedulePublished(ctx.tournament);
   await tRef.set({ schedule: { status: 'published', publishedAt: admin.firestore.FieldValue.serverTimestamp() } }, { merge: true });
+  try {
+    await notifyRunner.syncRegistry(db, clientId, tournamentId, scheduledDates(list));
+    if (firstPublish) await notifyRunner.enqueueEvents(db, clientId, tournamentId, [{ id: 'publish', data: { type: 'publish' } }]);
+  } catch (e) {
+    console.warn('[notify] could not queue the schedule-live alert:', e.message);
+  }
   await logAudit(tRef, 'schedule-published', `Published ${scheduled.length} scheduled match(es); ${blocks} court block(s) placed on the club calendar`);
   return { status: 'published', scheduled: scheduled.length, unscheduled: playable.filter((m) => !m.sched).length, blocks, warnings: validation.warningCount, venueChanges: validation.flags.length };
+});
+
+/* ================================================================
+   MATCH ALERTS (web push)
+   Players have no accounts, so a phone number that matches a registration
+   is what links a device to a team. Everything is opt-in from the public
+   tournament page; delivery is one scheduled job (below). The public VAPID
+   key is not secret and also lives in tournament.html; the private half is
+   a Secret Manager secret.
+   ================================================================ */
+const VAPID_PUBLIC_KEY = 'BA9Ng9DBkZZ2M1Iz10L-6sRmo6VonfH_dix22fgrZCVG8JDBBeg4ni8xS3nph0CeNMKy6aB38WbdQU35G5xMZLA';
+const VAPID_PRIVATE_KEY = defineSecret('VAPID_PRIVATE_KEY');
+let vapidConfigured = false;
+
+function makePushSender() {
+  if (!vapidConfigured) {
+    webpush.setVapidDetails('https://courtbooking-85175.web.app', VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY.value());
+    vapidConfigured = true;
+  }
+  return async (sub, payload) => {
+    try {
+      await webpush.sendNotification({ endpoint: sub.endpoint, keys: sub.keys }, JSON.stringify(payload), { TTL: 1800, urgency: 'high' });
+      return { ok: true };
+    } catch (e) {
+      if (e && (e.statusCode === 404 || e.statusCode === 410)) return { gone: true };
+      console.warn('[notify] push failed:', e && (e.statusCode || e.message));
+      return { ok: false };
+    }
+  };
+}
+
+const NOTIFY_ERRORS = new Set(['invalid-argument', 'not-found', 'failed-precondition']);
+function asHttpsError(e) {
+  if (e instanceof HttpsError) return e;
+  if (e && NOTIFY_ERRORS.has(e.code)) return new HttpsError(e.code, e.message);
+  return e;
+}
+
+exports.subscribeMatchAlerts = onCall({ region: REGION, secrets: [VAPID_PRIVATE_KEY] }, async (request) => {
+  const { clientId, tournamentId, phone, subscription } = request.data || {};
+  assertValidTenantId(clientId);
+  requireString(tournamentId, 'tournamentId');
+  requireString(phone, 'phone');
+  try {
+    return await notifyRunner.registerSubscription({ db, clientId, tournamentId, phone, subscription, send: makePushSender() });
+  } catch (e) { throw asHttpsError(e); }
+});
+
+exports.unsubscribeMatchAlerts = onCall({ region: REGION }, async (request) => {
+  const { clientId, tournamentId, endpoint } = request.data || {};
+  assertValidTenantId(clientId);
+  requireString(tournamentId, 'tournamentId');
+  try {
+    return await notifyRunner.removeSubscription({ db, clientId, tournamentId, endpoint });
+  } catch (e) { throw asHttpsError(e); }
+});
+
+/* How many people have alerts on -- shown to the organizer so they know how
+   far the push reaches and whether to also share the schedule another way. */
+exports.getAlertReach = onCall({ region: REGION }, async (request) => {
+  const { clientId, tournamentId } = request.data || {};
+  assertValidTenantId(clientId);
+  requireString(tournamentId, 'tournamentId');
+  const tRef = tournamentRef(clientId, tournamentId);
+  const [subSnap, regSnap] = await Promise.all([tRef.collection('pushSubs').get(), tRef.collection('registrations').get()]);
+  const players = new Set();
+  regSnap.docs.forEach((d) => { const r = d.data(); if (r.status === 'approved' || r.status === 'checked_in') (r.playerIds || []).forEach((p) => players.add(p)); });
+  const reached = new Set();
+  subSnap.docs.forEach((d) => { const s = d.data(); if (players.has(s.playerId)) reached.add(s.playerId); });
+  return { players: players.size, reached: reached.size, devices: subSnap.size };
+});
+
+/* The one scheduled job: every minute, deliver whatever is due for every
+   published tournament. Cheap when idle (see notifyRunner.js). */
+exports.tournamentNotifier = onSchedule({
+  schedule: 'every 1 minutes', region: REGION, timeoutSeconds: 120, memory: '256MiB', retryCount: 0, secrets: [VAPID_PRIVATE_KEY],
+}, async () => {
+  const result = await notifyRunner.runNotifier({ db, send: makePushSender(), log: (m) => console.warn('[notify]', m) });
+  if (result.sent || result.errors) console.log('[notify] run', JSON.stringify(result));
 });

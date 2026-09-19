@@ -322,6 +322,44 @@
           </div>
           <div id="schedResult" class="mt-3 space-y-1.5"></div>
         </div>
+
+        <div id="notifyPanel" class="mt-4 pt-4 border-t border-[#F1E9DF]">
+          <div class="flex items-center justify-between flex-wrap gap-2 mb-2">
+            <div class="mono text-[10px] uppercase tracking-widest opacity-60">Notification Control Panel</div>
+            <div id="notifyReach" class="mono text-[10px] opacity-60"></div>
+          </div>
+          <div class="space-y-2">
+            <label class="flex items-center justify-between gap-3 rounded-[14px] border border-[#EAE0D5] bg-[#FFFBF5] px-4 py-3 cursor-pointer">
+              <span class="mono text-[12px] font-[700]">Enable Schedule-Driven Push Notifications</span>
+              <input id="nfEnabled" type="checkbox" class="accent-[#201C19] w-5 h-5 shrink-0"/>
+            </label>
+            <label class="flex items-center justify-between gap-3 rounded-[14px] border border-[#EAE0D5] bg-[#FFFBF5] px-4 py-2.5">
+              <span class="mono text-[12px] font-[700]">Pre-Match Notification Window</span>
+              <select id="nfLead" class="h-10 rounded-full border border-[#EAE0D5] bg-white px-3 mono text-[12px] outline-none focus:border-[#201C19]"></select>
+            </label>
+            <label class="flex items-center justify-between gap-3 rounded-[14px] border border-[#EAE0D5] bg-[#FFFBF5] px-4 py-3 cursor-pointer">
+              <span class="mono text-[12px] font-[700]">Dispatch Alerts for Live Court/Venue Reassignments</span>
+              <input id="nfReassign" type="checkbox" class="accent-[#201C19] w-5 h-5 shrink-0"/>
+            </label>
+            <label class="flex items-center justify-between gap-3 rounded-[14px] border border-[#EAE0D5] bg-[#FFFBF5] px-4 py-2.5">
+              <span class="mono text-[12px] font-[700]">Tournament clock (timezone)</span>
+              <select id="nfTz" class="h-10 max-w-[60%] rounded-full border border-[#EAE0D5] bg-white px-3 mono text-[11px] outline-none focus:border-[#201C19]"></select>
+            </label>
+          </div>
+          <ul class="mono text-[10px] opacity-60 mt-3 leading-[1.7] list-disc pl-4 space-y-0.5">
+            <li>Players opt in from the tournament page ("My matches &amp; alerts") using the mobile number they registered with. Only people who opt in can be notified.</li>
+            <li>When you publish, everyone who opted in hears the schedule is live. After that, each team gets an "Up Next" alert before its match and an alert if its court or time changes.</li>
+            <li>If a court's previous match has run over, the "Up Next" alert for the next match waits until that match is scored.</li>
+            <li>Changes you make between 10 PM and 6 AM are held and sent at 7 AM, unless play is under way.</li>
+            <li>Phones that can't receive alerts (some iPhones, older browsers) still see live times on the same page. Use the buttons below to reach everyone else.</li>
+          </ul>
+          <div class="mt-3 flex flex-wrap items-center gap-2">
+            <button id="nfSaveBtn" type="button" class="h-10 px-4 rounded-full bg-[#201C19] text-white mono text-[11px] font-[700] cursor-pointer hover:opacity-90">Save Notification Settings</button>
+            <button id="nfCopyLinkBtn" type="button" class="h-10 px-3.5 rounded-full bg-white border border-[#EAE0D5] mono text-[11px] font-[700] cursor-pointer hover:border-[#201C19]">Copy player link</button>
+            <button id="nfCopyAnnounceBtn" type="button" class="h-10 px-3.5 rounded-full bg-white border border-[#EAE0D5] mono text-[11px] font-[700] cursor-pointer hover:border-[#201C19]">Copy schedule announcement</button>
+          </div>
+          <div id="nfMsg" class="mt-2 space-y-1.5"></div>
+        </div>
       </div>
 
       <div id="financialsWrap" class="hidden mt-5 rounded-[24px] bg-white border border-[#EAE0D5] p-5 md:p-6">
@@ -1309,6 +1347,7 @@ function initVenuePanel(t){
   document.getElementById('schedResult').innerHTML = '';
   renderVenuePanel();
   refreshSchedulePreview();
+  initNotifyPanel(t);
 }
 function nextId(prefix, taken){
   let n = taken.length + 1;
@@ -1571,6 +1610,97 @@ document.getElementById('publishScheduleBtn').addEventListener('click', (e) => {
     toast(publishing ? 'Schedule published' : 'Schedule unpublished');
     await refreshTournamentDoc(); await refreshSchedulePreview();
   });
+});
+
+/* ---------- Notification control panel ----------
+   Settings live on the tournament doc (`notifications`); the scheduled
+   notifier (functions/notifyRunner.js) reads them every minute. The two
+   copy buttons are for the people push can't reach. */
+const NF_LEADS = [5, 10, 15, 20, 30, 45, 60];
+const NF_ZONES = [[480, 'UTC+8 · Manila, Singapore, Hong Kong'], [420, 'UTC+7 · Bangkok, Jakarta'], [540, 'UTC+9 · Tokyo, Seoul'], [330, 'UTC+5:30 · India'], [600, 'UTC+10 · Brisbane']];
+function initNotifyPanel(t){
+  const n = (t && t.notifications) || {};
+  document.getElementById('nfEnabled').checked = n.enabled !== false;
+  document.getElementById('nfReassign').checked = n.reassignments !== false;
+  const lead = NF_LEADS.includes(Number(n.leadMinutes)) ? Number(n.leadMinutes) : 15;
+  document.getElementById('nfLead').innerHTML = NF_LEADS.map(m => `<option value="${m}" ${m === lead ? 'selected' : ''}>${m} minutes before</option>`).join('');
+  const tz = Number.isFinite(Number(n.utcOffsetMin)) && n.utcOffsetMin !== undefined && n.utcOffsetMin !== null ? Number(n.utcOffsetMin) : 480;
+  const zones = NF_ZONES.some(z => z[0] === tz) ? NF_ZONES : [...NF_ZONES, [tz, `UTC${tz >= 0 ? '+' : '-'}${Math.floor(Math.abs(tz) / 60)}${Math.abs(tz) % 60 ? ':' + String(Math.abs(tz) % 60).padStart(2, '0') : ''}`]];
+  document.getElementById('nfTz').innerHTML = zones.map(z => `<option value="${z[0]}" ${z[0] === tz ? 'selected' : ''}>${escapeHtml(z[1])}</option>`).join('');
+  document.getElementById('nfMsg').innerHTML = '';
+  refreshNotifyReach();
+}
+async function refreshNotifyReach(){
+  const el = document.getElementById('notifyReach');
+  el.textContent = '';
+  if(!CURRENT_TOURNAMENT_ID) return;
+  const tid = CURRENT_TOURNAMENT_ID;
+  try {
+    const res = await callEngine('getAlertReach', { clientId: currentClientId, tournamentId: tid });
+    if(tid !== CURRENT_TOURNAMENT_ID) return;
+    const d = res.data;
+    el.textContent = d.players ? `${d.reached} of ${d.players} registered players have alerts on` : 'No registered players yet';
+  } catch(ex) { /* reach is informational */ }
+}
+async function saveNotifySettings(){
+  const payload = { notifications: {
+    enabled: document.getElementById('nfEnabled').checked,
+    leadMinutes: Number(document.getElementById('nfLead').value) || 15,
+    reassignments: document.getElementById('nfReassign').checked,
+    utcOffsetMin: Number(document.getElementById('nfTz').value),
+  } };
+  if(!Number.isFinite(payload.notifications.utcOffsetMin)) payload.notifications.utcOffsetMin = 480;
+  try {
+    await db.doc(`clients/${currentClientId}/tournaments/${CURRENT_TOURNAMENT_ID}`).set(payload, { merge: true });
+    const t = currentTournamentDoc();
+    if(t) t.notifications = { ...(t.notifications || {}), ...payload.notifications };
+    await logTournamentAudit(CURRENT_TOURNAMENT_ID, 'notifications-saved', `Alerts ${payload.notifications.enabled ? `on (${payload.notifications.leadMinutes} min before)` : 'off'}; reassignment alerts ${payload.notifications.reassignments ? 'on' : 'off'}`);
+    toast('Notification settings saved');
+  } catch(ex) { toast('Failed: ' + ex.message); }
+}
+function playerLinkUrl(){
+  return new URL(`tournament.html?client=${encodeURIComponent(currentClientId)}&t=${encodeURIComponent(CURRENT_TOURNAMENT_ID)}#my`, window.location.href).href;
+}
+async function copyOrShow(text, okMessage){
+  try { await navigator.clipboard.writeText(text); toast(okMessage); return; } catch(e) { /* fall through to a select-and-copy box */ }
+  const box = document.getElementById('nfMsg');
+  box.innerHTML = `<textarea readonly rows="8" class="w-full rounded-[12px] border border-[#EAE0D5] bg-[#FFFBF5] p-3 mono text-[11px]">${escapeHtml(text)}</textarea><div class="mono text-[10px] opacity-60">Select the text above and copy it.</div>`;
+  const ta = box.querySelector('textarea'); ta.focus(); ta.select();
+}
+async function buildScheduleAnnouncement(){
+  const t = currentTournamentDoc() || {};
+  const venues = t.venues || [];
+  const snap = await db.collection(`clients/${currentClientId}/tournaments/${CURRENT_TOURNAMENT_ID}/matches`).get();
+  const divName = (id) => (CURRENT_DIVISIONS.find(d => d.id === id) || {}).name || '';
+  const rows = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+    .filter(m => m.sched && !(m.isBye || (m.participantIds || []).includes('BYE')) && !['completed', 'walkover', 'forfeit', 'cancelled'].includes(m.status));
+  if(!rows.length) return null;
+  const venueIdx = (id) => { const i = venues.findIndex(v => v.id === id); return i < 0 ? 99 : i; };
+  rows.sort((a, b) => a.sched.date.localeCompare(b.sched.date) || venueIdx(a.sched.venueId) - venueIdx(b.sched.venueId) || a.sched.startMin - b.sched.startMin);
+  const lines = [`🏓 ${t.name || 'Tournament'} — ${t.schedule && t.schedule.status === 'published' ? 'Schedule' : 'DRAFT schedule (not published yet)'}`];
+  let lastDate = null, lastVenue = null;
+  rows.forEach(m => {
+    if(m.sched.date !== lastDate){ lines.push('', `📅 ${fmtDate(m.sched.date)}`); lastDate = m.sched.date; lastVenue = null; }
+    if(m.sched.venueId !== lastVenue){
+      const v = venues.find(x => x.id === m.sched.venueId);
+      lines.push(`📍 ${v ? v.name : 'Venue'}${v && v.address ? ` — ${v.address}` : ''}`); lastVenue = m.sched.venueId;
+    }
+    const v = venues.find(x => x.id === m.sched.venueId);
+    const c = v && (v.courts || []).find(x => x.id === m.sched.courtId);
+    const where = [divName(m.divisionId), m.groupId ? `Group ${m.groupId}` : (m.stage === 'knockout' || m.stage === 'main') ? 'Knockout' : ''].filter(Boolean).join(' · ');
+    lines.push(`• ${fmtMinLabel(m.sched.startMin)} · ${c ? c.name : 'Court'} · ${(m.participantNames || []).join(' vs ')}${where ? ` (${where})` : ''}`);
+  });
+  lines.push('', `🔔 See your own court and time, and turn on match alerts: ${playerLinkUrl()}`);
+  return lines.join('\n');
+}
+document.getElementById('nfSaveBtn').addEventListener('click', saveNotifySettings);
+document.getElementById('nfCopyLinkBtn').addEventListener('click', () => copyOrShow(playerLinkUrl(), 'Player link copied'));
+document.getElementById('nfCopyAnnounceBtn').addEventListener('click', async () => {
+  try {
+    const text = await buildScheduleAnnouncement();
+    if(!text){ toast('Generate the schedule first — nothing is scheduled yet'); return; }
+    copyOrShow(text, 'Schedule announcement copied');
+  } catch(ex) { toast('Failed: ' + ex.message); }
 });
 
 /* ---------- Group strategy (group stage -> knockout divisions) ----------

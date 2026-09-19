@@ -1216,18 +1216,103 @@ async function loadMatchesForDivision(divisionId){
   }
 }
 
+/* ---------- Group strategy (group stage -> knockout divisions) ----------
+   Shown only before the bracket is generated. The organizer picks a target
+   (games per team OR teams per pool) and, optionally, how many teams reach
+   the playoffs; previewPoolPlan (the same planner generateBracket runs)
+   says exactly what that produces for the current registrations. "Target
+   games" is a target, not a guarantee -- uneven splits give some pools one
+   more game -- and the preview says so in plain words. */
+function groupStrategyPanelHtml(division){
+  const cfg = division.groupConfig || {};
+  const strategy = cfg.strategy === 'games' ? 'games' : 'size';
+  const size = cfg.targetSize || 4;
+  const games = cfg.targetGames || (size - 1);
+  const adv = cfg.advanceCount || '';
+  const inputCls = 'h-10 w-24 rounded-full border border-[#EAE0D5] bg-white px-4 mono text-[12px] outline-none focus:border-[#201C19]';
+  return `<div id="gsPanel" class="mb-3 p-4 rounded-[16px] bg-[#FFFBF5] border border-[#EAE0D5] space-y-3">
+    <div class="mono text-[10px] uppercase tracking-widest opacity-60">Group Strategy — Configuration Focus</div>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+      <label class="rounded-[14px] border border-[#EAE0D5] bg-white p-3 flex flex-col gap-2 cursor-pointer">
+        <span class="flex items-center gap-2 mono text-[12px] font-[700]"><input type="radio" name="gsStrategy" value="games" ${strategy === 'games' ? 'checked' : ''} class="accent-[#201C19]"/> Target Games per team</span>
+        <input id="gsGames" type="number" min="2" max="11" step="1" value="${games}" class="${inputCls}"/>
+        <span id="gsGamesHint" class="mono text-[10px] opacity-60"></span>
+      </label>
+      <label class="rounded-[14px] border border-[#EAE0D5] bg-white p-3 flex flex-col gap-2 cursor-pointer">
+        <span class="flex items-center gap-2 mono text-[12px] font-[700]"><input type="radio" name="gsStrategy" value="size" ${strategy === 'size' ? 'checked' : ''} class="accent-[#201C19]"/> Target Group Size</span>
+        <input id="gsSize" type="number" min="3" max="12" step="1" value="${size}" class="${inputCls}"/>
+        <span id="gsSizeHint" class="mono text-[10px] opacity-60"></span>
+      </label>
+    </div>
+    <label class="flex flex-wrap items-center gap-2">
+      <span class="mono text-[10px] uppercase tracking-widest opacity-60">Teams advancing to playoffs</span>
+      <input id="gsAdvance" type="number" min="2" step="1" value="${adv}" placeholder="Auto" class="${inputCls}"/>
+      <span class="mono text-[10px] opacity-50">Leave blank for the recommended size (8 with 12+ teams, otherwise 4).</span>
+    </label>
+    <div id="gsPreview" class="space-y-1.5"><div class="mono text-[11px] opacity-50">Working out the plan…</div></div>
+  </div>`;
+}
+function readGroupStrategy(){
+  const num = (id) => { const v = document.getElementById(id).value; return v === '' ? null : Number(v); };
+  const checked = document.querySelector('input[name="gsStrategy"]:checked');
+  return { strategy: checked ? checked.value : 'size', targetGames: num('gsGames'), targetSize: num('gsSize'), advanceCount: num('gsAdvance') };
+}
+let _gsTimer = null, _gsSeq = 0;
+function wireGroupStrategyPanel(division){
+  const panel = document.getElementById('gsPanel');
+  if(!panel) return;
+  const updateHints = () => {
+    const g = Number(document.getElementById('gsGames').value);
+    const s = Number(document.getElementById('gsSize').value);
+    document.getElementById('gsGamesHint').textContent = Number.isFinite(g) && g > 0 ? `Aims for pools of ${g + 1} teams.` : '';
+    document.getElementById('gsSizeHint').textContent = Number.isFinite(s) && s > 0 ? `Each team plays up to ${s - 1} games.` : '';
+  };
+  const levelStyle = { success: 'bg-[#E8F5D8] text-[#3F7019] border-[#CFE8B5]', info: 'bg-white text-[#201C19]/80 border-[#EAE0D5]', warning: 'bg-[#FFF0D6] text-[#92400E] border-[#FFE0A3]', error: 'bg-[#FFE9E0] text-[#8C2C10] border-[#FFC9B6]' };
+  const levelIcon = { success: '✔', info: 'ℹ', warning: '⚠', error: '✖' };
+  const refresh = () => {
+    updateHints();
+    clearTimeout(_gsTimer);
+    _gsTimer = setTimeout(async () => {
+      const seq = ++_gsSeq;
+      const box = document.getElementById('gsPreview');
+      try {
+        const res = await callEngine('previewPoolPlan', { clientId: currentClientId, tournamentId: CURRENT_TOURNAMENT_ID, divisionId: division.id, groupConfig: readGroupStrategy() });
+        if(seq !== _gsSeq || !document.getElementById('gsPreview')) return;
+        box.innerHTML = res.data.messages.map(m => `<div class="mono text-[11px] leading-[1.5] px-3 py-2 rounded-[12px] border ${levelStyle[m.level] || levelStyle.info}">${levelIcon[m.level] || ''} ${escapeHtml(m.text)}</div>`).join('');
+        const btn = document.getElementById('generateBracketBtn');
+        if(btn && !res.data.pools.ok){ btn.disabled = true; btn.className = btn.className.replace('cursor-pointer hover:opacity-90', 'cursor-not-allowed opacity-40'); }
+      } catch(ex) {
+        if(seq === _gsSeq && box) box.innerHTML = `<div class="mono text-[11px] text-[#8C2C10]">Couldn't preview the plan: ${escapeHtml(ex.message || String(ex))}</div>`;
+      }
+    }, 350);
+  };
+  panel.querySelectorAll('input').forEach(i => i.addEventListener('input', refresh));
+  panel.querySelectorAll('input[name="gsStrategy"]').forEach(i => i.addEventListener('change', refresh));
+  // Editing a strategy's own number selects that strategy (the field sits
+  // inside the radio's label but clicking it doesn't activate the radio).
+  document.getElementById('gsGames').addEventListener('input', () => { panel.querySelector('input[name="gsStrategy"][value="games"]').checked = true; });
+  document.getElementById('gsSize').addEventListener('input', () => { panel.querySelector('input[name="gsStrategy"][value="size"]').checked = true; });
+  refresh();
+}
+
 function renderMatchesActionRow(division, matches){
   const wrap = document.getElementById('matchesActionRow');
   const activeRegs = REGISTRATIONS.filter(r => r.divisionId === division.id && (r.status === 'approved' || r.status === 'checked_in'));
   if(matches.length === 0){
-    const enough = activeRegs.length >= 2;
-    wrap.innerHTML = `<button id="generateBracketBtn" ${enough ? '' : 'disabled'} class="h-10 px-4 rounded-full ${enough ? 'bg-[#201C19] text-white cursor-pointer hover:opacity-90' : 'bg-[#F1E9DF] text-[#201C19]/40 cursor-not-allowed'} mono text-[12px] font-[700]">Generate Bracket</button>
-      ${!enough ? `<div class="mono text-[10px] opacity-50 mt-1.5">Needs at least 2 approved/checked-in registrations (currently ${activeRegs.length}).</div>` : ''}`;
+    const isGroup = division.format === 'group_knockout';
+    const minTeams = isGroup ? 3 : 2;
+    const enough = activeRegs.length >= minTeams;
+    wrap.innerHTML = `${isGroup ? groupStrategyPanelHtml(division) : ''}
+      <button id="generateBracketBtn" ${enough ? '' : 'disabled'} class="h-10 px-4 rounded-full ${enough ? 'bg-[#201C19] text-white cursor-pointer hover:opacity-90' : 'bg-[#F1E9DF] text-[#201C19]/40 cursor-not-allowed'} mono text-[12px] font-[700]">Generate Bracket</button>
+      ${!enough ? `<div class="mono text-[10px] opacity-50 mt-1.5">Needs at least ${minTeams} approved/checked-in registrations${isGroup ? ' for pool play' : ''} (currently ${activeRegs.length}).</div>` : ''}`;
+    if(isGroup) wireGroupStrategyPanel(division);
     if(enough){
       document.getElementById('generateBracketBtn').addEventListener('click', async (e) => {
         e.target.disabled = true; e.target.textContent = 'Generating...';
         try {
-          const result = await callEngine('generateBracket', { clientId: currentClientId, tournamentId: CURRENT_TOURNAMENT_ID, divisionId: division.id });
+          const payload = { clientId: currentClientId, tournamentId: CURRENT_TOURNAMENT_ID, divisionId: division.id };
+          if(isGroup) payload.groupConfig = readGroupStrategy();
+          const result = await callEngine('generateBracket', payload);
           toast(`Bracket generated -- ${result.data.matchCount} match(es)`);
           await loadDivisions(CURRENT_TOURNAMENT_ID);
           await loadMatchesForDivision(division.id);

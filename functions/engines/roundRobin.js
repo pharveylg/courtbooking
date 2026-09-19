@@ -54,9 +54,13 @@ function generateMatches(participants) {
   return matches;
 }
 
-/* Standings: win/loss record, then point differential, then head-to-head.
-   `matches` is every completed match in the division (round robin has no
-   separate "advancement" concept -- standings are just a tally).
+/* Standings order: wins, then head-to-head among the teams tied on wins,
+   then overall point differential, then points scored, then id (so the
+   order is deterministic). Head-to-head for a 2-way tie is simply who won
+   that match; for a 3+ way tie it's wins within the tied group (a mini
+   league), and a cycle (A beat B beat C beat A) falls through to point
+   differential. `matches` is every completed match in the division (round
+   robin has no separate "advancement" concept -- standings are a tally).
    `participants` here is [{participantId, name}] -- a display name, not
    the raw playerNames array generateMatches() works with. */
 function computeStandings(participants, matches) {
@@ -81,15 +85,37 @@ function computeStandings(participants, matches) {
     if (m.winnerParticipantId === aId) { a.wins++; b.losses++; }
     else if (m.winnerParticipantId === bId) { b.wins++; a.losses++; }
   });
-  const rows = [...table.values()];
-  rows.sort((x, y) => {
-    if (y.wins !== x.wins) return y.wins - x.wins;
-    const diffX = x.pointsFor - x.pointsAgainst;
-    const diffY = y.pointsFor - y.pointsAgainst;
-    if (diffY !== diffX) return diffY - diffX;
-    return 0; // true head-to-head tiebreak is a future refinement
+
+  const diff = (r) => r.pointsFor - r.pointsAgainst;
+  const byWins = new Map();
+  [...table.values()].forEach((r) => {
+    if (!byWins.has(r.wins)) byWins.set(r.wins, []);
+    byWins.get(r.wins).push(r);
   });
-  rows.forEach((r, i) => { r.rank = i + 1; });
+  const rows = [];
+  [...byWins.keys()].sort((x, y) => y - x).forEach((w) => {
+    const tied = byWins.get(w);
+    const ids = new Set(tied.map((r) => r.participantId));
+    const h2h = new Map(tied.map((r) => [r.participantId, 0]));
+    if (tied.length > 1) {
+      completed.forEach((m) => {
+        const [aId, bId] = m.participantIds;
+        if (ids.has(aId) && ids.has(bId) && m.winnerParticipantId && h2h.has(m.winnerParticipantId)) {
+          h2h.set(m.winnerParticipantId, h2h.get(m.winnerParticipantId) + 1);
+        }
+      });
+    }
+    tied.sort((x, y) => {
+      const hx = h2h.get(x.participantId);
+      const hy = h2h.get(y.participantId);
+      if (hy !== hx) return hy - hx;
+      if (diff(y) !== diff(x)) return diff(y) - diff(x);
+      if (y.pointsFor !== x.pointsFor) return y.pointsFor - x.pointsFor;
+      return x.participantId < y.participantId ? -1 : 1;
+    });
+    rows.push(...tied);
+  });
+  rows.forEach((r, i) => { r.rank = i + 1; r.played = r.wins + r.losses; });
   return rows;
 }
 

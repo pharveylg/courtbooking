@@ -33,9 +33,23 @@ const seeding = require('./engines/seeding');
 const roundRobin = require('./engines/roundRobin');
 const singleElim = require('./engines/singleElim');
 const groupKnockout = require('./engines/groupKnockout');
+const poolPlanner = require('./engines/poolPlanner');
 
-const GROUP_SIZE = 4;
-const ADVANCE_PER_GROUP = 2;
+const ADVANCE_PER_GROUP = 2; // legacy divisions generated before poolPlanner (no bracketMeta.advancePlan)
+
+/* Group-stage settings for a division: what the organizer sent with this
+   request, else what the division already remembers, else defaults. Only
+   plain numbers/strings are ever kept. */
+function groupConfigFrom(input, division) {
+  const src = { ...((division && division.groupConfig) || {}), ...(input || {}) };
+  const num = (v) => (v === '' || v == null || !Number.isFinite(Number(v)) ? null : Math.round(Number(v)));
+  return {
+    strategy: src.strategy === 'games' ? 'games' : 'size',
+    targetSize: num(src.targetSize),
+    targetGames: num(src.targetGames),
+    advanceCount: num(src.advanceCount),
+  };
+}
 
 function assertValidTenantId(clientId) {
   if (typeof clientId !== 'string' || !/^[a-z0-9-]{1,50}$/.test(clientId)) {
@@ -147,6 +161,7 @@ exports.generateBracket = onCall({ region: REGION }, async (request) => {
   const seeded = seeding.rankParticipants(participants, division.seedingMethod || 'random');
 
   let matches = [];
+  let groupConfig = null;
   const bracketMeta = {};
 
   if (division.format === 'round_robin') {
@@ -157,11 +172,18 @@ exports.generateBracket = onCall({ region: REGION }, async (request) => {
     matches = singleElim.cascadeByes(tagged, roundsTotal);
     bracketMeta.roundsTotal = roundsTotal;
   } else if (division.format === 'group_knockout') {
-    const { matches: groupMatches, groups } = groupKnockout.generateGroupStageMatches(seeded, GROUP_SIZE);
-    matches = groupMatches.map((m) => ({ ...m, divisionId }));
-    bracketMeta.groupSize = GROUP_SIZE;
-    bracketMeta.advancePerGroup = ADVANCE_PER_GROUP;
-    bracketMeta.groups = groups.map((g) => ({
+    groupConfig = groupConfigFrom(request.data && request.data.groupConfig, division);
+    const plan = poolPlanner.planPools(seeded.length, groupConfig);
+    if (!plan.ok) throw new HttpsError('failed-precondition', plan.reason);
+    const adv = poolPlanner.planAdvancement(plan.poolSizes, groupConfig.advanceCount);
+    const pools = poolPlanner.assignPools(seeded, plan.poolSizes);
+    matches = groupKnockout.generateMatchesForPools(pools).map((m) => ({ ...m, divisionId }));
+    bracketMeta.groupSize = plan.targetSize;
+    bracketMeta.strategy = plan.strategy;
+    bracketMeta.poolSizes = plan.poolSizes;
+    bracketMeta.advancePlan = { count: adv.count, perPool: adv.perPool, wildcards: adv.wildcards };
+    bracketMeta.advancePerGroup = adv.perPool[0];
+    bracketMeta.groups = pools.map((g) => ({
       groupId: g.groupId,
       participants: g.members.map((m) => ({ participantId: m.participantId, name: m.playerNames.join(' & ') })),
     }));
@@ -174,12 +196,38 @@ exports.generateBracket = onCall({ region: REGION }, async (request) => {
     const ref = tRef.collection('matches').doc();
     batch.set(ref, { ...m, createdAt: admin.firestore.FieldValue.serverTimestamp() });
   });
-  if (Object.keys(bracketMeta).length) batch.set(divRef, { bracketMeta }, { merge: true });
+  if (Object.keys(bracketMeta).length) batch.set(divRef, { bracketMeta, ...(groupConfig ? { groupConfig } : {}) }, { merge: true });
   await batch.commit();
 
   await recomputeAndWriteStandings(tRef, divRef, divisionId);
   await logAudit(tRef, 'bracket-generated', `Generated ${matches.length} match(es) for "${division.name}" (${participants.length} participants)`);
   return { matchCount: matches.length };
+});
+
+/* ================================================================
+   previewPoolPlan -- what generateBracket WOULD do for a division, without
+   writing anything: pool sizes, games per team, who advances, and the
+   organizer-facing copy. Runs the exact same planner generateBracket uses,
+   so the preview cannot drift from the result. Pass divisionId to use the
+   division's live approved/checked-in count, or teamCount to plan ahead
+   before registration closes.
+   ================================================================ */
+exports.previewPoolPlan = onCall({ region: REGION }, async (request) => {
+  const { clientId, tournamentId, divisionId, teamCount, groupConfig } = request.data || {};
+  assertValidTenantId(clientId);
+  let teams = Math.max(0, Math.min(500, Math.floor(Number(teamCount)) || 0));
+  let division = null;
+  if (tournamentId && divisionId) {
+    const tRef = tournamentRef(clientId, tournamentId);
+    const divSnap = await tRef.collection('divisions').doc(divisionId).get();
+    if (!divSnap.exists) throw new HttpsError('not-found', 'Division not found.');
+    division = divSnap.data();
+    teams = (await loadActiveParticipants(tRef, divisionId)).length;
+  }
+  const cfg = groupConfigFrom(groupConfig, division);
+  const pools = poolPlanner.planPools(teams, cfg);
+  const advancement = pools.ok ? poolPlanner.planAdvancement(pools.poolSizes, cfg.advanceCount) : null;
+  return { teamCount: teams, config: cfg, pools, advancement, messages: poolPlanner.describePlan(pools, advancement) };
 });
 
 /* ================================================================
@@ -211,11 +259,28 @@ exports.advanceToKnockout = onCall({ region: REGION }, async (request) => {
   const unfinished = groupMatches.some((m) => !['completed', 'walkover', 'forfeit'].includes(m.status));
   if (unfinished) throw new HttpsError('failed-precondition', 'Group stage is not complete yet.');
 
-  const groups = division.bracketMeta.groups.map((g) => ({
-    groupId: g.groupId,
-    members: g.participants.map((p) => ({ participantId: p.participantId, playerNames: [p.name] })),
-  }));
-  const advancers = groupKnockout.selectAdvancers(groups, groupMatches, division.bracketMeta.advancePerGroup || ADVANCE_PER_GROUP);
+  let advancers;
+  if (division.bracketMeta.advancePlan) {
+    // Pools can differ in size, so qualifiers are chosen and cross-seeded by
+    // finishing place, then by win%/point-diff-per-game across pools, with
+    // same-pool rematches kept out of round 1 where possible.
+    const tables = division.bracketMeta.groups.map((g) => ({
+      groupId: g.groupId,
+      table: roundRobin.computeStandings(
+        g.participants.map((p) => ({ participantId: p.participantId, name: p.name })),
+        groupMatches.filter((m) => m.groupId === g.groupId)
+      ),
+    }));
+    const qualifiers = poolPlanner.selectQualifiers(tables, division.bracketMeta.advancePlan);
+    poolPlanner.separatePoolRematches(qualifiers);
+    advancers = qualifiers.map((q) => ({ participantId: q.row.participantId, playerNames: [q.row.name], groupId: q.groupId, place: q.place }));
+  } else {
+    const groups = division.bracketMeta.groups.map((g) => ({
+      groupId: g.groupId,
+      members: g.participants.map((p) => ({ participantId: p.participantId, playerNames: [p.name] })),
+    }));
+    advancers = groupKnockout.selectAdvancers(groups, groupMatches, division.bracketMeta.advancePerGroup || ADVANCE_PER_GROUP);
+  }
   if (advancers.length < 2) throw new HttpsError('failed-precondition', 'Not enough advancers to form a knockout bracket.');
 
   const { matches: initial, roundsTotal } = singleElim.generateInitialMatches(advancers);

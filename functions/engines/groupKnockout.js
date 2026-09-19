@@ -34,6 +34,18 @@ function generateGroupStageMatches(seeded, groupSize) {
   return { matches, groups };
 }
 
+/* Round robin inside each already-assigned pool (see poolPlanner.assignPools).
+   Pools may differ in size by one, so match counts differ per pool. */
+function generateMatchesForPools(pools) {
+  const matches = [];
+  pools.forEach(({ groupId, members }) => {
+    roundRobin.generateMatches(members).forEach((m) => {
+      matches.push({ ...m, groupId, stage: 'group' });
+    });
+  });
+  return matches;
+}
+
 /* Given every completed group-stage match and the group assignments, ranks
    each group internally (reusing Round Robin's win/loss/differential
    table) and returns the participants who advance, in knockout-seed order:
@@ -58,4 +70,4 @@ function selectAdvancers(groups, allGroupMatches, advancePerGroup) {
   return advancers;
 }
 
-module.exports = { assignGroups, generateGroupStageMatches, selectAdvancers, GROUP_LABELS };
+module.exports = { assignGroups, generateGroupStageMatches, generateMatchesForPools, selectAdvancers, GROUP_LABELS };

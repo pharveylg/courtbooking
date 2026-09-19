@@ -966,7 +966,7 @@ let vapidConfigured = false;
 
 function makePushSender() {
   if (!vapidConfigured) {
-    webpush.setVapidDetails('https://courtbooking-85175.web.app', VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY.value());
+    webpush.setVapidDetails('https://courts.dulahq.app', VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY.value());
     vapidConfigured = true;
   }
   return async (sub, payload) => {

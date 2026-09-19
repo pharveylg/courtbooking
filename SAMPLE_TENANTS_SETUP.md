@@ -145,10 +145,10 @@ Use the configurations from `setup-sample-tenants-admin.js` as reference.
 
 Open these URLs in your browser:
 
-- **Demo**: https://courtbooking-85175.web.app/?client=demo
-- **Ace Pickleball**: https://courtbooking-85175.web.app/?client=acepickle
-- **Smash Club**: https://courtbooking-85175.web.app/?client=smash-club
-- **Rally Point**: https://courtbooking-85175.web.app/?client=rally-point
+- **Demo**: https://courts.dulahq.app/?client=demo
+- **Ace Pickleball**: https://courts.dulahq.app/?client=acepickle
+- **Smash Club**: https://courts.dulahq.app/?client=smash-club
+- **Rally Point**: https://courts.dulahq.app/?client=rally-point
 
 ### 2. Verify Branding
 
@@ -176,7 +176,7 @@ Each tenant should show:
 
 ### 5. Test Invalid Tenant
 
-Visit: https://courtbooking-85175.web.app/?client=invalid-tenant-123
+Visit: https://courts.dulahq.app/?client=invalid-tenant-123
 
 Expected behavior:
 - ❌ Should show error or fallback to default

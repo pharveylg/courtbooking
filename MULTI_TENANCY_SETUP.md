@@ -2,7 +2,7 @@
 
 ## Overview
 
-Pickleball Court Booking is a multi-tenant pickleball court booking system deployed at `https://courtbooking-85175.web.app/`. Each tenant (pickleball club/court owner) gets their own isolated data, branding, and booking system while sharing the same application infrastructure.
+Pickleball Court Booking is a multi-tenant pickleball court booking system deployed at `https://courts.dulahq.app/`. Each tenant (pickleball club/court owner) gets their own isolated data, branding, and booking system while sharing the same application infrastructure.
 
 **First-Year Scale:**
 - <10 clients
@@ -18,14 +18,14 @@ The application supports multiple tenant resolution strategies:
 
 ### Current (Development/Testing)
 ```
-https://courtbooking-85175.web.app/?client=demo
-https://courtbooking-85175.web.app/?client=acepickle
+https://courts.dulahq.app/?client=demo
+https://courts.dulahq.app/?client=acepickle
 ```
 
 ### Path-Based (Production Ready)
 ```
-https://courtbooking-85175.web.app/demo
-https://courtbooking-85175.web.app/acepickle
+https://courts.dulahq.app/demo
+https://courts.dulahq.app/acepickle
 ```
 
 ### Future (Custom Domain)
@@ -264,9 +264,9 @@ Create empty state documents for:
 
 ### Step 5: Access the Tenant
 
-Visit: `https://courtbooking-85175.web.app/?client={clientId}`
+Visit: `https://courts.dulahq.app/?client={clientId}`
 
-Or with path-based routing: `https://courtbooking-85175.web.app/{clientId}`
+Or with path-based routing: `https://courts.dulahq.app/{clientId}`
 
 ---
 
@@ -347,13 +347,13 @@ All tenants share:
 
 1. **Valid Tenant Access:**
    ```
-   GET https://courtbooking-85175.web.app/?client=demo
+   GET https://courts.dulahq.app/?client=demo
    Expected: Loads demo tenant config and data
    ```
 
 2. **Invalid Tenant:**
    ```
-   GET https://courtbooking-85175.web.app/?client=invalid-tenant
+   GET https://courts.dulahq.app/?client=invalid-tenant
    Expected: Shows error or falls back to default config
    ```
 
@@ -469,7 +469,7 @@ For issues or questions:
 
 **Next Steps:**
 1. Run `setup-first-client.js` to create your first tenant
-2. Test at `https://courtbooking-85175.web.app/?client={clientId}`
+2. Test at `https://courts.dulahq.app/?client={clientId}`
 3. Customize branding and courts for each tenant
 4. Deploy Firestore security rules
 5. Monitor usage in Firebase Console

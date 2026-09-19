@@ -2,7 +2,7 @@
 
 Single source of truth for every tenant's real-world status. Update this
 file whenever a tenant actually goes live (starts billing), renews, or
-churns. All tenants share one deployment (`courtbooking-85175.web.app`,
+churns. All tenants share one deployment (`courts.dulahq.app`,
 Firebase project `courtbooking-85175`) and are resolved via `?client=<id>`
 -- there is no per-client branch, domain, or Firebase project anymore.
 

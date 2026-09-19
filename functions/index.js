@@ -34,6 +34,7 @@ const roundRobin = require('./engines/roundRobin');
 const singleElim = require('./engines/singleElim');
 const groupKnockout = require('./engines/groupKnockout');
 const poolPlanner = require('./engines/poolPlanner');
+const scheduler = require('./engines/scheduler');
 
 const ADVANCE_PER_GROUP = 2; // legacy divisions generated before poolPlanner (no bracketMeta.advancePlan)
 
@@ -615,4 +616,293 @@ exports.getBillingPortalData = onCall({ region: REGION }, async (request) => {
     .map((s) => sanitizeForClient({ id: s.id, ...s.data() }));
 
   return { tenant, confirmedBookingsThisMonth, invoices };
+});
+
+/* ================================================================
+   MULTI-VENUE SCHEDULING
+   ================================================================
+   Venues, courts, and the day/duration/rest/travel settings live on the
+   tournament doc (client-written, like divisions) and are re-normalized
+   here on every read -- nothing from the browser is trusted as-is. The
+   schedule itself lives on each match as `sched` ({venueId, courtId,
+   date, startMin, endMin}); it is server-written, like the rest of a
+   match. `tournament.schedule.status` is 'draft' until the organizer
+   publishes: only then does the public page show times, and only then do
+   this club's own courts get blocked on the real booking calendar.
+   The scheduling maths lives in engines/scheduler.js (pure + tested);
+   these callables just load, call it, and write the result. */
+
+const cleanIdStr = (v) => (typeof v === 'string' && /^[a-z0-9_-]{1,40}$/.test(v) ? v : null);
+const isByeMatch = (m) => !!(m.isBye || (m.participantIds || []).includes('BYE'));
+const unitKeyOf = (m) => `${m.divisionId}:${m.groupId || (m.stage === 'knockout' ? 'ko' : 'main')}`;
+
+async function loadScheduleContext(clientId, tournamentId) {
+  const tRef = tournamentRef(clientId, tournamentId);
+  const tSnap = await tRef.get();
+  if (!tSnap.exists) throw new HttpsError('not-found', 'Tournament not found.');
+  const tournament = tSnap.data();
+  const venues = scheduler.normalizeVenues(tournament.venues);
+  const config = scheduler.normalizeScheduleConfig(tournament.scheduleConfig, venues);
+  const [divSnap, regSnap, matchSnap, bookSnap] = await Promise.all([
+    tRef.collection('divisions').get(),
+    tRef.collection('registrations').get(),
+    tRef.collection('matches').get(),
+    db.doc(`clients/${clientId}/bookings/state`).get(),
+  ]);
+  const divisions = divSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  const registrations = regSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  const playersByParticipant = {};
+  registrations.forEach((r) => { playersByParticipant[r.id] = r.playerIds || []; });
+  const matches = matchSnap.docs.map((d) => ({ id: d.id, ...d.data() })).filter((m) => !isByeMatch(m));
+  const bookings = (bookSnap.exists && bookSnap.data().data) || [];
+  return { tRef, tournament, venues, config, divisions, registrations, playersByParticipant, matches, bookings, clientId, tournamentId };
+}
+
+function toSchedMatch(m, ctx) {
+  const players = new Set();
+  (m.participantIds || []).forEach((pid) => {
+    const ids = ctx.playersByParticipant[pid];
+    (ids && ids.length ? ids : [pid]).forEach((p) => players.add(p));
+  });
+  return {
+    id: m.id, divisionId: m.divisionId, stage: m.stage, unitKey: unitKeyOf(m),
+    round: m.round, position: m.position,
+    participantIds: m.participantIds, participantNames: m.participantNames,
+    playerIds: [...players], sched: m.sched || null, status: m.status,
+  };
+}
+
+const isOwnScheduleBlock = (tournamentId) => (b) => b && b.source === 'tournament' && b.tournamentId === tournamentId && b.kind === 'schedule-block';
+const isPlayed = (m) => ['completed', 'walkover', 'forfeit'].includes(m.status);
+
+function validateContext(ctx, matchesWithSched) {
+  const busy = scheduler.busyFromBookings(ctx.bookings, ctx.venues, isOwnScheduleBlock(ctx.tournamentId));
+  const list = matchesWithSched || ctx.matches.map((m) => toSchedMatch(m, ctx));
+  return { ...scheduler.validateSchedule({ matches: list, venues: ctx.venues, config: ctx.config, busy }), busy };
+}
+
+/* Replace this tournament's schedule blocks on the club's booking calendar.
+   In a transaction because customers book courts at the same time. */
+async function syncCourtBlocks(ctx, matchesWithSched, publish) {
+  const ref = db.doc(`clients/${ctx.clientId}/bookings/state`);
+  const prefix = `tsched_${ctx.tournamentId}_`;
+  const blocks = publish ? scheduler.courtBlocks(matchesWithSched, ctx.venues) : [];
+  await db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    const list = (snap.exists && snap.data().data) || [];
+    const kept = list.filter((b) => !(typeof b.id === 'string' && b.id.startsWith(prefix)));
+    const added = blocks.map((b) => ({
+      id: `${prefix}${b.tenantCourtId}_${b.date}_${b.startHour}`,
+      name: `[Tournament] ${ctx.tournament.name || 'Tournament play'}`, email: '',
+      court: b.tenantCourtId, date: b.date, start: b.startHour, end: b.endHour,
+      status: 'Reserved', group: 'Tournament play', createdAt: Date.now(),
+      source: 'tournament', tournamentId: ctx.tournamentId, kind: 'schedule-block',
+    }));
+    tx.set(ref, { data: [...kept, ...added], updatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+  });
+  return blocks.length;
+}
+
+async function commitInChunks(ops) {
+  for (let i = 0; i < ops.length; i += 400) {
+    const batch = db.batch();
+    ops.slice(i, i + 400).forEach((op) => op(batch));
+    await batch.commit();
+  }
+}
+
+/* ---------------- previewSchedulePlan ---------------- */
+exports.previewSchedulePlan = onCall({ region: REGION }, async (request) => {
+  const { clientId, tournamentId } = request.data || {};
+  assertValidTenantId(clientId);
+  requireString(tournamentId, 'tournamentId');
+  const ctx = await loadScheduleContext(clientId, tournamentId);
+
+  const counts = {};
+  ctx.registrations.forEach((r) => {
+    if (r.status === 'approved' || r.status === 'checked_in') counts[r.divisionId] = (counts[r.divisionId] || 0) + 1;
+  });
+  // Exact counts once a division's bracket exists; estimates before that.
+  const withMatches = new Set(ctx.matches.map((m) => m.divisionId));
+  const units = scheduler.estimateUnits(ctx.divisions.filter((d) => !withMatches.has(d.id)), counts);
+  const byUnit = new Map();
+  ctx.matches.forEach((m) => {
+    const k = unitKeyOf(m);
+    if (!byUnit.has(k)) byUnit.set(k, { key: k, divisionId: m.divisionId, stage: m.stage === 'knockout' ? 'knockout' : m.stage, matchCount: 0, rounds: 0, label: '' });
+    const u = byUnit.get(k);
+    u.matchCount++;
+    u.rounds = Math.max(u.rounds, m.round || 0);
+  });
+  const divName = Object.fromEntries(ctx.divisions.map((d) => [d.id, d.name]));
+  byUnit.forEach((u) => {
+    const tail = u.key.split(':').pop();
+    u.label = `${divName[u.divisionId] || 'Division'} · ${u.stage === 'knockout' ? 'Playoffs' : tail === 'main' ? 'Bracket' : `Pool ${tail}`}`;
+    units.push(u);
+  });
+
+  const capacity = scheduler.capacityCheck(units, ctx.venues, ctx.config);
+  const schedulable = ctx.matches.filter((m) => !isPlayed(m));
+  return {
+    venues: ctx.venues, config: ctx.config,
+    scheduleStatus: (ctx.tournament.schedule && ctx.tournament.schedule.status) || 'draft',
+    capacity: { ok: capacity.ok, perVenue: capacity.perVenue, totalMatches: capacity.totalMatches, poolMatches: capacity.poolMatches },
+    messages: capacity.messages,
+    progress: { total: schedulable.length, scheduled: schedulable.filter((m) => m.sched).length },
+  };
+});
+
+/* ---------------- generateSchedule ---------------- */
+exports.generateSchedule = onCall({ region: REGION }, async (request) => {
+  const { clientId, tournamentId, mode } = request.data || {};
+  assertValidTenantId(clientId);
+  requireString(tournamentId, 'tournamentId');
+  const tRef = tournamentRef(clientId, tournamentId);
+  await assertTournamentIsActive(tRef);
+  const ctx = await loadScheduleContext(clientId, tournamentId);
+
+  if (!ctx.venues.some((v) => scheduler.activeCourts(v).length)) throw new HttpsError('failed-precondition', 'Add a venue with at least one active court first.');
+  if (!ctx.config.days.length) throw new HttpsError('failed-precondition', 'Add at least one tournament day (date, opening and closing time) first.');
+
+  const redo = mode === 'all';
+  const playable = ctx.matches.filter((m) => !isPlayed(m));
+  const toPlace = playable.filter((m) => redo || !m.sched);
+  if (!toPlace.length) return { scheduledCount: 0, unscheduled: [], conflicts: [], flags: [], message: 'Every match already has a court and time.' };
+
+  const placeIds = new Set(toPlace.map((m) => m.id));
+  const existing = ctx.matches.filter((m) => m.sched && !placeIds.has(m.id)).map((m) => toSchedMatch(m, ctx));
+  const toPlaceMatches = toPlace.map((m) => toSchedMatch({ ...m, sched: null }, ctx));
+
+  // Units already anchored to a venue stay there.
+  const votes = {};
+  existing.forEach((m) => { const v = m.sched.venueId; votes[m.unitKey] = votes[m.unitKey] || {}; votes[m.unitKey][v] = (votes[m.unitKey][v] || 0) + 1; });
+  const hints = {};
+  Object.entries(votes).forEach(([k, byVenue]) => { hints[k] = Object.entries(byVenue).sort((a, b) => b[1] - a[1])[0][0]; });
+  const unitMap = new Map();
+  [...existing, ...toPlaceMatches].forEach((m) => {
+    if (!unitMap.has(m.unitKey)) unitMap.set(m.unitKey, { key: m.unitKey, matchCount: 0, stage: m.stage === 'knockout' ? 'knockout' : 'group' });
+    unitMap.get(m.unitKey).matchCount++;
+  });
+  const unitVenue = scheduler.assignUnitsToVenues([...unitMap.values()], ctx.venues, ctx.config, hints);
+  const busy = scheduler.busyFromBookings(ctx.bookings, ctx.venues, isOwnScheduleBlock(tournamentId));
+
+  const result = scheduler.scheduleMatches({ matches: toPlaceMatches, existing, venues: ctx.venues, config: ctx.config, busy, unitVenue });
+
+  const ops = [];
+  toPlace.forEach((m) => {
+    const s = result.assignments[m.id];
+    if (s) ops.push((b) => b.update(tRef.collection('matches').doc(m.id), { sched: s }));
+    else if (redo && m.sched) ops.push((b) => b.update(tRef.collection('matches').doc(m.id), { sched: admin.firestore.FieldValue.delete() }));
+  });
+  await commitInChunks(ops);
+
+  const final = ctx.matches.map((m) => {
+    const sm = toSchedMatch(m, ctx);
+    if (placeIds.has(m.id)) sm.sched = result.assignments[m.id] || null;
+    return sm;
+  });
+  const wasPublished = !!(ctx.tournament.schedule && ctx.tournament.schedule.status === 'published');
+  await tRef.set({ schedule: { status: wasPublished ? 'published' : 'draft', generatedAt: admin.firestore.FieldValue.serverTimestamp(), ...(wasPublished ? { publishedAt: ctx.tournament.schedule.publishedAt || null } : {}) } }, { merge: true });
+  if (wasPublished) await syncCourtBlocks(ctx, final, true);
+
+  const label = Object.fromEntries(ctx.matches.map((m) => [m.id, (m.participantNames || []).join(' vs ')]));
+  const validation = validateContext(ctx, final);
+  await logAudit(tRef, 'schedule-generated', `Scheduled ${Object.keys(result.assignments).length} match(es)${result.unscheduled.length ? `, ${result.unscheduled.length} could not be placed` : ''}${redo ? ' (full regeneration)' : ''}`);
+  return {
+    scheduledCount: Object.keys(result.assignments).length,
+    unscheduled: result.unscheduled.map((u) => ({ ...u, label: label[u.matchId] || u.matchId })),
+    conflicts: validation.conflicts.slice(0, 50), flags: validation.flags.length,
+    errorCount: validation.errorCount, warningCount: validation.warningCount,
+  };
+});
+
+/* ---------------- moveMatch ---------------- */
+// Geometric impossibilities are refused outright; softer problems (rest,
+// travel, a pool split across venues) are applied but reported, and the
+// travel rule still blocks publishing.
+const HARD_CONFLICTS = new Set(['court_overlap', 'player_overlap', 'inactive_court', 'unknown_court', 'outside_window', 'facility_busy']);
+
+exports.moveMatch = onCall({ region: REGION }, async (request) => {
+  const { clientId, tournamentId, matchId, sched } = request.data || {};
+  assertValidTenantId(clientId);
+  requireString(tournamentId, 'tournamentId');
+  requireString(matchId, 'matchId');
+  const tRef = tournamentRef(clientId, tournamentId);
+  await assertTournamentIsActive(tRef);
+  const ctx = await loadScheduleContext(clientId, tournamentId);
+  const match = ctx.matches.find((m) => m.id === matchId);
+  if (!match) throw new HttpsError('not-found', 'Match not found.');
+  if (isPlayed(match)) throw new HttpsError('failed-precondition', "This match has already been played -- it can't be moved.");
+  const wasPublished = !!(ctx.tournament.schedule && ctx.tournament.schedule.status === 'published');
+
+  let next = null;
+  if (sched) {
+    const venueId = cleanIdStr(sched.venueId), courtId = cleanIdStr(sched.courtId);
+    const startMin = Math.round(Number(sched.startMin));
+    if (!venueId || !courtId || !scheduler.isValidDate(sched.date) || !Number.isFinite(startMin) || startMin < 0 || startMin >= 24 * 60) {
+      throw new HttpsError('invalid-argument', 'Pick a venue, court, date and start time.');
+    }
+    next = { venueId, courtId, date: sched.date, startMin, endMin: startMin + ctx.config.matchMinutes };
+  }
+
+  const list = ctx.matches.map((m) => { const sm = toSchedMatch(m, ctx); if (m.id === matchId) sm.sched = next; return sm; });
+  const validation = validateContext(ctx, list);
+  const mine = validation.conflicts.filter((c) => c.matchIds.includes(matchId));
+  const blocking = next ? mine.filter((c) => c.severity === 'error' && HARD_CONFLICTS.has(c.type)) : [];
+  if (blocking.length) throw new HttpsError('failed-precondition', blocking.map((c) => c.message).join(' '), { conflicts: blocking });
+
+  await tRef.collection('matches').doc(matchId).update({ sched: next || admin.firestore.FieldValue.delete() });
+  if (wasPublished) await syncCourtBlocks(ctx, list, true);
+  const label = (match.participantNames || []).join(' vs ');
+  await logAudit(tRef, next ? 'match-moved' : 'match-unscheduled', `${label}${next ? ` -> ${next.date} ${scheduler.fmtMin(next.startMin)}` : ''}`);
+  return { applied: true, published: wasPublished, conflicts: mine };
+});
+
+/* ---------------- validateSchedule ---------------- */
+exports.validateSchedule = onCall({ region: REGION }, async (request) => {
+  const { clientId, tournamentId } = request.data || {};
+  assertValidTenantId(clientId);
+  requireString(tournamentId, 'tournamentId');
+  const ctx = await loadScheduleContext(clientId, tournamentId);
+  const v = validateContext(ctx);
+  const playable = ctx.matches.filter((m) => !isPlayed(m));
+  return {
+    conflicts: v.conflicts.slice(0, 100), errorCount: v.errorCount, warningCount: v.warningCount,
+    venueChanges: v.flags.length,
+    unscheduled: playable.filter((m) => !m.sched).length, scheduled: playable.filter((m) => m.sched).length,
+    scheduleStatus: (ctx.tournament.schedule && ctx.tournament.schedule.status) || 'draft',
+  };
+});
+
+/* ---------------- publishSchedule ---------------- */
+exports.publishSchedule = onCall({ region: REGION }, async (request) => {
+  const { clientId, tournamentId, publish } = request.data || {};
+  assertValidTenantId(clientId);
+  requireString(tournamentId, 'tournamentId');
+  const tRef = tournamentRef(clientId, tournamentId);
+  await assertTournamentIsActive(tRef);
+  const ctx = await loadScheduleContext(clientId, tournamentId);
+  const list = ctx.matches.map((m) => toSchedMatch(m, ctx));
+
+  if (publish === false) {
+    await tRef.set({ schedule: { status: 'draft', unpublishedAt: admin.firestore.FieldValue.serverTimestamp() } }, { merge: true });
+    const removed = await syncCourtBlocks(ctx, list, false);
+    await logAudit(tRef, 'schedule-unpublished', 'Schedule taken back to draft; club court blocks removed');
+    return { status: 'draft', blocks: removed };
+  }
+
+  const scheduled = list.filter((m) => m.sched);
+  if (!scheduled.length) throw new HttpsError('failed-precondition', 'Nothing is scheduled yet -- generate the schedule first.');
+  const validation = validateContext(ctx, list);
+  const errors = validation.conflicts.filter((c) => c.severity === 'error');
+  if (errors.length) {
+    const travel = errors.filter((c) => c.type === 'travel_buffer').length;
+    throw new HttpsError('failed-precondition',
+      `The schedule can't go live yet: ${errors.length} conflict${errors.length === 1 ? '' : 's'} to fix${travel ? ` (${travel} venue-to-venue transit buffer${travel === 1 ? '' : 's'} shorter than ${ctx.config.travelBufferMinutes} minutes)` : ''}. ${errors[0].message}`,
+      { conflicts: errors.slice(0, 30) });
+  }
+  const playable = list.filter((m) => !isPlayed(m));
+  const blocks = await syncCourtBlocks(ctx, list, true);
+  await tRef.set({ schedule: { status: 'published', publishedAt: admin.firestore.FieldValue.serverTimestamp() } }, { merge: true });
+  await logAudit(tRef, 'schedule-published', `Published ${scheduled.length} scheduled match(es); ${blocks} court block(s) placed on the club calendar`);
+  return { status: 'published', scheduled: scheduled.length, unscheduled: playable.filter((m) => !m.sched).length, blocks, warnings: validation.warningCount, venueChanges: validation.flags.length };
 });

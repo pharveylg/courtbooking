@@ -281,6 +281,49 @@
       </div>
 
       <!-- Tournament Financials -->
+      <!-- Venues, courts & schedule -->
+      <div id="venuesWrap" class="hidden mt-5 rounded-[24px] bg-white border border-[#EAE0D5] p-5 md:p-6">
+        <div class="flex items-center justify-between flex-wrap gap-2 mb-1">
+          <h3 class="text-[16px] font-[800] tracking-[-0.02em]">Tournament Location &amp; Court Grid</h3>
+          <div class="flex items-center gap-2 flex-wrap">
+            <button id="useClubCourtsBtn" type="button" class="h-9 px-3.5 rounded-full bg-white border border-[#EAE0D5] mono text-[11px] font-[700] cursor-pointer hover:border-[#201C19]">Use this club's courts</button>
+            <button id="addVenueBtn" type="button" class="h-9 px-3.5 rounded-full bg-white border border-[#EAE0D5] mono text-[11px] font-[700] cursor-pointer hover:border-[#201C19]">+ Add Venue</button>
+          </div>
+        </div>
+        <p class="mono text-[10px] opacity-50 mb-3">Host one tournament across several locations. This club's own courts also block the public booking calendar once the schedule is published; other venues are tournament-only. Pools stay together at one venue, and playoffs consolidate at the primary venue.</p>
+        <div id="venueList" class="space-y-3"></div>
+
+        <div class="mt-4 pt-4 border-t border-[#F1E9DF]">
+          <div class="mono text-[10px] uppercase tracking-widest opacity-60 mb-2">Tournament days &amp; timing</div>
+          <div id="schedDays" class="space-y-2"></div>
+          <button id="addDayBtn" type="button" class="mt-2 h-8 px-3 rounded-full bg-white border border-[#EAE0D5] mono text-[10px] font-[700] cursor-pointer hover:border-[#201C19]">+ Add Day</button>
+          <div class="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <label class="flex flex-col gap-1.5"><span class="mono text-[10px] uppercase tracking-widest opacity-60">Match length (min)</span>
+              <input id="schedMatchMin" type="number" min="10" max="120" step="5" class="h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-4 mono text-[12px] outline-none focus:border-[#201C19]"/></label>
+            <label class="flex flex-col gap-1.5"><span class="mono text-[10px] uppercase tracking-widest opacity-60">Rest between a team's matches (min)</span>
+              <input id="schedRestMin" type="number" min="0" max="120" step="5" class="h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-4 mono text-[12px] outline-none focus:border-[#201C19]"/></label>
+            <label class="flex flex-col gap-1.5"><span class="mono text-[10px] uppercase tracking-widest opacity-60">Travel buffer between venues (min)</span>
+              <input id="schedTravelMin" type="number" min="0" max="180" step="5" class="h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-4 mono text-[12px] outline-none focus:border-[#201C19]"/></label>
+          </div>
+          <button id="saveVenuesBtn" type="button" class="mt-3 h-10 px-4 rounded-full bg-[#201C19] text-white mono text-[11px] font-[700] cursor-pointer hover:opacity-90">Save Locations &amp; Timing</button>
+        </div>
+
+        <div class="mt-4 pt-4 border-t border-[#F1E9DF]">
+          <div class="flex items-center justify-between flex-wrap gap-2 mb-2">
+            <div class="mono text-[10px] uppercase tracking-widest opacity-60">Schedule <span id="schedStatusBadge" class="ml-1"></span></div>
+            <div id="schedProgress" class="mono text-[10px] opacity-60"></div>
+          </div>
+          <div id="schedPreview" class="space-y-1.5 mb-3"><div class="mono text-[11px] opacity-50">Add a venue and tournament days to see whether the courts can handle your matches.</div></div>
+          <div class="flex flex-wrap items-center gap-2">
+            <button id="genScheduleBtn" type="button" class="h-10 px-4 rounded-full bg-[#201C19] text-white mono text-[11px] font-[700] cursor-pointer hover:opacity-90">Generate Schedule</button>
+            <button id="regenScheduleBtn" type="button" class="h-10 px-3.5 rounded-full bg-white border border-[#EAE0D5] mono text-[11px] font-[700] cursor-pointer hover:border-[#201C19]">Regenerate All</button>
+            <button id="checkScheduleBtn" type="button" class="h-10 px-3.5 rounded-full bg-white border border-[#EAE0D5] mono text-[11px] font-[700] cursor-pointer hover:border-[#201C19]">Check Conflicts</button>
+            <button id="publishScheduleBtn" type="button" class="h-10 px-4 rounded-full bg-[#D6FF5F] hover:bg-[#CBF052] text-[#201C19] border border-[#201C19]/10 mono text-[11px] font-[800] cursor-pointer">Publish Schedule</button>
+          </div>
+          <div id="schedResult" class="mt-3 space-y-1.5"></div>
+        </div>
+      </div>
+
       <div id="financialsWrap" class="hidden mt-5 rounded-[24px] bg-white border border-[#EAE0D5] p-5 md:p-6">
         <h3 class="text-[16px] font-[800] tracking-[-0.02em] mb-1">Tournament Financials</h3>
         <p class="mono text-[10px] opacity-50 mb-3">Your own event budget -- entry fees collected from players, minus admin/officiating costs and the prize pool. Separate from the platform's premium pricing above.</p>
@@ -610,6 +653,7 @@ async function openTournament(tournamentId){
   document.getElementById('tfDualWrap').classList.add('hidden');
   document.getElementById('divisionsWrap').classList.add('hidden');
   document.getElementById('registrationWrap').classList.add('hidden');
+  document.getElementById('venuesWrap').classList.add('hidden');
   document.getElementById('financialsWrap').classList.add('hidden');
   document.getElementById('matchesWrap').classList.add('hidden');
   document.getElementById('announcementsWrap').classList.add('hidden');
@@ -658,6 +702,8 @@ async function openTournament(tournamentId){
 
   document.getElementById('divisionsWrap').classList.remove('hidden');
   document.getElementById('registrationWrap').classList.remove('hidden');
+  document.getElementById('venuesWrap').classList.remove('hidden');
+  initVenuePanel(t);
   document.getElementById('financialsWrap').classList.remove('hidden');
   document.getElementById('matchesWrap').classList.remove('hidden');
   document.getElementById('announcementsWrap').classList.remove('hidden');
@@ -1216,6 +1262,317 @@ async function loadMatchesForDivision(divisionId){
   }
 }
 
+/* ================================================================
+   VENUES, COURTS & SCHEDULE
+   Venues/courts/days/timing are edited here and written straight to the
+   tournament doc (like divisions); every schedule computation --
+   capacity preview, generation, conflict checks, publishing -- runs in
+   the Cloud Functions (engines/scheduler.js), which re-validate whatever
+   was saved. A schedule stays a private draft until Publish: only then
+   does the public page show times and the club's own courts get blocked
+   on the booking calendar.
+   ================================================================ */
+let SCHED_STATE = { venues: [], config: { days: [], matchMinutes: 30, restMinutes: 15, travelBufferMinutes: 30, primaryVenueId: null } };
+const toMinutes = (hhmm) => { const [h, m] = String(hhmm || '').split(':').map(Number); return Number.isFinite(h) ? h * 60 + (m || 0) : null; };
+const fromMinutes = (min) => `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
+function fmtMinLabel(min){
+  const h24 = Math.floor(min / 60) % 24, m = min % 60, h12 = h24 % 12 === 0 ? 12 : h24 % 12;
+  return `${h12}:${String(m).padStart(2, '0')} ${h24 < 12 ? 'AM' : 'PM'}`;
+}
+function currentTournamentDoc(){ return TOURNAMENTS.find(x => x.id === CURRENT_TOURNAMENT_ID) || null; }
+function venuesConfigured(){
+  const t = currentTournamentDoc();
+  return !!(t && Array.isArray(t.venues) && t.venues.some(v => (v.courts || []).some(c => c.active !== false)));
+}
+function scheduleDaysFor(t){
+  if(t && t.scheduleConfig && (t.scheduleConfig.days || []).length) return JSON.parse(JSON.stringify(t.scheduleConfig.days));
+  const days = [];
+  if(t && t.startDate){
+    const start = new Date(t.startDate + 'T00:00:00Z');
+    const end = new Date((t.endDate || t.startDate) + 'T00:00:00Z');
+    for(let d = new Date(start); d <= end && days.length < 7; d = new Date(d.getTime() + 86400000)){
+      days.push({ date: d.toISOString().slice(0, 10), startMin: 8 * 60, endMin: 18 * 60 });
+    }
+  }
+  return days;
+}
+function initVenuePanel(t){
+  const cfg = (t && t.scheduleConfig) || {};
+  SCHED_STATE = {
+    venues: JSON.parse(JSON.stringify((t && t.venues) || [])),
+    config: {
+      days: scheduleDaysFor(t),
+      matchMinutes: cfg.matchMinutes || 30, restMinutes: cfg.restMinutes ?? 15, travelBufferMinutes: cfg.travelBufferMinutes ?? 30,
+      primaryVenueId: cfg.primaryVenueId || null,
+    },
+  };
+  document.getElementById('schedResult').innerHTML = '';
+  renderVenuePanel();
+  refreshSchedulePreview();
+}
+function nextId(prefix, taken){
+  let n = taken.length + 1;
+  while(taken.includes(prefix + n)) n++;
+  return prefix + n;
+}
+function renderVenuePanel(){
+  const list = document.getElementById('venueList');
+  const inputCls = 'h-10 rounded-full border border-[#EAE0D5] bg-white px-4 mono text-[12px] outline-none focus:border-[#201C19]';
+  if(!SCHED_STATE.venues.length){
+    list.innerHTML = `<div class="mono text-[11px] opacity-50">No venues yet. Use "Use this club's courts" for this facility, or "+ Add Venue" for another location.</div>`;
+  } else {
+    list.innerHTML = SCHED_STATE.venues.map((v, i) => {
+      const isClub = v.kind === 'facility';
+      const primary = SCHED_STATE.config.primaryVenueId === v.id;
+      const courts = (v.courts || []).map((c, j) => `
+        <div class="flex items-center gap-2" data-court-row="${j}">
+          <span class="mono text-[10px] opacity-50 w-16 shrink-0">Court #${j + 1}</span>
+          <input data-cf="name" data-vi="${i}" data-ci="${j}" value="${escapeHtml(c.name || '')}" ${isClub ? 'readonly' : ''} class="${inputCls} flex-1 min-w-0 ${isClub ? 'opacity-70' : ''}"/>
+          <label class="flex items-center gap-1.5 mono text-[10px] font-[700] shrink-0 cursor-pointer"><input type="checkbox" data-cf="active" data-vi="${i}" data-ci="${j}" ${c.active !== false ? 'checked' : ''} class="accent-[#201C19]"/> ${c.active !== false ? 'Active' : 'Maintenance'}</label>
+        </div>`).join('');
+      return `<div class="p-4 rounded-[16px] bg-[#FFFBF5] border ${primary ? 'border-[#201C19]' : 'border-[#EAE0D5]'}" data-venue-card="${i}">
+        <div class="flex items-center justify-between gap-2 flex-wrap mb-3">
+          <div class="flex items-center gap-2">
+            <span class="mono text-[9px] px-2 py-0.5 rounded-full ${isClub ? 'bg-[#D6FF5F] text-[#201C19]' : 'bg-[#EDE8FF] text-[#3B2A9E]'} font-[800] uppercase">${isClub ? 'This club' : 'External venue'}</span>
+            <label class="flex items-center gap-1.5 mono text-[10px] font-[700] cursor-pointer"><input type="radio" name="primaryVenue" data-primary="${i}" ${primary ? 'checked' : ''} class="accent-[#201C19]"/> Primary venue (playoffs)</label>
+          </div>
+          <button type="button" data-remove-venue="${i}" class="mono text-[9px] opacity-50 hover:opacity-100 cursor-pointer">Remove venue</button>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <label class="flex flex-col gap-1.5"><span class="mono text-[10px] uppercase tracking-widest opacity-60">Venue Name / Branch</span>
+            <input data-vf="name" data-vi="${i}" value="${escapeHtml(v.name || '')}" placeholder="e.g. Sports Zone Main" class="${inputCls}"/></label>
+          <label class="flex flex-col gap-1.5"><span class="mono text-[10px] uppercase tracking-widest opacity-60">Street Address</span>
+            <input data-vf="address" data-vi="${i}" value="${escapeHtml(v.address || '')}" placeholder="e.g. 123 Premium St., Makati City" class="${inputCls}"/></label>
+        </div>
+        ${isClub ? `<div class="mono text-[10px] opacity-50 mt-3">Courts mirror this club's real courts (set in Admin → Court Management). Untick one to keep it out of the tournament, e.g. when it's under maintenance.</div>`
+          : `<label class="mt-3 flex items-center gap-2 flex-wrap"><span class="mono text-[10px] uppercase tracking-widest opacity-60">Courts available at this location</span>
+              <input type="number" min="0" max="24" step="1" data-vf="courtCount" data-vi="${i}" value="${(v.courts || []).length}" class="${inputCls} w-24"/></label>`}
+        <div class="mt-3 space-y-2">${courts || '<div class="mono text-[10px] opacity-50">No courts yet.</div>'}</div>
+      </div>`;
+    }).join('');
+  }
+  renderScheduleDays();
+  document.getElementById('schedMatchMin').value = SCHED_STATE.config.matchMinutes;
+  document.getElementById('schedRestMin').value = SCHED_STATE.config.restMinutes;
+  document.getElementById('schedTravelMin').value = SCHED_STATE.config.travelBufferMinutes;
+}
+function renderScheduleDays(){
+  const inputCls = 'h-9 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-3 mono text-[11px] outline-none focus:border-[#201C19]';
+  const wrap = document.getElementById('schedDays');
+  const days = SCHED_STATE.config.days;
+  wrap.innerHTML = days.length ? days.map((d, i) => `
+    <div class="flex items-center gap-2 flex-wrap" data-day-row="${i}">
+      <input type="date" data-df="date" data-di="${i}" value="${escapeHtml(d.date || '')}" class="${inputCls}"/>
+      <label class="flex items-center gap-1.5 mono text-[10px] opacity-70">Opens <input type="time" step="900" data-df="start" data-di="${i}" value="${fromMinutes(d.startMin)}" class="${inputCls}"/></label>
+      <label class="flex items-center gap-1.5 mono text-[10px] opacity-70">Closes <input type="time" step="900" data-df="end" data-di="${i}" value="${fromMinutes(d.endMin)}" class="${inputCls}"/></label>
+      <button type="button" data-remove-day="${i}" class="mono text-[9px] opacity-50 hover:opacity-100 cursor-pointer">Remove</button>
+    </div>`).join('') : `<div class="mono text-[11px] opacity-50">No tournament days yet -- add each day the courts will be in use.</div>`;
+}
+document.getElementById('venueList').addEventListener('input', (e) => {
+  const t = e.target;
+  const vi = Number(t.dataset.vi), ci = Number(t.dataset.ci);
+  const v = SCHED_STATE.venues[vi];
+  if(!v) return;
+  if(t.dataset.vf === 'name') v.name = t.value;
+  else if(t.dataset.vf === 'address') v.address = t.value;
+  else if(t.dataset.cf === 'name' && v.courts[ci]) v.courts[ci].name = t.value;
+});
+document.getElementById('venueList').addEventListener('change', (e) => {
+  const t = e.target;
+  if(t.dataset.primary !== undefined){ SCHED_STATE.config.primaryVenueId = SCHED_STATE.venues[Number(t.dataset.primary)].id; renderVenuePanel(); return; }
+  const vi = Number(t.dataset.vi), ci = Number(t.dataset.ci);
+  const v = SCHED_STATE.venues[vi];
+  if(!v) return;
+  if(t.dataset.cf === 'active' && v.courts[ci]){ v.courts[ci].active = t.checked; renderVenuePanel(); return; }
+  if(t.dataset.vf === 'courtCount'){
+    const n = Math.max(0, Math.min(24, parseInt(t.value, 10) || 0));
+    const taken = v.courts.map(c => c.id);
+    while(v.courts.length > n) v.courts.pop();
+    while(v.courts.length < n){ const id = nextId('c', taken); taken.push(id); v.courts.push({ id, name: `Court ${v.courts.length + 1}`, active: true }); }
+    renderVenuePanel();
+  }
+});
+document.getElementById('venueList').addEventListener('click', (e) => {
+  const rm = e.target.closest('[data-remove-venue]');
+  if(!rm) return;
+  const i = Number(rm.dataset.removeVenue);
+  const gone = SCHED_STATE.venues.splice(i, 1)[0];
+  if(gone && SCHED_STATE.config.primaryVenueId === gone.id) SCHED_STATE.config.primaryVenueId = (SCHED_STATE.venues[0] || {}).id || null;
+  renderVenuePanel();
+});
+document.getElementById('addVenueBtn').addEventListener('click', () => {
+  if(SCHED_STATE.venues.length >= 8){ toast('Up to 8 venues per tournament'); return; }
+  const id = nextId('v', SCHED_STATE.venues.map(v => v.id));
+  SCHED_STATE.venues.push({ id, name: '', address: '', kind: 'external', courts: [{ id: 'c1', name: 'Court 1', active: true }, { id: 'c2', name: 'Court 2', active: true }] });
+  if(!SCHED_STATE.config.primaryVenueId) SCHED_STATE.config.primaryVenueId = id;
+  renderVenuePanel();
+});
+document.getElementById('useClubCourtsBtn').addEventListener('click', () => {
+  if(SCHED_STATE.venues.some(v => v.kind === 'facility')){ toast("This club's courts are already added"); return; }
+  const usable = COURTS.filter(c => c.active !== false);
+  if(!usable.length){ toast('No courts set up yet -- add them in Admin → Court Management first'); return; }
+  const id = nextId('v', SCHED_STATE.venues.map(v => v.id));
+  SCHED_STATE.venues.unshift({ id, name: (document.getElementById('appBizName') && document.getElementById('appBizName').textContent) || 'This club', address: '', kind: 'facility',
+    courts: usable.map(c => ({ id: 'c_' + String(c.id).toLowerCase().replace(/[^a-z0-9_-]/g, ''), name: c.name, active: true, tenantCourtId: c.id })) });
+  if(!SCHED_STATE.config.primaryVenueId) SCHED_STATE.config.primaryVenueId = id;
+  renderVenuePanel();
+});
+document.getElementById('schedDays').addEventListener('change', (e) => {
+  const t = e.target;
+  const d = SCHED_STATE.config.days[Number(t.dataset.di)];
+  if(!d) return;
+  if(t.dataset.df === 'date') d.date = t.value;
+  else if(t.dataset.df === 'start'){ const m = toMinutes(t.value); if(m != null) d.startMin = m; }
+  else if(t.dataset.df === 'end'){ const m = toMinutes(t.value); if(m != null) d.endMin = m; }
+});
+document.getElementById('schedDays').addEventListener('click', (e) => {
+  const rm = e.target.closest('[data-remove-day]');
+  if(!rm) return;
+  SCHED_STATE.config.days.splice(Number(rm.dataset.removeDay), 1);
+  renderScheduleDays();
+});
+document.getElementById('addDayBtn').addEventListener('click', () => {
+  const days = SCHED_STATE.config.days;
+  const last = days[days.length - 1];
+  const nextDate = last && last.date ? new Date(new Date(last.date + 'T00:00:00Z').getTime() + 86400000).toISOString().slice(0, 10) : (currentTournamentDoc() || {}).startDate || '';
+  days.push({ date: nextDate, startMin: last ? last.startMin : 8 * 60, endMin: last ? last.endMin : 18 * 60 });
+  renderScheduleDays();
+});
+
+async function saveVenuesAndTiming(){
+  const cfg = SCHED_STATE.config;
+  cfg.matchMinutes = Number(document.getElementById('schedMatchMin').value) || 30;
+  cfg.restMinutes = Number(document.getElementById('schedRestMin').value);
+  cfg.travelBufferMinutes = Number(document.getElementById('schedTravelMin').value);
+  if(!Number.isFinite(cfg.restMinutes)) cfg.restMinutes = 15;
+  if(!Number.isFinite(cfg.travelBufferMinutes)) cfg.travelBufferMinutes = 30;
+  for(const v of SCHED_STATE.venues){
+    if(!String(v.name || '').trim()){ toast('Give every venue a name'); return false; }
+  }
+  const dates = new Set();
+  for(const d of cfg.days){
+    if(!d.date){ toast('Every tournament day needs a date'); return false; }
+    if(dates.has(d.date)){ toast(`${d.date} is listed twice`); return false; }
+    dates.add(d.date);
+    if(d.endMin - d.startMin < cfg.matchMinutes){ toast(`${d.date}: the day is shorter than one match`); return false; }
+  }
+  const payload = {
+    venues: SCHED_STATE.venues.map(v => ({ id: v.id, name: v.name.trim(), address: (v.address || '').trim(), kind: v.kind === 'facility' ? 'facility' : 'external',
+      courts: (v.courts || []).map(c => ({ id: c.id, name: c.name, active: c.active !== false, ...(c.tenantCourtId ? { tenantCourtId: c.tenantCourtId } : {}) })) })),
+    scheduleConfig: { days: cfg.days.map(d => ({ date: d.date, startMin: d.startMin, endMin: d.endMin })), matchMinutes: cfg.matchMinutes, restMinutes: cfg.restMinutes, travelBufferMinutes: cfg.travelBufferMinutes, primaryVenueId: cfg.primaryVenueId || null },
+  };
+  try {
+    await db.doc(`clients/${currentClientId}/tournaments/${CURRENT_TOURNAMENT_ID}`).set(payload, { merge: true });
+    const t = currentTournamentDoc();
+    if(t) Object.assign(t, payload);
+    await logTournamentAudit(CURRENT_TOURNAMENT_ID, 'venues-saved', `${payload.venues.length} venue(s), ${payload.scheduleConfig.days.length} day(s), ${payload.scheduleConfig.matchMinutes}-minute matches`);
+    toast('Locations & timing saved');
+    refreshSchedulePreview();
+    if(CURRENT_MATCHES_DIVISION_ID) loadMatchesForDivision(CURRENT_MATCHES_DIVISION_ID);
+    return true;
+  } catch(ex) { toast('Failed: ' + ex.message); return false; }
+}
+document.getElementById('saveVenuesBtn').addEventListener('click', saveVenuesAndTiming);
+
+const SCHED_LEVEL_STYLE = { success: 'bg-[#E8F5D8] text-[#3F7019] border-[#CFE8B5]', info: 'bg-white text-[#201C19]/80 border-[#EAE0D5]', warning: 'bg-[#FFF0D6] text-[#92400E] border-[#FFE0A3]', error: 'bg-[#FFE9E0] text-[#8C2C10] border-[#FFC9B6]' };
+const SCHED_LEVEL_ICON = { success: '✔️', info: 'ℹ️', warning: '⚠️', error: '✖️' };
+const schedNote = (level, text) => `<div class="mono text-[11px] leading-[1.5] px-3 py-2 rounded-[12px] border ${SCHED_LEVEL_STYLE[level] || SCHED_LEVEL_STYLE.info}">${SCHED_LEVEL_ICON[level] || ''} ${escapeHtml(text)}</div>`;
+let SCHED_STATUS = 'draft';
+function setSchedStatus(status){
+  SCHED_STATUS = status === 'published' ? 'published' : 'draft';
+  document.getElementById('schedStatusBadge').innerHTML = SCHED_STATUS === 'published'
+    ? `<span class="px-2 py-0.5 rounded-full bg-[#E8F5D8] text-[#3F7019] text-[9px] font-[800] uppercase">Published</span>`
+    : `<span class="px-2 py-0.5 rounded-full bg-[#F1E9DF] text-[9px] font-[800] uppercase">Draft — not visible to players</span>`;
+  document.getElementById('publishScheduleBtn').textContent = SCHED_STATUS === 'published' ? 'Unpublish (back to draft)' : 'Publish Schedule';
+}
+async function refreshSchedulePreview(){
+  const box = document.getElementById('schedPreview');
+  if(!venuesConfigured()){
+    setSchedStatus((currentTournamentDoc() || {}).schedule && currentTournamentDoc().schedule.status);
+    box.innerHTML = `<div class="mono text-[11px] opacity-50">Add a venue and tournament days, then save, to see whether the courts can handle your matches.</div>`;
+    document.getElementById('schedProgress').textContent = '';
+    return;
+  }
+  try {
+    const res = await callEngine('previewSchedulePlan', { clientId: currentClientId, tournamentId: CURRENT_TOURNAMENT_ID });
+    const d = res.data;
+    setSchedStatus(d.scheduleStatus);
+    box.innerHTML = d.messages.length ? d.messages.map(m => schedNote(m.level, m.text)).join('') : '';
+    document.getElementById('schedProgress').textContent = d.progress.total ? `${d.progress.scheduled} of ${d.progress.total} open matches have a court and time` : 'Generate the bracket, then the schedule';
+  } catch(ex) {
+    box.innerHTML = `<div class="mono text-[11px] text-[#8C2C10]">Couldn't check court capacity: ${escapeHtml(ex.message || String(ex))}</div>`;
+  }
+}
+function renderSchedResult(data){
+  const out = [];
+  if(data.message) out.push(schedNote('info', data.message));
+  if(data.scheduledCount != null) out.push(schedNote(data.scheduledCount ? 'success' : 'info', `${data.scheduledCount} match${data.scheduledCount === 1 ? '' : 'es'} scheduled.`));
+  (data.unscheduled || []).slice(0, 8).forEach(u => out.push(schedNote('warning', `Couldn't place ${u.label || u.matchId}: ${u.reason}`)));
+  if((data.unscheduled || []).length > 8) out.push(schedNote('warning', `…and ${data.unscheduled.length - 8} more couldn't be placed.`));
+  const conflicts = data.conflicts || [];
+  const errors = conflicts.filter(c => c.severity === 'error'), warns = conflicts.filter(c => c.severity !== 'error');
+  errors.slice(0, 8).forEach(c => out.push(schedNote('error', c.message)));
+  warns.slice(0, 5).forEach(c => out.push(schedNote('warning', c.message)));
+  if(errors.length > 8) out.push(schedNote('error', `…and ${errors.length - 8} more conflicts.`));
+  const venueChanges = data.venueChanges != null ? data.venueChanges : data.flags;
+  if(venueChanges) out.push(schedNote('info', `${venueChanges} player${venueChanges === 1 ? '' : 's'} move between venues for their playoff matches (e.g. satellite → primary) -- each has at least the travel buffer.`));
+  if(!errors.length && (data.scheduledCount || data.scheduled) && data.errorCount === 0) out.push(schedNote('success', 'No conflicts: every court, player and venue-to-venue transit checks out.'));
+  document.getElementById('schedResult').innerHTML = out.join('');
+}
+async function refreshTournamentDoc(){
+  const snap = await db.doc(`clients/${currentClientId}/tournaments/${CURRENT_TOURNAMENT_ID}`).get();
+  const t = currentTournamentDoc();
+  if(snap.exists && t) Object.assign(t, snap.data());
+}
+async function runScheduleAction(btn, label, fn){
+  const original = btn.textContent;
+  btn.disabled = true; btn.textContent = label;
+  try { await fn(); }
+  catch(ex) {
+    const conflicts = ex.details && ex.details.conflicts;
+    document.getElementById('schedResult').innerHTML = schedNote('error', ex.message || String(ex)) + (conflicts ? conflicts.slice(0, 8).map(c => schedNote('error', c.message)).join('') : '');
+    toast('Failed: ' + (ex.message || ex).toString().slice(0, 90));
+  }
+  finally { btn.disabled = false; btn.textContent = original; if(btn.id === 'publishScheduleBtn') setSchedStatus(SCHED_STATUS); }
+}
+document.getElementById('genScheduleBtn').addEventListener('click', (e) => runScheduleAction(e.currentTarget, 'Scheduling…', async () => {
+  if(!(await saveVenuesAndTiming())) return;
+  const res = await callEngine('generateSchedule', { clientId: currentClientId, tournamentId: CURRENT_TOURNAMENT_ID });
+  renderSchedResult(res.data);
+  await refreshTournamentDoc(); await refreshSchedulePreview();
+  if(CURRENT_MATCHES_DIVISION_ID) await loadMatchesForDivision(CURRENT_MATCHES_DIVISION_ID);
+}));
+document.getElementById('regenScheduleBtn').addEventListener('click', (e) => {
+  if(!confirm('Re-plan every match that has not been played yet? Their current courts and times will be replaced.')) return;
+  runScheduleAction(e.currentTarget, 'Rescheduling…', async () => {
+    if(!(await saveVenuesAndTiming())) return;
+    const res = await callEngine('generateSchedule', { clientId: currentClientId, tournamentId: CURRENT_TOURNAMENT_ID, mode: 'all' });
+    renderSchedResult(res.data);
+    await refreshTournamentDoc(); await refreshSchedulePreview();
+    if(CURRENT_MATCHES_DIVISION_ID) await loadMatchesForDivision(CURRENT_MATCHES_DIVISION_ID);
+  });
+});
+document.getElementById('checkScheduleBtn').addEventListener('click', (e) => runScheduleAction(e.currentTarget, 'Checking…', async () => {
+  const res = await callEngine('validateSchedule', { clientId: currentClientId, tournamentId: CURRENT_TOURNAMENT_ID });
+  renderSchedResult({ ...res.data, scheduledCount: null });
+  if(!res.data.conflicts.length) document.getElementById('schedResult').innerHTML += schedNote('info', `${res.data.scheduled} scheduled, ${res.data.unscheduled} still without a court.`);
+}));
+document.getElementById('publishScheduleBtn').addEventListener('click', (e) => {
+  const publishing = SCHED_STATUS !== 'published';
+  if(!publishing && !confirm("Take the schedule back to draft? Players will stop seeing times, and this club's court blocks come off the booking calendar.")) return;
+  runScheduleAction(e.currentTarget, publishing ? 'Publishing…' : 'Unpublishing…', async () => {
+    const res = await callEngine('publishSchedule', { clientId: currentClientId, tournamentId: CURRENT_TOURNAMENT_ID, publish: publishing });
+    const d = res.data;
+    setSchedStatus(d.status);
+    document.getElementById('schedResult').innerHTML = publishing
+      ? schedNote('success', `Schedule is live: ${d.scheduled} matches scheduled${d.blocks ? `, ${d.blocks} court block${d.blocks === 1 ? '' : 's'} placed on this club's booking calendar` : ''}.`)
+        + (d.unscheduled ? schedNote('warning', `${d.unscheduled} open match${d.unscheduled === 1 ? '' : 'es'} still have no court or time.`) : '')
+      : schedNote('info', 'Back to draft. Club court blocks were removed from the booking calendar.');
+    toast(publishing ? 'Schedule published' : 'Schedule unpublished');
+    await refreshTournamentDoc(); await refreshSchedulePreview();
+  });
+});
+
 /* ---------- Group strategy (group stage -> knockout divisions) ----------
    Shown only before the bracket is generated. The organizer picks a target
    (games per team OR teams per pool) and, optionally, how many teams reach
@@ -1290,8 +1647,21 @@ function wireGroupStrategyPanel(division){
   panel.querySelectorAll('input[name="gsStrategy"]').forEach(i => i.addEventListener('change', refresh));
   // Editing a strategy's own number selects that strategy (the field sits
   // inside the radio's label but clicking it doesn't activate the radio).
-  document.getElementById('gsGames').addEventListener('input', () => { panel.querySelector('input[name="gsStrategy"][value="games"]').checked = true; });
-  document.getElementById('gsSize').addEventListener('input', () => { panel.querySelector('input[name="gsStrategy"][value="size"]').checked = true; });
+  // The two dials are one setting seen two ways (a pool of S teams plays S-1
+  // games each), so editing one moves the other -- otherwise the panel shows
+  // contradictory numbers.
+  document.getElementById('gsGames').addEventListener('input', (e) => {
+    panel.querySelector('input[name="gsStrategy"][value="games"]').checked = true;
+    const g = Number(e.target.value);
+    if(Number.isFinite(g) && g > 0) document.getElementById('gsSize').value = g + 1;
+    updateHints();
+  });
+  document.getElementById('gsSize').addEventListener('input', (e) => {
+    panel.querySelector('input[name="gsStrategy"][value="size"]').checked = true;
+    const s = Number(e.target.value);
+    if(Number.isFinite(s) && s > 1) document.getElementById('gsGames').value = s - 1;
+    updateHints();
+  });
   refresh();
 }
 
@@ -1571,6 +1941,14 @@ function renderMatchesList(division, matches){
   }));
   wrap.querySelectorAll('[data-save-schedule]').forEach(btn => btn.addEventListener('click', () => saveSchedule(btn.dataset.saveSchedule)));
   wrap.querySelectorAll('[data-unschedule]').forEach(btn => btn.addEventListener('click', () => unscheduleMatch(btn.dataset.unschedule)));
+  // venue-aware scheduling (tournaments with venues configured)
+  wrap.querySelectorAll('[data-sched-venue]').forEach(sel => sel.addEventListener('change', () => {
+    const v = ((currentTournamentDoc() || {}).venues || []).find(x => x.id === sel.value);
+    document.getElementById(`schedCourt-${sel.dataset.schedVenue}`).innerHTML = ((v && v.courts) || [])
+      .map(c => `<option value="${escapeHtml(c.id)}" ${c.active === false ? 'disabled' : ''}>${escapeHtml(c.name)}${c.active === false ? ' (maintenance)' : ''}</option>`).join('');
+  }));
+  wrap.querySelectorAll('[data-save-vsched]').forEach(btn => btn.addEventListener('click', () => saveVenueSchedule(btn.dataset.saveVsched)));
+  wrap.querySelectorAll('[data-unvsched]').forEach(btn => btn.addEventListener('click', () => moveMatchTo(btn.dataset.unvsched, null)));
 }
 function renderMatchCard(m){
   const [nameA, nameB] = m.participantNames;
@@ -1578,12 +1956,41 @@ function renderMatchCard(m){
   const resultLine = m.status !== 'scheduled'
     ? `<div class="mono text-[11px] mt-1">${m.score ? `${m.score.a} - ${m.score.b}` : (m.isBye ? 'Bye' : 'Forfeit')} · winner: <b>${escapeHtml(m.participantNames[m.participantIds.indexOf(m.winnerParticipantId)] || '')}</b></div>`
     : '';
-  const scheduleLine = (!isBye && m.court) ? (() => {
+  const useVenues = venuesConfigured();
+  const tdoc = currentTournamentDoc() || {};
+  const venuesList = tdoc.venues || [];
+  const sched = m.sched || null;
+  const scheduleLine = (!isBye && sched) ? (() => {
+    const v = venuesList.find(x => x.id === sched.venueId);
+    const c = v && (v.courts || []).find(x => x.id === sched.courtId);
+    return `<div class="mono text-[10px] opacity-60 mt-1">📍 ${escapeHtml(v ? v.name : sched.venueId)} · ${escapeHtml(c ? c.name : sched.courtId)} · ${escapeHtml(sched.date)} · ${fmtMinLabel(sched.startMin)}–${fmtMinLabel(sched.endMin)}</div>`;
+  })() : (!isBye && m.court) ? (() => {
     const courtDef = COURTS.find(c => c.id === m.court);
     return `<div class="mono text-[10px] opacity-60 mt-1">📍 ${escapeHtml(courtDef ? courtDef.name : m.court)} · ${escapeHtml(m.scheduledDate || '')} · ${m.scheduledHour}:00</div>`;
   })() : '';
   const courtOptions = COURTS.map(c => `<option value="${c.id}" ${c.id===m.court?'selected':''}>${escapeHtml(c.name)}</option>`).join('');
-  const scheduleForm = !isBye ? `
+  const dayChoices = [...new Set([...(tdoc.scheduleConfig && tdoc.scheduleConfig.days || []).map(d => d.date), ...(sched ? [sched.date] : [])])].sort();
+  const selVenue = venuesList.find(v => v.id === (sched && sched.venueId)) || venuesList[0] || { courts: [] };
+  const venueScheduleForm = (!isBye && useVenues) ? `
+    <div id="scheduleForm-${m.id}" class="hidden mt-2 p-2.5 rounded-[12px] bg-[#F1E9DF] border border-[#EAE0D5] flex flex-wrap items-end gap-2">
+      <label class="flex flex-col gap-1"><span class="mono text-[9px] opacity-50">Venue</span>
+        <select id="schedVenue-${m.id}" data-sched-venue="${m.id}" class="h-8 rounded-full border border-[#EAE0D5] bg-white px-2 mono text-[10px] font-[700] outline-none focus:border-[#201C19]">
+          ${venuesList.map(v => `<option value="${escapeHtml(v.id)}" ${v.id === selVenue.id ? 'selected' : ''}>${escapeHtml(v.name)}</option>`).join('')}
+        </select></label>
+      <label class="flex flex-col gap-1"><span class="mono text-[9px] opacity-50">Court</span>
+        <select id="schedCourt-${m.id}" class="h-8 rounded-full border border-[#EAE0D5] bg-white px-2 mono text-[10px] font-[700] outline-none focus:border-[#201C19]">
+          ${(selVenue.courts || []).map(c => `<option value="${escapeHtml(c.id)}" ${sched && c.id === sched.courtId ? 'selected' : ''} ${c.active === false ? 'disabled' : ''}>${escapeHtml(c.name)}${c.active === false ? ' (maintenance)' : ''}</option>`).join('')}
+        </select></label>
+      <label class="flex flex-col gap-1"><span class="mono text-[9px] opacity-50">Day</span>
+        <select id="schedDay-${m.id}" class="h-8 rounded-full border border-[#EAE0D5] bg-white px-2 mono text-[10px] font-[700] outline-none focus:border-[#201C19]">
+          ${dayChoices.map(d => `<option value="${escapeHtml(d)}" ${sched && sched.date === d ? 'selected' : ''}>${escapeHtml(d)}</option>`).join('')}
+        </select></label>
+      <label class="flex flex-col gap-1"><span class="mono text-[9px] opacity-50">Start</span>
+        <input type="time" step="300" id="schedTime-${m.id}" value="${sched ? fromMinutes(sched.startMin) : '09:00'}" class="h-8 rounded-full border border-[#EAE0D5] bg-white px-2 mono text-[10px] outline-none focus:border-[#201C19]"/></label>
+      <button data-save-vsched="${m.id}" class="h-8 px-3 rounded-full bg-[#201C19] text-white mono text-[10px] font-[700] cursor-pointer">Save</button>
+      ${sched ? `<button data-unvsched="${m.id}" class="h-8 px-2.5 rounded-full bg-white border border-[#EAE0D5] mono text-[9px] font-[700] cursor-pointer">Unschedule</button>` : ''}
+    </div>` : '';
+  const scheduleForm = (!isBye && useVenues) ? venueScheduleForm : !isBye ? `
     <div id="scheduleForm-${m.id}" class="hidden mt-2 p-2.5 rounded-[12px] bg-[#F1E9DF] border border-[#EAE0D5] flex flex-wrap items-end gap-2">
       <label class="flex flex-col gap-1"><span class="mono text-[9px] opacity-50">Court</span>
         <select id="scheduleCourt-${m.id}" class="h-8 rounded-full border border-[#EAE0D5] bg-white px-2 mono text-[10px] font-[700] outline-none focus:border-[#201C19]">
@@ -1616,7 +2023,7 @@ function renderMatchCard(m){
         <span class="font-[700] text-[12.5px]">${escapeHtml(nameA)} <span class="opacity-40 font-[500]">vs</span> ${escapeHtml(nameB)}</span>
         <div class="flex items-center gap-1.5">
           ${matchStatusBadge(m.status)}
-          ${!isBye ? `<button data-schedule-toggle="${m.id}" class="h-7 px-2.5 rounded-full bg-white border border-[#EAE0D5] mono text-[9px] font-[700] cursor-pointer hover:border-[#201C19]">${m.court ? 'Reschedule' : 'Assign Court'}</button>` : ''}
+          ${!isBye ? `<button data-schedule-toggle="${m.id}" class="h-7 px-2.5 rounded-full bg-white border border-[#EAE0D5] mono text-[9px] font-[700] cursor-pointer hover:border-[#201C19]">${(m.sched || m.court) ? 'Reschedule' : 'Assign Court'}</button>` : ''}
           ${m.status === 'scheduled' && !m.participantIds.includes('BYE') ? `<button data-score-form-toggle="${m.id}" class="h-7 px-2.5 rounded-full bg-white border border-[#EAE0D5] mono text-[9px] font-[700] cursor-pointer hover:border-[#201C19]">Enter Score</button>` : ''}
           ${(['completed','forfeit','walkover'].includes(m.status) && !m.isBye) ? `<button data-correct-toggle="${m.id}" class="h-7 px-2.5 rounded-full bg-white border border-[#EAE0D5] mono text-[9px] font-[700] cursor-pointer hover:border-[#201C19]">Correct</button>` : ''}
         </div>
@@ -1656,6 +2063,32 @@ async function submitCorrection(matchId){
     toast(result.data.warning ? `Corrected -- ${result.data.warning}` : 'Correction saved');
     await loadMatchesForDivision(CURRENT_MATCHES_DIVISION_ID);
   } catch(ex) { toast('Failed: ' + (ex.message || ex)); }
+}
+
+/* Venue-aware move (tournaments with venues configured). The server refuses
+   hard impossibilities (court double-booked, player in two places, closed
+   court, outside opening hours) and reports softer issues (short rest,
+   travel time) -- the travel-buffer rule still blocks publishing. */
+async function moveMatchTo(matchId, sched){
+  if(!sched && !confirm('Remove this match\'s court and time?')) return;
+  try {
+    const res = await callEngine('moveMatch', { clientId: currentClientId, tournamentId: CURRENT_TOURNAMENT_ID, matchId, sched });
+    const soft = (res.data.conflicts || []).filter(c => c.severity !== 'error');
+    const errs = (res.data.conflicts || []).filter(c => c.severity === 'error');
+    toast(sched ? (errs.length ? `Moved, but: ${errs[0].message}` : soft.length ? `Moved -- ${soft[0].message}` : (res.data.published ? 'Moved -- players will see the change' : 'Match moved')) : 'Match unscheduled');
+    await refreshTournamentDoc(); refreshSchedulePreview();
+    await loadMatchesForDivision(CURRENT_MATCHES_DIVISION_ID);
+  } catch(ex) { toast('Not moved: ' + (ex.message || ex)); }
+}
+async function saveVenueSchedule(matchId){
+  const venueId = document.getElementById(`schedVenue-${matchId}`).value;
+  const courtId = document.getElementById(`schedCourt-${matchId}`).value;
+  const date = document.getElementById(`schedDay-${matchId}`).value;
+  const startMin = toMinutes(document.getElementById(`schedTime-${matchId}`).value);
+  if(!venueId || !courtId){ toast('Pick a venue and an active court'); return; }
+  if(!date){ toast('Add tournament days first'); return; }
+  if(startMin == null){ toast('Pick a start time'); return; }
+  await moveMatchTo(matchId, { venueId, courtId, date, startMin });
 }
 
 async function saveSchedule(matchId){

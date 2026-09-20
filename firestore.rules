@@ -432,6 +432,20 @@ service cloud.firestore {
         allow update, delete: if false;
       }
 
+      // Live scoreboard state for matches in progress, and results a player
+      // proposed for the organizer to accept. Anyone can read (spectators
+      // watch live); nobody writes from a browser -- setLiveScore /
+      // proposeMatchResult / submitMatchScore are the only writers, so a live
+      // score can never become an official result on its own.
+      match /tournaments/{tournamentId}/live/{document} {
+        allow read: if isValidTenantId(clientId);
+        allow write: if false;
+      }
+      match /tournaments/{tournamentId}/proposals/{document} {
+        allow read: if isValidTenantId(clientId);
+        allow write: if false;
+      }
+
       // Match-alert plumbing, server-only (Admin SDK bypasses rules). pushSubs
       // holds device push endpoints and keys, so it must never be readable.
       match /tournaments/{tournamentId}/pushSubs/{document} {

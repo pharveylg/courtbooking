@@ -180,6 +180,7 @@ body:not(.staff-mode) .staff-link{display:none!important}
       <div class="hidden md:flex items-center gap-2">
         <nav class="nav-shell flex items-center gap-1 p-1 rounded-full bg-[#F1E9DF] border border-[#E9DDD0] mp-in-view-scale">
           <button data-nav="home" class="nav-btn active px-5 h-8 rounded-full text-[13px] font-[650] tracking-[-0.01em] bg-[#201C19] text-white shadow-sm transition mp-magnetic" data-magnetic-strength="0.15">Home</button>
+          <button data-nav="contact" class="nav-btn px-5 h-8 rounded-full text-[13px] font-[550] opacity-70 hover:opacity-100 transition">Contact</button>
           <button data-nav="book" class="nav-btn px-5 h-8 rounded-full text-[13px] font-[550] opacity-70 hover:opacity-100 transition mp-magnetic" data-magnetic-strength="0.15">Book</button>
           <button data-nav="queue" class="nav-btn px-5 h-8 rounded-full text-[13px] font-[550] opacity-70 hover:opacity-100 transition mp-magnetic" data-magnetic-strength="0.15">Queue</button>
           <button data-nav="stats" class="nav-btn px-5 h-8 rounded-full text-[13px] font-[550] opacity-70 hover:opacity-100 transition mp-magnetic" data-magnetic-strength="0.15">Match Stats</button>
@@ -269,6 +270,13 @@ body:not(.staff-mode) .staff-link{display:none!important}
         <div class="mono text-[10px] uppercase tracking-widest opacity-50 mb-2">Also here</div>
         <div id="homeTiles" class="grid grid-cols-1 sm:grid-cols-2 gap-2"></div>
       </div>
+    </div>
+  </section>
+
+  <!-- VIEW: CONTACT (its own screen, like Book and Find a Game) -->
+  <section id="view-contact" class="view hidden" data-mp-panel="contact">
+    <div class="max-w-[720px] mx-auto">
+      <div id="contactContent"></div>
     </div>
   </section>
 
@@ -687,9 +695,19 @@ body:not(.staff-mode) .staff-link{display:none!important}
               </div>
             </div>
 
+            <!-- Live scoreboard: tap points as they happen, then it submits for you -->
+            <div class="relative flex flex-col sm:flex-row items-center justify-between gap-3 bg-white/5 rounded-2xl p-3 border border-white/5 mb-3">
+              <div class="flex flex-wrap items-center gap-2 justify-center sm:justify-start">
+                <select id="qFmtTarget" aria-label="Game to" class="h-9 rounded-full bg-white/10 border border-white/15 text-white px-3 mono text-[11px] font-[700] outline-none"><option value="7" class="text-black">To 7</option><option value="9" class="text-black">To 9</option><option value="11" selected class="text-black">To 11</option><option value="15" class="text-black">To 15</option><option value="21" class="text-black">To 21</option></select>
+                <select id="qFmtWinBy" aria-label="Win by" class="h-9 rounded-full bg-white/10 border border-white/15 text-white px-3 mono text-[11px] font-[700] outline-none"><option value="2" selected class="text-black">Win by 2</option><option value="1" class="text-black">Win by 1</option></select>
+                <select id="qFmtScoring" aria-label="Scoring" class="h-9 rounded-full bg-white/10 border border-white/15 text-white px-3 mono text-[11px] font-[700] outline-none"><option value="sideout" selected class="text-black">Side-out</option><option value="rally" class="text-black">Rally</option></select>
+              </div>
+              <button type="button" id="liveScoreBtn" class="h-10 px-5 rounded-full bg-white text-[#201C19] font-[800] text-[13px] hover:bg-[#D6FF5F] transition cursor-pointer shrink-0 disabled:opacity-40 disabled:cursor-not-allowed">Live score (tap points)</button>
+            </div>
+
             <!-- Submit Button -->
             <div class="relative flex flex-col sm:flex-row items-center justify-between gap-3 bg-white/5 rounded-2xl p-3 border border-white/5">
-              <span class="mono text-[11px] opacity-60 text-center sm:text-left">Enter both final scores and submit to advance the queue.</span>
+              <span class="mono text-[11px] opacity-60 text-center sm:text-left">Or enter both final scores and submit to advance the queue.</span>
               <button type="button" id="submitScoreBtn" class="h-10 px-5 rounded-full bg-[#D6FF5F] hover:bg-[#CBF052] text-[#201C19] font-[800] text-[13px] transition cursor-pointer shrink-0">
                 Submit & Rotate Queue →
               </button>
@@ -1509,6 +1527,18 @@ body:not(.staff-mode) .staff-link{display:none!important}
                     <span class="mono text-[10px] uppercase tracking-widest opacity-60">Instagram URL</span>
                     <input type="url" id="bizInstagramInput" placeholder="https://instagram.com/..." class="h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-4 mono text-[12px] outline-none focus:border-[#201C19]"/>
                   </label>
+                  <label class="flex flex-col gap-1.5">
+                    <span class="mono text-[10px] uppercase tracking-widest opacity-60">Messenger link</span>
+                    <input type="text" id="bizMessengerInput" placeholder="https://m.me/yourclub" class="h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-4 mono text-[12px] outline-none focus:border-[#201C19]"/>
+                  </label>
+                  <label class="flex flex-col gap-1.5">
+                    <span class="mono text-[10px] uppercase tracking-widest opacity-60">TikTok URL</span>
+                    <input type="text" id="bizTiktokInput" placeholder="https://tiktok.com/@yourclub" class="h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-4 mono text-[12px] outline-none focus:border-[#201C19]"/>
+                  </label>
+                  <label class="flex flex-col gap-1.5">
+                    <span class="mono text-[10px] uppercase tracking-widest opacity-60">Website</span>
+                    <input type="text" id="bizWebsiteInput" placeholder="https://yourclub.com" class="h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-4 mono text-[12px] outline-none focus:border-[#201C19]"/>
+                  </label>
                 </div>
                 <button type="button" id="saveBizBtn" class="mt-3.5 h-10 px-5 rounded-full bg-[#201C19] text-white mono text-[11px] font-[700] hover:opacity-90 transition cursor-pointer">Save Business Info</button>
               </div>
@@ -1875,7 +1905,7 @@ body:not(.staff-mode) .staff-link{display:none!important}
    ================================================================ */
 const _cfgDefaults = {
   business: { name:'COURT BOOKING', sub:'Pickleball • Single Court', tagline:'Book the court.\nRun the queue.', location:'Single Court' },
-  contact: { address:'', phone:'', email:'', facebook:'', instagram:'' },
+  contact: { address:'', phone:'', email:'', facebook:'', instagram:'', messenger:'', tiktok:'', website:'' },
   branding: { logoUrl:'', faviconUrl:'', monogram:'CB', watermarkUrl:'' },
   theme: { primary:'#D4D4D8', primaryHover:'#A1A1AA', dark:'#18181B', bg:'#FAFAFA', border:'#E4E4E7', borderSoft:'#F4F4F5', staff:'#FB923C', openPlay:'#8B5CF6', queue:'#34D399', pending:'#FBBF24' },
   currency: '₱',
@@ -2049,6 +2079,44 @@ function showPausedState(){
 }
 
 /* ---------- Contact card + footer contact/socials ---------- */
+/* Contact channels shown on Home and in the footer. Links are only ever
+   http(s): a tenant can type anything into these fields, so nothing else may
+   reach an href. */
+const CONTACT_ICONS = {
+  pin: '<path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/>',
+  phone: '<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>',
+  mail: '<rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 6L2 7"/>',
+  facebook: '<path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/>',
+  instagram: '<rect x="2" y="2" width="20" height="20" rx="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/>',
+  messenger: '<path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 8.6 8.6 0 0 1-3.6-.8L3 21l1.9-5.4A8.4 8.4 0 1 1 21 11.5z"/>',
+  tiktok: '<path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>',
+  website: '<circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>',
+};
+const SOCIAL_CHANNELS = [['facebook', 'Facebook'], ['instagram', 'Instagram'], ['messenger', 'Messenger'], ['tiktok', 'TikTok'], ['website', 'Website']];
+/* '' stays '', a bare address gets https://, any other scheme is refused (null). */
+function normalizeLinkInput(raw){
+  const v = String(raw || '').trim();
+  if(!v) return '';
+  if(/^https?:\/\//i.test(v)) return v;
+  if(/^[a-z][a-z0-9+.-]*:/i.test(v)) return null;
+  return 'https://' + v.replace(/^\/+/, '');
+}
+/* Only http(s) links are ever rendered as hrefs. */
+function safeUrl(raw){
+  try { const u = new URL(String(raw || '').trim()); return (u.protocol === 'https:' || u.protocol === 'http:') ? u.href : null; }
+  catch(e){ return null; }
+}
+function contactSocials(c){
+  return SOCIAL_CHANNELS.map(([key, label]) => ({ key, label, url: safeUrl(c[key]) })).filter(s => s.url);
+}
+function svgIcon(path, size){
+  return `<svg width="${size || 14}" height="${size || 14}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${path}</svg>`;
+}
+function hasContactDetails(){
+  const c = (CLIENT && CLIENT.contact) || {};
+  return !!(c.phone || c.email || c.address || contactSocials(c).length);
+}
+
 function buildContactUI(){
   const c = CLIENT.contact;
   const icon = (p)=>`<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;
@@ -2067,11 +2135,8 @@ function buildContactUI(){
     if(card) card.classList.remove('hidden');
   }
   // Socials
-  const soc = [];
-  if(c.facebook)  soc.push({u:c.facebook, i:'<path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/>', label:'Facebook'});
-  if(c.instagram) soc.push({u:c.instagram, i:'<rect x="2" y="2" width="20" height="20" rx="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/>', label:'Instagram'});
-  const socialHtml = soc.map(s=>`
-    <a href="${s.u}" target="_blank" rel="noopener" aria-label="${s.label}" class="w-9 h-9 rounded-full border border-white/15 bg-white/5 hover:bg-[#D6FF5F] hover:text-[#201C19] hover:border-[#D6FF5F] grid place-items-center transition">${icon(s.i)}</a>`).join('');
+  const socialHtml = contactSocials(c).map(s=>`
+    <a href="${escapeHtml(s.url)}" target="_blank" rel="noopener noreferrer" aria-label="${s.label}" class="w-9 h-9 rounded-full border border-white/15 bg-white/5 hover:bg-[#D6FF5F] hover:text-[#201C19] hover:border-[#D6FF5F] grid place-items-center transition">${icon(CONTACT_ICONS[s.key])}</a>`).join('');
   const fs = document.getElementById('footSocials'); if(fs) fs.innerHTML = socialHtml;
   // Footer contact mirrors card rows
   const fc = document.getElementById('footContact');
@@ -3324,7 +3389,7 @@ function updateStaffNote(){
 updateStaffNote();
 
 /* ---------- Nav & Public Portal vs Admin Access ---------- */
-const views = {home:document.getElementById('view-home'), book:document.getElementById('view-book'), queue:document.getElementById('view-queue'), stats:document.getElementById('view-stats'), opengames:document.getElementById('view-opengames'), bookings:document.getElementById('view-bookings'), payment:document.getElementById('view-payment'), admin:document.getElementById('view-admin')};
+const views = {home:document.getElementById('view-home'), contact:document.getElementById('view-contact'), book:document.getElementById('view-book'), queue:document.getElementById('view-queue'), stats:document.getElementById('view-stats'), opengames:document.getElementById('view-opengames'), bookings:document.getElementById('view-bookings'), payment:document.getElementById('view-payment'), admin:document.getElementById('view-admin')};
 let adminUnlocked = sessionStorage.getItem(LS.adminUnlocked) === 'true';
 
 function updateAdminTabsVisibility(){
@@ -3405,6 +3470,7 @@ document.querySelectorAll('.nav-btn').forEach(btn=>{
     if(typeof MP !== 'undefined') MP.observeNew();
     if(id==='bookings') renderBookingsList();
     if(id==='home') renderHome();
+    if(id==='contact') renderContactView();
     if(id==='book') renderSchedule();
     if(id==='queue') renderQueueModule();
     if(id==='stats') renderStatsView();
@@ -3427,7 +3493,7 @@ document.querySelectorAll('.nav-btn').forEach(btn=>{
    belong to staff and only appear once the Staff PIN has been entered. Each
    route is a URL hash so the phone's Back button and shared links work. */
 const STAFF_ONLY_VIEWS = ['queue', 'stats', 'bookings', 'admin'];
-const FLOW_TITLES = { book: 'Book the court', opengames: 'Find a game', payment: 'How to Pay', queue: 'Queue & scoreboard', stats: 'Match stats', bookings: 'Bookings', admin: 'Admin' };
+const FLOW_TITLES = { contact: 'Contact facility', book: 'Book the court', opengames: 'Find a game', payment: 'How to Pay', queue: 'Queue & scoreboard', stats: 'Match stats', bookings: 'Bookings', admin: 'Admin' };
 let _navFromPop = false;
 let HOME_TOURNAMENTS = [];
 
@@ -3505,6 +3571,39 @@ function renderHomeHints(){
   }
 }
 
+function renderContactView(){
+  const box = document.getElementById('contactContent');
+  if(!box) return;
+  const c = (CLIENT && CLIENT.contact) || {};
+  const name = (CLIENT.business && CLIENT.business.name) ? titleCase(CLIENT.business.name) : 'the facility';
+  if(!hasContactDetails()){
+    box.innerHTML = `<div class="rounded-[24px] bg-white border border-[#EAE0D5] p-6 text-center"><div class="font-[800] text-[18px]">Contact details aren't set up yet</div><p class="mono text-[11.5px] opacity-60 mt-2">Ask the staff at the court, or check back soon.</p></div>`;
+    return;
+  }
+  const row = (icon, label, value, href) => `<${href ? 'a' : 'div'} ${href ? `href="${escapeHtml(href)}"${/^https?:/.test(href) ? ' target="_blank" rel="noopener noreferrer"' : ''}` : ''} class="flex items-center gap-3.5 rounded-[18px] border border-[#EAE0D5] bg-white px-4 py-4 ${href ? 'hover:border-[#201C19]' : ''} transition">
+    <span class="w-11 h-11 rounded-full bg-[#F1E9DF] grid place-items-center shrink-0">${svgIcon(icon, 18)}</span>
+    <span class="min-w-0 flex-1"><span class="block mono text-[9.5px] uppercase tracking-widest opacity-50">${label}</span><span class="block text-[15px] font-[750] break-words">${escapeHtml(value)}</span></span>
+    ${href ? '<span class="opacity-40 shrink-0" aria-hidden="true">→</span>' : ''}
+  </${href ? 'a' : 'div'}>`;
+  const rows = [];
+  if(c.phone) rows.push(row(CONTACT_ICONS.phone, 'Call', c.phone, 'tel:' + c.phone.replace(/[^\d+]/g, '')));
+  if(c.email) rows.push(row(CONTACT_ICONS.mail, 'Email', c.email, 'mailto:' + c.email));
+  if(c.address) rows.push(row(CONTACT_ICONS.pin, 'Find us', c.address, 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(c.address)));
+  const chips = contactSocials(c).map(s => `<a href="${escapeHtml(s.url)}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-2 h-11 px-5 rounded-full bg-white border border-[#EAE0D5] hover:border-[#201C19] text-[13px] font-[750] transition">${svgIcon(CONTACT_ICONS[s.key], 16)}${s.label}</a>`).join('');
+  const hours = `<div class="rounded-[18px] border border-[#EAE0D5] bg-white px-4 py-4">
+    <div class="mono text-[9.5px] uppercase tracking-widest opacity-50 mb-2">Hours</div>
+    <div class="space-y-1.5 mono text-[12px]">
+      ${SCHED.queueStart < SCHED.queueEnd ? `<div class="flex justify-between gap-3"><span class="opacity-60">Queue / Walk-in</span><span class="font-[700]">${_hh12(SCHED.queueStart)}–${_hh12(SCHED.queueEnd)}</span></div>` : ''}
+      <div class="flex justify-between gap-3"><span class="opacity-60">Reservations</span><span class="font-[700]">${_hh12(SCHED.bookStart)}–${_hh12(SCHED.close)}</span></div>
+    </div></div>`;
+  box.innerHTML = `
+    <h1 class="text-[26px] md:text-[32px] font-[850] tracking-[-0.03em] leading-none">Contact ${escapeHtml(name)}</h1>
+    <p class="mono text-[11px] opacity-60 mt-2">Call, message or visit us.</p>
+    <div class="mt-5 space-y-2.5">${rows.join('')}</div>
+    ${chips ? `<div class="mono text-[10px] uppercase tracking-widest opacity-50 mt-6 mb-2.5">Follow and message us</div><div class="flex flex-wrap gap-2.5">${chips}</div>` : ''}
+    <div class="mt-6">${hours}</div>`;
+}
+
 function renderHomeTiles(){
   const wrap = document.getElementById('homeTiles');
   if(!wrap) return;
@@ -3513,8 +3612,11 @@ function renderHomeTiles(){
   HOME_TOURNAMENTS.forEach(t => {
     tiles.push(tile({ href: `tournament.html?client=${encodeURIComponent(currentClientId)}&t=${encodeURIComponent(t.id)}#my` }, escapeHtml(t.name || 'Tournament'), t.status === 'live' ? 'Live now · your matches and alerts' : 'Schedule, brackets and your matches'));
   });
-  const phone = CLIENT && CLIENT.contact && CLIENT.contact.phone;
-  if(phone) tiles.push(tile({ href: 'tel:' + escapeHtml(phone.replace(/[^\d+]/g, '')) }, 'Call the facility', escapeHtml(phone)));
+  if(hasContactDetails()){
+    const c = CLIENT.contact;
+    const bits = [c.phone ? 'Call' : '', c.email ? 'Email' : '', contactSocials(c).length ? 'Message' : '', c.address ? 'Visit' : ''].filter(Boolean);
+    tiles.push(tile({ go: 'contact' }, 'Contact facility', bits.join(' · ')));
+  }
   wrap.innerHTML = tiles.join('');
 }
 
@@ -4087,6 +4189,9 @@ function renderAdminBranding(){
   document.getElementById('bizEmailInput').value = c.email || '';
   document.getElementById('bizFacebookInput').value = c.facebook || '';
   document.getElementById('bizInstagramInput').value = c.instagram || '';
+  document.getElementById('bizMessengerInput').value = c.messenger || '';
+  document.getElementById('bizTiktokInput').value = c.tiktok || '';
+  document.getElementById('bizWebsiteInput').value = c.website || '';
 
   document.getElementById('heroSubInput').value = b.sub || '';
   document.getElementById('heroTaglineInput').value = b.tagline || '';
@@ -4165,12 +4270,16 @@ document.getElementById('saveBizBtn')?.addEventListener('click', async () => {
   const address = document.getElementById('bizAddressInput').value.trim();
   const phone = document.getElementById('bizPhoneInput').value.trim();
   const email = document.getElementById('bizEmailInput').value.trim();
-  const facebook = document.getElementById('bizFacebookInput').value.trim();
-  const instagram = document.getElementById('bizInstagramInput').value.trim();
+  const links = {};
+  for(const [key, id, label] of [['facebook','bizFacebookInput','Facebook'], ['instagram','bizInstagramInput','Instagram'], ['messenger','bizMessengerInput','Messenger'], ['tiktok','bizTiktokInput','TikTok'], ['website','bizWebsiteInput','Website']]){
+    const v = normalizeLinkInput(document.getElementById(id).value);
+    if(v === null){ toast(label + ' link must start with http:// or https:// (or just be a web address)'); return; }
+    links[key] = v;
+  }
   if(!name){ toast('Business name is required'); return; }
   const ok = await saveTenantConfigPatch(cfg => {
     cfg.business = { ...(cfg.business || {}), name };
-    cfg.contact = { ...(cfg.contact || {}), address, phone, email, facebook, instagram };
+    cfg.contact = { ...(cfg.contact || {}), address, phone, email, ...links };
   });
   if(ok) toast('Business info saved');
 });
@@ -6890,6 +6999,7 @@ function renderActiveQueueDashboard() {
   const teamBPlayers = document.getElementById('teamBPlayers');
   const scoreAInput = document.getElementById('scoreA');
   const scoreBInput = document.getElementById('scoreB');
+  syncQueueFormatControls(session);
 
   if (teamAPlayers && teamBPlayers) {
     if (session.activeMatch) {
@@ -7448,6 +7558,52 @@ document.getElementById('joinQueueForm')?.addEventListener('submit', (e) => {
 });
 
 // SUBMIT Live scoreboard score & Rotate Queue
+/* ---------- Live scoreboard for the current queue match ----------
+   Format is remembered per session. When the match ends the scoreboard fills
+   in the two final scores and presses the normal Submit & Rotate button, so
+   every rotation rule (winner stays, pairs, timed...) behaves exactly as
+   before. Sessions play a single game. */
+function queueFormatOf(session){
+  const f = (session && session.gameFormat) || {};
+  return { target: Number(f.target) || 11, winBy: Number(f.winBy) || 2, scoring: f.scoring === 'rally' ? 'rally' : 'sideout' };
+}
+function syncQueueFormatControls(session){
+  const f = queueFormatOf(session);
+  const set = (id, v) => { const el = document.getElementById(id); if(el) el.value = String(v); };
+  set('qFmtTarget', f.target); set('qFmtWinBy', f.winBy); set('qFmtScoring', f.scoring);
+  const btn = document.getElementById('liveScoreBtn');
+  if(btn) btn.disabled = !(session && session.activeMatch);
+}
+['qFmtTarget', 'qFmtWinBy', 'qFmtScoring'].forEach(id => document.getElementById(id)?.addEventListener('change', () => {
+  if(!selectedQueueSessionId) return;
+  const sessions = loadQueues();
+  const session = sessions.find(s => s.id === selectedQueueSessionId);
+  if(!session) return;
+  session.gameFormat = { target: Number(document.getElementById('qFmtTarget').value), winBy: Number(document.getElementById('qFmtWinBy').value), scoring: document.getElementById('qFmtScoring').value };
+  saveQueues(sessions);
+}));
+document.getElementById('liveScoreBtn')?.addEventListener('click', () => {
+  if(!selectedQueueSessionId || typeof CourtBoard === 'undefined') return;
+  const session = loadQueues().find(s => s.id === selectedQueueSessionId);
+  if(!session || !session.activeMatch){ toast('Waiting for players to step up'); return; }
+  const m = session.activeMatch, f = queueFormatOf(session);
+  const accent = CLIENT && CLIENT.theme && /^#[0-9a-fA-F]{6}$/.test(CLIENT.theme.primary || '') ? CLIENT.theme.primary : null;
+  CourtBoard.open({
+    title: session.name || 'Live score',
+    names: { home: m.teamA.join(' & '), away: m.teamB.join(' & ') },
+    config: { target: f.target, winBy: f.winBy, scoring: f.scoring, bestOf: 1, doubles: session.mode === 'doubles' },
+    storageKey: lsKey('cb_board_' + session.id + '_' + m.id),
+    finishLabel: 'Submit & rotate queue',
+    accent,
+    onFinish: (sum) => {
+      const g = sum.games[0];
+      document.getElementById('scoreA').value = g.home;
+      document.getElementById('scoreB').value = g.away;
+      document.getElementById('submitScoreBtn').click();
+    },
+  });
+});
+
 document.getElementById('submitScoreBtn')?.addEventListener('click', () => {
   if (!selectedQueueSessionId) return;
 
@@ -8241,6 +8397,8 @@ document.getElementById('modalGoUpload')?.addEventListener('click', () => {
   openProofPicker(null); // resolves to the most recent Pending booking
 });
 </script>
+<script src="pickleball-scoring.js"></script>
+<script src="court-scoreboard.js"></script>
 <script src="motion.js"></script>
 
 <!-- PWA: Service Worker + Offline + Install -->

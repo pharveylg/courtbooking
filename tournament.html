@@ -8,6 +8,8 @@
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 <script src="firebase-config.js"></script>
+<script src="pickleball-scoring.js"></script>
+<script src="court-scoreboard.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
@@ -334,14 +336,14 @@ function matchLine(m){
     return `<div class="p-3 rounded-[14px] bg-[#FFFBF5] border border-[#EAE0D5] opacity-60"><span class="font-[700] text-[12.5px]">${escapeHtml(nameA)}</span> <span class="mono text-[10px] ml-1">advances (bye)</span></div>`;
   }
   const resultLine = m.status !== 'scheduled'
-    ? `<div class="mono text-[11px] mt-1">${m.score ? `${m.score.a} - ${m.score.b}` : 'Forfeit'} · winner: <b>${escapeHtml(m.participantNames[m.participantIds.indexOf(m.winnerParticipantId)] || '')}</b></div>`
+    ? `<div class="mono text-[11px] mt-1">${m.games && m.games.length ? m.games.map(g => `${g.a}-${g.b}`).join(', ') : m.score ? `${m.score.a} - ${m.score.b}` : 'Forfeit'} · winner: <b>${escapeHtml(m.participantNames[m.participantIds.indexOf(m.winnerParticipantId)] || '')}</b></div>`
     : (schedulePublished() && m.sched ? publicSchedLine(m.sched)
       : (m.court || m.scheduledDate ? `<div class="mono text-[10.5px] opacity-60 mt-1">📍 ${escapeHtml(m.scheduledDate || '')}${m.scheduledHour != null ? ' · ' + fmtHour(m.scheduledHour) : ''}</div>` : ''));
   return `
     <div class="p-3 rounded-[14px] bg-white border border-[#EAE0D5]">
       <div class="flex items-center justify-between gap-2 flex-wrap">
         <span class="font-[700] text-[12.5px]">${escapeHtml(nameA)} <span class="opacity-40 font-[500]">vs</span> ${escapeHtml(nameB)}</span>
-        ${matchStatusBadge(m.status)}
+        <span class="flex items-center gap-1.5">${liveTag(m)}${matchStatusBadge(m.status)}</span>
       </div>
       ${resultLine}
     </div>`;
@@ -618,6 +620,92 @@ function subscribeToGallery(){
 }
 
 /* ================================================================
+   LIVE SCORES
+   Matches in play publish their score to tournaments/{t}/live/{matchId}.
+   Every viewer sees a LIVE tag; the points themselves open only for the match
+   they choose to watch. A player can also KEEP SCORE on their own match: the
+   live points go out as they play, and at the end the result is PROPOSED to
+   the organizer (never official until the organizer accepts it).
+   ================================================================ */
+let LIVE = {};
+let unsubLive = null;
+let viewerMatchId = null;
+function liveTag(m){
+  if(m.status !== 'scheduled' || !LIVE[m.id]) return '';
+  return `<button type="button" data-watch="${escapeHtml(m.id)}" class="mono text-[9px] uppercase tracking-widest font-[800] px-2 py-1 rounded-full bg-[#FFE9E0] text-[#8C2C10] cursor-pointer">● Live · watch</button>`;
+}
+function subscribeLive(){
+  if(unsubLive) return;
+  unsubLive = db.collection(`clients/${currentClientId}/tournaments/${CURRENT_TOURNAMENT_ID}/live`).onSnapshot(snap => {
+    LIVE = Object.fromEntries(snap.docs.map(d => [d.id, d.data()]));
+    if(LAST_MATCHES.length){ renderSchedule(LAST_MATCHES); renderBracket(LAST_MATCHES); }
+    if(MY.regIds.size) renderMyMatches();
+    if(viewerMatchId) renderLiveViewer();
+  }, ex => console.warn('[PickleTournamentPublic] live listener failed:', ex.message));
+}
+function closeLiveViewer(){ viewerMatchId = null; const el = document.getElementById('liveViewer'); if(el) el.remove(); }
+function openLiveViewer(matchId){
+  closeLiveViewer(); viewerMatchId = matchId;
+  const wrap = document.createElement('div');
+  wrap.id = 'liveViewer'; wrap.setAttribute('role', 'dialog'); wrap.setAttribute('aria-modal', 'true');
+  wrap.className = 'fixed inset-0 z-50 bg-[#08111F] text-[#F4E7D0] flex flex-col';
+  wrap.innerHTML = '<div class="flex items-center justify-between p-3"><button type="button" id="liveViewerClose" class="h-11 px-5 rounded-full border border-[#27405E] bg-[#101D30] mono text-[12px] font-[800] cursor-pointer">Close</button><span class="mono text-[10px] uppercase tracking-widest opacity-60">Live score</span><span class="w-[76px]"></span></div><div id="liveViewerBody" class="flex-1 flex flex-col items-center justify-center gap-4 p-4"></div>';
+  document.body.appendChild(wrap);
+  document.getElementById('liveViewerClose').addEventListener('click', closeLiveViewer);
+  renderLiveViewer();
+}
+function renderLiveViewer(){
+  const body = document.getElementById('liveViewerBody');
+  if(!body) return;
+  const v = LIVE[viewerMatchId];
+  if(!v){
+    const m = LAST_MATCHES.concat(ALL_MATCHES).find(x => x.id === viewerMatchId);
+    body.innerHTML = '<div class="text-[20px] font-[800]">This match is no longer live.</div>' + (m && m.status !== 'scheduled' ? `<div class="mono text-[13px] opacity-70">Final: ${escapeHtml(m.games && m.games.length ? m.games.map(g => `${g.a}-${g.b}`).join(', ') : m.score ? `${m.score.a}-${m.score.b}` : 'see the schedule')}</div>` : '');
+    return;
+  }
+  const side = (s) => `<div class="flex-1 min-w-0 text-center rounded-[24px] bg-[#101D30] border-2 ${v.serving === s && !v.complete && !v.gameOver ? 'border-[#D6FF5F]' : 'border-[#27405E]'} p-4">
+    <div class="text-[clamp(15px,4vw,24px)] font-[800] break-words">${escapeHtml(v.names[s])}</div>
+    <div class="font-[900] leading-none text-white" style="font-size:clamp(64px,22vw,180px)">${v.points[s]}</div>
+    <div class="mono text-[11px] uppercase tracking-widest text-[#D6FF5F] min-h-[16px] mt-1">${v.serving === s && !v.complete && !v.gameOver ? (v.serverNumber ? `Serving · server ${v.serverNumber}` : 'Serving') : ''}</div>
+    ${v.config.bestOf > 1 ? `<div class="mono text-[12px] opacity-70 mt-1">Games ${v.gamesWon[s]}</div>` : ''}
+  </div>`;
+  body.innerHTML = `<div class="flex gap-3 w-full max-w-[720px]">${side('home')}${side('away')}</div>
+    <div class="mono text-[12px] opacity-70">${v.games.length ? 'Games: ' + v.games.map(g => `${g.home}-${g.away}`).join('  ') : ''}</div>
+    <div class="mono text-[11px] opacity-50">${v.complete ? 'Match finished, waiting for the organizer' : v.gameOver ? 'Game over' : 'Updating live'}</div>`;
+}
+function keepScore(matchId){
+  const m = ALL_MATCHES.find(x => x.id === matchId);
+  if(!m || typeof CourtBoard === 'undefined') return;
+  const div = DIVISIONS.find(d => d.id === m.divisionId) || {};
+  const mine = MY.regs.find(r => (m.participantIds || []).includes(r.id));
+  const args = { clientId: currentClientId, tournamentId: CURRENT_TOURNAMENT_ID, matchId };
+  let timer = null, pending = null, last = 0, closed = false;
+  const flush = async () => { timer = null; if(closed || !pending) return; const live = pending; pending = null; last = Date.now(); try { await callFn('setLiveScore', { ...args, live }); } catch(e) { /* best effort */ } };
+  const push = (live) => { pending = live; if(!timer) timer = setTimeout(flush, Math.max(0, 1200 - (Date.now() - last))); };
+  CourtBoard.open({
+    title: `${div.name || 'Match'} · ${(m.participantNames || []).join(' vs ')}`,
+    names: { home: m.participantNames[0], away: m.participantNames[1] },
+    config: { ...(div.matchFormat || {}), doubles: mine ? (mine.playerIds || []).length !== 1 : true },
+    storageKey: `cb_board_p_${CURRENT_TOURNAMENT_ID}_${matchId}`,
+    finishLabel: 'Send result to organizer',
+    onLive: push,
+    onFinish: async (sum) => {
+      closed = true; clearTimeout(timer);
+      await callFn('proposeMatchResult', { ...args, games: sum.games.map(g => ({ a: g.home, b: g.away })) });
+      setMyOpen(true);
+      myMsg('Thanks. Your result was sent to the organizer, who confirms it before it counts.');
+    },
+    onCancel: () => { closed = true; clearTimeout(timer); callFn('setLiveScore', { ...args, clear: true }).catch(() => {}); },
+  });
+}
+document.addEventListener('click', (e) => {
+  const w = e.target.closest && e.target.closest('[data-watch]');
+  if(w){ openLiveViewer(w.dataset.watch); return; }
+  const k = e.target.closest && e.target.closest('[data-keep-score]');
+  if(k) keepScore(k.dataset.keepScore);
+});
+
+/* ================================================================
    MY MATCHES + ALERTS
    Players have no accounts: a phone number that matches a registration is
    the only identity here. The lookup reads the same open registration and
@@ -717,16 +805,17 @@ function myMatchCard(m, opts){
   let head;
   if(PLAYED_STATUSES.includes(m.status)){
     const won = m.winnerParticipantId && MY.regIds.has(m.winnerParticipantId);
-    const sc = m.score ? (side === 0 ? `${m.score.a}-${m.score.b}` : `${m.score.b}-${m.score.a}`) : (m.status === 'cancelled' ? '' : 'forfeit');
+    const sc = m.games && m.games.length ? m.games.map(g => side === 0 ? `${g.a}-${g.b}` : `${g.b}-${g.a}`).join(', ') : m.score ? (side === 0 ? `${m.score.a}-${m.score.b}` : `${m.score.b}-${m.score.a}`) : (m.status === 'cancelled' ? '' : 'forfeit');
     head = `<span class="mono text-[9px] uppercase tracking-widest font-[800] px-2 py-0.5 rounded-full" style="background:${m.status === 'cancelled' ? '#F1E9DF' : won ? '#E8F5D8' : '#FFE9E0'};color:${m.status === 'cancelled' ? '#201C19' : won ? '#3F7019' : '#8C2C10'}">${m.status === 'cancelled' ? 'Cancelled' : won ? 'Won' : 'Lost'} ${escapeHtml(sc)}</span>`;
     return `<div class="p-3 rounded-[14px] bg-white border border-[#EAE0D5]"><div class="flex items-center justify-between gap-2 flex-wrap"><span class="font-[700] text-[12.5px]">vs ${escapeHtml(opp)}</span>${head}</div><div class="mono text-[9.5px] opacity-50 mt-1">${escapeHtml([divName, stage].filter(Boolean).join(' · '))}</div></div>`;
   }
   const hot = opts && opts.next && schedulePublished() && m.sched;
   const when = hot ? `<span class="mono text-[10px] font-[800] px-2.5 py-1 rounded-full bg-[#D6FF5F] text-[#201C19]">${escapeHtml(countdownText(slotStartMs(m.sched) - Date.now()))}</span>` : '';
   return `<div class="p-3 rounded-[14px] ${hot ? 'bg-[#FFFDF0] border-2 border-[#201C19]' : 'bg-white border border-[#EAE0D5]'}">
-    <div class="flex items-center justify-between gap-2 flex-wrap"><span class="font-[800] text-[13px]">vs ${escapeHtml(opp)}</span>${when}</div>
+    <div class="flex items-center justify-between gap-2 flex-wrap"><span class="font-[800] text-[13px]">vs ${escapeHtml(opp)}</span><span class="flex items-center gap-1.5">${liveTag(m)}${when}</span></div>
     ${where}
     <div class="mono text-[9.5px] opacity-50 mt-1">${escapeHtml([divName, stage, m.round ? `Round ${m.round}` : ''].filter(Boolean).join(' · '))}</div>
+    <div class="mt-2"><button type="button" data-keep-score="${escapeHtml(m.id)}" class="h-9 px-4 rounded-full bg-white border border-[#EAE0D5] hover:border-[#201C19] mono text-[10.5px] font-[800] cursor-pointer">${LIVE[m.id] ? 'Take over scoring' : 'Keep score'}</button></div>
   </div>`;
 }
 
@@ -917,6 +1006,7 @@ async function init(){
       if(!DIVISIONS.length) await loadDivisionsAndRender();
       if(MY.regIds.size) renderMyMatches();
       subscribeToGallery();
+      subscribeLive();
     }, ex => {
       renderGateState(`<p class="mt-5 mono text-[12px] text-[#8C2C10]">Failed to load: ${escapeHtml(ex.message)}</p>`);
     });

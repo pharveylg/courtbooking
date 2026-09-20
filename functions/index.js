@@ -84,6 +84,27 @@ function sanitizeForClient(value) {
   return value;
 }
 
+/* Game-by-game scores from a scoreboard: [{ a, b }], one entry per game played.
+   Legal shape only (whole numbers, no ties, 1-5 games, a clear winner) -- the
+   organizer stays the authority on whether the result is right. */
+function cleanGames(raw) {
+  if (!Array.isArray(raw) || raw.length < 1 || raw.length > 5) throw new HttpsError('invalid-argument', 'Send between 1 and 5 game scores.');
+  const games = raw.map((g) => {
+    const a = Number(g && g.a), b = Number(g && g.b);
+    if (!Number.isInteger(a) || !Number.isInteger(b) || a < 0 || b < 0 || a > 99 || b > 99 || a === b) {
+      throw new HttpsError('invalid-argument', 'Each game needs two different whole-number scores.');
+    }
+    return { a, b };
+  });
+  const winsA = games.filter((g) => g.a > g.b).length;
+  if (winsA * 2 === games.length) throw new HttpsError('invalid-argument', 'The games do not produce a winner.');
+  return games;
+}
+const gamesSummary = (games) => ({
+  score: { a: games.reduce((s, g) => s + g.a, 0), b: games.reduce((s, g) => s + g.b, 0) },
+  winnerIndex: games.filter((g) => g.a > g.b).length * 2 > games.length ? 0 : 1,
+});
+
 function tournamentRef(clientId, tournamentId) {
   return db.doc(`clients/${clientId}/tournaments/${tournamentId}`);
 }
@@ -317,7 +338,7 @@ exports.advanceToKnockout = onCall({ region: REGION }, async (request) => {
    and single-elim advancement.
    ================================================================ */
 exports.submitMatchScore = onCall({ region: REGION }, async (request) => {
-  const { clientId, tournamentId, matchId, scoreA, scoreB, forfeitWinnerParticipantId } = request.data || {};
+  const { clientId, tournamentId, matchId, scoreA, scoreB, forfeitWinnerParticipantId, games } = request.data || {};
   assertValidTenantId(clientId);
   requireString(tournamentId, 'tournamentId');
   requireString(matchId, 'matchId');
@@ -332,11 +353,17 @@ exports.submitMatchScore = onCall({ region: REGION }, async (request) => {
     throw new HttpsError('failed-precondition', 'This match is already decided -- use a correction instead.');
   }
 
-  let winnerParticipantId, status, score = null;
+  let winnerParticipantId, status, score = null, gameList = null;
   if (forfeitWinnerParticipantId) {
     if (!match.participantIds.includes(forfeitWinnerParticipantId)) throw new HttpsError('invalid-argument', 'Forfeit winner is not in this match.');
     winnerParticipantId = forfeitWinnerParticipantId;
     status = 'forfeit';
+  } else if (games != null) {
+    gameList = cleanGames(games);
+    const sum = gamesSummary(gameList);
+    winnerParticipantId = match.participantIds[sum.winnerIndex];
+    status = 'completed';
+    score = sum.score; // total points, so standings and stats keep working
   } else {
     const a = Number(scoreA), b = Number(scoreB);
     if (!Number.isFinite(a) || !Number.isFinite(b) || a === b) {
@@ -347,7 +374,9 @@ exports.submitMatchScore = onCall({ region: REGION }, async (request) => {
     score = { a, b };
   }
 
-  await matchRef.set({ status, score, winnerParticipantId, completedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+  await matchRef.set({ status, score, winnerParticipantId, completedAt: admin.firestore.FieldValue.serverTimestamp(), ...(gameList ? { games: gameList } : {}) }, { merge: true });
+  // the result is official now: drop the live scoreboard and any player proposal for this match
+  await Promise.all([tRef.collection('live').doc(matchId).delete(), tRef.collection('proposals').doc(matchId).delete()]);
   await logAudit(tRef, 'score-submitted', `${match.participantNames.join(' vs ')}: ${score ? `${score.a}-${score.b}` : 'forfeit'} -- winner ${match.participantNames[match.participantIds.indexOf(winnerParticipantId)]}`);
 
   const divRef = tRef.collection('divisions').doc(match.divisionId);
@@ -396,7 +425,7 @@ exports.correctMatchScore = onCall({ region: REGION }, async (request) => {
     score = { a, b };
   }
 
-  await matchRef.set({ status: 'completed', score, winnerParticipantId, correctedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+  await matchRef.set({ status: 'completed', score, winnerParticipantId, correctedAt: admin.firestore.FieldValue.serverTimestamp(), games: admin.firestore.FieldValue.delete() }, { merge: true });
 
   let warning = '';
   if (previousWinner && previousWinner !== winnerParticipantId && match.round != null) {
@@ -1079,4 +1108,82 @@ exports.tournamentChargesJob = onSchedule({
 }, async () => {
   const r = await tournamentCharges.syncAll({ db, nowMs: Date.now() });
   console.log('[charges] daily sync', JSON.stringify(r));
+});
+
+/* ================================================================
+   LIVE SCORES AND PLAYER-PROPOSED RESULTS
+   A scoreboard (organizer's or a player's) publishes the match in progress to
+   tournaments/{t}/live/{matchId}, which spectators read; it is informational
+   only. An OFFICIAL result still goes through submitMatchScore. A player who
+   kept score can only PROPOSE the result (tournaments/{t}/proposals/{matchId});
+   the organizer accepts it (submitMatchScore) or dismisses it. Both docs are
+   server-write-only in firestore.rules.
+   ================================================================ */
+function cleanLive(v) {
+  const src = v && typeof v === 'object' ? v : {};
+  const n = (x, hi) => { const k = Math.round(Number(x)); return Number.isFinite(k) && k >= 0 && k <= hi ? k : 0; };
+  const s = (x) => String(x == null ? '' : x).slice(0, 80);
+  const pair = (o, hi) => ({ home: n(o && o.home, hi), away: n(o && o.away, hi) });
+  const cfg = src.config || {};
+  return {
+    names: { home: s(src.names && src.names.home), away: s(src.names && src.names.away) },
+    games: (Array.isArray(src.games) ? src.games.slice(0, 5) : []).map((g) => pair(g, 99)),
+    gamesWon: pair(src.gamesWon, 5),
+    points: pair(src.points, 99),
+    serving: src.serving === 'away' ? 'away' : 'home',
+    serverNumber: src.serverNumber === 1 || src.serverNumber === 2 ? src.serverNumber : null,
+    gameOver: !!src.gameOver, complete: !!src.complete,
+    winner: src.winner === 'home' || src.winner === 'away' ? src.winner : null,
+    config: {
+      target: n(cfg.target, 50) || 11, winBy: cfg.winBy === 1 ? 1 : 2,
+      bestOf: [1, 3, 5].includes(Number(cfg.bestOf)) ? Number(cfg.bestOf) : 1,
+      scoring: cfg.scoring === 'rally' ? 'rally' : 'sideout', doubles: cfg.doubles !== false,
+    },
+  };
+}
+async function loadOpenMatch(tRef, matchId) {
+  const snap = await tRef.collection('matches').doc(matchId).get();
+  if (!snap.exists) throw new HttpsError('not-found', 'Match not found.');
+  const m = snap.data();
+  if (['completed', 'walkover', 'forfeit', 'cancelled'].includes(m.status) || isByeMatch(m)) {
+    throw new HttpsError('failed-precondition', 'This match is already decided.');
+  }
+  return m;
+}
+
+exports.setLiveScore = onCall({ region: REGION }, async (request) => {
+  const { clientId, tournamentId, matchId, live, clear } = request.data || {};
+  assertValidTenantId(clientId);
+  requireString(tournamentId, 'tournamentId');
+  requireString(matchId, 'matchId');
+  const tRef = tournamentRef(clientId, tournamentId);
+  await assertTournamentIsActive(tRef);
+  const ref = tRef.collection('live').doc(matchId);
+  if (clear) { await ref.delete(); return { cleared: true }; }
+  const m = await loadOpenMatch(tRef, matchId);
+  await ref.set({ ...cleanLive(live), divisionId: m.divisionId || null, updatedAtMs: Date.now() });
+  return { ok: true };
+});
+
+exports.proposeMatchResult = onCall({ region: REGION }, async (request) => {
+  const { clientId, tournamentId, matchId, games } = request.data || {};
+  assertValidTenantId(clientId);
+  requireString(tournamentId, 'tournamentId');
+  requireString(matchId, 'matchId');
+  const tRef = tournamentRef(clientId, tournamentId);
+  await assertTournamentIsActive(tRef);
+  await loadOpenMatch(tRef, matchId);
+  const gameList = cleanGames(games);
+  await tRef.collection('proposals').doc(matchId).set({ games: gameList, ...gamesSummary(gameList), submittedAtMs: Date.now(), source: 'player' });
+  await tRef.collection('live').doc(matchId).delete();
+  return { ok: true };
+});
+
+exports.dismissMatchProposal = onCall({ region: REGION }, async (request) => {
+  const { clientId, tournamentId, matchId } = request.data || {};
+  assertValidTenantId(clientId);
+  requireString(tournamentId, 'tournamentId');
+  requireString(matchId, 'matchId');
+  await tournamentRef(clientId, tournamentId).collection('proposals').doc(matchId).delete();
+  return { dismissed: true };
 });

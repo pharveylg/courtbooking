@@ -9,6 +9,8 @@
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-functions-compat.js"></script>
 <script src="firebase-config.js"></script>
+<script src="pickleball-scoring.js"></script>
+<script src="court-scoreboard.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
@@ -172,6 +174,15 @@
             <span class="mono text-[10px] uppercase tracking-widest opacity-60">Entry Fee per Team/Player (₱, optional)</span>
             <input id="dfEntryFee" type="number" min="0" step="0.01" placeholder="0 = no entry fee" class="h-10 rounded-full border border-[#EAE0D5] bg-white px-4 mono text-[12px] outline-none focus:border-[#201C19]"/>
           </label>
+          <div class="md:col-span-2 rounded-[14px] border border-[#EAE0D5] bg-[#FFFBF5] p-3">
+            <div class="mono text-[10px] uppercase tracking-widest opacity-60 mb-2">Match format (used by the live scoreboard)</div>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
+              <select id="dfTarget" aria-label="Game to" class="h-10 rounded-full border border-[#EAE0D5] bg-white px-3 mono text-[12px] outline-none focus:border-[#201C19]"><option value="7">Game to 7</option><option value="9">Game to 9</option><option value="11" selected>Game to 11</option><option value="15">Game to 15</option><option value="21">Game to 21</option></select>
+              <select id="dfWinBy" aria-label="Win by" class="h-10 rounded-full border border-[#EAE0D5] bg-white px-3 mono text-[12px] outline-none focus:border-[#201C19]"><option value="2" selected>Win by 2</option><option value="1">Win by 1</option></select>
+              <select id="dfBestOf" aria-label="Games per match" class="h-10 rounded-full border border-[#EAE0D5] bg-white px-3 mono text-[12px] outline-none focus:border-[#201C19]"><option value="1" selected>One game</option><option value="3">Best of 3</option><option value="5">Best of 5</option></select>
+              <select id="dfScoring" aria-label="Scoring" class="h-10 rounded-full border border-[#EAE0D5] bg-white px-3 mono text-[12px] outline-none focus:border-[#201C19]"><option value="sideout" selected>Side-out scoring</option><option value="rally">Rally scoring</option></select>
+            </div>
+          </div>
           <div class="flex gap-2">
             <label class="flex flex-col gap-1.5 flex-1">
               <span class="mono text-[10px] uppercase tracking-widest opacity-60">DUPR Min</span>
@@ -811,6 +822,7 @@ function renderDivisions(){
         <span>•</span>
         <span>${d.maxParticipants ? d.maxParticipants + ' max' : 'No limit'}</span>
         ${d.entryFee ? `<span>• ${fmtMoney(d.entryFee)} entry fee</span>` : ''}
+        <span>• ${escapeHtml(PickleScore.formatLabel(d.matchFormat))}</span>
         ${(d.duprMin || d.duprMax) ? `<span>• DUPR ${d.duprMin || '0'}–${d.duprMax || '∞'}</span>` : ''}
       </div>
     </div>
@@ -830,6 +842,7 @@ document.getElementById('divisionForm').addEventListener('submit', async (e) => 
     seedingMethod: document.getElementById('dfSeeding').value,
     maxParticipants: parseInt(document.getElementById('dfMaxParticipants').value) || null,
     entryFee: parseFloat(document.getElementById('dfEntryFee').value) || 0,
+    matchFormat: (({ target, winBy, bestOf, scoring }) => ({ target, winBy, bestOf, scoring }))(PickleScore.normalizeConfig({ target: document.getElementById('dfTarget').value, winBy: document.getElementById('dfWinBy').value, bestOf: document.getElementById('dfBestOf').value, scoring: document.getElementById('dfScoring').value })),
     duprMin: parseFloat(document.getElementById('dfDuprMin').value) || null,
     duprMax: parseFloat(document.getElementById('dfDuprMax').value) || null,
     createdAt: firebase.firestore.FieldValue.serverTimestamp(),
@@ -1211,16 +1224,23 @@ function populateMatchesDivisionSelect(){
 }
 document.getElementById('matchesDivisionSelect').addEventListener('change', (e) => loadMatchesForDivision(e.target.value));
 
+let CURRENT_MATCHES = [], PROPOSALS = {}, LIVE_SCORES = {};
 async function loadMatchesForDivision(divisionId){
   CURRENT_MATCHES_DIVISION_ID = divisionId;
   if(!divisionId) return;
   const division = CURRENT_DIVISIONS.find(d => d.id === divisionId);
   try {
-    const [matchesSnap, standingsSnap] = await Promise.all([
-      db.collection(`clients/${currentClientId}/tournaments/${CURRENT_TOURNAMENT_ID}/matches`).where('divisionId', '==', divisionId).get(),
-      db.doc(`clients/${currentClientId}/tournaments/${CURRENT_TOURNAMENT_ID}/standings/${divisionId}`).get(),
+    const base = `clients/${currentClientId}/tournaments/${CURRENT_TOURNAMENT_ID}`;
+    const [matchesSnap, standingsSnap, proposalSnap, liveSnap] = await Promise.all([
+      db.collection(`${base}/matches`).where('divisionId', '==', divisionId).get(),
+      db.doc(`${base}/standings/${divisionId}`).get(),
+      db.collection(`${base}/proposals`).get(),
+      db.collection(`${base}/live`).get(),
     ]);
     const matches = matchesSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    CURRENT_MATCHES = matches;
+    PROPOSALS = Object.fromEntries(proposalSnap.docs.map(d => [d.id, d.data()]));
+    LIVE_SCORES = Object.fromEntries(liveSnap.docs.map(d => [d.id, d.data()]));
     renderMatchesActionRow(division, matches);
     renderStandings(standingsSnap.exists ? standingsSnap.data() : null);
     renderAdminStats(matches);
@@ -2014,7 +2034,7 @@ function renderMatchCard(m){
   const [nameA, nameB] = m.participantNames;
   const isBye = m.isBye || m.participantIds.includes('BYE');
   const resultLine = m.status !== 'scheduled'
-    ? `<div class="mono text-[11px] mt-1">${m.score ? `${m.score.a} - ${m.score.b}` : (m.isBye ? 'Bye' : 'Forfeit')} · winner: <b>${escapeHtml(m.participantNames[m.participantIds.indexOf(m.winnerParticipantId)] || '')}</b></div>`
+    ? `<div class="mono text-[11px] mt-1">${m.games && m.games.length ? m.games.map(g => `${g.a}-${g.b}`).join(', ') : m.score ? `${m.score.a} - ${m.score.b}` : (m.isBye ? 'Bye' : 'Forfeit')} · winner: <b>${escapeHtml(m.participantNames[m.participantIds.indexOf(m.winnerParticipantId)] || '')}</b></div>`
     : '';
   const useVenues = venuesConfigured();
   const tdoc = currentTournamentDoc() || {};
@@ -2077,24 +2097,95 @@ function renderMatchCard(m){
       <label class="flex flex-col gap-1 flex-1 min-w-[140px]"><span class="mono text-[9px] opacity-50">Reason (required)</span><input type="text" id="correctReason-${m.id}" class="h-8 rounded-full border border-[#EAE0D5] bg-white px-3 mono text-[10px] outline-none focus:border-[#201C19]"/></label>
       <button data-submit-correction="${m.id}" class="h-8 px-3 rounded-full bg-[#201C19] text-white mono text-[10px] font-[700] cursor-pointer">Save Correction</button>
     </div>` : '';
+  const liveNow = m.status === 'scheduled' ? LIVE_SCORES[m.id] : null;
+  const liveChip = liveNow ? `<span class="mono text-[9px] uppercase tracking-widest font-[800] px-2 py-0.5 rounded-full bg-[#FFE9E0] text-[#8C2C10]">Live ${liveNow.points.home}-${liveNow.points.away}${liveNow.config && liveNow.config.bestOf > 1 ? ` · games ${liveNow.gamesWon.home}-${liveNow.gamesWon.away}` : ''}</span>` : '';
+  const proposal = m.status === 'scheduled' ? PROPOSALS[m.id] : null;
+  const proposalBox = proposal ? `
+    <div class="mt-2 p-2.5 rounded-[12px] bg-[#E8F5D8] border border-[#CFE8B5] flex flex-wrap items-center gap-2">
+      <span class="mono text-[10.5px] flex-1 min-w-[180px]">Result proposed by a player: <b>${proposal.games.map(g => `${g.a}-${g.b}`).join(', ')}</b> · winner <b>${escapeHtml(m.participantNames[proposal.winnerIndex] || '')}</b></span>
+      <button data-accept-proposal="${m.id}" class="h-8 px-3 rounded-full bg-[#201C19] text-white mono text-[10px] font-[700] cursor-pointer">Accept</button>
+      <button data-dismiss-proposal="${m.id}" class="h-8 px-2.5 rounded-full bg-white border border-[#EAE0D5] mono text-[9px] font-[700] cursor-pointer">Dismiss</button>
+    </div>` : '';
   return `
     <div class="p-3 rounded-[14px] bg-[#FFFBF5] border border-[#EAE0D5]">
       <div class="flex items-center justify-between gap-2 flex-wrap">
         <span class="font-[700] text-[12.5px]">${escapeHtml(nameA)} <span class="opacity-40 font-[500]">vs</span> ${escapeHtml(nameB)}</span>
         <div class="flex items-center gap-1.5">
-          ${matchStatusBadge(m.status)}
+          ${liveChip}${matchStatusBadge(m.status)}
+          ${m.status === 'scheduled' && !m.participantIds.includes('BYE') ? `<button data-live-score="${m.id}" class="h-7 px-2.5 rounded-full bg-[#D6FF5F] border border-[#201C19]/10 mono text-[9px] font-[800] cursor-pointer">Live score</button>` : ''}
           ${!isBye ? `<button data-schedule-toggle="${m.id}" class="h-7 px-2.5 rounded-full bg-white border border-[#EAE0D5] mono text-[9px] font-[700] cursor-pointer hover:border-[#201C19]">${(m.sched || m.court) ? 'Reschedule' : 'Assign Court'}</button>` : ''}
           ${m.status === 'scheduled' && !m.participantIds.includes('BYE') ? `<button data-score-form-toggle="${m.id}" class="h-7 px-2.5 rounded-full bg-white border border-[#EAE0D5] mono text-[9px] font-[700] cursor-pointer hover:border-[#201C19]">Enter Score</button>` : ''}
           ${(['completed','forfeit','walkover'].includes(m.status) && !m.isBye) ? `<button data-correct-toggle="${m.id}" class="h-7 px-2.5 rounded-full bg-white border border-[#EAE0D5] mono text-[9px] font-[700] cursor-pointer hover:border-[#201C19]">Correct</button>` : ''}
         </div>
       </div>
       ${resultLine}
+      ${proposalBox}
       ${scheduleLine}
       ${scheduleForm}
       ${scoreForm}
       ${correctForm}
     </div>`;
 }
+
+/* ---------- Live scoreboard for a tournament match ----------
+   The organizer scores on this device; spectators see the live points through
+   setLiveScore, and the official result goes through submitMatchScore with the
+   game-by-game scores. Closing without finishing takes the match off the live
+   board but keeps the progress here, so reopening picks up where you left off. */
+function openLiveScore(matchId){
+  const m = CURRENT_MATCHES.find(x => x.id === matchId);
+  if(!m || typeof CourtBoard === 'undefined') return;
+  const div = CURRENT_DIVISIONS.find(d => d.id === m.divisionId) || {};
+  const reg = REGISTRATIONS.find(r => r.id === m.participantIds[0]);
+  const doubles = reg ? (reg.playerIds || []).length !== 1 : DOUBLES_CATEGORIES.includes(div.category);
+  const args = { clientId: currentClientId, tournamentId: CURRENT_TOURNAMENT_ID, matchId };
+  let timer = null, pending = null, last = 0, closed = false;
+  const flush = async () => {
+    timer = null; if(closed || !pending) return;
+    const live = pending; pending = null; last = Date.now();
+    try { await callEngine('setLiveScore', { ...args, live }); } catch(e) { /* live view is best-effort */ }
+  };
+  const push = (live) => { pending = live; if(!timer) timer = setTimeout(flush, Math.max(0, 1200 - (Date.now() - last))); };
+  CourtBoard.open({
+    title: `${div.name || 'Match'} · ${m.participantNames.join(' vs ')}`,
+    names: { home: m.participantNames[0], away: m.participantNames[1] },
+    config: { ...(div.matchFormat || {}), doubles },
+    storageKey: `cb_board_t_${CURRENT_TOURNAMENT_ID}_${matchId}`,
+    finishLabel: 'Submit official result',
+    onLive: push,
+    onFinish: async (sum) => {
+      closed = true; clearTimeout(timer);
+      await callEngine('submitMatchScore', { ...args, games: sum.games.map(g => ({ a: g.home, b: g.away })) });
+      toast('Result submitted');
+      await loadMatchesForDivision(CURRENT_MATCHES_DIVISION_ID);
+    },
+    onCancel: () => { closed = true; clearTimeout(timer); callEngine('setLiveScore', { ...args, clear: true }).catch(() => {}).then(() => loadMatchesForDivision(CURRENT_MATCHES_DIVISION_ID)); },
+  });
+}
+document.getElementById('matchesList').addEventListener('click', async (e) => {
+  const live = e.target.closest('[data-live-score]');
+  if(live){ openLiveScore(live.dataset.liveScore); return; }
+  const accept = e.target.closest('[data-accept-proposal]');
+  if(accept){
+    const id = accept.dataset.acceptProposal, p = PROPOSALS[id];
+    if(!p) return;
+    accept.disabled = true;
+    try {
+      await callEngine('submitMatchScore', { clientId: currentClientId, tournamentId: CURRENT_TOURNAMENT_ID, matchId: id, games: p.games });
+      toast('Result accepted');
+      await loadMatchesForDivision(CURRENT_MATCHES_DIVISION_ID);
+    } catch(ex) { toast('Failed: ' + (ex.message || ex)); accept.disabled = false; }
+    return;
+  }
+  const dismiss = e.target.closest('[data-dismiss-proposal]');
+  if(dismiss){
+    try {
+      await callEngine('dismissMatchProposal', { clientId: currentClientId, tournamentId: CURRENT_TOURNAMENT_ID, matchId: dismiss.dataset.dismissProposal });
+      toast('Proposal dismissed');
+      await loadMatchesForDivision(CURRENT_MATCHES_DIVISION_ID);
+    } catch(ex) { toast('Failed: ' + (ex.message || ex)); }
+  }
+});
 
 async function submitScore(matchId){
   const a = document.getElementById(`scoreA-${matchId}`).value;

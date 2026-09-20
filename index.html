@@ -266,6 +266,8 @@ body:not(.staff-mode) .staff-link{display:none!important}
         </button>
       </div>
 
+      <div id="homeStaff" class="hidden mt-5"></div>
+
       <div class="mt-5">
         <div class="mono text-[10px] uppercase tracking-widest opacity-50 mb-2">Also here</div>
         <div id="homeTiles" class="grid grid-cols-1 sm:grid-cols-2 gap-2"></div>
@@ -280,45 +282,32 @@ body:not(.staff-mode) .staff-link{display:none!important}
     </div>
   </section>
 
-  <!-- VIEW: BOOK -->
+  <!-- VIEW: BOOK (guided: 1 Pick a time, 2 Your details, then Pay) -->
   <section id="view-book" class="view hidden" data-mp-panel="book">
-    <!-- Mobile Segment Switcher (< lg breakpoint only) -->
-    <div class="lg:hidden flex p-1.5 rounded-full bg-[#F1E9DF] border border-[#EAE0D5] mb-4">
-      <button id="mobTabSchedule" class="flex-1 py-2 rounded-full text-[13px] font-[700] bg-[#201C19] text-white shadow-xs transition">Today's Schedule</button>
-      <button id="mobTabReserve" class="flex-1 py-2 rounded-full text-[13px] font-[650] text-[#201C19] opacity-70 hover:opacity-100 transition">Reserve Court Form</button>
-    </div>
+    <div id="bookWizard" class="max-w-[720px] mx-auto">
+      <div id="bkProgress" class="mb-4"></div>
 
-    <!-- top bar -->
-    <div class="grid grid-cols-12 gap-4 md:gap-5">
-      <!-- Left: schedule + info -->
-      <div id="colSchedule" class="col-span-12 lg:col-span-7 flex flex-col gap-4">
-        <!-- Hero strip -->
-        <div class="rounded-[24px] md:rounded-[28px] bg-[#201C19] text-[#FFFBF5] p-5 md:p-7 relative overflow-hidden mp-mesh-bg mp-tilt" data-tilt-max="5">
-          <img id="heroWatermark" src="" alt="" class="hidden absolute inset-0 w-full h-full object-cover opacity-[0.14] pointer-events-none select-none"/>
-          <div class="absolute -right-12 -top-12 w-[280px] h-[280px] rounded-full bg-[#D6FF5F] opacity-[0.18] blur-[2px]"></div>
-          <div class="absolute right-[-20px] bottom-[-30px] rotate-[-10deg] mono text-[96px] leading-none font-[800] tracking-[-0.08em] text-white/[0.06]">PICKLE</div>
-          <div class="relative z-10 flex flex-wrap items-start justify-between gap-6">
-            <div>
-              <div id="heroLocation" class="inline-flex items-center gap-2 px-3 h-7 rounded-full bg-white/10 border border-white/10 mono text-[11px] tracking-widest uppercase mp-in-view">Single Court</div>
-              <h1 id="heroTitle" class="mt-4 text-[32px] md:text-[44px] font-[800] leading-[0.92] tracking-[-0.04em] max-w-[16ch] mp-in-view-scale">Book the court.<br/>Run the queue.</h1>
-              <div class="mt-4 flex flex-wrap gap-2 mp-stagger">
-                <div id="chipHourly" class="mp-in-view px-3 py-1.5 rounded-full bg-[#D6FF5F] text-[#201C19] mono text-[11px] font-[700] mp-hover-lift">₱300 / hour • Reservations</div>
-                <div id="chipQueue" class="mp-in-view px-3 py-1.5 rounded-full bg-white/10 border border-white/15 mono text-[11px] mp-hover-lift">₱100 / head • Queue</div>
-                <div id="chipOpenPlay" class="mp-in-view px-3 py-1.5 rounded-full bg-[#EDE8FF] border border-[#D8D0FF] mono text-[11px] font-[700] text-[#4C1D95] mp-hover-lift">₱120 / head • Open Play</div>
+      <div id="bkStep1">
+        <div id="bkInfo" class="mb-3 flex flex-wrap gap-2"></div>
+        <div class="rounded-[24px] bg-white border border-[#EAE0D5] p-4 mb-3">
+          <div class="font-[800] text-[18px] tracking-[-0.02em] mb-3">Pick a date</div>
+          <div class="rounded-[18px] bg-[#FFFBF5] border border-[#F1E9DF] p-3.5">
+              <div class="flex items-center justify-between mb-3">
+                <button id="calPrev" class="w-8 h-8 rounded-full bg-white border border-[#EAE0D5] grid place-items-center hover:bg-[#201C19] hover:text-white transition">‹</button>
+                <div id="calTitle" class="font-[700] text-[14px] tracking-[-0.01em]"></div>
+                <button id="calNext" class="w-8 h-8 rounded-full bg-white border border-[#EAE0D5] grid place-items-center hover:bg-[#201C19] hover:text-white transition">›</button>
+              </div>
+              <div class="grid grid-cols-7 gap-1 mb-2 mono text-[10px] tracking-widest uppercase opacity-50 text-center">
+                <div>Mo</div><div>Tu</div><div>We</div><div>Th</div><div>Fr</div><div>Sa</div><div>Su</div>
+              </div>
+              <div id="calGrid" class="grid grid-cols-7 gap-1"></div>
+              <div class="mt-3 flex items-center gap-2 mono text-[10px]">
+                <span class="inline-flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-[#201C19]"></span>Selected</span>
+                <span class="inline-flex items-center gap-1"><span class="w-2 h-2 rounded-full border border-[#201C19]"></span>Today</span>
+                <span class="ml-auto opacity-60" id="calSelectedLabel"></span>
               </div>
             </div>
-            <div class="mp-glass-dark rounded-[16px] p-3 w-full md:w-[240px] mp-in-view-right mp-spotlight">
-              <div class="mono text-[10px] tracking-widest uppercase opacity-60">Today's Blocked</div>
-              <div id="staffNote" class="mt-2 text-[13px] leading-[1.35] font-[500]"></div>
-              <div class="mt-3 flex gap-2 flex-wrap">
-                <span id="heroStaffChip" class="inline-flex items-center px-3.5 h-7 rounded-full bg-[#FF8A5B] text-[#201C19] mono text-[10px] font-[700]">STAFF 5–10PM</span>
-                <span class="inline-flex items-center px-3.5 h-7 rounded-full bg-white text-[#201C19] mono text-[10px] font-[700]">ONE COURT ONLY</span>
-              </div>
-            </div>
-          </div>
         </div>
-
-        <!-- Today's Schedule -->
         <div class="rounded-[24px] md:rounded-[28px] bg-white border border-[#EAE0D5] shadow-[0_8px_30px_rgba(32,28,25,0.04)] overflow-hidden">
           <div class="px-5 md:px-7 h-[64px] flex items-center justify-between border-b border-[#F1E9DF]">
             <div class="flex items-center gap-3">
@@ -348,74 +337,12 @@ body:not(.staff-mode) .staff-link{display:none!important}
             <span>Tue/Thu/Sat/Sun 5PM–10PM = Staff reserved</span>
           </div>
         </div>
-
-        <!-- Mobile Sticky Bottom CTA (< lg breakpoint only) -->
-        <div class="lg:hidden sticky bottom-4 z-20 mt-2">
-          <button type="button" id="mobJumpToReserveBtn" class="w-full h-[52px] rounded-full bg-[#201C19] text-[#D6FF5F] font-[800] text-[14px] tracking-[-0.01em] shadow-[0_10px_30px_rgba(32,28,25,0.35)] flex items-center justify-center gap-2 border border-white/10 active:scale-[0.98] transition">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 L3 14 h7 l-1 8 L19 10 h-7 z"/></svg>
-            <span>Jump to Reserve Court Form →</span>
-          </button>
-        </div>
+        <p class="mono text-[11px] opacity-60 mt-3 text-center">Tap <b>Book Now</b> on a free hour to continue.</p>
       </div>
 
-      <!-- Right: Reserve Form -->
-      <div id="colReserve" class="col-span-12 lg:col-span-5 hidden lg:flex flex-col gap-4">
-        <!-- Mobile Back to Schedule button (< lg only) -->
-        <div class="lg:hidden">
-          <button type="button" id="mobBackToScheduleBtn" class="inline-flex items-center gap-2 px-4 h-9 rounded-full bg-white border border-[#EAE0D5] font-[700] text-[12px] text-[#201C19] shadow-2xs">
-            <span>← Back to Today's Schedule</span>
-          </button>
-        </div>
-
-        <div class="rounded-[24px] md:rounded-[28px] bg-white border border-[#EAE0D5] shadow-[0_8px_30px_rgba(32,28,25,0.04)] overflow-hidden sticky top-[84px] mp-in-view-right mp-spotlight">
-          <div class="px-6 md:px-7 pt-6 pb-4">
-            <div class="flex items-start justify-between">
-              <div>
-                <h3 class="text-[20px] font-[800] tracking-[-0.02em]">Reserve Court</h3>
-                <p class="mono text-[11px] opacity-60 mt-1">1-hour increments • Single court</p>
-              </div>
-              <div class="w-9 h-9 rounded-full bg-[#D6FF5F] grid place-items-center mono font-[800] text-[14px]">₱</div>
-            </div>
-          </div>
-
-          <!-- Calendar -->
-          <div class="px-6 md:px-7">
-            <div class="rounded-[18px] bg-[#FFFBF5] border border-[#F1E9DF] p-3.5">
-              <div class="flex items-center justify-between mb-3">
-                <button id="calPrev" class="w-8 h-8 rounded-full bg-white border border-[#EAE0D5] grid place-items-center hover:bg-[#201C19] hover:text-white transition">‹</button>
-                <div id="calTitle" class="font-[700] text-[14px] tracking-[-0.01em]"></div>
-                <button id="calNext" class="w-8 h-8 rounded-full bg-white border border-[#EAE0D5] grid place-items-center hover:bg-[#201C19] hover:text-white transition">›</button>
-              </div>
-              <div class="grid grid-cols-7 gap-1 mb-2 mono text-[10px] tracking-widest uppercase opacity-50 text-center">
-                <div>Mo</div><div>Tu</div><div>We</div><div>Th</div><div>Fr</div><div>Sa</div><div>Su</div>
-              </div>
-              <div id="calGrid" class="grid grid-cols-7 gap-1"></div>
-              <div class="mt-3 flex items-center gap-2 mono text-[10px]">
-                <span class="inline-flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-[#201C19]"></span>Selected</span>
-                <span class="inline-flex items-center gap-1"><span class="w-2 h-2 rounded-full border border-[#201C19]"></span>Today</span>
-                <span class="ml-auto opacity-60" id="calSelectedLabel"></span>
-              </div>
-            </div>
-
-            <!-- Selected-date slot availability preview (tap an open slot to prefill) -->
-            <div class="mt-3 rounded-[18px] bg-white border border-[#F1E9DF] p-3.5">
-              <div class="flex items-center justify-between mb-2.5">
-                <span class="mono text-[10px] uppercase tracking-widest font-[700] opacity-60">Slots for <span id="slotPreviewDate" class="text-[#201C19]"></span></span>
-                <span class="mono text-[9px] opacity-50">tap an OPEN slot to prefill</span>
-              </div>
-              <div id="dateSlotPreview" class="flex gap-1.5 overflow-x-auto no-scrollbar pb-1"></div>
-              <div class="mt-2 flex flex-wrap gap-x-3 gap-y-1 mono text-[9px] uppercase tracking-wider opacity-60">
-                <span class="flex items-center gap-1"><i class="w-2 h-2 rounded-full bg-[#4ADE80] block"></i>Open</span>
-                <span class="flex items-center gap-1"><i class="w-2 h-2 rounded-full bg-[#FDBA74] block"></i>Pending</span>
-                <span class="flex items-center gap-1"><i class="w-2 h-2 rounded-full bg-[#201C19] block"></i>Reserved</span>
-                <span class="flex items-center gap-1"><i class="w-2 h-2 rounded-full bg-[#9B8EFF] block"></i>Open&nbsp;Play</span>
-                <span class="flex items-center gap-1"><i class="w-2 h-2 rounded-full bg-[#FF8A5B] block"></i>Staff</span>
-                <span class="flex items-center gap-1"><i class="w-2 h-2 rounded-full bg-[#CFE8B5] block"></i>Queue</span>
-              </div>
-            </div>
-          </div>
-
-          <!-- Form -->
+      <div id="bkStep2" class="hidden">
+        <div id="bkSummary" class="mb-4 rounded-[22px] bg-[#201C19] text-white p-5"></div>
+        <div class="rounded-[24px] bg-white border border-[#EAE0D5] overflow-hidden">
           <form id="reserveForm" class="px-6 md:px-7 py-5 flex flex-col gap-4">
             <div class="grid grid-cols-2 gap-3">
               <label class="col-span-2 md:col-span-1 flex flex-col gap-1.5">
@@ -477,6 +404,106 @@ body:not(.staff-mode) .staff-link{display:none!important}
           </form>
         </div>
       </div>
+    </div>
+
+    <!-- Original two-column layout, kept only so the code that still talks to its elements keeps working -->
+    <div id="bookLegacy" class="hidden">
+
+    <!-- Mobile Segment Switcher (< lg breakpoint only) -->
+    <div class="lg:hidden flex p-1.5 rounded-full bg-[#F1E9DF] border border-[#EAE0D5] mb-4">
+      <button id="mobTabSchedule" class="flex-1 py-2 rounded-full text-[13px] font-[700] bg-[#201C19] text-white shadow-xs transition">Today's Schedule</button>
+      <button id="mobTabReserve" class="flex-1 py-2 rounded-full text-[13px] font-[650] text-[#201C19] opacity-70 hover:opacity-100 transition">Reserve Court Form</button>
+    </div>
+
+    <!-- top bar -->
+    <div class="grid grid-cols-12 gap-4 md:gap-5">
+      <!-- Left: schedule + info -->
+      <div id="colSchedule" class="col-span-12 lg:col-span-7 flex flex-col gap-4">
+        <!-- Hero strip -->
+        <div class="rounded-[24px] md:rounded-[28px] bg-[#201C19] text-[#FFFBF5] p-5 md:p-7 relative overflow-hidden mp-mesh-bg mp-tilt" data-tilt-max="5">
+          <img id="heroWatermark" src="" alt="" class="hidden absolute inset-0 w-full h-full object-cover opacity-[0.14] pointer-events-none select-none"/>
+          <div class="absolute -right-12 -top-12 w-[280px] h-[280px] rounded-full bg-[#D6FF5F] opacity-[0.18] blur-[2px]"></div>
+          <div class="absolute right-[-20px] bottom-[-30px] rotate-[-10deg] mono text-[96px] leading-none font-[800] tracking-[-0.08em] text-white/[0.06]">PICKLE</div>
+          <div class="relative z-10 flex flex-wrap items-start justify-between gap-6">
+            <div>
+              <div id="heroLocation" class="inline-flex items-center gap-2 px-3 h-7 rounded-full bg-white/10 border border-white/10 mono text-[11px] tracking-widest uppercase mp-in-view">Single Court</div>
+              <h1 id="heroTitle" class="mt-4 text-[32px] md:text-[44px] font-[800] leading-[0.92] tracking-[-0.04em] max-w-[16ch] mp-in-view-scale">Book the court.<br/>Run the queue.</h1>
+              <div class="mt-4 flex flex-wrap gap-2 mp-stagger">
+                <div id="chipHourly" class="mp-in-view px-3 py-1.5 rounded-full bg-[#D6FF5F] text-[#201C19] mono text-[11px] font-[700] mp-hover-lift">₱300 / hour • Reservations</div>
+                <div id="chipQueue" class="mp-in-view px-3 py-1.5 rounded-full bg-white/10 border border-white/15 mono text-[11px] mp-hover-lift">₱100 / head • Queue</div>
+                <div id="chipOpenPlay" class="mp-in-view px-3 py-1.5 rounded-full bg-[#EDE8FF] border border-[#D8D0FF] mono text-[11px] font-[700] text-[#4C1D95] mp-hover-lift">₱120 / head • Open Play</div>
+              </div>
+            </div>
+            <div class="mp-glass-dark rounded-[16px] p-3 w-full md:w-[240px] mp-in-view-right mp-spotlight">
+              <div class="mono text-[10px] tracking-widest uppercase opacity-60">Today's Blocked</div>
+              <div id="staffNote" class="mt-2 text-[13px] leading-[1.35] font-[500]"></div>
+              <div class="mt-3 flex gap-2 flex-wrap">
+                <span id="heroStaffChip" class="inline-flex items-center px-3.5 h-7 rounded-full bg-[#FF8A5B] text-[#201C19] mono text-[10px] font-[700]">STAFF 5–10PM</span>
+                <span class="inline-flex items-center px-3.5 h-7 rounded-full bg-white text-[#201C19] mono text-[10px] font-[700]">ONE COURT ONLY</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Today's Schedule -->
+        
+
+        <!-- Mobile Sticky Bottom CTA (< lg breakpoint only) -->
+        <div class="lg:hidden sticky bottom-4 z-20 mt-2">
+          <button type="button" id="mobJumpToReserveBtn" class="w-full h-[52px] rounded-full bg-[#201C19] text-[#D6FF5F] font-[800] text-[14px] tracking-[-0.01em] shadow-[0_10px_30px_rgba(32,28,25,0.35)] flex items-center justify-center gap-2 border border-white/10 active:scale-[0.98] transition">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 L3 14 h7 l-1 8 L19 10 h-7 z"/></svg>
+            <span>Jump to Reserve Court Form →</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Right: Reserve Form -->
+      <div id="colReserve" class="col-span-12 lg:col-span-5 hidden lg:flex flex-col gap-4">
+        <!-- Mobile Back to Schedule button (< lg only) -->
+        <div class="lg:hidden">
+          <button type="button" id="mobBackToScheduleBtn" class="inline-flex items-center gap-2 px-4 h-9 rounded-full bg-white border border-[#EAE0D5] font-[700] text-[12px] text-[#201C19] shadow-2xs">
+            <span>← Back to Today's Schedule</span>
+          </button>
+        </div>
+
+        <div class="rounded-[24px] md:rounded-[28px] bg-white border border-[#EAE0D5] shadow-[0_8px_30px_rgba(32,28,25,0.04)] overflow-hidden sticky top-[84px] mp-in-view-right mp-spotlight">
+          <div class="px-6 md:px-7 pt-6 pb-4">
+            <div class="flex items-start justify-between">
+              <div>
+                <h3 class="text-[20px] font-[800] tracking-[-0.02em]">Reserve Court</h3>
+                <p class="mono text-[11px] opacity-60 mt-1">1-hour increments • Single court</p>
+              </div>
+              <div class="w-9 h-9 rounded-full bg-[#D6FF5F] grid place-items-center mono font-[800] text-[14px]">₱</div>
+            </div>
+          </div>
+
+          <!-- Calendar -->
+          <div class="px-6 md:px-7">
+            
+
+            <!-- Selected-date slot availability preview (tap an open slot to prefill) -->
+            <div class="mt-3 rounded-[18px] bg-white border border-[#F1E9DF] p-3.5">
+              <div class="flex items-center justify-between mb-2.5">
+                <span class="mono text-[10px] uppercase tracking-widest font-[700] opacity-60">Slots for <span id="slotPreviewDate" class="text-[#201C19]"></span></span>
+                <span class="mono text-[9px] opacity-50">tap an OPEN slot to prefill</span>
+              </div>
+              <div id="dateSlotPreview" class="flex gap-1.5 overflow-x-auto no-scrollbar pb-1"></div>
+              <div class="mt-2 flex flex-wrap gap-x-3 gap-y-1 mono text-[9px] uppercase tracking-wider opacity-60">
+                <span class="flex items-center gap-1"><i class="w-2 h-2 rounded-full bg-[#4ADE80] block"></i>Open</span>
+                <span class="flex items-center gap-1"><i class="w-2 h-2 rounded-full bg-[#FDBA74] block"></i>Pending</span>
+                <span class="flex items-center gap-1"><i class="w-2 h-2 rounded-full bg-[#201C19] block"></i>Reserved</span>
+                <span class="flex items-center gap-1"><i class="w-2 h-2 rounded-full bg-[#9B8EFF] block"></i>Open&nbsp;Play</span>
+                <span class="flex items-center gap-1"><i class="w-2 h-2 rounded-full bg-[#FF8A5B] block"></i>Staff</span>
+                <span class="flex items-center gap-1"><i class="w-2 h-2 rounded-full bg-[#CFE8B5] block"></i>Queue</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Form -->
+          
+        </div>
+      </div>
+    </div>
     </div>
   </section>
 
@@ -984,8 +1011,8 @@ body:not(.staff-mode) .staff-link{display:none!important}
 
   <!-- VIEW: OPEN GAMES (public matchmaking, separate from the admin Queue Manager above) -->
   <section id="view-opengames" class="view hidden" data-mp-panel="opengames">
-    <div class="grid grid-cols-12 gap-4 md:gap-6">
-      <div class="col-span-12 lg:col-span-8 flex flex-col gap-4">
+    <div class="max-w-[720px] mx-auto grid grid-cols-12 gap-4">
+      <div class="col-span-12 flex flex-col gap-4">
         <div class="rounded-[24px] bg-white border border-[#EAE0D5] shadow-[0_8px_30px_rgba(32,28,25,0.04)] overflow-hidden">
           <div class="px-5 md:px-7 h-[64px] flex items-center justify-between border-b border-[#F1E9DF]">
             <div>
@@ -997,7 +1024,7 @@ body:not(.staff-mode) .staff-link{display:none!important}
           <div id="ogDiscoverList" class="divide-y divide-[#F5EDE4]"></div>
         </div>
       </div>
-      <div class="col-span-12 lg:col-span-4 flex flex-col gap-4">
+      <div class="col-span-12 flex flex-col gap-4">
         <div class="rounded-[24px] bg-white border border-[#EAE0D5] p-5">
           <div class="font-[750] text-[14px]">My Games</div>
           <div class="mono text-[11px] opacity-60 mt-1">Games you created or joined on this device.</div>
@@ -1009,16 +1036,20 @@ body:not(.staff-mode) .staff-link{display:none!important}
 
   <!-- Create Open Game Modal -->
   <div id="ogCreateModal" class="fixed inset-0 z-50 hidden">
-    <div class="absolute inset-0 bg-[#201C19]/60 backdrop-blur-[6px]" id="ogCreateBackdrop"></div>
+    <div class="absolute inset-0 bg-[#FFFBF5]" id="ogCreateBackdrop"></div>
     <div class="absolute inset-0 overflow-y-auto overscroll-contain flex items-start justify-center p-4">
-      <div class="w-full max-w-[480px] rounded-[28px] bg-white border border-[#EAE0D5] shadow-[0_20px_60px_rgba(32,28,25,0.25)] p-5 md:p-7 my-4">
-        <div class="flex items-center justify-between">
-          <h3 class="text-[20px] font-[800] tracking-[-0.02em]">Create a Game</h3>
-          <button id="ogCreateCloseBtn" class="w-9 h-9 rounded-full bg-[#F1E9DF] grid place-items-center text-[14px] hover:bg-[#E5DDD4] transition cursor-pointer">✕</button>
+      <div class="w-full max-w-[560px] my-2">
+        <div class="flex items-center justify-between gap-3">
+          <button id="ogCreateCloseBtn" type="button" class="h-10 px-4 rounded-full bg-white border border-[#EAE0D5] hover:border-[#201C19] text-[13px] font-[700] flex items-center gap-1.5 cursor-pointer transition">✕ <span>Cancel</span></button>
+          <h3 class="text-[17px] font-[800] tracking-[-0.02em]">Create a game</h3>
+          <span class="w-[92px]"></span>
         </div>
-        <form id="ogCreateForm" class="mt-4 space-y-3">
-          <div id="ogSuggestBox" class="hidden p-3.5 rounded-[16px] bg-[#FFF8F0] border border-[#FFE0A3] mono text-[12px] leading-[1.5]"></div>
-          <div class="grid grid-cols-2 gap-3">
+        <div id="ogProgress" class="mt-4"></div>
+        <div class="mt-4 rounded-[28px] bg-white border border-[#EAE0D5] shadow-[0_8px_30px_rgba(32,28,25,0.05)] p-5 md:p-7">
+        <form id="ogCreateForm" class="space-y-3">
+          <div data-og-step="1" class="space-y-3">
+            <div class="font-[800] text-[18px] tracking-[-0.02em]">When do you want to play?</div>
+            <div class="grid grid-cols-2 gap-3">
             <label class="flex flex-col gap-1.5">
               <span class="mono text-[10px] uppercase tracking-widest opacity-60">Date</span>
               <input type="date" id="ogDate" required class="h-11 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-4 mono text-[13px] outline-none focus:border-[#201C19]"/>
@@ -1028,7 +1059,14 @@ body:not(.staff-mode) .staff-link{display:none!important}
               <select id="ogStart" class="h-11 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-3 mono text-[13px] outline-none focus:border-[#201C19]"></select>
             </label>
           </div>
-          <div class="grid grid-cols-2 gap-3">
+            <label id="ogCourtLabel" class="hidden flex flex-col gap-1.5">
+              <span class="mono text-[10px] uppercase tracking-widest opacity-60">Court (optional)</span>
+              <select id="ogCourt" class="h-11 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-3 mono text-[13px] outline-none focus:border-[#201C19]"></select>
+            </label>
+          </div>
+          <div data-og-step="2" class="hidden space-y-3">
+            <div class="font-[800] text-[18px] tracking-[-0.02em]">Who are you looking for?</div>
+            <div class="grid grid-cols-2 gap-3">
             <label class="flex flex-col gap-1.5">
               <span class="mono text-[10px] uppercase tracking-widest opacity-60">Skill Level</span>
               <select id="ogSkill" class="h-11 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-3 mono text-[13px] outline-none focus:border-[#201C19]">
@@ -1047,7 +1085,7 @@ body:not(.staff-mode) .staff-link{display:none!important}
               </select>
             </label>
           </div>
-          <div class="grid grid-cols-2 gap-3">
+            <div>
             <label class="flex flex-col gap-1.5">
               <span class="mono text-[10px] uppercase tracking-widest opacity-60">Players Needed (total)</span>
               <select id="ogPlayersNeeded" class="h-11 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-3 mono text-[13px] outline-none focus:border-[#201C19]">
@@ -1056,17 +1094,16 @@ body:not(.staff-mode) .staff-link{display:none!important}
                 <option value="6">6</option>
                 <option value="8">8</option>
               </select>
-            </label>
-            <label id="ogCourtLabel" class="hidden flex flex-col gap-1.5">
-              <span class="mono text-[10px] uppercase tracking-widest opacity-60">Court (optional)</span>
-              <select id="ogCourt" class="h-11 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-3 mono text-[13px] outline-none focus:border-[#201C19]"></select>
-            </label>
-          </div>
-          <label class="flex flex-col gap-1.5">
+            </label></div>
+            <label class="flex flex-col gap-1.5">
             <span class="mono text-[10px] uppercase tracking-widest opacity-60">Notes (optional)</span>
             <input type="text" id="ogNotes" maxlength="140" placeholder="e.g. Casual game, bring water" class="h-11 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-4 mono text-[13px] outline-none focus:border-[#201C19]"/>
           </label>
-          <div class="grid grid-cols-2 gap-3">
+          </div>
+          <div data-og-step="3" class="hidden space-y-3">
+            <div class="font-[800] text-[18px] tracking-[-0.02em]">Almost done</div>
+            <div id="ogSuggestBox" class="hidden p-3.5 rounded-[16px] bg-[#FFF8F0] border border-[#FFE0A3] mono text-[12px] leading-[1.5]"></div>
+            <div class="grid grid-cols-2 gap-3">
             <label class="flex flex-col gap-1.5">
               <span class="mono text-[10px] uppercase tracking-widest opacity-60">Your Name</span>
               <input type="text" id="ogCreatorName" required class="h-11 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-4 mono text-[13px] outline-none focus:border-[#201C19]"/>
@@ -1076,25 +1113,14 @@ body:not(.staff-mode) .staff-link{display:none!important}
               <input type="email" id="ogCreatorEmail" required class="h-11 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-4 mono text-[13px] outline-none focus:border-[#201C19]"/>
             </label>
           </div>
-
-          <!-- Organizer can pre-add known players at creation time (or later,
-               from the game's detail view) -- these never go through the
-               free self-join step, so they're tagged "added by organizer"
-               in the roster to stay honest about who actually opted in. -->
-          <div class="pt-1">
+            <div class="pt-1">
             <div class="flex items-center justify-between">
               <span class="mono text-[10px] uppercase tracking-widest opacity-60">Add players now (optional)</span>
               <button type="button" id="ogAddExtraPlayerBtn" class="mono text-[10px] font-[700] text-[#201C19] underline cursor-pointer">+ Add another player</button>
             </div>
             <div id="ogExtraPlayersList" class="space-y-2 mt-2"></div>
           </div>
-
-          <!-- Peer-to-peer only: no payment processing exists here (no
-               wallet, no facility involvement, no verification). This is a
-               consent/expectation-setting step, not an enforced gate --
-               joiners see the organizer's terms and explicitly acknowledge
-               before joining, same trust level as the rest of this app. -->
-          <div class="pt-1 space-y-2.5">
+            <div class="pt-1 space-y-2.5">
             <label class="flex items-center gap-2.5 mono text-[12px] cursor-pointer select-none">
               <input type="checkbox" id="ogPayBeforeJoin" class="w-4 h-4 accent-[#201C19] cursor-pointer"/>
               <span>Require payment before joining <span class="opacity-50">(peer-to-peer — the facility doesn't process this)</span></span>
@@ -1110,14 +1136,18 @@ body:not(.staff-mode) .staff-link{display:none!important}
               </label>
             </div>
           </div>
-
+          </div>
           <div id="ogCreateError" class="hidden mono text-[12px] text-[#8C2C10] bg-[#FFE9E0] border border-[#FFC9B6] rounded-[14px] px-4 py-2.5"></div>
-          <button type="submit" class="w-full h-12 rounded-full bg-[#201C19] text-white font-[800] text-[14px] hover:opacity-90 transition cursor-pointer">Create Game</button>
+          <div class="flex gap-2 pt-1">
+            <button type="button" id="ogStepBack" class="h-12 px-5 rounded-full bg-white border border-[#EAE0D5] hover:border-[#201C19] font-[700] text-[13px] cursor-pointer hidden">Back</button>
+            <button type="button" id="ogStepNext" class="flex-1 h-12 rounded-full bg-[#D6FF5F] hover:bg-[#CBF052] border border-[#201C19]/10 font-[800] text-[14px] cursor-pointer">Continue</button>
+            <button type="submit" class="hidden flex-1 h-12 rounded-full bg-[#201C19] text-white font-[800] text-[14px] hover:opacity-90 transition cursor-pointer" id="ogSubmitBtn">Create game</button>
+          </div>
         </form>
+        </div>
       </div>
     </div>
   </div>
-
   <!-- Open Game Detail Modal -->
   <div id="ogDetailModal" class="fixed inset-0 z-50 hidden">
     <div class="absolute inset-0 bg-[#201C19]/60 backdrop-blur-[6px]" id="ogDetailBackdrop"></div>
@@ -1134,6 +1164,7 @@ body:not(.staff-mode) .staff-link{display:none!important}
 
   <!-- VIEW: PAYMENT -->
   <section id="view-payment" class="view hidden" data-mp-panel="payment">
+    <div id="payBookingCard" class="hidden max-w-[720px] mx-auto mb-5"></div>
     <div class="grid grid-cols-12 gap-4 md:gap-6">
       <!-- Left Column: Scannable QR & Channel Switcher Buttons -->
       <div class="col-span-12 lg:col-span-6">
@@ -2869,6 +2900,7 @@ async function handleProofSelected() {
       const res = await uploadProofCloud(bookingId, booking ? booking.name : 'Unknown', proof);
       if (res.ok) {
         toast('Proof uploaded — admins can now review it.');
+        window.dispatchEvent(new CustomEvent('proof-sent', { detail: { bookingId } }));
       } else {
         toast('Offline: proof saved locally, will sync when connection returns.');
         saveProofLocal({ id: 'pl_' + Date.now(), bookingId, name: booking ? booking.name : 'Unknown', fileName: proof.fileName, url: proof.dataUrl, mime: proof.mime, uploadedAt: Date.now(), expiresAt: Date.now() + 7 * 24 * 3600 * 1000, offline: true });
@@ -2876,6 +2908,7 @@ async function handleProofSelected() {
     } else {
       saveProofLocal({ id: 'pl_' + Date.now(), bookingId, name: booking ? booking.name : 'Unknown', fileName: proof.fileName, url: proof.dataUrl, mime: proof.mime, uploadedAt: Date.now(), expiresAt: Date.now() + 7 * 24 * 3600 * 1000, offline: true });
       toast('Proof saved locally (demo mode — persists 1 week on this device).');
+      window.dispatchEvent(new CustomEvent('proof-sent', { detail: { bookingId } }));
     }
     if (adminUnlocked) renderPaymentProofsQueue();
   } catch (e) {
@@ -3394,6 +3427,7 @@ let adminUnlocked = sessionStorage.getItem(LS.adminUnlocked) === 'true';
 
 function updateAdminTabsVisibility(){
   document.body.classList.toggle('staff-mode', adminUnlocked);
+  if(typeof renderStaffTools === 'function') renderStaffTools();
   if(typeof syncFlowBar === 'function') syncFlowBar(document.body.dataset.route || 'home');
   const badge = document.getElementById('hdrBookingsBadge');
   if(badge) badge.textContent = bookings.length;
@@ -3446,6 +3480,7 @@ document.querySelectorAll('.nav-btn').forEach(btn=>{
     const id=btn.dataset.nav;
     // Protect admin-only tabs if not unlocked
     if(STAFF_ONLY_VIEWS.includes(id) && !adminUnlocked){
+      PENDING_STAFF_ROUTE = id;
       document.getElementById('adminLoginModal').classList.remove('hidden');
       setTimeout(()=> document.getElementById('modalPinInput').focus(), 50);
       if(_navFromPop){
@@ -3471,7 +3506,9 @@ document.querySelectorAll('.nav-btn').forEach(btn=>{
     if(id==='bookings') renderBookingsList();
     if(id==='home') renderHome();
     if(id==='contact') renderContactView();
-    if(id==='book') renderSchedule();
+    if(id==='home' || (id!=='payment' && PAY_CTX && PAY_CTX.proofSent)){ PAY_CTX = null; _currentProofBookingId = null; }
+    if(id==='book'){ renderSchedule(); bookGoStep(1); }
+    if(id==='payment') renderPayContext();
     if(id==='queue') renderQueueModule();
     if(id==='stats') renderStatsView();
     if(id==='opengames') renderOpenGames();
@@ -3493,6 +3530,7 @@ document.querySelectorAll('.nav-btn').forEach(btn=>{
    belong to staff and only appear once the Staff PIN has been entered. Each
    route is a URL hash so the phone's Back button and shared links work. */
 const STAFF_ONLY_VIEWS = ['queue', 'stats', 'bookings', 'admin'];
+let PENDING_STAFF_ROUTE = null; // the staff page someone tapped before entering the PIN
 const FLOW_TITLES = { contact: 'Contact facility', book: 'Book the court', opengames: 'Find a game', payment: 'How to Pay', queue: 'Queue & scoreboard', stats: 'Match stats', bookings: 'Bookings', admin: 'Admin' };
 let _navFromPop = false;
 let HOME_TOURNAMENTS = [];
@@ -3502,8 +3540,9 @@ function syncFlowBar(id){
   const inFlow = !!FLOW_TITLES[id];
   if(bar){
     bar.classList.toggle('hidden', !inFlow);
-    if(inFlow) document.getElementById('flowTitle').textContent = FLOW_TITLES[id];
+    if(inFlow) document.getElementById('flowTitle').textContent = (id === 'payment' && PAY_CTX) ? 'Pay for your booking' : FLOW_TITLES[id];
   }
+  const back = document.getElementById('flowBackLabel'); if(back) back.textContent = (id === 'book' && BK_STEP === 2) ? 'Back' : 'Home';
 }
 function syncRoute(id){
   document.body.dataset.route = id;
@@ -3522,7 +3561,7 @@ function routeTo(id, fromPop){
   try { btn.click(); } finally { _navFromPop = false; }
 }
 window.addEventListener('popstate', () => routeTo((location.hash || '#home').slice(1), true));
-document.getElementById('flowBackBtn').addEventListener('click', () => routeTo('home'));
+document.getElementById('flowBackBtn').addEventListener('click', () => { if(document.body.dataset.route === 'book' && BK_STEP === 2){ bookGoStep(1); return; } routeTo('home'); });
 ['brandLogo', 'brandName'].forEach(id => { const el = document.getElementById(id); if(el){ el.style.cursor = 'pointer'; el.addEventListener('click', () => routeTo('home')); } });
 document.addEventListener('click', (e) => {
   const go = e.target.closest && e.target.closest('[data-go]');
@@ -3550,7 +3589,25 @@ function nextOpenSlotToday(){
   return best;
 }
 
+/* Staff see their own tools right on Home, with the number of bookings waiting for payment. */
+function renderStaffTools(){
+  const box = document.getElementById('homeStaff');
+  if(!box) return;
+  if(!adminUnlocked){ box.classList.add('hidden'); box.innerHTML = ''; return; }
+  const pending = (typeof bookings !== 'undefined' ? bookings : []).filter(b => b.status === 'Pending').length;
+  const tile = (go, title, sub, hot) => `<button type="button" data-go="${go}" class="text-left rounded-[16px] ${hot ? 'bg-[#FFF0D6] border-[#FFE0A3]' : 'bg-white border-[#EAE0D5]'} border hover:border-[#201C19] px-3.5 py-3 cursor-pointer transition"><span class="block text-[13.5px] font-[800] tracking-[-0.01em]">${title}</span><span class="block mono text-[10px] opacity-60 mt-0.5">${sub}</span></button>`;
+  box.classList.remove('hidden');
+  box.innerHTML = `<div class="mono text-[10px] uppercase tracking-widest opacity-50 mb-2">Staff</div>
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+      ${tile('bookings', 'Bookings', pending ? pending + ' pending' : 'All caught up', pending > 0)}
+      ${tile('queue', 'Queue', 'Sessions and scores')}
+      ${tile('stats', 'Match Stats', 'Leaderboard')}
+      ${tile('admin', 'Admin', 'Settings and payments')}
+    </div>`;
+}
+
 function renderHomeHints(){
+  try { renderStaffTools(); } catch(e){}
   const bookHint = document.getElementById('homeBookHint');
   const gamesHint = document.getElementById('homeGamesHint');
   if(!bookHint || !gamesHint) return;
@@ -3705,7 +3762,9 @@ if(adminModalForm){
       input.value = '';
       err.classList.add('hidden');
       updateAdminTabsVisibility();
-      toast('Admin Access Unlocked • All Tabs Available');
+      const next = PENDING_STAFF_ROUTE; PENDING_STAFF_ROUTE = null;
+      if(next && typeof routeTo === 'function') setTimeout(() => routeTo(next), 60);
+      toast(next ? 'Staff mode on' : 'Staff mode on. Bookings, Queue, Stats and Admin are on Home and in the footer.');
     } else {
       err.textContent = 'Incorrect PIN. Default is 1234.';
       err.classList.remove('hidden');
@@ -3714,10 +3773,12 @@ if(adminModalForm){
 }
 
 document.getElementById('closeAdminModalBtn').addEventListener('click', ()=>{
+  PENDING_STAFF_ROUTE = null;
   document.getElementById('adminLoginModal').classList.add('hidden');
   document.getElementById('modalPinError').classList.add('hidden');
 });
 document.getElementById('adminModalBackdrop').addEventListener('click', ()=>{
+  PENDING_STAFF_ROUTE = null;
   document.getElementById('adminLoginModal').classList.add('hidden');
   document.getElementById('modalPinError').classList.add('hidden');
 });
@@ -4309,7 +4370,7 @@ function renderSchedule(){
   if(headingEl) headingEl.textContent = dateISO === today ? "Today's Schedule" : "Selected Day's Schedule";
   
   // Determine if we should show multi-column layout (desktop with multiple courts)
-  const isDesktop = window.innerWidth >= 1024;
+  const isDesktop = false; // the booking flow is a single column
   const activeCourts = getActiveCourts();
   const showMultiColumn = isDesktop && activeCourts.length > 1 && (activeCourtTab === 'all' || !activeCourtTab);
   
@@ -4407,7 +4468,7 @@ function renderScheduleSlots(container, dateISO, courtFilter){
       } else {
         statusChip=`<span class="inline-flex items-center gap-1.5 px-3.5 h-8 rounded-full bg-[#D6FF5F] border border-[#201C19]/10 text-[#201C19] mono text-[11px] font-[800]">OPEN • ${fmtMoney(getCourtRate(courtFilter, slot.s))}/hr</span>`;
         leftDot=`<span class="w-2 h-2 rounded-full bg-[#4ADE80]"></span>`;
-        actionHtml=`<button data-book="${slot.s}" class="book-now-btn h-8 px-4 rounded-full bg-[#201C19] text-white mono text-[11px] font-[700] hover:opacity-90 active:scale-[0.97] transition">Book Now →</button>`;
+        actionHtml=`<button data-book="${slot.s}" data-book-court="${courtFilter || ''}" class="book-now-btn h-8 px-4 rounded-full bg-[#201C19] text-white mono text-[11px] font-[700] hover:opacity-90 active:scale-[0.97] transition">Book Now →</button>`;
       }
     }
 
@@ -4436,12 +4497,12 @@ function renderScheduleSlots(container, dateISO, courtFilter){
       // to force it back to today, that would silently move the booking
       // to a different day than the row the visitor actually clicked.
       renderCalendar();
+      const courtSel = document.getElementById('fCourt');
+      if(btn.dataset.bookCourt && courtSel && [...courtSel.options].some(o => o.value === btn.dataset.bookCourt)) courtSel.value = btn.dataset.bookCourt;
       document.getElementById('fStart').value = String(start);
       document.getElementById('fEnd').value = String(start+1);
       recalcTotal();
-      if(window.innerWidth < 1024) switchMobileTab('reserve');
-      document.getElementById('fName').focus();
-      window.scrollTo({top:document.getElementById('reserveForm').getBoundingClientRect().top + window.scrollY - 90, behavior:'smooth'});
+      bookGoStep(2);
     });
   });
 
@@ -4782,37 +4843,13 @@ document.getElementById('reserveForm').addEventListener('submit', (ev)=>{
   if(adminUnlocked) renderAdminBookings();
   // Billing counts confirmed bookings, not creation -- see setBookingStatus().
 
-  // show confirmation modal with email preview
-  const hrs = e - s - (_crossesGap(s,e) ? _gapLength() : 0);
-  const amount = _sumBillableCourtRate(newBooking.court, s, e);
-  const bizName = titleCase(CLIENT.business.name);
-  const preview = `To: ${email}
-Subject: ${bizName} Pickleball — Reservation ${newBooking.status} for ${fmtDateLabel(selectedDate)}
-
-Hi ${name},
-
-Your reservation is received and is now PENDING verification:
-
-📅 Date: ${fmtDateLabel(selectedDate)}
-🕖 Time: ${to12Range(s,e)} (${hrs} hour${hrs>1?'s':''})
-💰 Total: ${fmtMoney(amount)}${hrs>0 ? ` (avg ${fmtMoney(Math.round(amount/hrs))}/hour)` : ''}
-👥 Group: ${group || '—'}
-🏟️ Court: ${getCourtName(newBooking.court) || '—'}
-🔑 Booking PIN: ${pin} (use this to pay later from schedule)
-Status: Pending — awaiting payment verification
-
-Next steps:
-1. Pay externally via QR on Payment Info page
-2. Keep your reference number
-3. Admin will verify and tag your booking as Reserved
-
-If you booked morning hours, note: morning is queue by default unless admin unlocked it. Your booking is in the system as requested.
-
-See you at ${bizName} Pickleball Court!
-— ${bizName} Team
-`;
-  document.getElementById('emailPreview').textContent = preview;
-  document.getElementById('confirmModal').classList.remove('hidden');
+  // remember who is booking, then move on to paying for this reservation
+  try { localStorage.setItem(lsKey('cb_last_contact_v1'), JSON.stringify({ name, email })); } catch(e){}
+  _currentProofBookingId = newBooking.id;
+  PAY_CTX = { bookingId: newBooking.id, proofSent: false };
+  document.getElementById('reserveForm').reset();
+  bookGoStep(1);
+  routeTo('payment');
 });
 
 document.getElementById('closeModalBtn').addEventListener('click', ()=> document.getElementById('confirmModal').classList.add('hidden'));
@@ -4824,6 +4861,90 @@ document.getElementById('modalGoPayment').addEventListener('click', ()=>{
 document.getElementById('modalGoBookings').addEventListener('click', ()=>{
   document.getElementById('confirmModal').classList.add('hidden');
   document.querySelector('[data-nav="bookings"]').click();
+});
+
+/* ---------- Guided booking: 1 Pick a time -> 2 Your details -> 3 Pay ----------
+   The calendar, schedule, form and proof upload are the existing pieces; this
+   only decides which one is on screen and keeps a running summary of the
+   reservation. Submitting the form creates the Pending booking exactly as
+   before, then lands on the pay step for that booking. */
+let PAY_CTX = null;   // { bookingId, proofSent } while paying for a booking made in this flow
+let BK_STEP = 1;
+const BK_STEPS = ['Pick a time', 'Your details', 'Pay'];
+function bookProgressHtml(step){
+  return `<div class="flex items-center gap-2">${BK_STEPS.map((label, i) => {
+    const n = i + 1, on = n === step, done = n < step;
+    return `<div class="flex-1 min-w-0"><div class="h-1.5 rounded-full ${on || done ? 'bg-[#201C19]' : 'bg-[#E9DDD0]'}"></div><div class="mt-1.5 mono text-[10px] uppercase tracking-widest truncate ${on ? 'font-[800]' : 'opacity-50'}">${n}. ${label}</div></div>`;
+  }).join('')}</div>`;
+}
+function bookSelection(){
+  const s = parseInt(document.getElementById('fStart').value, 10), e = parseInt(document.getElementById('fEnd').value, 10);
+  const courtEl = document.getElementById('fCourt'), label = document.getElementById('fCourtLabel');
+  const courtId = (courtEl && label && !label.classList.contains('hidden')) ? courtEl.value : (COURTS[0] ? COURTS[0].id : null);
+  return { s, e, courtId };
+}
+function renderBookSummary(){
+  const box = document.getElementById('bkSummary');
+  if(!box) return;
+  const { s, e, courtId } = bookSelection();
+  const courts = getActiveCourts();
+  box.innerHTML = `<div class="mono text-[10px] uppercase tracking-widest opacity-60">Your slot</div>
+    <div class="mt-1 text-[22px] font-[800] tracking-[-0.02em] leading-tight">${escapeHtml(fmtDateLabel(selectedDate))}</div>
+    <div class="mono text-[13px] mt-1">${Number.isFinite(s) && Number.isFinite(e) ? escapeHtml(to12Range(s, e)) : ''}${courts.length > 1 && courtId ? ' · ' + escapeHtml(getCourtName(courtId) || '') : ''}</div>
+    <button type="button" id="bkChangeTime" class="mt-3 h-9 px-4 rounded-full bg-white/10 hover:bg-white/20 border border-white/15 mono text-[11px] font-[700] cursor-pointer">Change time</button>`;
+  document.getElementById('bkChangeTime').addEventListener('click', () => bookGoStep(1));
+}
+function renderBookInfo(){
+  const box = document.getElementById('bkInfo');
+  if(!box) return;
+  const chip = (t, cls) => `<span class="px-3 py-1.5 rounded-full mono text-[11px] font-[700] ${cls}">${escapeHtml(t)}</span>`;
+  box.innerHTML = chip(`${fmtMoney(CLIENT.rates.hourly)} / hour`, 'bg-[#D6FF5F] text-[#201C19]') + chip(staffNoteEl.textContent || '', 'bg-white border border-[#EAE0D5] font-[500]');
+}
+function bookGoStep(step){
+  BK_STEP = step;
+  document.getElementById('bkStep1').classList.toggle('hidden', step !== 1);
+  document.getElementById('bkStep2').classList.toggle('hidden', step !== 2);
+  document.getElementById('bkProgress').innerHTML = bookProgressHtml(step);
+  const back = document.getElementById('flowBackLabel'); if(back) back.textContent = step === 2 ? 'Back' : 'Home';
+  if(step === 1) renderBookInfo();
+  if(step === 2){
+    renderBookSummary();
+    const last = (() => { try { return JSON.parse(localStorage.getItem(lsKey('cb_last_contact_v1')) || 'null'); } catch(e){ return null; } })();
+    if(last){ const n = document.getElementById('fName'), m = document.getElementById('fEmail'); if(n && !n.value) n.value = last.name || ''; if(m && !m.value) m.value = last.email || ''; }
+    setTimeout(() => { const el = document.getElementById(document.getElementById('fName').value ? 'fPin' : 'fName'); if(el) el.focus(); }, 60);
+  }
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+['fStart', 'fEnd', 'fCourt'].forEach(id => document.getElementById(id)?.addEventListener('change', () => { if(BK_STEP === 2) renderBookSummary(); }));
+
+function renderPayContext(){
+  const card = document.getElementById('payBookingCard');
+  if(!card) return;
+  if(!PAY_CTX && _currentProofBookingId){ // arrived via "Pay Now" on a pending booking
+    const pending = bookings.find(b => b.id === _currentProofBookingId && b.status === 'Pending');
+    if(pending) PAY_CTX = { bookingId: pending.id, proofSent: false };
+  }
+  const bk = PAY_CTX ? bookings.find(b => b.id === PAY_CTX.bookingId) : null;
+  if(!bk){ card.classList.add('hidden'); card.innerHTML = ''; return; }
+  const isSpot = bk.source === 'openplay-join';
+  const amount = bk.amountDue != null && isSpot ? bk.amountDue : _sumBillableCourtRate(bk.court, bk.start, bk.end);
+  const sent = PAY_CTX.proofSent;
+  card.classList.remove('hidden');
+  card.innerHTML = `${bookProgressHtml(3)}
+    <div class="mt-4 rounded-[24px] ${sent ? 'bg-[#E8F5D8] border border-[#CFE8B5]' : 'bg-white border border-[#EAE0D5]'} p-5">
+      <div class="mono text-[10px] uppercase tracking-widest opacity-60">${sent ? 'Proof sent' : isSpot ? 'Your spot is held · Pending payment' : 'Reservation held · Pending payment'}</div>
+      <div class="mt-1 text-[22px] font-[800] tracking-[-0.02em]">${escapeHtml(fmtDateLabel(bk.date))}</div>
+      <div class="mono text-[13px] mt-0.5">${escapeHtml(to12Range(bk.start, bk.end))}${getActiveCourts().length > 1 ? ' · ' + escapeHtml(getCourtName(bk.court) || '') : ''} · <b>${fmtMoney(amount)}</b></div>
+      <p class="mono text-[11.5px] leading-[1.6] opacity-75 mt-3">${sent ? 'Thanks! The club will check your payment and confirm your booking. Keep your Booking PIN (' + escapeHtml(bk.pin) + ').' : 'Pay using the QR below, then send a screenshot so the club can confirm your booking. Your Booking PIN is <b>' + escapeHtml(bk.pin) + '</b>.'}</p>
+      <div class="mt-4 flex flex-wrap gap-2">
+        ${sent ? '' : `<button type="button" data-upload-proof="${escapeHtml(bk.id)}" class="h-11 px-5 rounded-full bg-[#D6FF5F] border border-[#201C19]/10 font-[800] text-[13px] cursor-pointer">Send payment proof</button>`}
+        <button type="button" id="payDoneBtn" class="h-11 px-5 rounded-full ${sent ? 'bg-[#201C19] text-white' : 'bg-white border border-[#EAE0D5]'} font-[800] text-[13px] cursor-pointer">${sent ? 'Back to home' : "I'll send it later"}</button>
+      </div>
+    </div>`;
+  document.getElementById('payDoneBtn').addEventListener('click', () => { PAY_CTX = null; routeTo('home'); });
+}
+window.addEventListener('proof-sent', (e) => {
+  if(PAY_CTX && (!e.detail || e.detail.bookingId === PAY_CTX.bookingId)){ PAY_CTX.proofSent = true; renderPayContext(); window.scrollTo({ top: 0, behavior: 'smooth' }); }
 });
 
 /* ---------- Bookings List View ---------- */
@@ -5976,9 +6097,61 @@ document.getElementById('ogAddExtraPlayerBtn')?.addEventListener('click', ogAddE
 document.getElementById('ogPayBeforeJoin')?.addEventListener('change', (e) => {
   document.getElementById('ogPayFields').classList.toggle('hidden', !e.target.checked);
 });
+/* ---------- Create a game: three steps, then a confirmation ---------- */
+const OG_STEPS = ['When', 'The game', 'You'];
+let OG_STEP = 1;
+function ogGoStep(n){
+  OG_STEP = n;
+  document.querySelectorAll('#ogCreateForm [data-og-step]').forEach(el => el.classList.toggle('hidden', Number(el.dataset.ogStep) !== n));
+  document.getElementById('ogStepBack').classList.toggle('hidden', n === 1);
+  document.getElementById('ogStepNext').classList.toggle('hidden', n === 3);
+  const sub = document.getElementById('ogSubmitBtn'); if(sub) sub.classList.toggle('hidden', n !== 3);
+  document.getElementById('ogProgress').innerHTML = `<div class="flex items-center gap-2">${OG_STEPS.map((label, i) => {
+    const k = i + 1, on = k === n, done = k < n;
+    return `<div class="flex-1 min-w-0"><div class="h-1.5 rounded-full ${on || done ? 'bg-[#201C19]' : 'bg-[#E9DDD0]'}"></div><div class="mt-1.5 mono text-[10px] uppercase tracking-widest truncate ${on ? 'font-[800]' : 'opacity-50'}">${k}. ${label}</div></div>`;
+  }).join('')}</div>`;
+  const box = document.querySelector('#ogCreateModal .overflow-y-auto'); if(box) box.scrollTo({ top: 0 });
+}
+document.getElementById('ogStepNext')?.addEventListener('click', () => {
+  const errEl = document.getElementById('ogCreateError'); errEl.classList.add('hidden');
+  if(OG_STEP === 1){
+    const date = document.getElementById('ogDate').value, start = parseInt(document.getElementById('ogStart').value, 10);
+    if(!date || isNaN(start)){ errEl.textContent = 'Pick a date and start time.'; errEl.classList.remove('hidden'); return; }
+    if(ogGameStartsAt({ date, startHour: start }) < Date.now() - 3600000){ errEl.textContent = 'That date and time has already passed.'; errEl.classList.remove('hidden'); return; }
+  }
+  ogGoStep(Math.min(3, OG_STEP + 1));
+});
+document.getElementById('ogStepBack')?.addEventListener('click', () => ogGoStep(Math.max(1, OG_STEP - 1)));
+
+/* One confirmation screen for "game created" and "you're in". */
+function ogShowDone({ title, lead, gameId, notes, game }){
+  document.getElementById('ogDone')?.remove();
+  const g = game || openGames.find(x => x.id === gameId) || null;
+  const when = g ? `${fmtDateLabel(g.date)} · ${fmtTime(g.startHour)}` : '';
+  const wrap = document.createElement('div');
+  wrap.id = 'ogDone'; wrap.className = 'fixed inset-0 z-[60] bg-[#FFFBF5] overflow-y-auto';
+  wrap.innerHTML = `<div class="max-w-[520px] mx-auto px-5 py-10 text-center">
+    <div class="mx-auto w-16 h-16 rounded-full bg-[#D6FF5F] border border-[#201C19]/10 grid place-items-center text-[28px]" aria-hidden="true">✓</div>
+    <h2 class="mt-5 text-[28px] font-[850] tracking-[-0.03em] leading-tight">${escapeHtml(title)}</h2>
+    <p class="mono text-[12px] opacity-65 mt-2 leading-[1.6]">${escapeHtml(lead)}</p>
+    ${g ? `<div class="mt-6 rounded-[22px] bg-white border border-[#EAE0D5] p-5 text-left">
+      <div class="text-[18px] font-[800] tracking-[-0.02em]">${escapeHtml(when)}</div>
+      <div class="mono text-[12px] opacity-70 mt-1">${escapeHtml([g.skillLevel, g.format, `${g.players.length}/${g.playersNeeded} players`].filter(Boolean).join(' · '))}</div>
+      ${notes ? `<div class="mono text-[11.5px] leading-[1.6] mt-3 p-3 rounded-[14px] bg-[#FFF8F0] border border-[#FFE0A3]">${notes}</div>` : ''}
+    </div>` : ''}
+    <div class="mt-6 flex flex-col gap-2.5">
+      <button type="button" id="ogDoneHome" class="h-12 rounded-full bg-[#201C19] text-white font-[800] text-[14px] cursor-pointer">Back to home</button>
+      ${g ? '<button type="button" id="ogDoneView" class="h-12 rounded-full bg-white border border-[#EAE0D5] hover:border-[#201C19] font-[700] text-[13px] cursor-pointer">View this game</button>' : ''}
+    </div></div>`;
+  document.body.appendChild(wrap);
+  document.getElementById('ogDoneHome').addEventListener('click', () => { wrap.remove(); routeTo('home'); });
+  document.getElementById('ogDoneView')?.addEventListener('click', () => { wrap.remove(); openOgDetailModal(gameId); });
+}
+
 document.getElementById('ogCreateBtn')?.addEventListener('click', () => {
   if(!db){ toast('Find a Game needs this site connected to Firebase.'); return; }
   ogPopulateCreateForm();
+  ogGoStep(1);
   document.getElementById('ogCreateModal').classList.remove('hidden');
 });
 document.getElementById('ogCreateCloseBtn')?.addEventListener('click', () => document.getElementById('ogCreateModal').classList.add('hidden'));
@@ -6052,7 +6225,7 @@ document.getElementById('ogCreateForm')?.addEventListener('submit', async (e) =>
         await ogJoinGame(match.id, name, email);
       });
       _ogPendingCreateConfirmed = true; // next submit proceeds to actually create
-      e.target.querySelector('button[type=submit]').textContent = 'Create New Game Anyway';
+      e.target.querySelector('button[type=submit]').textContent = 'Create new game anyway';
       return;
     }
   }
@@ -6085,8 +6258,7 @@ document.getElementById('ogCreateForm')?.addEventListener('submit', async (e) =>
     ogTrackMyGame(ref.id, 'creator', creatorToken);
     logUsageEvent('open_game_created', { court: court || null }); // analytics only, never billed
     document.getElementById('ogCreateModal').classList.add('hidden');
-    toast('Game created! Share it or wait for players to join.');
-    openOgDetailModal(ref.id);
+    ogShowDone({ title: 'Your game is up', lead: 'Players can now find it and join. You can invite friends or add players from the game page.', gameId: ref.id, game: { id: ref.id, ...game } });
   } catch(ex){
     errEl.textContent = 'Failed to create game: ' + ex.message;
     errEl.classList.remove('hidden');
@@ -6100,6 +6272,7 @@ document.getElementById('ogCreateForm')?.addEventListener('submit', async (e) =>
    backend of its own) ---------- */
 async function ogJoinGame(gameId, name, email, opts={}){
   const ref = db.doc(`clients/${currentClientId}/openGames/${gameId}`);
+  let joinedCount = null;
   try {
     await db.runTransaction(async (tx) => {
       const snap = await tx.get(ref);
@@ -6111,15 +6284,22 @@ async function ogJoinGame(gameId, name, email, opts={}){
       const player = { name, email, joinedAt: Date.now(), addedBy: 'self' };
       if(opts.ackPay) player.ackPay = true; // acknowledged the organizer's pay-before-join terms (informational only -- never enforced/verified)
       const players = [...g.players, player];
+      joinedCount = players.length;
       const status = players.length >= g.playersNeeded ? 'FULL' : 'OPEN';
       tx.update(ref, { players, status, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
     });
     ogSaveIdentity(name, email);
     ogTrackMyGame(gameId, 'player', null);
     logUsageEvent('open_game_joined', {}); // analytics only, never billed
-    toast('Joined the game!');
+    document.getElementById('ogDetailModal').classList.add('hidden');
+    _ogActiveGameId = null; _ogAckPendingGameId = null;
+    const joined = openGames.find(x => x.id === gameId);
+    const terms = joined && joined.payBeforeJoin ? `<b>Payment:</b> ${joined.payAmount ? fmtMoney(joined.payAmount) + ' per player. ' : ''}${escapeHtml(joined.payNote || 'Arrange it with the organizer.')} (Paid directly to the organizer, not through the facility.)` : '';
+    ogShowDone({ title: "You're in!", lead: 'Your spot is saved. See you on court.', gameId, notes: terms, game: joined ? { ...joined, players: Array.from({ length: joinedCount || joined.players.length }, (_, i) => joined.players[i] || {}) } : null });
+    return true;
   } catch(ex){
     toast(ex.message || 'Could not join this game.');
+    return false;
   }
 }
 /* ---------- Organizer pre-adding a known player, at creation or any time

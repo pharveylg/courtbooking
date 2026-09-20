@@ -812,7 +812,8 @@ function renderDivisions(){
     return;
   }
   wrap.innerHTML = CURRENT_DIVISIONS.map(d => `
-    <div class="flex items-center justify-between gap-2 p-3 rounded-[14px] bg-[#FFFBF5] border border-[#EAE0D5] flex-wrap">
+    <div class="p-3 rounded-[14px] bg-[#FFFBF5] border border-[#EAE0D5]">
+    <div class="flex items-center justify-between gap-2 flex-wrap">
       <div>
         <span class="font-[700] text-[13px]">${escapeHtml(d.name)}</span>
         <span class="mono text-[10px] opacity-50 ml-1.5">${CATEGORY_LABELS[d.category] || d.category}</span>
@@ -824,10 +825,44 @@ function renderDivisions(){
         ${d.entryFee ? `<span>• ${fmtMoney(d.entryFee)} entry fee</span>` : ''}
         <span>• ${escapeHtml(PickleScore.formatLabel(d.matchFormat))}</span>
         ${(d.duprMin || d.duprMax) ? `<span>• DUPR ${d.duprMin || '0'}–${d.duprMax || '∞'}</span>` : ''}
+        <button type="button" data-edit-format="${d.id}" class="h-7 px-2.5 rounded-full bg-white border border-[#EAE0D5] hover:border-[#201C19] mono text-[9px] font-[700] cursor-pointer">Match format</button>
       </div>
+    </div>
+    <div id="formatEditor-${d.id}" class="hidden mt-2.5 p-3 rounded-[12px] bg-[#F1E9DF] border border-[#EAE0D5]">
+      ${(() => { const f = PickleScore.normalizeConfig(d.matchFormat); const cls = 'h-9 rounded-full border border-[#EAE0D5] bg-white px-3 mono text-[11px] outline-none focus:border-[#201C19]'; const opt = (v, cur, label) => `<option value="${v}" ${String(cur) === String(v) ? 'selected' : ''}>${label}</option>`; return `
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
+        <select data-fmt="target" class="${cls}">${PickleScore.TARGETS.map(t => opt(t, f.target, 'Game to ' + t)).join('')}</select>
+        <select data-fmt="winBy" class="${cls}">${opt(2, f.winBy, 'Win by 2')}${opt(1, f.winBy, 'Win by 1')}</select>
+        <select data-fmt="bestOf" class="${cls}">${opt(1, f.bestOf, 'One game')}${opt(3, f.bestOf, 'Best of 3')}${opt(5, f.bestOf, 'Best of 5')}</select>
+        <select data-fmt="scoring" class="${cls}">${opt('sideout', f.scoring, 'Side-out scoring')}${opt('rally', f.scoring, 'Rally scoring')}</select>
+      </div>`; })()}
+      <div class="mt-2 flex items-center gap-2 flex-wrap">
+        <button type="button" data-save-format="${d.id}" class="h-8 px-3.5 rounded-full bg-[#201C19] text-white mono text-[10px] font-[700] cursor-pointer">Save format</button>
+        <span class="mono text-[9.5px] opacity-60">Applies to scoreboards opened from now on. Results already recorded keep their scores.</span>
+      </div>
+    </div>
     </div>
   `).join('');
 }
+document.getElementById('divisionsList').addEventListener('click', async (e) => {
+  const edit = e.target.closest('[data-edit-format]');
+  if(edit){ document.getElementById('formatEditor-' + edit.dataset.editFormat).classList.toggle('hidden'); return; }
+  const save = e.target.closest('[data-save-format]');
+  if(!save) return;
+  const id = save.dataset.saveFormat;
+  const box = document.getElementById('formatEditor-' + id);
+  const pick = (k) => box.querySelector('[data-fmt="' + k + '"]').value;
+  const f = PickleScore.normalizeConfig({ target: pick('target'), winBy: pick('winBy'), bestOf: pick('bestOf'), scoring: pick('scoring') });
+  const matchFormat = { target: f.target, winBy: f.winBy, bestOf: f.bestOf, scoring: f.scoring };
+  save.disabled = true;
+  try {
+    await db.doc(`clients/${currentClientId}/tournaments/${CURRENT_TOURNAMENT_ID}/divisions/${id}`).set({ matchFormat }, { merge: true });
+    const d = CURRENT_DIVISIONS.find(x => x.id === id);
+    await logTournamentAudit(CURRENT_TOURNAMENT_ID, 'division-format', `${d ? d.name : id}: ${PickleScore.formatLabel(matchFormat)}`);
+    toast('Match format saved');
+    await loadDivisions(CURRENT_TOURNAMENT_ID);
+  } catch(ex) { toast('Failed: ' + (ex.message || ex)); save.disabled = false; }
+});
 document.getElementById('addDivisionBtn').addEventListener('click', () => {
   document.getElementById('divisionForm').classList.toggle('hidden');
 });

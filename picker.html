@@ -3,9 +3,9 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<meta name="theme-color" content="#201C19"/>
+<meta name="theme-color" content="#FFFBF5"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="default"/>
 <meta name="apple-mobile-web-app-title" content="CourtBook"/>
 <link rel="manifest" href="/manifest.json"/>
 <link rel="apple-touch-icon" href="/icons/icon-192.png"/>
@@ -14,441 +14,294 @@
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet"/>
 <title>Court Booking — Choose Your Facility</title>
 <style>
+/* Same look as the facility (tenant) app: cream page, ink cards, lime accent,
+   white bordered cards and mono labels. */
+:root{--cream:#FFFBF5;--ink:#201C19;--lime:#D6FF5F;--line:#EAE0D5;--sand:#F1E9DF}
 *{margin:0;padding:0;box-sizing:border-box}
 html{scroll-behavior:smooth}
 body{
   font-family:"Bricolage Grotesque",system-ui,sans-serif;
-  background:#201C19;
-  color:#FFFBF5;
+  background:var(--cream);
+  color:var(--ink);
   min-height:100vh;min-height:100dvh;
+  display:flex;flex-direction:column;
   -webkit-font-smoothing:antialiased;
   overflow-x:hidden;
 }
 .mono{font-family:"JetBrains Mono",monospace}
+a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
 
-/* ── Animated Mesh Background ─────────────────────────── */
-.bg-mesh{
-  background:
-    radial-gradient(ellipse 80% 60% at 20% 0%, rgba(214,255,95,0.07) 0%, transparent 60%),
-    radial-gradient(ellipse 60% 50% at 80% 100%, rgba(214,255,95,0.04) 0%, transparent 50%),
-    radial-gradient(ellipse 50% 40% at 50% 50%, rgba(255,138,91,0.02) 0%, transparent 50%),
-    #201C19;
+/* ── Header ───────────────────────────────────────────── */
+.topbar{
+  display:flex;align-items:center;gap:10px;
+  padding:12px 20px;
+  border-bottom:1px solid var(--line);
+  background:var(--cream);
+  position:sticky;top:0;z-index:20;
 }
+.topbar-inner{display:flex;align-items:center;gap:10px;width:100%;max-width:720px;margin:0 auto}
+.mark{
+  width:34px;height:34px;border-radius:50%;
+  background:var(--ink);color:var(--lime);
+  display:grid;place-items:center;
+  font-weight:800;font-size:16px;flex-shrink:0;
+}
+.brand-name{font-weight:800;font-size:15px;letter-spacing:-0.02em;line-height:1.1}
+.brand-sub{font-size:10px;letter-spacing:0.12em;text-transform:uppercase;opacity:0.5;margin-top:2px}
 
-/* ── Hero Section ─────────────────────────────────────── */
+.page{width:100%;max-width:720px;margin:0 auto;padding:16px 20px 8px;flex:1}
+
+/* ── Hero card ────────────────────────────────────────── */
 .hero{
-  padding:56px 24px 0;
-  text-align:center;
-  max-width:640px;
-  margin:0 auto;
+  position:relative;overflow:hidden;
+  background:var(--ink);color:var(--cream);
+  border-radius:28px;
+  padding:24px 22px 22px;
 }
+.hero::before{
+  content:'';position:absolute;right:-60px;top:-60px;
+  width:220px;height:220px;border-radius:50%;
+  background:var(--lime);opacity:0.16;
+}
+.hero > *{position:relative}
 .hero-badge{
-  display:inline-flex;
-  align-items:center;
-  gap:8px;
-  padding:6px 16px;
-  border-radius:999px;
-  background:rgba(214,255,95,0.08);
-  border:1px solid rgba(214,255,95,0.15);
-  font-size:11px;
-  font-weight:700;
-  color:#D6FF5F;
-  letter-spacing:0.05em;
-  text-transform:uppercase;
-  margin-bottom:28px;
+  display:inline-flex;align-items:center;gap:8px;
+  padding:5px 13px;border-radius:999px;
+  background:rgba(255,255,255,0.09);
+  border:1px solid rgba(255,255,255,0.14);
+  font-size:11px;letter-spacing:0.06em;text-transform:uppercase;
 }
-.hero-badge-dot{
-  width:6px;height:6px;
-  border-radius:50%;
-  background:#D6FF5F;
-  animation:pulse-dot 2s ease-in-out infinite;
-}
-@keyframes pulse-dot{
-  0%,100%{opacity:0.5;transform:scale(1)}
-  50%{opacity:1;transform:scale(1.3)}
-}
+.hero-dot{width:6px;height:6px;border-radius:50%;background:var(--lime);animation:pulse-dot 2s ease-in-out infinite}
+@keyframes pulse-dot{0%,100%{opacity:0.5;transform:scale(1)}50%{opacity:1;transform:scale(1.3)}}
 .hero h1{
-  font-size:clamp(28px,6vw,44px);
-  font-weight:800;
-  letter-spacing:-0.04em;
-  line-height:1.05;
-  margin-bottom:16px;
+  font-size:clamp(28px,7vw,42px);
+  font-weight:800;letter-spacing:-0.04em;line-height:1.02;
+  margin:16px 0 14px;
 }
-.hero h1 .accent{
-  color:#D6FF5F;
-  position:relative;
-}
-.hero h1 .accent::after{
-  content:'';
-  position:absolute;
-  bottom:-2px;left:0;right:0;
-  height:3px;
-  background:#D6FF5F;
-  border-radius:2px;
-  opacity:0.3;
-}
-.hero-sub{
-  font-size:15px;
-  opacity:0.5;
-  line-height:1.6;
-  max-width:420px;
-  margin:0 auto 28px;
-}
-
-/* ── Feature Pills ────────────────────────────────────── */
-.features{
-  display:flex;
-  gap:10px;
-  justify-content:center;
-  flex-wrap:wrap;
-  margin-bottom:40px;
-}
+.hero h1 .accent{color:var(--lime)}
+.features{display:flex;flex-wrap:wrap;gap:7px}
 .feature-pill{
-  display:inline-flex;
-  align-items:center;
-  gap:7px;
-  padding:7px 16px;
-  border-radius:999px;
-  background:rgba(255,255,255,0.05);
-  border:1px solid rgba(255,255,255,0.08);
-  font-size:12px;
-  font-weight:600;
-  color:rgba(255,251,245,0.7);
-  transition:all 0.25s ease;
+  display:inline-flex;align-items:center;gap:6px;
+  padding:5px 12px;border-radius:999px;
+  background:rgba(255,255,255,0.07);
+  border:1px solid rgba(255,255,255,0.1);
+  font-size:11.5px;font-weight:600;color:rgba(255,251,245,0.78);
 }
-.feature-pill:hover{
-  background:rgba(214,255,95,0.08);
-  border-color:rgba(214,255,95,0.2);
-  color:#FFFBF5;
-}
-.feature-dot{
-  width:5px;height:5px;
-  border-radius:50%;
-  background:#D6FF5F;
-  flex-shrink:0;
-}
+.feature-dot{width:5px;height:5px;border-radius:50%;background:var(--lime);flex-shrink:0}
 
 /* ── Search ───────────────────────────────────────────── */
-.search-wrap{
-  max-width:540px;
-  margin:0 auto;
-  padding:0 24px;
-  position:relative;
-}
+.search-wrap{position:relative;margin-top:16px}
 .search-input{
-  width:100%;
-  height:54px;
-  border-radius:16px;
-  background:rgba(255,255,255,0.06);
-  border:1px solid rgba(255,255,255,0.1);
-  padding:0 20px 0 52px;
-  font-size:15px;
-  color:#FFFBF5;
-  outline:none;
+  width:100%;height:48px;
+  border-radius:999px;
+  background:#fff;
+  border:1px solid var(--line);
+  padding:0 20px 0 48px;
+  font-size:15px;color:var(--ink);
   font-family:inherit;
-  transition:all 0.25s ease;
-  backdrop-filter:blur(8px);
-  -webkit-backdrop-filter:blur(8px);
+  outline:none;
+  transition:border-color .2s;
 }
-.search-input::placeholder{color:rgba(255,255,255,0.3)}
-.search-input:focus{
-  border-color:rgba(214,255,95,0.5);
-  background:rgba(255,255,255,0.09);
-  box-shadow:0 0 0 4px rgba(214,255,95,0.08),0 8px 32px rgba(0,0,0,0.2);
-}
+.search-input::placeholder{color:rgba(32,28,25,0.4)}
+.search-input:focus{border-color:var(--ink);outline:none}
 .search-icon{
-  position:absolute;
-  left:42px;top:50%;
-  transform:translateY(-50%);
-  width:18px;height:18px;
-  color:rgba(255,255,255,0.3);
-  pointer-events:none;
-  transition:color 0.25s;
-}
-.search-wrap:focus-within .search-icon{color:#D6FF5F}
-
-/* ── Tenant Grid ──────────────────────────────────────── */
-.grid-section{
-  max-width:720px;
-  margin:0 auto;
-  padding:32px 24px 60px;
-}
-.grid-label{
-  font-size:11px;
-  font-weight:700;
-  text-transform:uppercase;
-  letter-spacing:0.1em;
-  color:rgba(255,251,245,0.35);
-  margin-bottom:16px;
-  padding-left:4px;
-}
-.tenant-grid{
-  display:grid;
-  grid-template-columns:1fr;
-  gap:12px;
-}
-@media(min-width:540px){
-  .tenant-grid{grid-template-columns:1fr 1fr}
+  position:absolute;left:18px;top:50%;transform:translateY(-50%);
+  width:18px;height:18px;color:rgba(32,28,25,0.4);pointer-events:none;
 }
 
-/* ── Tenant Tile ──────────────────────────────────────── */
-.tenant-tile{
-  display:flex;
-  align-items:center;
-  gap:14px;
-  padding:16px;
-  border-radius:18px;
-  background:rgba(255,255,255,0.04);
-  border:1px solid rgba(255,255,255,0.07);
-  cursor:pointer;
-  transition:all 0.3s cubic-bezier(0.16,1,0.3,1);
-  font-family:inherit;
-  color:inherit;
-  outline:none;
-  text-align:left;
-  width:100%;
-  position:relative;
-  overflow:hidden;
+/* ── Section labels ───────────────────────────────────── */
+.label{
+  font-size:11px;letter-spacing:0.1em;text-transform:uppercase;
+  opacity:0.55;margin:22px 4px 10px;
 }
-.tenant-tile::before{
-  content:'';
-  position:absolute;
-  inset:0;
-  border-radius:18px;
-  background:radial-gradient(circle at var(--mx,50%) var(--my,50%), rgba(214,255,95,0.06) 0%, transparent 60%);
-  opacity:0;
-  transition:opacity 0.3s;
-  pointer-events:none;
-}
-.tenant-tile:hover{
-  background:rgba(255,255,255,0.07);
-  border-color:rgba(214,255,95,0.25);
-  transform:translateY(-2px);
-  box-shadow:0 8px 24px rgba(0,0,0,0.2),0 0 0 1px rgba(214,255,95,0.1);
-}
-.tenant-tile:hover::before{opacity:1}
-.tenant-tile:active{transform:translateY(0) scale(0.98)}
 
-.tenant-logo{
-  width:52px;height:52px;
-  border-radius:14px;
-  overflow:hidden;
-  flex-shrink:0;
-  background:rgba(255,255,255,0.06);
+/* ── Continue card (returning players) ────────────────── */
+.continue{
+  display:flex;flex-direction:column;justify-content:space-between;gap:26px;
+  width:100%;min-height:128px;
+  padding:18px;border-radius:24px;
+  background:var(--lime);color:var(--ink);
+  border:1px solid rgba(32,28,25,0.1);
+  cursor:pointer;text-align:left;font-family:inherit;
+  transition:transform .2s cubic-bezier(0.16,1,0.3,1),box-shadow .2s;
+}
+.continue:hover{transform:translateY(-2px);box-shadow:0 10px 28px rgba(32,28,25,0.14)}
+.continue:active{transform:scale(0.985)}
+.continue-top{display:flex;align-items:center;justify-content:space-between}
+.continue .logo{width:40px;height:40px;background:var(--ink);color:var(--lime);font-size:17px}
+.continue-arrow{
+  width:38px;height:38px;border-radius:50%;
+  background:var(--ink);color:var(--lime);
   display:grid;place-items:center;
-  box-shadow:0 2px 8px rgba(0,0,0,0.15);
 }
-.tenant-logo img{
-  width:100%;height:100%;
-  object-fit:cover;
+.continue-title{font-weight:800;font-size:clamp(20px,5.5vw,26px);letter-spacing:-0.035em;line-height:1.05}
+.continue-meta{font-size:11.5px;font-weight:600;margin-top:6px;opacity:0.72}
+
+/* ── Facility rows ────────────────────────────────────── */
+.tenant-grid{display:grid;grid-template-columns:1fr;gap:10px}
+@media(min-width:540px){.tenant-grid{grid-template-columns:1fr 1fr}}
+.tenant-tile{
+  display:flex;align-items:center;gap:12px;
+  padding:12px 14px;border-radius:22px;
+  background:#fff;border:1px solid var(--line);
+  cursor:pointer;font-family:inherit;color:inherit;text-align:left;width:100%;
+  transition:border-color .2s,transform .2s cubic-bezier(0.16,1,0.3,1),box-shadow .2s;
 }
-.tenant-logo-fallback{
-  font-weight:800;
-  font-size:20px;
-  color:#D6FF5F;
+.tenant-tile:hover{border-color:var(--ink);transform:translateY(-2px);box-shadow:0 8px 22px rgba(32,28,25,0.08)}
+.tenant-tile:active{transform:scale(0.985)}
+.logo{
+  width:44px;height:44px;border-radius:50%;
+  overflow:hidden;flex-shrink:0;
+  background:var(--lime);color:var(--ink);
+  display:grid;place-items:center;
+  font-weight:800;font-size:18px;
+  border:1px solid rgba(32,28,25,0.08);
 }
+.logo img{width:100%;height:100%;object-fit:cover;display:block}
 .tenant-info{flex:1;min-width:0}
-.tenant-name{
-  font-weight:800;
-  font-size:15px;
-  letter-spacing:-0.01em;
-  white-space:nowrap;
-  overflow:hidden;
-  text-overflow:ellipsis;
-  transition:color 0.2s;
-}
-.tenant-tile:hover .tenant-name{color:#D6FF5F}
-.tenant-meta{
-  font-size:11px;
-  color:rgba(255,251,245,0.45);
-  margin-top:3px;
-  white-space:nowrap;
-  overflow:hidden;
-  text-overflow:ellipsis;
-}
-.tenant-arrow{
-  width:20px;height:20px;
-  color:rgba(255,255,255,0.15);
-  flex-shrink:0;
-  transition:all 0.25s ease;
-}
-.tenant-tile:hover .tenant-arrow{
-  color:#D6FF5F;
-  transform:translateX(3px);
-}
+.tenant-name{font-weight:800;font-size:15px;letter-spacing:-0.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tenant-meta{font-size:11px;opacity:0.55;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tenant-arrow{width:18px;height:18px;opacity:0.35;flex-shrink:0;transition:transform .2s,opacity .2s}
+.tenant-tile:hover .tenant-arrow{opacity:1;transform:translateX(3px)}
 
 /* ── States ───────────────────────────────────────────── */
-.state{display:none;text-align:center;padding:56px 24px}
+.state{display:none;text-align:center;padding:48px 24px}
 .state.visible{display:block}
 .spinner{
-  width:36px;height:36px;
-  border:3px solid rgba(214,255,95,0.15);
-  border-top-color:#D6FF5F;
-  border-radius:50%;
-  animation:spin 0.8s linear infinite;
-  margin:0 auto 16px;
+  width:34px;height:34px;
+  border:3px solid var(--line);border-top-color:var(--ink);
+  border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 14px;
 }
 @keyframes spin{to{transform:rotate(360deg)}}
-.state-icon{font-size:52px;margin-bottom:16px}
-.state-title{font-weight:700;font-size:17px;margin-bottom:8px}
-.state-msg{font-size:12px;opacity:0.45;margin-bottom:24px}
+.state-icon{font-size:46px;margin-bottom:14px}
+.state-title{font-weight:800;font-size:17px;margin-bottom:8px}
+.state-msg{font-size:12px;opacity:0.55;margin-bottom:22px}
 .retry-btn{
   display:inline-flex;align-items:center;gap:8px;
-  padding:12px 28px;border-radius:999px;
-  background:#D6FF5F;color:#201C19;
-  font-weight:700;font-size:13px;
-  border:none;cursor:pointer;font-family:inherit;
-  transition:all 0.2s;
+  height:44px;padding:0 26px;border-radius:999px;
+  background:var(--ink);color:var(--cream);
+  font-weight:800;font-size:13px;border:none;cursor:pointer;font-family:inherit;
+  transition:opacity .2s,transform .2s;
 }
-.retry-btn:hover{background:#CBF052;transform:translateY(-1px)}
+.retry-btn:hover{opacity:0.88}
 .retry-btn:active{transform:scale(0.97)}
 
-/* ── Footer ───────────────────────────────────────────── */
-.footer{
-  text-align:center;
-  padding:20px 24px 32px;
-  font-size:10px;
-  opacity:0.25;
-  letter-spacing:0.05em;
-}
+/* ── Footer band ──────────────────────────────────────── */
+.foot{background:var(--ink);color:var(--cream);margin-top:28px;padding:18px 16px 26px;text-align:center}
+.foot .dula-credit{padding:0 !important}
+.footer{padding-top:14px;font-size:10px;opacity:0.4;letter-spacing:0.06em}
 
 /* ── Animations ───────────────────────────────────────── */
-@keyframes fadeUp{
-  from{opacity:0;transform:translateY(16px)}
-  to{opacity:1;transform:translateY(0)}
-}
-@keyframes fadeIn{
-  from{opacity:0}
-  to{opacity:1}
-}
-.fade-up{animation:fadeUp 0.6s cubic-bezier(0.16,1,0.3,1) forwards}
-.fade-in{animation:fadeIn 0.5s ease forwards}
-.d1{animation-delay:0.05s;opacity:0}
-.d2{animation-delay:0.12s;opacity:0}
-.d3{animation-delay:0.2s;opacity:0}
-.d4{animation-delay:0.28s;opacity:0}
-.d5{animation-delay:0.36s;opacity:0}
+@keyframes fadeUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
+.rise{opacity:0;animation:fadeUp .55s cubic-bezier(0.16,1,0.3,1) forwards}
+@media(prefers-reduced-motion:reduce){.rise{animation:none;opacity:1}.hero-dot,.spinner{animation:none}}
 
-/* ── Install Banner ───────────────────────────────────── */
+/* ── Install banner ───────────────────────────────────── */
 .install-bar{
-  position:fixed;
-  bottom:20px;left:16px;right:16px;
-  max-width:400px;
-  margin:0 auto;
-  z-index:100;
-  padding:14px 18px;
-  border-radius:18px;
-  background:rgba(32,28,25,0.9);
-  backdrop-filter:blur(16px);
-  -webkit-backdrop-filter:blur(16px);
-  border:1px solid rgba(255,255,255,0.1);
-  display:flex;
-  align-items:center;
-  gap:12px;
-  box-shadow:0 12px 40px rgba(0,0,0,0.4);
-  animation:fadeUp 0.5s cubic-bezier(0.16,1,0.3,1) 1s forwards;
+  position:fixed;bottom:20px;left:16px;right:16px;
+  max-width:400px;margin:0 auto;z-index:100;
+  padding:14px 18px;border-radius:22px;
+  background:var(--ink);color:var(--cream);
+  display:flex;align-items:center;gap:12px;
+  box-shadow:0 12px 40px rgba(32,28,25,0.35);
+  animation:fadeUp .5s cubic-bezier(0.16,1,0.3,1) 1s forwards;
   opacity:0;
 }
 .install-bar img{width:40px;height:40px;border-radius:10px;flex-shrink:0}
 .install-bar-text{flex:1;min-width:0}
 .install-bar-title{font-weight:800;font-size:13px}
-.install-bar-sub{font-size:10px;opacity:0.5;margin-top:1px}
+.install-bar-sub{font-size:10px;opacity:0.6;margin-top:1px}
 .install-btn{
-  padding:8px 18px;
-  border-radius:999px;
-  background:#D6FF5F;
-  color:#201C19;
-  font-weight:700;
-  font-size:11px;
-  border:none;
-  cursor:pointer;
-  font-family:inherit;
-  flex-shrink:0;
-  transition:all 0.2s;
+  padding:8px 18px;border-radius:999px;
+  background:var(--lime);color:var(--ink);
+  font-weight:800;font-size:11px;border:none;cursor:pointer;font-family:inherit;flex-shrink:0;
 }
-.install-btn:hover{background:#CBF052}
+.install-btn:hover{filter:brightness(0.95)}
 .install-dismiss{
-  width:28px;height:28px;
-  border-radius:50%;
-  background:rgba(255,255,255,0.08);
-  border:none;
-  color:rgba(255,255,255,0.4);
-  cursor:pointer;
-  display:grid;place-items:center;
-  flex-shrink:0;
-  font-size:14px;
-  transition:all 0.2s;
+  width:28px;height:28px;border-radius:50%;
+  background:rgba(255,255,255,0.1);border:none;color:rgba(255,251,245,0.6);
+  cursor:pointer;display:grid;place-items:center;flex-shrink:0;font-size:14px;
 }
-.install-dismiss:hover{background:rgba(255,255,255,0.15);color:#FFFBF5}
-
-@media(min-width:640px){
-  .hero{padding:72px 24px 0}
-}
+.install-dismiss:hover{background:rgba(255,255,255,0.2);color:var(--cream)}
 </style>
 </head>
-<body class="bg-mesh">
+<body>
 
-<!-- Hero -->
-<div class="hero">
-  <div class="hero-badge fade-up d1">
-    <span class="hero-badge-dot"></span>
-    Multi-Facility Platform
+<!-- Header -->
+<header class="topbar">
+  <div class="topbar-inner">
+    <span class="mark" aria-hidden="true">D</span>
+    <div>
+      <div class="brand-name">Courts</div>
+      <div class="brand-sub mono">by DulaHQ</div>
+    </div>
   </div>
-  <h1 class="fade-up d2">
-    Book courts.<br/>
-    Run the queue.<br/>
-    <span class="accent">Track every match.</span>
-  </h1>
-  <p class="hero-sub mono fade-up d3">Select your facility to get started</p>
-  <div class="features fade-up d4">
-    <div class="feature-pill"><span class="feature-dot"></span>Court Reservations</div>
-    <div class="feature-pill"><span class="feature-dot"></span>Walk-in Queue</div>
-    <div class="feature-pill"><span class="feature-dot"></span>Match Stats</div>
-    <div class="feature-pill"><span class="feature-dot"></span>Open Play</div>
+</header>
+
+<main class="page">
+
+  <!-- Hero -->
+  <section class="hero rise" style="animation-delay:.05s">
+    <span class="hero-badge mono"><span class="hero-dot"></span><span id="heroCount">Multi-facility platform</span></span>
+    <h1>Book courts.<br/>Run the queue.<br/><span class="accent">Track every match.</span></h1>
+    <div class="features">
+      <div class="feature-pill"><span class="feature-dot"></span>Court Reservations</div>
+      <div class="feature-pill"><span class="feature-dot"></span>Walk-in Queue</div>
+      <div class="feature-pill"><span class="feature-dot"></span>Match Stats</div>
+      <div class="feature-pill"><span class="feature-dot"></span>Find a Game</div>
+    </div>
+  </section>
+
+  <!-- Search -->
+  <div class="search-wrap rise" id="searchWrap" style="animation-delay:.12s">
+    <svg class="search-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+    </svg>
+    <input type="text" id="searchInput" class="search-input" placeholder="Search facilities" aria-label="Search facilities" autocomplete="off"/>
   </div>
-</div>
 
-<!-- Search -->
-<div class="search-wrap fade-up d5" id="searchWrap">
-  <svg class="search-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
-  </svg>
-  <input type="text" id="searchInput" class="search-input" placeholder="Search facilities..." autocomplete="off"/>
-</div>
+  <!-- Loading -->
+  <div id="stateLoading" class="state visible">
+    <div class="spinner"></div>
+    <div class="mono" style="font-size:12px;opacity:0.5">Loading facilities...</div>
+  </div>
 
-<!-- Loading -->
-<div id="stateLoading" class="state visible">
-  <div class="spinner"></div>
-  <div class="mono" style="font-size:12px;opacity:0.4">Loading facilities...</div>
-</div>
+  <!-- Error -->
+  <div id="stateError" class="state">
+    <div class="state-icon">⚠️</div>
+    <div class="state-title">Could not load facilities</div>
+    <div class="state-msg mono" id="errorMsg"></div>
+    <button class="retry-btn" onclick="loadTenants()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1 4v6h6M23 20v-6h-6"/><path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15"/></svg>
+      Try Again
+    </button>
+  </div>
 
-<!-- Error -->
-<div id="stateError" class="state">
-  <div class="state-icon">⚠️</div>
-  <div class="state-title">Could not load facilities</div>
-  <div class="state-msg mono" id="errorMsg"></div>
-  <button class="retry-btn" onclick="loadTenants()">
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1 4v6h6M23 20v-6h-6"/><path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15"/></svg>
-    Try Again
-  </button>
-</div>
+  <!-- Empty -->
+  <div id="stateEmpty" class="state">
+    <div class="state-icon">🔍</div>
+    <div class="state-title">No facilities found</div>
+    <div class="state-msg mono">Try a different search term</div>
+  </div>
 
-<!-- Empty -->
-<div id="stateEmpty" class="state">
-  <div class="state-icon">🔍</div>
-  <div class="state-title">No facilities found</div>
-  <div class="state-msg mono">Try a different search term</div>
-</div>
+  <!-- Returning player -->
+  <section id="continueSection" style="display:none">
+    <div class="label mono">Welcome back</div>
+    <div id="continueSlot"></div>
+  </section>
 
-<!-- Tenant Grid -->
-<div class="grid-section" id="gridSection" style="display:none">
-  <div class="grid-label mono">Available Facilities</div>
-  <div class="tenant-grid" id="tenantGrid"></div>
-</div>
+  <!-- Facilities -->
+  <section id="gridSection" style="display:none">
+    <div class="label mono" id="gridLabel">Pick your facility</div>
+    <div class="tenant-grid" id="tenantGrid"></div>
+  </section>
+</main>
 
 <!-- Footer -->
-<div class="dula-credit" style="display:flex;justify-content:center;padding:8px 16px 0"><span style="display:inline-flex;align-items:center;gap:8px;height:38px;padding:0 18px 0 6px;border-radius:999px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.22);font:500 12.5px 'JetBrains Mono',ui-monospace,monospace;color:#FFFBF5"><span aria-hidden="true" style="width:26px;height:26px;border-radius:50%;background:#D6FF5F;color:#201C19;display:grid;place-items:center;font:900 12px 'Bricolage Grotesque',system-ui,sans-serif">D</span><span>Powered by <a href="https://dulahq.app" target="_blank" rel="noopener" style="font-weight:800;color:#D6FF5F;text-decoration:underline;text-underline-offset:3px">DulaHQ</a></span></span></div>
-<div class="footer mono">COURT BOOKING — MULTI-TENANT PWA</div>
+<footer class="foot">
+  <div class="dula-credit" style="display:flex;justify-content:center;padding:0"><span style="display:inline-flex;align-items:center;gap:8px;height:38px;padding:0 18px 0 6px;border-radius:999px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.22);font:500 12.5px 'JetBrains Mono',ui-monospace,monospace;color:#FFFBF5"><span aria-hidden="true" style="width:26px;height:26px;border-radius:50%;background:#D6FF5F;color:#201C19;display:grid;place-items:center;font:900 12px 'Bricolage Grotesque',system-ui,sans-serif">D</span><span>Powered by <a href="https://dulahq.app" target="_blank" rel="noopener" style="font-weight:800;color:#D6FF5F;text-decoration:underline;text-underline-offset:3px">DulaHQ</a></span></span></div>
+  <div class="footer mono">COURT BOOKING — MULTI-TENANT PWA</div>
+</footer>
 
 <!-- Install Banner (hidden by default) -->
 <div class="install-bar" id="installBar" style="display:none">
@@ -458,7 +311,7 @@ body{
     <div class="install-bar-sub mono">Book courts from your home screen</div>
   </div>
   <button class="install-btn" id="installBtn">Install</button>
-  <button class="install-dismiss" id="installDismiss">✕</button>
+  <button class="install-dismiss" id="installDismiss" aria-label="Dismiss">✕</button>
 </div>
 
 <!-- Firebase SDK -->
@@ -472,14 +325,8 @@ body{
 
   const LS_TENANT = 'cb_selected_tenant';
 
-  // ── Check stored tenant ────────────────────────────────
-  const urlParams = new URLSearchParams(window.location.search);
-  const queryClient = urlParams.get('client');
-
-  // Removed auto-redirect: picker always shows the picker page.
-  // Users explicitly click a tile to go to /?client=xxx.
-  // (Previously this would auto-redirect if localStorage had a saved tenant,
-  // which caused the root URL to skip the picker and go straight to the app.)
+  // The picker never auto-redirects: the root URL always shows the picker.
+  // A returning player gets a one-tap "Continue" card instead.
 
   // ── DOM refs ───────────────────────────────────────────
   const searchInput = document.getElementById('searchInput');
@@ -489,7 +336,11 @@ body{
   const stateEmpty = document.getElementById('stateEmpty');
   const errorMsg = document.getElementById('errorMsg');
   const gridSection = document.getElementById('gridSection');
+  const gridLabel = document.getElementById('gridLabel');
   const tenantGrid = document.getElementById('tenantGrid');
+  const continueSection = document.getElementById('continueSection');
+  const continueSlot = document.getElementById('continueSlot');
+  const heroCount = document.getElementById('heroCount');
 
   let allTenants = [];
 
@@ -534,55 +385,81 @@ body{
         showState('empty');
         return;
       }
-      renderTenants(allTenants);
+      heroCount.textContent = allTenants.length + (allTenants.length === 1 ? ' facility' : ' facilities');
+      renderTenants(allTenants, '');
     } catch (err) {
       console.error('[Picker]', err);
       showError(err.message);
     }
   }
 
-  // ── Render tiles ───────────────────────────────────────
-  function renderTenants(tenants) {
+  // ── Render ─────────────────────────────────────────────
+  function lastTenantId() {
+    try { return localStorage.getItem(LS_TENANT) || ''; } catch (e) { return ''; }
+  }
+
+  function logoHtml(t, extra) {
+    return `<span class="logo${extra ? ' ' + extra : ''}">${t.logoUrl
+      ? `<img src="${esc(t.logoUrl)}" alt="" loading="lazy"/>`
+      : esc((t.name || t.clientId || '?').charAt(0).toUpperCase())}</span>`;
+  }
+
+  function metaText(t) {
+    return [t.sub, t.location].filter(Boolean).join(' · ');
+  }
+
+  function renderTenants(tenants, query) {
     if (tenants.length === 0) {
       gridSection.style.display = 'none';
+      continueSection.style.display = 'none';
       showState('empty');
       return;
     }
 
     showState('grid');
-    tenantGrid.innerHTML = tenants.map((t, i) => `
-      <button class="tenant-tile" data-client-id="${esc(t.clientId || t.id)}" style="animation:fadeUp 0.5s cubic-bezier(0.16,1,0.3,1) ${0.05 + i * 0.07}s forwards;opacity:0">
-        <div class="tenant-logo">
-          ${t.logoUrl
-            ? `<img src="${esc(t.logoUrl)}" alt="" loading="lazy"/>`
-            : `<span class="tenant-logo-fallback">${(t.name || t.clientId).charAt(0).toUpperCase()}</span>`}
-        </div>
-        <div class="tenant-info">
-          <div class="tenant-name">${esc(t.name || t.clientId)}</div>
-          <div class="tenant-meta mono">${esc(t.sub || '')}${t.location ? ' · 📍 ' + esc(t.location) : ''}</div>
-        </div>
-        <svg class="tenant-arrow" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+
+    // Returning player: only when not searching and the saved facility is still listed
+    const last = !query ? allTenants.find(t => (t.clientId || t.id) === lastTenantId()) : null;
+    if (last) {
+      const meta = metaText(last);
+      continueSlot.innerHTML = `
+        <button class="continue rise" id="continueBtn" data-client-id="${esc(last.clientId || last.id)}">
+          <span class="continue-top">${logoHtml(last)}<span class="continue-arrow" aria-hidden="true"><svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.4" d="M5 12h14m-6-6l6 6-6 6"/></svg></span></span>
+          <span>
+            <span class="continue-title" style="display:block">Continue to<br/>${esc(last.name || last.clientId)}</span>
+            ${meta ? `<span class="continue-meta mono" style="display:block">${esc(meta)}</span>` : ''}
+          </span>
+        </button>`;
+      continueSection.style.display = '';
+      document.getElementById('continueBtn').addEventListener('click', () => selectTenant(last.clientId || last.id));
+    } else {
+      continueSection.style.display = 'none';
+      continueSlot.innerHTML = '';
+    }
+
+    const list = last ? tenants.filter(t => t !== last) : tenants;
+    gridLabel.textContent = last ? 'Other facilities' : (query ? 'Results' : 'Pick your facility');
+    gridSection.style.display = list.length ? '' : 'none';
+
+    tenantGrid.innerHTML = list.map((t, i) => `
+      <button class="tenant-tile rise" data-client-id="${esc(t.clientId || t.id)}" style="animation-delay:${Math.min(0.05 + i * 0.05, 0.5)}s">
+        ${logoHtml(t)}
+        <span class="tenant-info">
+          <span class="tenant-name" style="display:block">${esc(t.name || t.clientId)}</span>
+          <span class="tenant-meta mono" style="display:block">${esc(metaText(t))}</span>
+        </span>
+        <svg class="tenant-arrow" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
       </button>
     `).join('');
 
-    // Bind clicks + spotlight
     tenantGrid.querySelectorAll('.tenant-tile').forEach(tile => {
       tile.addEventListener('click', () => selectTenant(tile.dataset.clientId));
-
-      // Spotlight follow
-      tile.addEventListener('mousemove', (e) => {
-        const rect = tile.getBoundingClientRect();
-        tile.style.setProperty('--mx', ((e.clientX - rect.left) / rect.width * 100) + '%');
-        tile.style.setProperty('--my', ((e.clientY - rect.top) / rect.height * 100) + '%');
-      });
     });
-
-    searchInput.focus();
   }
 
   // ── Select tenant ──────────────────────────────────────
   function selectTenant(clientId) {
-    localStorage.setItem(LS_TENANT, clientId);
+    try { localStorage.setItem(LS_TENANT, clientId); } catch (e) { /* private mode: just navigate */ }
     // Same-tab navigation -- a synthetic click on a target="_blank" anchor
     // isn't reliably treated as a trusted user gesture across browsers, so
     // popup blockers can silently swallow it and leave the picker on screen
@@ -593,14 +470,14 @@ body{
   // ── Search ─────────────────────────────────────────────
   searchInput.addEventListener('input', (e) => {
     const q = e.target.value.toLowerCase().trim();
-    if (!q) { renderTenants(allTenants); return; }
+    if (!q) { renderTenants(allTenants, ''); return; }
     const filtered = allTenants.filter(t =>
       (t.name || '').toLowerCase().includes(q) ||
       (t.sub || '').toLowerCase().includes(q) ||
       (t.clientId || t.id || '').toLowerCase().includes(q) ||
       (t.location || '').toLowerCase().includes(q)
     );
-    renderTenants(filtered);
+    renderTenants(filtered, q);
   });
 
   // ── State management ───────────────────────────────────
@@ -608,7 +485,7 @@ body{
     stateLoading.classList.toggle('visible', s === 'loading');
     stateError.classList.toggle('visible', s === 'error');
     stateEmpty.classList.toggle('visible', s === 'empty');
-    gridSection.style.display = s === 'grid' ? '' : 'none';
+    if (s !== 'grid') { gridSection.style.display = 'none'; continueSection.style.display = 'none'; }
     searchWrap.style.display = (s === 'grid' || s === 'empty') ? '' : 'none';
   }
 
@@ -620,7 +497,7 @@ body{
   function esc(str) {
     const d = document.createElement('div');
     d.textContent = str || '';
-    return d.innerHTML;
+    return d.innerHTML.replace(/"/g, '&quot;');
   }
 
   // ── PWA Install ────────────────────────────────────────

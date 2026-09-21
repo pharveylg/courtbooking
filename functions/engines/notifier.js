@@ -28,6 +28,7 @@ const DEFAULTS = Object.freeze({
 const LEAD_OPTIONS = Object.freeze([5, 10, 15, 20, 30, 45, 60]);
 const PLAYED = Object.freeze(['completed', 'walkover', 'forfeit', 'cancelled']);
 const OUTBOX_MAX_AGE_MS = 36 * 3600 * 1000;
+const LIVE_FRESH_MS = 15 * 60000; // a scoreboard that has not published for this long is treated as abandoned
 const DIGEST_THRESHOLD = 2; // this many change-type messages for one person -> one digest
 
 function normalizeNotifyConfig(raw) {
@@ -112,9 +113,24 @@ function isAllowedPushEndpoint(endpoint) {
   return PUSH_HOST_SUFFIXES.some((s) => host === s || host.endsWith(`.${s}`));
 }
 
+/* ---------------- scoreboard signal ----------------
+   A scoreboard publishes tournaments/{t}/live/{matchId} while a match is being
+   scored. That tells us what the schedule can't:
+     playing   published recently and not finished -> the match is under way
+     finished  the scoreboard says the match is over (result may not be entered yet)
+     stale     a doc nobody has touched for a while -> ignored
+     none      no scoreboard in use for this match */
+function liveState(live, nowMs) {
+  if (!live) return 'none';
+  if (live.complete || live.winner) return 'finished';
+  return nowMs - (Number(live.updatedAtMs) || 0) <= LIVE_FRESH_MS ? 'playing' : 'stale';
+}
+
 /* ---------------- quiet hours ---------------- */
-/* Live play: some scheduled match is within an hour of its window. */
-function isLivePlay(matches, nowMs, cfg) {
+/* Live play: some scheduled match is within an hour of its window, or a
+   scoreboard is actively in use. */
+function isLivePlay(matches, nowMs, cfg, liveById) {
+  if (Object.values(liveById || {}).some((l) => liveState(l, nowMs) === 'playing')) return true;
   return matches.some((m) => hasSched(m) && !isBye(m)
     && nowMs >= slotStartMs(m.sched, cfg.utcOffsetMin) - 3600000
     && nowMs <= slotEndMs(m.sched, cfg.utcOffsetMin) + 3600000);
@@ -128,27 +144,37 @@ function canSendChangesNow(nowMs, cfg, live) {
 
 /* ---------------- reminders ---------------- */
 /* A court is "delayed" when an earlier match on it is unfinished although its
-   scheduled window is over. The reminder for the next match waits for it. */
-function courtDelayed(match, matches, nowMs, offsetMin) {
+   scheduled window is over. The reminder for the next match waits for it --
+   unless that match's scoreboard already says it is over, in which case the
+   court is free even though the result hasn't been entered yet. */
+function courtDelayed(match, matches, nowMs, offsetMin, liveById) {
   const s = match.sched;
+  const live = liveById || {};
   return matches.some((o) => o.id !== match.id && hasSched(o) && !isBye(o) && !isPlayed(o)
     && o.sched.venueId === s.venueId && o.sched.courtId === s.courtId && o.sched.date === s.date
-    && o.sched.startMin < s.startMin && slotEndMs(o.sched, offsetMin) <= nowMs);
+    && o.sched.startMin < s.startMin && slotEndMs(o.sched, offsetMin) <= nowMs
+    && liveState(live[o.id], nowMs) !== 'finished');
 }
 
 /* Which matches should get an Up Next reminder right now. `reminded` maps
-   reminderKey -> true for ones already sent. */
-function planReminders({ matches, cfg, nowMs, reminded }) {
-  const due = [], held = [];
+   reminderKey -> true for ones already sent. `liveById` (optional) maps matchId
+   -> the scoreboard's live doc. A match whose scoreboard is already running (or
+   finished) has started, so a "warm up now" reminder would be wrong: it is
+   reported in `started` so the runner can mark it as handled. */
+function planReminders({ matches, cfg, nowMs, reminded, liveById }) {
+  const due = [], held = [], started = [];
   const done = reminded || {};
+  const live = liveById || {};
   matches.forEach((m) => {
     if (!hasSched(m) || isBye(m) || isPlayed(m)) return;
     const start = slotStartMs(m.sched, cfg.utcOffsetMin);
     if (nowMs < start - cfg.leadMinutes * 60000 || nowMs > start + cfg.graceMinutes * 60000) return;
     if (done[reminderKey(m)]) return;
-    (courtDelayed(m, matches, nowMs, cfg.utcOffsetMin) ? held : due).push({ match: m, key: reminderKey(m), minutesLeft: Math.round((start - nowMs) / 60000) });
+    const state = liveState(live[m.id], nowMs);
+    if (state === 'playing' || state === 'finished') { started.push({ match: m, key: reminderKey(m) }); return; }
+    (courtDelayed(m, matches, nowMs, cfg.utcOffsetMin, live) ? held : due).push({ match: m, key: reminderKey(m), minutesLeft: Math.round((start - nowMs) / 60000) });
   });
-  return { due, held };
+  return { due, held, started };
 }
 
 /* ---------------- message copy ---------------- */
@@ -213,7 +239,7 @@ function coalesceForRecipient(messages) {
 }
 
 module.exports = {
-  DEFAULTS, LEAD_OPTIONS, PLAYED, OUTBOX_MAX_AGE_MS, DIGEST_THRESHOLD,
+  DEFAULTS, LEAD_OPTIONS, PLAYED, OUTBOX_MAX_AGE_MS, DIGEST_THRESHOLD, LIVE_FRESH_MS, liveState,
   normalizeNotifyConfig, isDate, slotStartMs, slotEndMs, localNow, addDays, fmtDay, fmtClock,
   isBye, isPlayed, hasSched, schedFingerprint, safeKey, reminderKey, describeSlot,
   isAllowedPushEndpoint, isLivePlay, canSendChangesNow, courtDelayed, planReminders,

@@ -6486,6 +6486,127 @@ async function ogLinkReservation(gameId, token, pin){
   return { ok:true };
 }
 
+/* ---------- Keep score (Find a Game, peer games) ----------
+   Players in a game (and staff) can open the same court scoreboard the Queue
+   uses. Results stay on this device: Find a Game has no stats table, so this is
+   a convenience, not a record. Facility open play is scored from the Queue. */
+// OG-SCORE-START
+const OG_SCORE_BEFORE_MS = 30 * 60000;      // the scoreboard is available from 30 minutes before the game...
+const OG_SCORE_AFTER_MS = 6 * 3600000;      // ...until 6 hours after it ends
+function ogCanKeepScore(game, status, canScore, nowMs){
+  if(!game || game.source === 'facility' || !canScore) return false;
+  if(status === 'CANCELLED' || status === 'EXPIRED') return false;
+  if((game.players || []).length < 2) return false;
+  return nowMs >= ogGameStartsAt(game) - OG_SCORE_BEFORE_MS && nowMs <= ogGameEndsAt(game) + OG_SCORE_AFTER_MS;
+}
+function ogScoreDefaults(game){
+  const doubles = game.format !== 'Singles' && game.players.length >= 4;
+  return { mode: doubles ? 'doubles' : 'singles', home: doubles ? [0, 1] : [0], away: doubles ? [2, 3] : [1], target: 11, winBy: 2, scoring: 'sideout', bestOf: 1 };
+}
+/* Turns the chosen players into the two side names, or says what's wrong. */
+function ogScoreSides(game, pick){
+  const want = pick.mode === 'doubles' ? 2 : 1;
+  if(pick.home.length !== want || pick.away.length !== want) return { error: 'Pick ' + (want * 2) + ' players.' };
+  const all = pick.home.concat(pick.away);
+  if(all.some(i => !Number.isInteger(i) || i < 0 || i >= game.players.length)) return { error: 'Pick the players from the list.' };
+  if(new Set(all).size !== all.length) return { error: 'Each player can only be on one side.' };
+  const name = (i) => game.players[i].name;
+  return { home: pick.home.map(name).join(' & '), away: pick.away.map(name).join(' & ') };
+}
+function ogScoreLine(sides, sum){
+  const g = sum.games || [];
+  if(g.length <= 1){ const x = g[0] || { home: 0, away: 0 }; return sides.home + ' ' + x.home + '–' + x.away + ' ' + sides.away; }
+  return sides.home + ' ' + sum.gamesWon.home + '–' + sum.gamesWon.away + ' ' + sides.away + ' (' + g.map(x => x.home + '–' + x.away).join(', ') + ')';
+}
+// OG-SCORE-END
+let _ogScore = null; // { gameId, open, pick, error } -- kept across live re-renders of the modal
+function ogScoresLoad(gameId){
+  try { const v = JSON.parse(localStorage.getItem(lsKey('cb_og_scores_v1_' + gameId))); return Array.isArray(v) ? v : []; } catch { return []; }
+}
+function ogScoresAdd(gameId, line){
+  const list = ogScoresLoad(gameId); list.push({ line, at: Date.now() });
+  try { localStorage.setItem(lsKey('cb_og_scores_v1_' + gameId), JSON.stringify(list.slice(-20))); } catch {}
+}
+function ogScorePanelHtml(game){
+  const st = (_ogScore && _ogScore.gameId === game.id) ? _ogScore : (_ogScore = { gameId: game.id, open: false, pick: ogScoreDefaults(game), error: '' });
+  const box = 'rounded-[16px] border border-[#EAE0D5] bg-[#FFFBF5] p-3.5';
+  const results = ogScoresLoad(game.id).slice().reverse();
+  const resultsHtml = results.length ? `<div class="mt-3 space-y-1">${results.map((r, i) => `<div class="mono text-[11.5px]"><span class="opacity-50">Match ${results.length - i}</span> · ${escapeHtml(r.line)}</div>`).join('')}<div class="mono text-[10px] opacity-45">Saved on this device only.</div></div>` : '';
+  if(!st.open){
+    return `<div class="pt-3 border-t border-[#EAE0D5]">
+      <div class="mono text-[10px] uppercase tracking-widest opacity-60 mb-1.5">Scoreboard</div>
+      <button type="button" id="ogScoreOpenBtn" class="w-full h-11 rounded-full bg-[#201C19] text-white font-[800] text-[13px] cursor-pointer hover:opacity-90 transition">Keep score</button>
+      <div class="mono text-[10.5px] opacity-55 mt-1.5">Tap the side that wins each rally. Optional.</div>
+      ${resultsHtml}
+    </div>`;
+  }
+  const p = st.pick;
+  const cls = 'h-10 rounded-full border border-[#EAE0D5] bg-white px-3 mono text-[12px] outline-none focus:border-[#201C19] w-full';
+  const playerSel = (side, slot) => {
+    const cur = p[side][slot];
+    return `<select data-og-pick="${side}${slot}" aria-label="${side === 'home' ? 'Side A' : 'Side B'} player ${slot + 1}" class="${cls}">${game.players.map((pl, i) => `<option value="${i}" ${cur === i ? 'selected' : ''}>${escapeHtml(pl.name)}</option>`).join('')}</select>`;
+  };
+  const opt = (v, cur, label) => `<option value="${v}" ${String(cur) === String(v) ? 'selected' : ''}>${label}</option>`;
+  const perSide = p.mode === 'doubles' ? [0, 1] : [0];
+  return `<div class="pt-3 border-t border-[#EAE0D5]">
+    <div class="mono text-[10px] uppercase tracking-widest opacity-60 mb-1.5">Scoreboard</div>
+    <div class="${box} space-y-2.5">
+      ${game.players.length >= 4 ? `<select id="ogScoreMode" aria-label="Singles or doubles" class="${cls}">${opt('doubles', p.mode, 'Doubles')}${opt('singles', p.mode, 'Singles')}</select>` : ''}
+      <div class="grid grid-cols-2 gap-2">
+        <div class="space-y-2"><div class="mono text-[10px] uppercase tracking-widest opacity-55">Side A</div>${perSide.map(s => playerSel('home', s)).join('')}</div>
+        <div class="space-y-2"><div class="mono text-[10px] uppercase tracking-widest opacity-55">Side B</div>${perSide.map(s => playerSel('away', s)).join('')}</div>
+      </div>
+      <div class="grid grid-cols-2 gap-2">
+        <select id="ogScoreTarget" aria-label="Game to" class="${cls}">${PickleScore.TARGETS.map(t => opt(t, p.target, 'Game to ' + t)).join('')}</select>
+        <select id="ogScoreWinBy" aria-label="Win by" class="${cls}">${opt(2, p.winBy, 'Win by 2')}${opt(1, p.winBy, 'Win by 1')}</select>
+        <select id="ogScoreBestOf" aria-label="Games" class="${cls}">${opt(1, p.bestOf, 'One game')}${opt(3, p.bestOf, 'Best of 3')}</select>
+        <select id="ogScoreScoring" aria-label="Scoring" class="${cls}">${opt('sideout', p.scoring, 'Side-out scoring')}${opt('rally', p.scoring, 'Rally scoring')}</select>
+      </div>
+      <div id="ogScoreError" class="${st.error ? '' : 'hidden'} mono text-[11px] text-[#8C2C10]">${escapeHtml(st.error || '')}</div>
+      <div class="flex gap-2">
+        <button type="button" id="ogScoreGo" class="flex-1 h-11 rounded-full bg-[#D6FF5F] hover:bg-[#CBF052] text-[#201C19] font-[800] text-[13px] border border-[#201C19]/10 cursor-pointer transition">Open scoreboard</button>
+        <button type="button" id="ogScoreHide" class="h-11 px-4 rounded-full bg-white border border-[#EAE0D5] mono text-[11px] font-[700] cursor-pointer">Hide</button>
+      </div>
+    </div>
+    ${resultsHtml}
+  </div>`;
+}
+function ogWireScorePanel(game){
+  const st = _ogScore && _ogScore.gameId === game.id ? _ogScore : null;
+  if(!st) return;
+  const rerender = () => renderOgDetailModal(game.id);
+  document.getElementById('ogScoreOpenBtn')?.addEventListener('click', () => { st.open = true; st.error = ''; st.pick = ogScoreDefaults(game); rerender(); });
+  document.getElementById('ogScoreHide')?.addEventListener('click', () => { st.open = false; rerender(); });
+  document.getElementById('ogScoreMode')?.addEventListener('change', (e) => {
+    const d = ogScoreDefaults({ ...game, format: e.target.value === 'singles' ? 'Singles' : 'Doubles' });
+    st.pick = { ...st.pick, mode: d.mode, home: d.home, away: d.away }; st.error = ''; rerender();
+  });
+  document.querySelectorAll('[data-og-pick]').forEach(sel => sel.addEventListener('change', () => {
+    const m = sel.dataset.ogPick.match(/^(home|away)(\d)$/);
+    if(m) st.pick[m[1]][Number(m[2])] = Number(sel.value);
+  }));
+  const num = (id, key) => document.getElementById(id)?.addEventListener('change', (e) => { st.pick[key] = key === 'scoring' ? e.target.value : Number(e.target.value); });
+  num('ogScoreTarget', 'target'); num('ogScoreWinBy', 'winBy'); num('ogScoreBestOf', 'bestOf'); num('ogScoreScoring', 'scoring');
+  document.getElementById('ogScoreGo')?.addEventListener('click', () => {
+    const sides = ogScoreSides(game, st.pick);
+    const err = document.getElementById('ogScoreError');
+    if(sides.error){ st.error = sides.error; err.textContent = sides.error; err.classList.remove('hidden'); return; }
+    if(typeof CourtBoard === 'undefined'){ toast('The scoreboard is still loading. Try again in a moment.'); return; }
+    st.error = '';
+    const p = st.pick;
+    const accent = CLIENT && CLIENT.theme && /^#[0-9a-fA-F]{6}$/.test(CLIENT.theme.primary || '') ? CLIENT.theme.primary : null;
+    CourtBoard.open({
+      title: (game.skillLevel && game.skillLevel !== 'Open' ? game.skillLevel + ' game' : 'Game') + ' · ' + fmtTime(game.startHour),
+      names: { home: sides.home, away: sides.away },
+      config: { target: p.target, winBy: p.winBy, scoring: p.scoring, bestOf: p.bestOf, doubles: p.mode === 'doubles' },
+      storageKey: lsKey('cb_board_og_' + game.id),
+      finishLabel: 'Save result',
+      accent,
+      onFinish: (sum) => { ogScoresAdd(game.id, ogScoreLine(sides, sum)); toast('Result saved on this device'); if(_ogActiveGameId === game.id) rerender(); },
+    });
+  });
+}
+
 /* ---------- Detail modal ---------- */
 function openOgDetailModal(gameId){
   _ogActiveGameId = gameId;
@@ -6571,6 +6692,8 @@ function renderOgDetailModal(gameId){
     reservationHtml = `<div class="mono text-[11px] opacity-50">Not yet linked to a reservation.</div>`;
   }
 
+  const scoreHtml = ogCanKeepScore(game, status, alreadyJoined || isCreator || adminUnlocked, Date.now()) ? ogScorePanelHtml(game) : '';
+
   const actions = [];
   if(status === 'OPEN' && !alreadyJoined && !(isFacility && game.allowJoin === false) && !payAckPending){
     actions.push(`<button type="button" id="ogActionJoin" class="flex-1 h-11 rounded-full bg-[#D6FF5F] hover:bg-[#CBF052] text-[#201C19] font-[800] text-[13px] border border-[#201C19]/10 transition cursor-pointer">${isFacility ? 'Join & Pay' : (game.payBeforeJoin ? 'Join Game →' : 'Join Game')}</button>`);
@@ -6603,6 +6726,7 @@ function renderOgDetailModal(gameId){
       <div class="space-y-1">${playersHtml}</div>
     </div>
     ${addPlayerHtml}
+    ${scoreHtml}
     <div class="pt-3 border-t border-[#EAE0D5]">
       <div class="mono text-[10px] uppercase tracking-widest opacity-60 mb-1.5">Reservation</div>
       ${reservationHtml}
@@ -6675,6 +6799,7 @@ function renderOgDetailModal(gameId){
     if(result.ok){ toast('Reservation linked!'); renderOgDetailModal(game.id); }
     else { errEl.textContent = result.error; errEl.classList.remove('hidden'); }
   });
+  if(scoreHtml) ogWireScorePanel(game);
 }
 
 function renderOpenPlayList(){

@@ -182,7 +182,10 @@ async function processTournament({ db, send, nowMs }, entry) {
     const windowDates = [notifier.addDays(local.date, -1), local.date, notifier.addDays(local.date, 1)];
     const nearby = (await tRef.collection('matches').where('sched.date', 'in', windowDates).get()).docs.map((d) => ({ id: d.id, ...d.data() }));
     const byId = new Map(nearby.map((m) => [m.id, m]));
-    const live = notifier.isLivePlay(nearby, nowMs, cfg);
+    // Scoreboards in use right now (tournaments/{t}/live/{matchId}).
+    const liveById = {};
+    (await tRef.collection('live').get()).docs.forEach((d) => { liveById[d.id] = d.data(); });
+    const live = notifier.isLivePlay(nearby, nowMs, cfg, liveById);
     const allowChanges = notifier.canSendChangesNow(nowMs, cfg, live);
 
     const add = (sub, msg) => { if (!plan.has(sub.id)) plan.set(sub.id, { sub, msgs: [] }); plan.get(sub.id).msgs.push(msg); };
@@ -230,7 +233,8 @@ async function processTournament({ db, send, nowMs }, entry) {
     }
 
     // 2. Up Next reminders
-    const { due, held: delayed } = notifier.planReminders({ matches: nearby, cfg, nowMs, reminded });
+    const { due, held: delayed, started } = notifier.planReminders({ matches: nearby, cfg, nowMs, reminded, liveById });
+    started.forEach(({ key }) => { reminded[key] = nowMs; }); // already under way: never remind later
     due.forEach(({ match, key, minutesLeft }) => {
       reminded[key] = nowMs;
       subs.forEach((s) => {
@@ -238,7 +242,7 @@ async function processTournament({ db, send, nowMs }, entry) {
         if (side >= 0) add(s, notifier.msgReminder({ match, sideIndex: side, venues, cfg, nowMs, minutesLeft }));
       });
     });
-    summary = { reminders: due.length, delayed: delayed.length, heldEvents: held, live };
+    summary = { reminders: due.length, delayed: delayed.length, started: started.length, heldEvents: held, live };
   } catch (e) {
     await stateRef.set({ ...prev, lockUntil: 0 });
     throw e;

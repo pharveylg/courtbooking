@@ -1051,13 +1051,17 @@ body:not(.staff-mode) .staff-link{display:none!important}
           <div data-og-step="1" class="space-y-3">
             <div class="font-[800] text-[18px] tracking-[-0.02em]">When do you want to play?</div>
             <div class="grid grid-cols-2 gap-3">
-            <label class="flex flex-col gap-1.5">
+            <label class="col-span-2 flex flex-col gap-1.5">
               <span class="mono text-[10px] uppercase tracking-widest opacity-60">Date</span>
               <input type="date" id="ogDate" required class="h-11 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-4 mono text-[13px] outline-none focus:border-[#201C19]"/>
             </label>
             <label class="flex flex-col gap-1.5">
               <span class="mono text-[10px] uppercase tracking-widest opacity-60">Start Time</span>
               <select id="ogStart" class="h-11 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-3 mono text-[13px] outline-none focus:border-[#201C19]"></select>
+            </label>
+            <label class="flex flex-col gap-1.5">
+              <span class="mono text-[10px] uppercase tracking-widest opacity-60">End Time</span>
+              <select id="ogEnd" class="h-11 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-3 mono text-[13px] outline-none focus:border-[#201C19]"></select>
             </label>
           </div>
             <label id="ogCourtLabel" class="hidden flex flex-col gap-1.5">
@@ -5920,6 +5924,19 @@ async function ogCheckCreationRate(email){
 
 function ogGameStartsAt(game){ return new Date(game.date+'T00:00:00').getTime() + game.startHour * 3600000; }
 function ogGameEndsAt(game){ return new Date(game.date+'T00:00:00').getTime() + (game.endHour != null ? game.endHour : game.startHour+1) * 3600000; }
+// OG-TIME-START
+/* Hours a game may end at: one hour after it starts, up to closing time (and the
+   facility's per-booking limit when it has one). */
+function ogEndHours(start, closeHour, maxHours){
+  let last = Math.min(24, Math.max(Number(closeHour) || 0, start + 1));
+  if(Number(maxHours) > 0) last = Math.min(last, start + Number(maxHours));
+  const out = [];
+  for(let e = start + 1; e <= last; e++) out.push(e);
+  return out;
+}
+/* "6:00 PM – 8:00 PM" when the game has an end time, else just the start (older games). */
+function ogTimeLabel(g){ return g.endHour != null ? to12Range(g.startHour, g.endHour) : fmtTime(g.startHour); }
+// OG-TIME-END
 /* Derived, not persisted -- EXPIRED/COMPLETED are computed from the
    stored status + current time rather than written back on every render. */
 function ogEffectiveStatus(game){
@@ -6037,11 +6054,11 @@ function ogNotifyNeedingPlayers(prevById){
     const skill = first.skillLevel && first.skillLevel !== 'Open' ? ` · ${first.skillLevel}` : '';
     ogShowNeedBanner(
       reopened.has(first.id) ? 'A spot just opened up' : `A game needs ${left} more player${left === 1 ? '' : 's'}`,
-      `${fmtDateLabel(first.date)} · ${fmtTime(first.startHour)} · ${first.format}${skill}${first.payBeforeJoin ? ' · Pay to join' : ''}`,
+      `${fmtDateLabel(first.date)} · ${ogTimeLabel(first)} · ${first.format}${skill}${first.payBeforeJoin ? ' · Pay to join' : ''}`,
       first.id
     );
   } else {
-    ogShowNeedBanner(`${fresh.length} games need players`, `Next: ${fmtDateLabel(first.date)} · ${fmtTime(first.startHour)}`, null);
+    ogShowNeedBanner(`${fresh.length} games need players`, `Next: ${fmtDateLabel(first.date)} · ${ogTimeLabel(first)}`, null);
   }
 }
 
@@ -6070,7 +6087,7 @@ function renderOpenGames(){
     discoverEl.innerHTML = discoverable.map(g => {
       const needed = g.playersNeeded - g.players.length;
       const isFacility = g.source === 'facility';
-      const timeLabel = (isFacility && g.endHour != null) ? to12Range(g.startHour, g.endHour) : fmtTime(g.startHour);
+      const timeLabel = ogTimeLabel(g);
       return `
       <button type="button" data-og-view="${g.id}" class="w-full text-left px-5 md:px-7 py-4 flex flex-wrap items-center justify-between gap-3 hover:bg-[#FFFBF5] transition cursor-pointer">
         <div class="min-w-0">
@@ -6108,7 +6125,7 @@ function renderOpenGames(){
       return `
       <button type="button" data-og-view="${g.id}" class="w-full text-left p-3 rounded-[14px] border border-[#F1E9DF] bg-[#FFFBF5] hover:border-[#201C19] transition cursor-pointer">
         <div class="flex items-center justify-between gap-2">
-          <span class="mono text-[11px] font-[700] truncate">${fmtDateLabel(g.date)} · ${fmtTime(g.startHour)}</span>
+          <span class="mono text-[11px] font-[700] truncate">${fmtDateLabel(g.date)} · ${ogTimeLabel(g)}</span>
           <span class="mono text-[9px] px-2.5 py-1 rounded-full font-[700] uppercase ${badgeColor}">${status}</span>
         </div>
         <div class="mono text-[10px] opacity-60 mt-1">${g.players.length} / ${g.playersNeeded} players • ${mine[g.id].role === 'creator' ? 'You organized this' : 'You joined'}</div>
@@ -6121,6 +6138,21 @@ function renderOpenGames(){
 }
 
 /* ---------- Create Game ---------- */
+let _ogDuration = 1; // hours; kept when the start time changes
+function ogRefreshEndOptions(){
+  const start = parseInt(document.getElementById('ogStart').value, 10);
+  const endSel = document.getElementById('ogEnd');
+  if(!endSel) return;
+  if(isNaN(start)){ endSel.innerHTML = ''; return; }
+  const hours = ogEndHours(start, SCHED.close, CLIENT.booking && CLIENT.booking.maxHoursPerBooking);
+  const want = hours.includes(start + _ogDuration) ? start + _ogDuration : hours[hours.length - 1];
+  endSel.innerHTML = hours.map(e => `<option value="${e}" ${e === want ? 'selected' : ''}>${fmtTime(e)}</option>`).join('');
+}
+document.getElementById('ogStart')?.addEventListener('change', ogRefreshEndOptions);
+document.getElementById('ogEnd')?.addEventListener('change', () => {
+  const s = parseInt(document.getElementById('ogStart').value, 10), e = parseInt(document.getElementById('ogEnd').value, 10);
+  if(!isNaN(s) && !isNaN(e) && e > s) _ogDuration = e - s;
+});
 function ogPopulateCreateForm(){
   const id = ogIdentity();
   document.getElementById('ogCreatorName').value = id.name || '';
@@ -6128,6 +6160,8 @@ function ogPopulateCreateForm(){
   document.getElementById('ogDate').value = selectedDate || todayISO();
   const startSel = document.getElementById('ogStart');
   startSel.innerHTML = ALL_HOURS_START.map(h => `<option value="${h}">${fmtTime(h)}</option>`).join('');
+  _ogDuration = 1;
+  ogRefreshEndOptions();
   const courtLabel = document.getElementById('ogCourtLabel');
   const courtSel = document.getElementById('ogCourt');
   const activeCourts = getActiveCourts();
@@ -6182,8 +6216,9 @@ function ogGoStep(n){
 document.getElementById('ogStepNext')?.addEventListener('click', () => {
   const errEl = document.getElementById('ogCreateError'); errEl.classList.add('hidden');
   if(OG_STEP === 1){
-    const date = document.getElementById('ogDate').value, start = parseInt(document.getElementById('ogStart').value, 10);
-    if(!date || isNaN(start)){ errEl.textContent = 'Pick a date and start time.'; errEl.classList.remove('hidden'); return; }
+    const date = document.getElementById('ogDate').value, start = parseInt(document.getElementById('ogStart').value, 10), end = parseInt(document.getElementById('ogEnd').value, 10);
+    if(!date || isNaN(start) || isNaN(end)){ errEl.textContent = 'Pick a date, start time and end time.'; errEl.classList.remove('hidden'); return; }
+    if(end <= start){ errEl.textContent = 'The end time must be after the start time.'; errEl.classList.remove('hidden'); return; }
     if(ogGameStartsAt({ date, startHour: start }) < Date.now() - 3600000){ errEl.textContent = 'That date and time has already passed.'; errEl.classList.remove('hidden'); return; }
   }
   ogGoStep(Math.min(3, OG_STEP + 1));
@@ -6194,7 +6229,7 @@ document.getElementById('ogStepBack')?.addEventListener('click', () => ogGoStep(
 function ogShowDone({ title, lead, gameId, notes, game }){
   document.getElementById('ogDone')?.remove();
   const g = game || openGames.find(x => x.id === gameId) || null;
-  const when = g ? `${fmtDateLabel(g.date)} · ${fmtTime(g.startHour)}` : '';
+  const when = g ? `${fmtDateLabel(g.date)} · ${ogTimeLabel(g)}` : '';
   const wrap = document.createElement('div');
   wrap.id = 'ogDone'; wrap.className = 'fixed inset-0 z-[60] bg-[#FFFBF5] overflow-y-auto';
   wrap.innerHTML = `<div class="max-w-[520px] mx-auto px-5 py-10 text-center">
@@ -6242,6 +6277,7 @@ document.getElementById('ogCreateForm')?.addEventListener('submit', async (e) =>
 
   const date = document.getElementById('ogDate').value;
   const startHour = parseInt(document.getElementById('ogStart').value, 10);
+  const endHour = parseInt(document.getElementById('ogEnd').value, 10);
   const skillLevel = document.getElementById('ogSkill').value;
   const format = document.getElementById('ogFormat').value;
   const playersNeeded = parseInt(document.getElementById('ogPlayersNeeded').value, 10);
@@ -6254,7 +6290,8 @@ document.getElementById('ogCreateForm')?.addEventListener('submit', async (e) =>
   const payAmount = payBeforeJoin && payAmountRaw !== '' ? Math.max(0, parseFloat(payAmountRaw) || 0) : null;
   const payNote = payBeforeJoin ? document.getElementById('ogPayNote').value.trim() : '';
 
-  if(!date || isNaN(startHour)){ errEl.textContent = 'Pick a date and start time.'; errEl.classList.remove('hidden'); return; }
+  if(!date || isNaN(startHour) || isNaN(endHour)){ errEl.textContent = 'Pick a date, start time and end time.'; errEl.classList.remove('hidden'); return; }
+  if(endHour <= startHour){ errEl.textContent = 'The end time must be after the start time.'; errEl.classList.remove('hidden'); return; }
   if(!name || !email){ errEl.textContent = 'Your name and email are required.'; errEl.classList.remove('hidden'); return; }
   if(ogGameStartsAt({date, startHour}) < Date.now() - 3600000){ errEl.textContent = 'That date/time has already passed.'; errEl.classList.remove('hidden'); return; }
 
@@ -6286,7 +6323,7 @@ document.getElementById('ogCreateForm')?.addEventListener('submit', async (e) =>
     if(match){
       const box = document.getElementById('ogSuggestBox');
       box.classList.remove('hidden');
-      box.innerHTML = `You already have a compatible open game at ${fmtTime(match.startHour)} on ${fmtDateLabel(match.date)} (${match.players.length}/${match.playersNeeded} players)${match.payBeforeJoin ? ' · pay before joining' : ''}. Join that one instead of splitting the group?<div class="mt-2 flex gap-2"><button type="button" id="ogJoinSuggested" class="h-9 px-3.5 rounded-full bg-[#201C19] text-white mono text-[11px] font-[700] cursor-pointer">Join Existing Game</button></div>`;
+      box.innerHTML = `You already have a compatible open game at ${ogTimeLabel(match)} on ${fmtDateLabel(match.date)} (${match.players.length}/${match.playersNeeded} players)${match.payBeforeJoin ? ' · pay before joining' : ''}. Join that one instead of splitting the group?<div class="mt-2 flex gap-2"><button type="button" id="ogJoinSuggested" class="h-9 px-3.5 rounded-full bg-[#201C19] text-white mono text-[11px] font-[700] cursor-pointer">Join Existing Game</button></div>`;
       document.getElementById('ogJoinSuggested').addEventListener('click', async () => {
         document.getElementById('ogCreateModal').classList.add('hidden');
         await ogJoinGame(match.id, name, email);
@@ -6313,7 +6350,7 @@ document.getElementById('ogCreateForm')?.addEventListener('submit', async (e) =>
     const game = {
       creatorName: name, creatorEmail: email, creatorToken,
       status: players.length >= playersNeeded ? 'FULL' : 'OPEN',
-      date, startHour, skillLevel, format, playersNeeded,
+      date, startHour, endHour, skillLevel, format, playersNeeded,
       court, notes,
       payBeforeJoin, payAmount, payNote,
       players,
@@ -6468,22 +6505,104 @@ async function ogCancelGame(gameId, token){
   toast('Game cancelled.');
 }
 
-/* ---------- Link Reservation. Validated client-side against the real
-   booking record -- the same trust tier as this app's existing
-   cancel-by-PIN flow, since there is no backend to validate it
-   server-side. The PIN is used only transiently to look up the
-   booking; it's never stored or displayed. ---------- */
-async function ogLinkReservation(gameId, token, pin){
+/* ---------- Link Reservation ----------
+   The organizer picks their booked session from the day's list, THEN enters that
+   booking's PIN. Validated client-side against the real booking record -- the same
+   trust tier as this app's existing cancel-by-PIN flow, since there is no backend
+   to validate it server-side. The PIN is only compared, never stored or shown.
+   The list shows only a first name and last initial, never contact details. */
+// OG-LINK-START
+function ogBookingCoversGame(b, game){
+  const gs = game.startHour, ge = game.endHour != null ? game.endHour : gs + 1;
+  return b.start < ge && b.end > gs;
+}
+function ogMaskName(name){
+  const p = String(name || '').trim().split(/\s+/).filter(Boolean);
+  if(!p.length) return 'Guest';
+  return p.length === 1 ? p[0] : p[0] + ' ' + p[p.length - 1][0].toUpperCase() + '.';
+}
+/* Confirmed reservations on the game's date that aren't already linked to another
+   game, the ones that overlap the game's time first. */
+function ogLinkableBookings(game, allBookings, allGames){
+  const taken = new Set((allGames || []).filter(g => g.id !== game.id && g.reservationId).map(g => g.reservationId));
+  return (allBookings || [])
+    .filter(b => b.date === game.date && (b.status === 'Reserved' || b.status === 'Paid') && b.pin && b.source !== 'openplay-join' && !taken.has(b.id))
+    .map(b => ({ booking: b, matches: ogBookingCoversGame(b, game) }))
+    .sort((x, y) => (Number(y.matches) - Number(x.matches)) || (x.booking.start - y.booking.start) || String(x.booking.court || '').localeCompare(String(y.booking.court || '')));
+}
+function ogCheckLink(game, allBookings, allGames, bookingId, pin){
+  const row = ogLinkableBookings(game, allBookings, allGames).find(r => r.booking.id === bookingId);
+  if(!row) return { ok: false, error: 'That reservation is no longer available.' };
+  if(!row.matches) return { ok: false, error: "That reservation is at a different time than this game." };
+  if(String(row.booking.pin) !== String(pin || '').trim()) return { ok: false, error: "That PIN doesn't match this reservation." };
+  return { ok: true, booking: row.booking };
+}
+// OG-LINK-END
+async function ogLinkReservation(gameId, token, bookingId, pin){
   const game = openGames.find(g => g.id === gameId);
   if(!game || game.creatorToken !== token) return { ok:false, error:'Only the organizer can link a reservation.' };
-  const booking = bookings.find(b => b.pin === pin && (b.status === 'Reserved' || b.status === 'Paid'));
-  if(!booking) return { ok:false, error:'No confirmed reservation matches that PIN.' };
-  if(booking.date !== game.date || booking.start > game.startHour || booking.end <= game.startHour){
-    return { ok:false, error:"That reservation doesn't match this game's date/time." };
-  }
+  const check = ogCheckLink(game, bookings, openGames, bookingId, pin);
+  if(!check.ok) return check;
   const ref = db.doc(`clients/${currentClientId}/openGames/${gameId}`);
-  await ref.update({ reservationId: booking.id, court: booking.court || game.court, status: 'RESERVED', updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+  await ref.update({ reservationId: check.booking.id, court: check.booking.court || game.court, status: 'RESERVED', updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
   return { ok:true };
+}
+let _ogLink = null; // { gameId, step: 'list' | 'pin', bookingId, pin, error } while the organizer is linking
+function ogLinkPanelHtml(game){
+  const st = _ogLink && _ogLink.gameId === game.id ? _ogLink : null;
+  const err = st && st.error ? `<div class="mt-2 mono text-[11px] text-[#8C2C10]">${escapeHtml(st.error)}</div>` : '';
+  if(!st){
+    return `<div class="mono text-[11px] opacity-60 mb-1.5">Not yet linked to a reservation.</div>
+      <button type="button" id="ogLinkStart" class="w-full h-11 rounded-full bg-[#201C19] text-white font-[800] text-[13px] cursor-pointer hover:opacity-90 transition">Link a reservation</button>`;
+  }
+  const rows = ogLinkableBookings(game, bookings, openGames);
+  const describe = (b) => `${to12Range(b.start, b.end)}${b.court ? ' · ' + escapeHtml(getCourtName(b.court)) : ''}`;
+  if(st.step === 'pin'){
+    const row = rows.find(r => r.booking.id === st.bookingId);
+    if(!row) return `<div class="mono text-[11.5px]">That reservation is no longer available.</div><button type="button" id="ogLinkBack" class="mt-2 h-10 px-4 rounded-full bg-white border border-[#EAE0D5] mono text-[11px] font-[700] cursor-pointer">Choose another</button>`;
+    const b = row.booking;
+    return `<div class="rounded-[16px] border border-[#EAE0D5] bg-[#FFFBF5] p-3.5">
+      <div class="mono text-[10px] uppercase tracking-widest opacity-60">Selected reservation</div>
+      <div class="mt-1 text-[14px] font-[800]">${describe(b)}</div>
+      <div class="mono text-[11px] opacity-60">Booked by ${escapeHtml(ogMaskName(b.name))}</div>
+      <form id="ogLinkForm" class="mt-3 flex gap-2">
+        <input type="password" inputmode="numeric" autocomplete="off" id="ogLinkPin" placeholder="Booking PIN" maxlength="8" value="${escapeHtml(st.pin || '')}" aria-label="Booking PIN" class="flex-1 min-w-0 h-11 rounded-full border border-[#EAE0D5] bg-white px-4 mono text-[14px] font-[700] outline-none focus:border-[#201C19]"/>
+        <button type="submit" class="h-11 px-4 rounded-full bg-[#D6FF5F] hover:bg-[#CBF052] text-[#201C19] font-[800] text-[12px] border border-[#201C19]/10 cursor-pointer">Link</button>
+      </form>
+      <div class="mono text-[10.5px] opacity-55 mt-1.5">Enter the 4-digit PIN chosen when this session was booked.</div>
+      ${err}
+      <button type="button" id="ogLinkBack" class="mt-2 mono text-[11px] font-[700] underline cursor-pointer">Choose a different reservation</button>
+    </div>`;
+  }
+  const items = rows.map(r => `<button type="button" ${r.matches ? `data-og-link-pick="${escapeHtml(r.booking.id)}"` : 'disabled'} class="w-full text-left rounded-[14px] border px-3.5 py-2.5 transition ${r.matches ? 'border-[#EAE0D5] bg-white hover:border-[#201C19] cursor-pointer' : 'border-[#EAE0D5] bg-[#F7F1EA] opacity-55 cursor-not-allowed'}">
+      <span class="block text-[13.5px] font-[800]">${describe(r.booking)}</span>
+      <span class="block mono text-[10.5px] opacity-65">${escapeHtml(ogMaskName(r.booking.name))}${r.booking.group ? ' · ' + escapeHtml(r.booking.group) : ''}${r.matches ? '' : ' · different time from your game'}</span>
+    </button>`).join('');
+  return `<div class="mono text-[11px] opacity-70 mb-2">Booked sessions on ${escapeHtml(fmtDateLabel(game.date))}. Pick yours.</div>
+    <div class="space-y-2">${items || `<div class="mono text-[11.5px] opacity-65 p-3 rounded-[14px] bg-[#F7F1EA]">No confirmed reservations on this date yet.</div>`}</div>
+    <div class="mono text-[10px] opacity-50 mt-2">Only confirmed reservations are listed.</div>
+    <button type="button" id="ogLinkCancel" class="mt-2 mono text-[11px] font-[700] underline cursor-pointer">Cancel</button>`;
+}
+function ogWireLink(game, mine){
+  const rerender = () => renderOgDetailModal(game.id);
+  const st = () => (_ogLink && _ogLink.gameId === game.id ? _ogLink : null);
+  document.getElementById('ogLinkStart')?.addEventListener('click', () => { _ogLink = { gameId: game.id, step: 'list', bookingId: null, pin: '', error: '' }; rerender(); });
+  document.getElementById('ogLinkCancel')?.addEventListener('click', () => { _ogLink = null; rerender(); });
+  document.getElementById('ogLinkBack')?.addEventListener('click', () => { if(st()){ st().step = 'list'; st().error = ''; st().pin = ''; } rerender(); });
+  document.querySelectorAll('[data-og-link-pick]').forEach(btn => btn.addEventListener('click', () => {
+    if(!st()) return;
+    Object.assign(st(), { step: 'pin', bookingId: btn.dataset.ogLinkPick, pin: '', error: '' });
+    rerender();
+    document.getElementById('ogLinkPin')?.focus();
+  }));
+  document.getElementById('ogLinkPin')?.addEventListener('input', (e) => { if(st()) st().pin = e.target.value; });
+  document.getElementById('ogLinkForm')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if(!st()) return;
+    const result = await ogLinkReservation(game.id, mine.token, st().bookingId, document.getElementById('ogLinkPin').value.trim());
+    if(result.ok){ _ogLink = null; toast('Reservation linked!'); rerender(); }
+    else { st().error = result.error; st().pin = ''; rerender(); document.getElementById('ogLinkPin')?.focus(); }
+  });
 }
 
 /* ---------- Keep score (Find a Game, peer games) ----------
@@ -6681,13 +6800,7 @@ function renderOgDetailModal(gameId){
   if(game.reservationId){
     reservationHtml = `<div class="mono text-[12px]"><span class="text-[#3F7019] font-[700]">✓ Reservation Confirmed</span>${game.court ? ' · '+escapeHtml(getCourtName(game.court)) : ''}</div>`;
   } else if(isCreator && status !== 'CANCELLED' && status !== 'EXPIRED'){
-    reservationHtml = `
-      <div class="mono text-[11px] opacity-60 mb-1.5">Not yet linked to a reservation.</div>
-      <form id="ogLinkForm" class="flex gap-2">
-        <input type="text" id="ogLinkPin" placeholder="Reservation PIN" maxlength="8" class="flex-1 h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-4 mono text-[13px] font-[700] outline-none focus:border-[#201C19]"/>
-        <button type="submit" class="h-10 px-4 rounded-full bg-[#201C19] text-white mono text-[11px] font-[700] cursor-pointer">Link Reservation</button>
-      </form>
-      <div id="ogLinkError" class="hidden mt-2 mono text-[11px] text-[#8C2C10]"></div>`;
+    reservationHtml = ogLinkPanelHtml(game);
   } else {
     reservationHtml = `<div class="mono text-[11px] opacity-50">Not yet linked to a reservation.</div>`;
   }
@@ -6709,7 +6822,7 @@ function renderOgDetailModal(gameId){
   }
 
   body.innerHTML = `
-    <div class="mono text-[13px] font-[700]">${fmtDateLabel(game.date)}<br/>${isFacility && game.endHour != null ? to12Range(game.startHour, game.endHour) : fmtTime(game.startHour)}</div>
+    <div class="mono text-[13px] font-[700]">${fmtDateLabel(game.date)}<br/>${ogTimeLabel(game)}</div>
     <div class="flex items-center gap-2 flex-wrap">
       ${isFacility
         ? `<span class="mono text-[10px] px-3 py-1 rounded-full bg-[#F1E9DF] text-[#201C19] font-[700]">${gameModeLabel(game.gameMode)}</span>
@@ -6790,15 +6903,7 @@ function renderOgDetailModal(gameId){
     await ogCancelGame(game.id, mine.token);
     renderOgDetailModal(game.id);
   });
-  document.getElementById('ogLinkForm')?.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const pin = document.getElementById('ogLinkPin').value.trim();
-    const errEl = document.getElementById('ogLinkError');
-    errEl.classList.add('hidden');
-    const result = await ogLinkReservation(game.id, mine.token, pin);
-    if(result.ok){ toast('Reservation linked!'); renderOgDetailModal(game.id); }
-    else { errEl.textContent = result.error; errEl.classList.remove('hidden'); }
-  });
+  if(isCreator && mine) ogWireLink(game, mine);
   if(scoreHtml) ogWireScorePanel(game);
 }
 

@@ -271,6 +271,7 @@ body:not(.staff-mode) .staff-link{display:none!important}
       <div class="mt-5">
         <div class="mono text-[10px] uppercase tracking-widest opacity-50 mb-2">Also here</div>
         <div id="homeTiles" class="grid grid-cols-1 sm:grid-cols-2 gap-2"></div>
+        <div class="dula-credit" style="display:flex;justify-content:center;padding:22px 0 4px"><span style="display:inline-flex;align-items:center;gap:8px;height:38px;padding:0 18px 0 6px;border-radius:999px;background:#ffffff;border:1px solid #EAE0D5;font:500 12.5px 'JetBrains Mono',ui-monospace,monospace;color:#201C19"><span aria-hidden="true" style="width:26px;height:26px;border-radius:50%;background:#201C19;color:#D6FF5F;display:grid;place-items:center;font:900 12px 'Bricolage Grotesque',system-ui,sans-serif">D</span><span>Powered by <a href="https://dulahq.app" target="_blank" rel="noopener" style="font-weight:800;color:inherit;text-decoration:underline;text-underline-offset:3px">DulaHQ</a></span></span></div>
       </div>
     </div>
   </section>
@@ -1542,6 +1543,20 @@ body:not(.staff-mode) .staff-link{display:none!important}
                     <span class="mono text-[10px] uppercase tracking-widest opacity-60">Address</span>
                     <input type="text" id="bizAddressInput" placeholder="e.g. 123 Street, City" class="h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-4 mono text-[12px] outline-none focus:border-[#201C19]"/>
                   </label>
+                  <div class="md:col-span-2 rounded-[16px] border border-[#EAE0D5] bg-[#FFFBF5] p-3.5">
+                    <div class="mono text-[10px] uppercase tracking-widest opacity-60">Map pin (optional)</div>
+                    <p class="mono text-[10px] opacity-55 mt-1 leading-[1.5]">Players get exact directions to your site when a pin is set. Pick whichever is easiest:</p>
+                    <div class="mt-2.5 flex flex-wrap gap-2">
+                      <button type="button" id="bizUseLocationBtn" class="h-9 px-4 rounded-full bg-white border border-[#EAE0D5] hover:border-[#201C19] mono text-[11px] font-[700] cursor-pointer transition">Use my current location</button>
+                      <button type="button" id="bizClearPinBtn" class="h-9 px-4 rounded-full bg-white border border-[#EAE0D5] hover:border-[#201C19] mono text-[11px] font-[700] cursor-pointer transition">Remove pin</button>
+                    </div>
+                    <input type="text" id="bizMapLinkInput" placeholder="Or paste a Google Maps link, or coordinates like 14.5547, 121.0244" aria-label="Google Maps link or coordinates" class="mt-2.5 w-full h-10 rounded-full border border-[#EAE0D5] bg-white px-4 mono text-[12px] outline-none focus:border-[#201C19]"/>
+                    <div class="mt-2 grid grid-cols-2 gap-2">
+                      <input type="number" step="any" id="bizLatInput" placeholder="Latitude" aria-label="Latitude" class="h-10 rounded-full border border-[#EAE0D5] bg-white px-4 mono text-[12px] outline-none focus:border-[#201C19]"/>
+                      <input type="number" step="any" id="bizLngInput" placeholder="Longitude" aria-label="Longitude" class="h-10 rounded-full border border-[#EAE0D5] bg-white px-4 mono text-[12px] outline-none focus:border-[#201C19]"/>
+                    </div>
+                    <div id="bizPinStatus" class="mono text-[10.5px] mt-2 leading-[1.5] opacity-80"></div>
+                  </div>
                   <label class="flex flex-col gap-1.5">
                     <span class="mono text-[10px] uppercase tracking-widest opacity-60">Phone</span>
                     <input type="text" id="bizPhoneInput" placeholder="+63 900 000 0000" class="h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-4 mono text-[12px] outline-none focus:border-[#201C19]"/>
@@ -1822,9 +1837,7 @@ body:not(.staff-mode) .staff-link{display:none!important}
       <div class="mono text-[10px] opacity-45">© <span id="footYear"></span> <span id="footCopyName">Pickleball Court Booking</span>. All rights reserved.</div>
       <div class="mono text-[10px] opacity-45">Reservations held Pending until payment verified.</div>
     </div>
-    <div class="mt-3 text-center md:text-right">
-      <span class="mono text-[10px] opacity-40">Powered by Dulà HQ</span>
-    </div>
+    <div class="dula-credit" style="display:flex;justify-content:center;padding:20px 0 0"><span style="display:inline-flex;align-items:center;gap:8px;height:38px;padding:0 18px 0 6px;border-radius:999px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.22);font:500 12.5px 'JetBrains Mono',ui-monospace,monospace;color:#FFFBF5"><span aria-hidden="true" style="width:26px;height:26px;border-radius:50%;background:#D6FF5F;color:#201C19;display:grid;place-items:center;font:900 12px 'Bricolage Grotesque',system-ui,sans-serif">D</span><span>Powered by <a href="https://dulahq.app" target="_blank" rel="noopener" style="font-weight:800;color:#D6FF5F;text-decoration:underline;text-underline-offset:3px">DulaHQ</a></span></span></div>
   </div>
 </footer>
 
@@ -1936,7 +1949,7 @@ body:not(.staff-mode) .staff-link{display:none!important}
    ================================================================ */
 const _cfgDefaults = {
   business: { name:'COURT BOOKING', sub:'Pickleball • Single Court', tagline:'Book the court.\nRun the queue.', location:'Single Court' },
-  contact: { address:'', phone:'', email:'', facebook:'', instagram:'', messenger:'', tiktok:'', website:'' },
+  contact: { address:'', phone:'', email:'', facebook:'', instagram:'', messenger:'', tiktok:'', website:'', lat:null, lng:null },
   branding: { logoUrl:'', faviconUrl:'', monogram:'CB', watermarkUrl:'' },
   theme: { primary:'#D4D4D8', primaryHover:'#A1A1AA', dark:'#18181B', bg:'#FAFAFA', border:'#E4E4E7', borderSoft:'#F4F4F5', staff:'#FB923C', openPlay:'#8B5CF6', queue:'#34D399', pending:'#FBBF24' },
   currency: '₱',
@@ -2137,6 +2150,38 @@ function safeUrl(raw){
   try { const u = new URL(String(raw || '').trim()); return (u.protocol === 'https:' || u.protocol === 'http:') ? u.href : null; }
   catch(e){ return null; }
 }
+/* ---------- Map pin ----------
+   A pin is a latitude/longitude pair. It can be typed, taken from the device,
+   or pulled out of a pasted Google Maps link ("short" share links can't be read
+   without visiting them, so those are reported instead of guessed). */
+const round6 = (n) => Math.round(n * 1e6) / 1e6;
+function parseMapInput(raw){
+  const s = String(raw == null ? '' : raw).trim();
+  if(!s) return null;
+  const pick = (la, ln) => {
+    la = Number(la); ln = Number(ln);
+    return Number.isFinite(la) && Number.isFinite(ln) && Math.abs(la) <= 90 && Math.abs(ln) <= 180 ? { lat: round6(la), lng: round6(ln) } : null;
+  };
+  let m;
+  if((m = s.match(/^(-?\d{1,2}(?:\.\d+)?)\s*[,\s]\s*(-?\d{1,3}(?:\.\d+)?)$/))) return pick(m[1], m[2]);
+  let d = s; try { d = decodeURIComponent(s); } catch(e){ /* use as typed */ }
+  if((m = d.match(/!3d(-?\d+(?:\.\d+)?)!4d(-?\d+(?:\.\d+)?)/))) return pick(m[1], m[2]);
+  if((m = d.match(/@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/))) return pick(m[1], m[2]);
+  if((m = d.match(/[?&](?:q|query|ll|destination|center)=(-?\d+(?:\.\d+)?)[,+ ]\s*(-?\d+(?:\.\d+)?)/))) return pick(m[1], m[2]);
+  if(/^(https?:\/\/)?(maps\.app\.goo\.gl|goo\.gl\/maps)/i.test(s)) return { short: true };
+  return null;
+}
+function hasPin(c){
+  return !!c && c.lat != null && c.lng != null && c.lat !== '' && c.lng !== '' && Number.isFinite(Number(c.lat)) && Number.isFinite(Number(c.lng)) && Math.abs(Number(c.lat)) <= 90 && Math.abs(Number(c.lng)) <= 180;
+}
+function mapPinUrl(c){
+  if(hasPin(c)) return 'https://www.google.com/maps/search/?api=1&query=' + Number(c.lat) + ',' + Number(c.lng);
+  return c && c.address ? 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(c.address) : null;
+}
+function mapDirectionsUrl(c){
+  if(hasPin(c)) return 'https://www.google.com/maps/dir/?api=1&destination=' + Number(c.lat) + ',' + Number(c.lng);
+  return c && c.address ? 'https://www.google.com/maps/dir/?api=1&destination=' + encodeURIComponent(c.address) : null;
+}
 function contactSocials(c){
   return SOCIAL_CHANNELS.map(([key, label]) => ({ key, label, url: safeUrl(c[key]) })).filter(s => s.url);
 }
@@ -2145,14 +2190,14 @@ function svgIcon(path, size){
 }
 function hasContactDetails(){
   const c = (CLIENT && CLIENT.contact) || {};
-  return !!(c.phone || c.email || c.address || contactSocials(c).length);
+  return !!(c.phone || c.email || c.address || hasPin(c) || contactSocials(c).length);
 }
 
 function buildContactUI(){
   const c = CLIENT.contact;
   const icon = (p)=>`<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;
   const rows = [];
-  if(c.address)  rows.push({i:'<path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/>', t:c.address, h:null});
+  if(c.address)  rows.push({i:'<path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/>', t:c.address, h:mapPinUrl(c)});
   if(c.phone)    rows.push({i:'<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>', t:c.phone, h:'tel:'+c.phone.replace(/\s/g,'')});
   if(c.email)    rows.push({i:'<rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 6L2 7"/>', t:c.email, h:'mailto:'+c.email});
   const list = document.getElementById('contactList');
@@ -3645,7 +3690,8 @@ function renderContactView(){
   const rows = [];
   if(c.phone) rows.push(row(CONTACT_ICONS.phone, 'Call', c.phone, 'tel:' + c.phone.replace(/[^\d+]/g, '')));
   if(c.email) rows.push(row(CONTACT_ICONS.mail, 'Email', c.email, 'mailto:' + c.email));
-  if(c.address) rows.push(row(CONTACT_ICONS.pin, 'Find us', c.address, 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(c.address)));
+  if(c.address || hasPin(c)) rows.push(row(CONTACT_ICONS.pin, 'Find us', c.address || 'See our location on the map', mapPinUrl(c)));
+  const directions = (c.address || hasPin(c)) ? `<a href="${escapeHtml(mapDirectionsUrl(c))}" target="_blank" rel="noopener noreferrer" class="mt-3 flex items-center justify-center gap-2 h-12 rounded-full bg-[#201C19] text-white font-[800] text-[14px] hover:opacity-90 transition">Get directions →</a>` : '';
   const chips = contactSocials(c).map(s => `<a href="${escapeHtml(s.url)}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-2 h-11 px-5 rounded-full bg-white border border-[#EAE0D5] hover:border-[#201C19] text-[13px] font-[750] transition">${svgIcon(CONTACT_ICONS[s.key], 16)}${s.label}</a>`).join('');
   const hours = `<div class="rounded-[18px] border border-[#EAE0D5] bg-white px-4 py-4">
     <div class="mono text-[9.5px] uppercase tracking-widest opacity-50 mb-2">Hours</div>
@@ -3657,6 +3703,7 @@ function renderContactView(){
     <h1 class="text-[26px] md:text-[32px] font-[850] tracking-[-0.03em] leading-none">Contact ${escapeHtml(name)}</h1>
     <p class="mono text-[11px] opacity-60 mt-2">Call, message or visit us.</p>
     <div class="mt-5 space-y-2.5">${rows.join('')}</div>
+    ${directions}
     ${chips ? `<div class="mono text-[10px] uppercase tracking-widest opacity-50 mt-6 mb-2.5">Follow and message us</div><div class="flex flex-wrap gap-2.5">${chips}</div>` : ''}
     <div class="mt-6">${hours}</div>`;
 }
@@ -4253,6 +4300,10 @@ function renderAdminBranding(){
   document.getElementById('bizMessengerInput').value = c.messenger || '';
   document.getElementById('bizTiktokInput').value = c.tiktok || '';
   document.getElementById('bizWebsiteInput').value = c.website || '';
+  document.getElementById('bizLatInput').value = hasPin(c) ? Number(c.lat) : '';
+  document.getElementById('bizLngInput').value = hasPin(c) ? Number(c.lng) : '';
+  document.getElementById('bizMapLinkInput').value = '';
+  renderPinStatus();
 
   document.getElementById('heroSubInput').value = b.sub || '';
   document.getElementById('heroTaglineInput').value = b.tagline || '';
@@ -4326,11 +4377,59 @@ document.getElementById('logoRemoveBtn')?.addEventListener('click', async () => 
   if(ok) toast('Logo removed');
 });
 
+function renderPinStatus(){
+  const box = document.getElementById('bizPinStatus');
+  if(!box) return;
+  const latRaw = document.getElementById('bizLatInput').value.trim(), lngRaw = document.getElementById('bizLngInput').value.trim();
+  box.textContent = '';
+  if(!latRaw && !lngRaw){ box.textContent = 'No pin set. "Find us" will search the address instead.'; return; }
+  const p = parseMapInput(latRaw + ', ' + lngRaw);
+  if(!p || p.short){ box.style.color = '#8C2C10'; box.textContent = 'Enter both numbers: latitude between -90 and 90, longitude between -180 and 180.'; return; }
+  box.style.color = '';
+  box.appendChild(document.createTextNode('Pin: ' + p.lat + ', ' + p.lng + ' · '));
+  const a = document.createElement('a'); a.href = mapPinUrl(p); a.target = '_blank'; a.rel = 'noopener noreferrer'; a.className = 'underline font-[700]'; a.textContent = 'Check it on Google Maps';
+  box.appendChild(a);
+  box.appendChild(document.createTextNode('. Remember to press Save Business Info.'));
+}
+function setPinFields(p){
+  document.getElementById('bizLatInput').value = p ? p.lat : '';
+  document.getElementById('bizLngInput').value = p ? p.lng : '';
+  renderPinStatus();
+}
+document.getElementById('bizUseLocationBtn')?.addEventListener('click', () => {
+  const box = document.getElementById('bizPinStatus');
+  if(!navigator.geolocation){ box.style.color = '#8C2C10'; box.textContent = "This browser can't share its location. Paste a Google Maps link or type the coordinates instead."; return; }
+  box.style.color = ''; box.textContent = 'Getting your location…';
+  navigator.geolocation.getCurrentPosition(
+    (pos) => setPinFields({ lat: round6(pos.coords.latitude), lng: round6(pos.coords.longitude) }),
+    () => { box.style.color = '#8C2C10'; box.textContent = "Couldn't get your location (permission denied or unavailable). Paste a Google Maps link or type the coordinates instead."; },
+    { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 });
+});
+document.getElementById('bizMapLinkInput')?.addEventListener('input', (e) => {
+  const v = e.target.value.trim();
+  if(!v) return;
+  const p = parseMapInput(v), box = document.getElementById('bizPinStatus');
+  if(p && !p.short){ setPinFields(p); return; }
+  box.style.color = '#8C2C10';
+  box.textContent = p && p.short
+    ? "That's a short Google Maps link, which can't be read here. Open it, then copy the long address from the browser's address bar, or right-click the spot in Google Maps and copy the coordinates."
+    : "Couldn't find coordinates in that. Paste a Google Maps link that contains them, or coordinates like 14.5547, 121.0244.";
+});
+['bizLatInput', 'bizLngInput'].forEach(id => document.getElementById(id)?.addEventListener('input', renderPinStatus));
+document.getElementById('bizClearPinBtn')?.addEventListener('click', () => { document.getElementById('bizMapLinkInput').value = ''; setPinFields(null); });
+
 document.getElementById('saveBizBtn')?.addEventListener('click', async () => {
   const name = document.getElementById('bizNameInput').value.trim();
   const address = document.getElementById('bizAddressInput').value.trim();
   const phone = document.getElementById('bizPhoneInput').value.trim();
   const email = document.getElementById('bizEmailInput').value.trim();
+  const latRaw = document.getElementById('bizLatInput').value.trim(), lngRaw = document.getElementById('bizLngInput').value.trim();
+  let pin = { lat: null, lng: null };
+  if(latRaw || lngRaw){
+    const p = parseMapInput(latRaw + ', ' + lngRaw);
+    if(!p || p.short){ toast('The map pin needs both a latitude (-90 to 90) and a longitude (-180 to 180)'); return; }
+    pin = p;
+  }
   const links = {};
   for(const [key, id, label] of [['facebook','bizFacebookInput','Facebook'], ['instagram','bizInstagramInput','Instagram'], ['messenger','bizMessengerInput','Messenger'], ['tiktok','bizTiktokInput','TikTok'], ['website','bizWebsiteInput','Website']]){
     const v = normalizeLinkInput(document.getElementById(id).value);
@@ -4340,7 +4439,7 @@ document.getElementById('saveBizBtn')?.addEventListener('click', async () => {
   if(!name){ toast('Business name is required'); return; }
   const ok = await saveTenantConfigPatch(cfg => {
     cfg.business = { ...(cfg.business || {}), name };
-    cfg.contact = { ...(cfg.contact || {}), address, phone, email, ...links };
+    cfg.contact = { ...(cfg.contact || {}), address, phone, email, ...links, lat: pin.lat, lng: pin.lng };
   });
   if(ok) toast('Business info saved');
 });

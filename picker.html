@@ -136,10 +136,14 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
 }
 .continue-title{font-weight:800;font-size:clamp(20px,5.5vw,26px);letter-spacing:-0.035em;line-height:1.05}
 .continue-meta{font-size:11.5px;font-weight:600;margin-top:6px;opacity:0.72}
+.continue-next{display:flex;align-items:center;gap:7px;font-size:11.5px;font-weight:700;margin-top:8px}
+.continue-next i{width:7px;height:7px;border-radius:50%;background:var(--ink);flex-shrink:0}
+.continue-next.wait{opacity:0.55;font-weight:600}
+.continue-next.wait i{animation:pulse-dot 1.4s ease-in-out infinite}
 
 /* ── Facility rows ────────────────────────────────────── */
-.tenant-grid{display:grid;grid-template-columns:1fr;gap:10px}
-@media(min-width:540px){.tenant-grid{grid-template-columns:1fr 1fr}}
+.tenant-grid{display:grid;grid-template-columns:minmax(0,1fr);gap:10px}
+@media(min-width:540px){.tenant-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .tenant-tile{
   display:flex;align-items:center;gap:12px;
   padding:12px 14px;border-radius:22px;
@@ -318,6 +322,7 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 <script src="/firebase-config.js"></script>
+<script src="/next-open.js"></script>
 
 <script>
 (function() {
@@ -343,6 +348,14 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
   const heroCount = document.getElementById('heroCount');
 
   let allTenants = [];
+
+  // Each facility's tagline and location live in its own config, not in the
+  // public directory, so they are read separately and remembered for a while.
+  const LS_META = 'cb_dir_meta_v1';
+  const META_TTL = 6 * 3600 * 1000;
+  let meta = {};
+  try { meta = JSON.parse(localStorage.getItem(LS_META)) || {}; } catch (e) { meta = {}; }
+  let nextOpen = { id: '', state: '', text: '' };
 
   // ── Firebase ───────────────────────────────────────────
   const FIREBASE_CFG = (window.FIREBASE_CONFIG && window.FIREBASE_CONFIG.apiKey && !String(window.FIREBASE_CONFIG.apiKey).startsWith('PASTE'))
@@ -386,7 +399,9 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
         return;
       }
       heroCount.textContent = allTenants.length + (allTenants.length === 1 ? ' facility' : ' facilities');
-      renderTenants(allTenants, '');
+      applySearch();
+      enrichMeta();
+      loadNextOpen(lastTenantId());
     } catch (err) {
       console.error('[Picker]', err);
       showError(err.message);
@@ -405,7 +420,59 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
   }
 
   function metaText(t) {
-    return [t.sub, t.location].filter(Boolean).join(' · ');
+    const m = meta[t.id] || {};
+    const sub = t.sub || m.sub || '', loc = t.location || m.location || '';
+    const dup = loc && sub.toLowerCase().includes(loc.toLowerCase());
+    return [sub, dup ? '' : loc].filter(Boolean).join(' · ');
+  }
+
+  async function enrichMeta() {
+    const stale = allTenants.filter(t => !meta[t.id] || Date.now() - meta[t.id].at > META_TTL);
+    if (!stale.length) return;
+    await Promise.all(stale.map(async t => {
+      try {
+        const snap = await db.doc('clients/' + t.id + '/config/state').get();
+        const b = (snap.exists && snap.data().data && snap.data().data.business) || {};
+        meta[t.id] = { sub: b.sub || '', location: b.location || '', at: Date.now() };
+      } catch (e) { /* leave this one blank; try again next visit */ }
+    }));
+    try { localStorage.setItem(LS_META, JSON.stringify(meta)); } catch (e) { /* not essential */ }
+    applySearch();
+  }
+
+  // Soonest free hour today for the facility on the Continue card, using the
+  // same rules as the facility's own Home screen (shared next-open.js).
+  async function loadNextOpen(id) {
+    if (!id || !allTenants.some(t => (t.clientId || t.id) === id)) return;
+    nextOpen = { id, state: 'wait', text: '' };
+    applySearch();
+    try {
+      const read = async (name) => {
+        const s = await db.doc('clients/' + id + '/' + name + '/state').get();
+        return s.exists ? s.data().data : null;
+      };
+      const [config, courts, courtHours, staffReserve, bookings, openPlays, status] =
+        await Promise.all(['config', 'courts', 'courtHours', 'staffReserve', 'bookings', 'openPlay', 'status'].map(read));
+      if (nextOpen.id !== id) return;
+      if (status && status.bookingPaused) {
+        nextOpen = { id, state: 'ok', text: 'Bookings are paused right now' };
+      } else if (!Array.isArray(courts) || !courts.length) {
+        nextOpen = { id, state: '', text: '' };
+      } else {
+        const hour = NextOpen.compute({
+          courts,
+          baseHours: { bookingStart: 7, close: 22, ...((config && config.hours) || {}) },
+          courtHours: courtHours || {},
+          staffReserve: NextOpen.migrateStaffReserve(staffReserve, courts.filter(c => c.active !== false)),
+          bookings: Array.isArray(bookings) ? bookings : [],
+          openPlays: Array.isArray(openPlays) ? openPlays : []
+        });
+        nextOpen = { id, state: 'ok', text: hour === null ? 'No open times left today' : 'Next open: ' + NextOpen.fmtHour(hour) + ' today' };
+      }
+    } catch (e) {
+      if (nextOpen.id === id) nextOpen = { id, state: '', text: '' };
+    }
+    applySearch();
   }
 
   function renderTenants(tenants, query) {
@@ -421,13 +488,15 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
     // Returning player: only when not searching and the saved facility is still listed
     const last = !query ? allTenants.find(t => (t.clientId || t.id) === lastTenantId()) : null;
     if (last) {
-      const meta = metaText(last);
+      const where = metaText(last);
       continueSlot.innerHTML = `
         <button class="continue rise" id="continueBtn" data-client-id="${esc(last.clientId || last.id)}">
           <span class="continue-top">${logoHtml(last)}<span class="continue-arrow" aria-hidden="true"><svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.4" d="M5 12h14m-6-6l6 6-6 6"/></svg></span></span>
           <span>
             <span class="continue-title" style="display:block">Continue to<br/>${esc(last.name || last.clientId)}</span>
-            ${meta ? `<span class="continue-meta mono" style="display:block">${esc(meta)}</span>` : ''}
+            ${where ? `<span class="continue-meta mono" style="display:block">${esc(where)}</span>` : ''}
+            ${nextOpen.id === (last.clientId || last.id) && nextOpen.state
+              ? `<span class="continue-next mono${nextOpen.state === 'wait' ? ' wait' : ''}"><i></i>${nextOpen.state === 'wait' ? 'Checking open times…' : esc(nextOpen.text)}</span>` : ''}
           </span>
         </button>`;
       continueSection.style.display = '';
@@ -468,17 +537,17 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
   }
 
   // ── Search ─────────────────────────────────────────────
-  searchInput.addEventListener('input', (e) => {
-    const q = e.target.value.toLowerCase().trim();
+  function applySearch() {
+    const q = searchInput.value.toLowerCase().trim();
     if (!q) { renderTenants(allTenants, ''); return; }
     const filtered = allTenants.filter(t =>
       (t.name || '').toLowerCase().includes(q) ||
-      (t.sub || '').toLowerCase().includes(q) ||
-      (t.clientId || t.id || '').toLowerCase().includes(q) ||
-      (t.location || '').toLowerCase().includes(q)
+      metaText(t).toLowerCase().includes(q) ||
+      (t.clientId || t.id || '').toLowerCase().includes(q)
     );
     renderTenants(filtered, q);
-  });
+  }
+  searchInput.addEventListener('input', applySearch);
 
   // ── State management ───────────────────────────────────
   function showState(s) {

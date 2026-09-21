@@ -1941,6 +1941,7 @@ body:not(.staff-mode) .staff-link{display:none!important}
   </div>
 </div>
 
+<script src="next-open.js"></script>
 <script>
 /* ================================================================
    CLIENT WHITE-LABEL LAYER
@@ -2588,8 +2589,7 @@ computeHours();
 
 /* ---------- Formatters ---------- */
 function todayISO(){
-  const d=new Date(); d.setHours(0,0,0,0);
-  return d.toISOString().slice(0,10);
+  return NextOpen.localISO(new Date());
 }
 function fmtDateLabel(iso){
   const d=new Date(iso+'T12:00:00');
@@ -2744,25 +2744,8 @@ function getEffectiveHourList(courtId){
    Only `true` entries are stored (absence = not reserved), keeping the doc small.
    Legacy shapes (day-of-week on/off applying to a fixed 5-10pm block, with or
    without per-court keys) are migrated in place the first time they're loaded. ---------- */
-const LEGACY_STAFF_HOURS = {"17":true,"18":true,"19":true,"20":true,"21":true}; // old fixed 5PM-10PM block
 function migrateStaffReserveShape(raw){
-  if(!raw || typeof raw !== 'object') return { template: {}, overrides: {} };
-  if(raw.template) return { template: raw.template, overrides: raw.overrides || {} };
-  const days = raw.days || {};
-  const isPerCourt = Object.keys(days).some(k => !/^[0-6]$/.test(k));
-  const template = {};
-  if(isPerCourt){
-    Object.entries(days).forEach(([courtId, dowMap]) => {
-      template[courtId] = {};
-      Object.entries(dowMap || {}).forEach(([dow, on]) => { if(on) template[courtId][dow] = {...LEGACY_STAFF_HOURS}; });
-    });
-  } else {
-    getActiveCourts().forEach(c => {
-      template[c.id] = {};
-      Object.entries(days).forEach(([dow, on]) => { if(on) template[c.id][dow] = {...LEGACY_STAFF_HOURS}; });
-    });
-  }
-  return { template, overrides: {} };
+  return NextOpen.migrateStaffReserve(raw, getActiveCourts());
 }
 function loadStaffReserve(){
   return migrateStaffReserveShape(fbLoadCache(LS.staffReserve, null));
@@ -3616,22 +3599,7 @@ document.addEventListener('click', (e) => {
 /* Soonest hour still free today on any court, using the same rules the
    schedule list applies (staff blocks, open play, existing bookings). */
 function nextOpenSlotToday(){
-  const dateISO = todayISO();
-  const now = new Date();
-  const from = Math.ceil(now.getHours() + now.getMinutes() / 60 - 0.0001);
-  const ops = getOpenPlayForDate(dateISO), bks = getBookingsForDate(dateISO);
-  let best = null;
-  getActiveCourts().forEach(c => {
-    const hrs = getEffectiveHours(c.id);
-    for(let h = Math.max(hrs.bookStart, from); h < hrs.close; h++){
-      if(isStaffBlocked(dateISO, h, h + 1, c.id)) continue;
-      if(ops.some(op => (!op.court || op.court === c.id) && h < op.end && h + 1 > op.start)) continue;
-      if(bks.some(b => b.status !== 'OpenPlay' && (!b.court || b.court === c.id) && h < b.end && h + 1 > b.start)) continue;
-      if(best === null || h < best) best = h;
-      break;
-    }
-  });
-  return best;
+  return NextOpen.compute({ courts: COURTS, baseHours: CLIENT.hours, courtHours, staffReserve: staffReserveEnabled, bookings, openPlays });
 }
 
 /* Staff see their own tools right on Home, with the number of bookings waiting for payment. */

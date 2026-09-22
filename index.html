@@ -6538,6 +6538,54 @@ function ogCheckLink(game, allBookings, allGames, bookingId, pin){
   return { ok: true, booking: row.booking };
 }
 // OG-LINK-END
+
+/* ---------- Auto-created queue for a linked game ----------
+   Once an organizer links their game to a real reservation, that game has a
+   real court and time slot -- so it gets its own walk-in queue / rotation
+   board, named after the game, seeded with its players, and unlocked with the
+   reservation's own PIN (the organizer already knows it). Staff manage it
+   like any other queue session from then on. */
+// OG-QUEUE-START
+function ogQueueNameForGame(game){
+  const skill = game.skillLevel && game.skillLevel !== 'Open' ? game.skillLevel + ' ' : '';
+  return `${skill}Game — ${fmtTime(game.startHour)}`;
+}
+function ogQueueModeForGame(game){ return game.format === 'Singles' ? 'singles' : 'doubles'; }
+function ogQueueWaitingForGame(game){
+  return (game.players || []).map((p, i) => ({ id: 'w_og_' + game.id + '_' + i, names: [p.name] }));
+}
+function ogLinkedQueueId(gameId){ return 'q_og_' + gameId; }
+function ogBuildLinkedQueueSession(game, booking){
+  return {
+    id: ogLinkedQueueId(game.id),
+    name: ogQueueNameForGame(game),
+    mode: ogQueueModeForGame(game),
+    rule: 'winner_stays',
+    pin: String(booking.pin),
+    allowJoin: true,
+    court: booking.court || game.court || null,
+    waiting: ogQueueWaitingForGame(game),
+    teams: {},
+    activeMatch: null,
+    matches: [],
+    linkedOpenGameId: game.id,
+    createdAt: Date.now(),
+    expiresAt: getMidnightTimestamp(),
+  };
+}
+// OG-QUEUE-END
+/* Skips creating a second board if this game was somehow linked more than
+   once (id is deterministic, so this is a plain existence check). */
+function ogEnsureLinkedQueue(game, booking){
+  const list = loadQueues();
+  if(list.some(q => q.id === ogLinkedQueueId(game.id))) return;
+  const session = ogBuildLinkedQueueSession(game, booking);
+  checkAndFillActiveMatch(session);
+  list.unshift(session);
+  saveQueues(list);
+  logUsageEvent('queue_session_created', { court: session.court || null, source: 'open-game-link' });
+}
+
 async function ogLinkReservation(gameId, token, bookingId, pin){
   const game = openGames.find(g => g.id === gameId);
   if(!game || game.creatorToken !== token) return { ok:false, error:'Only the organizer can link a reservation.' };
@@ -6545,6 +6593,7 @@ async function ogLinkReservation(gameId, token, bookingId, pin){
   if(!check.ok) return check;
   const ref = db.doc(`clients/${currentClientId}/openGames/${gameId}`);
   await ref.update({ reservationId: check.booking.id, court: check.booking.court || game.court, status: 'RESERVED', updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+  ogEnsureLinkedQueue({ ...game, court: check.booking.court || game.court }, check.booking);
   return { ok:true };
 }
 let _ogLink = null; // { gameId, step: 'list' | 'pin', bookingId, pin, error } while the organizer is linking
@@ -6600,7 +6649,7 @@ function ogWireLink(game, mine){
     e.preventDefault();
     if(!st()) return;
     const result = await ogLinkReservation(game.id, mine.token, st().bookingId, document.getElementById('ogLinkPin').value.trim());
-    if(result.ok){ _ogLink = null; toast('Reservation linked!'); rerender(); }
+    if(result.ok){ _ogLink = null; toast('Reservation linked! A queue was created for this game.'); rerender(); }
     else { st().error = result.error; st().pin = ''; rerender(); document.getElementById('ogLinkPin')?.focus(); }
   });
 }

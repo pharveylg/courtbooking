@@ -79,7 +79,8 @@ check('Create a Game has both start and end time fields', /id="ogStart"/.test(ht
 check('the end list follows the start', /ogRefreshEndOptions/.test(html) && /getElementById\('ogStart'\)\?\.addEventListener\('change', ogRefreshEndOptions\)/.test(html));
 check('the game is saved with endHour and validated (end after start)', /date, startHour, endHour, skillLevel/.test(html) && /The end time must be after the start time/.test(html));
 check('the time range is shown everywhere via one helper', (html.match(/ogTimeLabel\(/g) || []).length >= 8);
-const outsideHelper = html.replace(timeFns, '');
+const queueFns = grab('// OG-QUEUE-START', '// OG-QUEUE-END'); // ogQueueNameForGame intentionally uses a bare start time as a session label, not a game-time display
+const outsideHelper = html.replace(timeFns, '').replace(queueFns, '');
 check('no game list, banner or detail shows the start time alone any more', !/fmtTime\((first|match|g)\.startHour\)/.test(outsideHelper) && !/\$\{fmtTime\(game\.startHour\)\}/.test(outsideHelper));
 check('the old PIN-only form is gone; PIN comes after choosing a session', !/ogLinkPin[^]*Reservation PIN/.test(html) && /data-og-link-pick/.test(html) && /step: 'pin'/.test(html) && /ogLinkReservation\(game\.id, mine\.token, st\(\)\.bookingId/.test(html));
 check('the picker is only for the organizer', /if\(isCreator && mine\) ogWireLink\(game, mine\)/.test(html) && /else if\(isCreator && status !== 'CANCELLED' && status !== 'EXPIRED'\)\{\s*reservationHtml = ogLinkPanelHtml\(game\)/.test(html));

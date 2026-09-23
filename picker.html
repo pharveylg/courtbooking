@@ -234,7 +234,7 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
 <!-- Header -->
 <header class="topbar">
   <div class="topbar-inner">
-    <span class="mark" aria-hidden="true">D</span>
+    <span class="mark" aria-hidden="true" data-pb="Logo" data-pb-kind="hard">D</span>
     <div>
       <div class="brand-name">Courts</div>
       <div class="brand-sub mono">by DulaHQ</div>
@@ -247,7 +247,7 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
   <!-- Hero -->
   <section class="hero rise" style="animation-delay:.05s">
     <span class="hero-badge mono"><span class="hero-dot"></span><span id="heroCount">Multi-facility platform</span></span>
-    <h1>Book courts.<br/>Run the queue.<br/><span class="accent">Track every match.</span></h1>
+    <h1 data-pb="Headline" data-pb-kind="soft">Book courts.<br/>Run the queue.<br/><span class="accent">Track every match.</span></h1>
     <div class="features">
       <div class="feature-pill"><span class="feature-dot"></span>Court Reservations</div>
       <div class="feature-pill"><span class="feature-dot"></span>Walk-in Queue</div>
@@ -261,7 +261,7 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
     <svg class="search-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
     </svg>
-    <input type="text" id="searchInput" class="search-input" placeholder="Search facilities" aria-label="Search facilities" autocomplete="off"/>
+    <input type="text" id="searchInput" class="search-input" placeholder="Search facilities" aria-label="Search facilities" autocomplete="off" data-pb="Search" data-pb-kind="hard"/>
   </div>
 
   <!-- Loading -->
@@ -275,7 +275,7 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
     <div class="state-icon">⚠️</div>
     <div class="state-title">Could not load facilities</div>
     <div class="state-msg mono" id="errorMsg"></div>
-    <button class="retry-btn" onclick="loadTenants()">
+    <button class="retry-btn" onclick="loadTenants()" data-pb="Try again" data-pb-kind="hard">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1 4v6h6M23 20v-6h-6"/><path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15"/></svg>
       Try Again
     </button>
@@ -314,8 +314,8 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
     <div class="install-bar-title">Install Court Booking</div>
     <div class="install-bar-sub mono">Book courts from your home screen</div>
   </div>
-  <button class="install-btn" id="installBtn">Install</button>
-  <button class="install-dismiss" id="installDismiss" aria-label="Dismiss">✕</button>
+  <button class="install-btn" id="installBtn" data-pb="Install" data-pb-kind="bouncy">Install</button>
+  <button class="install-dismiss" id="installDismiss" aria-label="Dismiss" data-pb="Dismiss" data-pb-kind="hard">✕</button>
 </div>
 
 <!-- Firebase SDK -->
@@ -323,6 +323,7 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 <script src="/firebase-config.js"></script>
 <script src="/next-open.js"></script>
+<script src="/pickle-ball.js"></script>
 
 <script>
 (function() {
@@ -356,6 +357,27 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
   let meta = {};
   try { meta = JSON.parse(localStorage.getItem(LS_META)) || {}; } catch (e) { meta = {}; }
   let nextOpen = { id: '', state: '', text: '' };
+
+  // ── Pickleball toy + the "warp" page transition ─────────
+  // Only elements explicitly marked data-pb are colliders (big cards, real
+  // buttons/inputs, tenant tiles) -- small text (labels, meta lines, the
+  // footer) is never a collider, so the ball glides over it instead of
+  // bouncing off it. Independent of Firebase, so it works even if that isn't
+  // configured for local dev.
+  if (window.PickleBall) {
+    PickleBall.start();
+    PickleBall.scan();
+    const tiltBtn = document.createElement('button');
+    tiltBtn.className = 'pw-tilt-btn';
+    tiltBtn.type = 'button';
+    tiltBtn.textContent = '🎾 Tilt to play';
+    tiltBtn.addEventListener('click', () => { PickleBall.enableTilt(); tiltBtn.remove(); });
+    if (window.DeviceOrientationEvent && typeof window.DeviceOrientationEvent.requestPermission === 'function') {
+      document.body.appendChild(tiltBtn);
+      // A hint, not a fixture -- never left sitting over a facility tile forever.
+      setTimeout(() => tiltBtn.remove(), 6000);
+    }
+  }
 
   // ── Firebase ───────────────────────────────────────────
   const FIREBASE_CFG = (window.FIREBASE_CONFIG && window.FIREBASE_CONFIG.apiKey && !String(window.FIREBASE_CONFIG.apiKey).startsWith('PASTE'))
@@ -414,7 +436,7 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
   }
 
   function logoHtml(t, extra) {
-    return `<span class="logo${extra ? ' ' + extra : ''}">${t.logoUrl
+    return `<span class="logo${extra ? ' ' + extra : ''}" data-pb="${esc(t.name || t.clientId || 'Facility')}" data-pb-kind="hard">${t.logoUrl
       ? `<img src="${esc(t.logoUrl)}" alt="" loading="lazy"/>`
       : esc((t.name || t.clientId || '?').charAt(0).toUpperCase())}</span>`;
   }
@@ -491,16 +513,16 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
       const where = metaText(last);
       continueSlot.innerHTML = `
         <button class="continue rise" id="continueBtn" data-client-id="${esc(last.clientId || last.id)}">
-          <span class="continue-top">${logoHtml(last)}<span class="continue-arrow" aria-hidden="true"><svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.4" d="M5 12h14m-6-6l6 6-6 6"/></svg></span></span>
+          <span class="continue-top">${logoHtml(last)}<span class="continue-arrow" aria-hidden="true" data-pb="Continue arrow" data-pb-kind="hard"><svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.4" d="M5 12h14m-6-6l6 6-6 6"/></svg></span></span>
           <span>
-            <span class="continue-title" style="display:block">Continue to<br/>${esc(last.name || last.clientId)}</span>
+            <span class="continue-title" style="display:block" data-pb="${esc(last.name || last.clientId)}" data-pb-kind="bouncy">Continue to<br/>${esc(last.name || last.clientId)}</span>
             ${where ? `<span class="continue-meta mono" style="display:block">${esc(where)}</span>` : ''}
             ${nextOpen.id === (last.clientId || last.id) && nextOpen.state
               ? `<span class="continue-next mono${nextOpen.state === 'wait' ? ' wait' : ''}"><i></i>${nextOpen.state === 'wait' ? 'Checking open times…' : esc(nextOpen.text)}</span>` : ''}
           </span>
         </button>`;
       continueSection.style.display = '';
-      document.getElementById('continueBtn').addEventListener('click', () => selectTenant(last.clientId || last.id));
+      document.getElementById('continueBtn').addEventListener('click', () => selectTenant(last.clientId || last.id, last.name || last.clientId));
     } else {
       continueSection.style.display = 'none';
       continueSlot.innerHTML = '';
@@ -514,26 +536,92 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
       <button class="tenant-tile rise" data-client-id="${esc(t.clientId || t.id)}" style="animation-delay:${Math.min(0.05 + i * 0.05, 0.5)}s">
         ${logoHtml(t)}
         <span class="tenant-info">
-          <span class="tenant-name" style="display:block">${esc(t.name || t.clientId)}</span>
+          <span class="tenant-name" style="display:block" data-pb="${esc(t.name || t.clientId)}" data-pb-kind="hard">${esc(t.name || t.clientId)}</span>
           <span class="tenant-meta mono" style="display:block">${esc(metaText(t))}</span>
         </span>
-        <svg class="tenant-arrow" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+        <svg class="tenant-arrow" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true" data-pb="${esc(t.name || t.clientId)} arrow" data-pb-kind="hard"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
       </button>
     `).join('');
 
     tenantGrid.querySelectorAll('.tenant-tile').forEach(tile => {
-      tile.addEventListener('click', () => selectTenant(tile.dataset.clientId));
+      const t = list.find(x => (x.clientId || x.id) === tile.dataset.clientId);
+      tile.addEventListener('click', () => selectTenant(tile.dataset.clientId, t ? (t.name || t.clientId) : tile.dataset.clientId));
     });
+
+    // New tenant tiles (and the continue card) just replaced the old ones --
+    // pick up their real boxes so the ball bounces off where they actually are.
+    if (window.PickleBall) { PickleBall.scan(); PickleBall.invalidate(); }
   }
 
   // ── Select tenant ──────────────────────────────────────
-  function selectTenant(clientId) {
+  // Same transform index.html applies to a freshly-fetched config doc before
+  // caching it -- duplicated (not shared) because index.html runs this over
+  // its OWN fetch, before this file exists in its load order; kept in sync by
+  // the "prefetch matches index.html" test in tests/pickle-ball.test.js.
+  function normalizeClientConfig(raw) {
+    if (!raw || typeof raw !== 'object') return raw;
+    if (raw.business || raw.contact) return raw;
+    const out = {};
+    if (raw.businessName || raw.tagline || raw.heroHeadline || raw.address) {
+      out.business = {
+        name: raw.businessName,
+        sub: raw.tagline,
+        tagline: raw.heroHeadline || raw.heroSubheadline,
+        location: raw.address,
+      };
+    }
+    if (raw.address || raw.contactPhone || raw.contactEmail || raw.social) {
+      out.contact = {
+        address: raw.address,
+        phone: raw.contactPhone,
+        email: raw.contactEmail,
+        facebook: raw.social?.facebook,
+        instagram: raw.social?.instagram,
+      };
+    }
+    if (raw.logoUrl || raw.faviconUrl || raw.branding) {
+      out.branding = { logoUrl: raw.logoUrl, faviconUrl: raw.faviconUrl, ...(raw.branding || {}) };
+    }
+    if (raw.theme) {
+      out.theme = { ...raw.theme };
+      if (raw.theme.primaryColor && !out.theme.primary) out.theme.primary = raw.theme.primaryColor;
+    }
+    for (const k of ['currency', 'rates', 'hours', 'staff', 'booking']) {
+      if (raw[k] !== undefined) out[k] = raw[k];
+    }
+    return out;
+  }
+
+  // Warms the exact localStorage key index.html's loadClientConfig() checks
+  // first, so the facility's own loading screen -- which the warp doesn't
+  // replace, only precedes -- usually has one less network round trip left
+  // (its own always-fresh pause-status check still runs either way).
+  async function warmClientConfigCache(clientId) {
+    try {
+      const snap = await db.doc('clients/' + clientId + '/config/state').get();
+      if (!snap.exists) return;
+      localStorage.setItem('cb_client_config_v7_' + clientId, JSON.stringify(normalizeClientConfig(snap.data().data)));
+    } catch (e) { /* the destination just fetches its own copy, same as today */ }
+  }
+
+  function selectTenant(clientId, label) {
     try { localStorage.setItem(LS_TENANT, clientId); } catch (e) { /* private mode: just navigate */ }
     // Same-tab navigation -- a synthetic click on a target="_blank" anchor
     // isn't reliably treated as a trusted user gesture across browsers, so
     // popup blockers can silently swallow it and leave the picker on screen
     // with nothing happening. Plain navigation always works.
-    window.location.href = '/?client=' + encodeURIComponent(clientId);
+    const go = () => { window.location.href = '/?client=' + encodeURIComponent(clientId); };
+    if (window.PickleBall) {
+      PickleBall.warp({
+        label: label || clientId,
+        // No artificial pause here -- the destination has its own unavoidable
+        // loading screen once it starts loading (see warmClientConfigCache),
+        // so holding any longer than the prefetch needs only delays that
+        // further, for no benefit.
+        load: () => Promise.race([warmClientConfigCache(clientId), new Promise((r) => setTimeout(r, 1200))]),
+        onCover: go,
+      });
+    } else go();
   }
 
   // ── Search ─────────────────────────────────────────────

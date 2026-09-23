@@ -89,12 +89,12 @@ check('the module is loaded', /<script src="\/pickle-ball\.js"><\/script>/.test(
 check('the ambient toy is started once on load', /PickleBall\.start\(\)/.test(html));
 check('only an explicit opt-in list are colliders -- no blanket page scan', /PickleBall\.scan\(/.test(html) && !/data-pb-ignore/.test(html));
 check('small text is never tagged as a collider (meta lines, labels, footer, feature pills)', !/class="tenant-meta[^"]*"\s+data-pb/.test(html) && !/class="label[^"]*"\s+data-pb/.test(html) && !/class="feature-pill[^"]*"\s+data-pb/.test(html) && !/class="continue-meta[^"]*"\s+data-pb/.test(html) && !/<footer[^>]*data-pb/.test(html));
-check('real controls are tagged (logo, search, install/dismiss/retry buttons)', /class="mark"[^>]*data-pb=/.test(html) && /id="searchInput"[^>]*data-pb=/.test(html) && /id="installBtn"[^>]*data-pb=/.test(html) && /id="installDismiss"[^>]*data-pb=/.test(html) && /class="retry-btn"[^>]*data-pb=/.test(html));
-check('cards themselves are excluded (hero, continue, tenant tile) -- they leave too little room for the ball to move', !/class="hero rise"[^>]*data-pb=/.test(html) && !/class="continue rise"[^>]*data-pb=/.test(html) && !/class="tenant-tile rise"[^>]*data-pb=/.test(html));
+check('real controls are tagged (logo, install/dismiss/retry buttons)', /class="mark"[^>]*data-pb=/.test(html) && /id="installBtn"[^>]*data-pb=/.test(html) && /id="installDismiss"[^>]*data-pb=/.test(html) && /class="retry-btn"[^>]*data-pb=/.test(html));
+check('cards themselves are excluded (hero, continue, tenant tile, AND the search bar\'s pill) -- they leave too little room for the ball to move', !/class="hero rise"[^>]*data-pb=/.test(html) && !/class="continue rise"[^>]*data-pb=/.test(html) && !/class="tenant-tile rise"[^>]*data-pb=/.test(html) && !/id="searchInput"[^>]*data-pb=/.test(html));
+check('the search bar has no collider at all -- the ball passes through it, not around it', /id="searchInput" class="search-input" placeholder/.test(html) && !/data-pb="Search"/.test(html));
 check('bold callouts inside those cards ARE tagged: the hero headline, the continue title, each facility name', /<h1[^>]*data-pb="Headline"/.test(html) && /class="continue-title[^"]*"[^>]*data-pb=/.test(html) && /class="tenant-name[^"]*"[^>]*data-pb=/.test(html));
 check('icons inside those cards ARE tagged: logos and arrows, on both the continue card and every tile', /class="logo[^"]*"\s+data-pb=/.test(html) && /class="continue-arrow"[^>]*data-pb=/.test(html) && /class="tenant-arrow"[^>]*data-pb=/.test(html));
 check('text callouts get a glow that hugs the glyphs (pw-text-target), not a box around the whole line/paragraph', /<h1 class="pw-text-target"/.test(html) && /class="continue-title pw-text-target"/.test(html) && /class="tenant-name pw-text-target"/.test(html));
-check('the search bar gets the same glyph-hugging treatment -- its box is a full-width pill, much bigger than the "Search facilities" placeholder it shows', /id="searchInput" class="search-input pw-text-target"/.test(html));
 check('icons and buttons keep the box-shadow highlight instead -- a box reads fine on a small square/circle', !/class="logo[^"]*pw-text-target/.test(html) && !/tenant-arrow pw-text-target|continue-arrow pw-text-target/.test(html));
 check('the hit effect picks text-shadow for pw-text-target elements, box-shadow for everything else', /classList\.contains\('pw-text-target'\) \? 'pw-hit-text' : 'pw-hit'/.test(pbSrc.replace(/\s+/g, ' ')) && /\.pw-hit-text\{text-shadow:/.test(pbSrc));
 check('small text next to those callouts is still never tagged (the meta line, the "Next open" line)', !/class="tenant-meta[^"]*"[^>]*data-pb=/.test(html) && !/class="continue-meta[^"]*"[^>]*data-pb=/.test(html) && !/class="continue-next[^>]*data-pb=/.test(html));
@@ -106,6 +106,16 @@ check('a "tilt to play" affordance exists and asks the engine, not the raw brows
 check('service worker cache was bumped for the new script', /courtbooking-v(2[3-9]|[3-9]\d)/.test(fs.readFileSync(path.join(__dirname, '..', 'sw.js'), 'utf8')));
 
 check('the ball was made smaller than its original 44px/22px-radius size', /width:36px;height:36px/.test(pbSrc) && /const R = 18/.test(pbSrc));
+
+section('parity with the original kit\'s engine.ts (how it reacts on contact) -- radius and raw speed deliberately differ');
+check('cruise speed, gravity and the top speed cap are deliberately calmer than the kit\'s own defaults -- a page people read, not a physics toy', /const CRUISE = 340;.*kit: 560/.test(pbSrc) && /const GRAVITY_MAG = 1150;.*kit: 1900/.test(pbSrc) && /const MAX_SPEED = 1600;.*kit: 2400/.test(pbSrc));
+check('restitution bakes in the kit\'s default global bounce (0.94) the same way its settings.bounce multiplier did', /const WALL_E = 0\.8648/.test(pbSrc) && /soft: 0\.6956, hard: 0\.846, bouncy: 0\.9776/.test(pbSrc));
+check('damping, tangential friction and spin transfer match the kit\'s coefficients', /Math\.exp\(-\(gravityOn \? 0\.14 : 0\.05\) \* dt\)/.test(pbSrc) && /vt \* 0\.045/.test(pbSrc) && /vt \* 0\.0016/.test(pbSrc));
+check('the floor settle thresholds and sub-stepping match the kit', /Math\.abs\(ball\.vy\) < 90\) \{ ball\.vy = 0; ball\.vx \*= 0\.96/.test(pbSrc) && /v > 55\) impact/.test(pbSrc) && /R \* 0\.55\)\), 1, 12\)/.test(pbSrc));
+check('drag-and-fling clamps and the too-slow-to-count release match the kit', /-3200, 3200/.test(pbSrc) && /-2200, 2200/.test(pbSrc) && /< 120\) \{ ball\.vx = 420; ball\.vy = -260/.test(pbSrc));
+check('a paused drag bleeds off pointer velocity, so releasing after stopping is gentle, not a phantom flick', /Math\.exp\(-7 \* dt\)/.test(pbSrc));
+check('every impact -- including walls, not just registered elements -- spawns the signature expanding ring', /function spawnRing/.test(pbSrc) && /26 \+ Math\.min\(70, speed \/ 9\)/.test(pbSrc) && /spawnRing\(x, y, speed\)/.test(pbSrc));
+check('a hit element recoils away from the ball (not just glows) -- same duration/easing/magnitude as the kit', /Math\.min\(5, speed \/ 260\)/.test(pbSrc) && /duration: 340, easing: 'cubic-bezier\(\.2,\.9,\.3,1\)'/.test(pbSrc));
 
 section('prefetching the destination while the ball covers the screen (option 1)');
 const grab = (src, a, b) => { const i = src.indexOf(a), j = src.indexOf(b, i); if (i < 0 || j < 0) throw new Error('markers not found: ' + a.slice(0, 40)); return src.slice(i, j); };

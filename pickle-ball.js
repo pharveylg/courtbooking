@@ -75,9 +75,17 @@
   const document = root.document;
 
   const R = 18; // ball radius, px -- kept small so it has real room to roam the page
-  const CRUISE = 300;
-  const GRAVITY_MAG = 760;
-  const KIND_E = { soft: 0.72, hard: 0.86, bouncy: 1.05 };
+  // How the ball reacts on contact (restitution, friction, spin, recoil,
+  // rings) matches the original kit's engine.ts exactly -- its `settings.
+  // bounce` global multiplier, default 0.94, baked directly into these since
+  // this build has no bounce slider. Its raw SPEED (cruise/gravity/top speed)
+  // is deliberately slower than the kit's own defaults -- a calmer pace for
+  // a page people are trying to read, not a physics toy to play with.
+  const CRUISE = 340; // kit: 560
+  const GRAVITY_MAG = 1150; // kit: 1900
+  const MAX_SPEED = 1600; // kit: 2400
+  const WALL_E = 0.8648; // 0.94 * 0.92
+  const KIND_E = { soft: 0.6956, hard: 0.846, bouncy: 0.9776 }; // 0.94 * {0.74, 0.9, 1.04}
 
   const ball = { x: 80, y: 140, vx: 220, vy: 160, spin: 0, squash: 0, squashAngle: 0 };
   const pointer = { x: -999, y: -999, vx: 0, vy: 0 };
@@ -118,6 +126,7 @@
      rectangle around empty space, not around the actual letters. */
   .pw-hit-text{text-shadow:0 0 1px rgba(214,255,95,.95),0 0 14px rgba(214,255,95,.85),0 0 30px rgba(214,255,95,.55)}
   .pw-tilt-btn{position:fixed;left:50%;bottom:96px;transform:translateX(-50%);z-index:70;height:38px;padding:0 16px;border-radius:999px;background:#201C19;color:#FFFBF5;border:none;font:700 12px "JetBrains Mono",monospace;display:inline-flex;align-items:center;gap:7px;cursor:pointer;box-shadow:0 8px 22px rgba(32,28,25,.28)}
+  .pw-ring{position:absolute;top:0;left:0;border-radius:9999px;border:2px solid rgba(190,242,100,.9);opacity:0}
   @media (prefers-reduced-motion: reduce){.pw-caption-fill{animation:none}.pw-ball{display:none}}
   `;
 
@@ -129,7 +138,8 @@
     return `<svg viewBox="0 0 100 100" style="width:100%;height:100%"><defs><radialGradient id="pwShell" cx="36%" cy="30%" r="78%"><stop offset="0%" stop-color="#f2ffb8"/><stop offset="45%" stop-color="#D6FF5F"/><stop offset="100%" stop-color="#8fa800"/></radialGradient></defs><circle cx="50" cy="50" r="48" fill="url(#pwShell)"/>${dots}<circle cx="50" cy="50" r="47" fill="none" stroke="#6f8400" stroke-opacity=".5" stroke-width="2"/></svg>`;
   }
 
-  let layer, ballEl, spinEl, squashEl, shadowEl, glowEl, captionEl, captionTitleEl;
+  const RINGS = 12;
+  let layer, ballEl, spinEl, squashEl, shadowEl, glowEl, captionEl, captionTitleEl, ringEls, ringIdx = 0;
   function ensureLayer() {
     if (layer) return;
     const style = document.createElement('style');
@@ -137,7 +147,10 @@
     document.head.appendChild(style);
     layer = document.createElement('div');
     layer.className = 'pw-layer';
+    let ringsHtml = '';
+    for (let i = 0; i < RINGS; i++) ringsHtml += '<div class="pw-ring"></div>';
     layer.innerHTML =
+      ringsHtml +
       '<div class="pw-shadow"></div>' +
       '<div class="pw-ball">' +
         '<div class="pw-glow"></div>' +
@@ -145,6 +158,7 @@
       '</div>' +
       '<div class="pw-caption"><div class="pw-caption-eyebrow">Serving</div><div class="pw-caption-title"></div><div class="pw-caption-bar"><div class="pw-caption-fill"></div></div></div>';
     document.body.appendChild(layer);
+    ringEls = Array.prototype.slice.call(layer.querySelectorAll('.pw-ring'));
     ballEl = layer.querySelector('.pw-ball');
     spinEl = layer.querySelector('.pw-spin');
     squashEl = layer.querySelector('.pw-squash');
@@ -152,6 +166,28 @@
     glowEl = layer.querySelector('.pw-glow');
     captionEl = layer.querySelector('.pw-caption');
     captionTitleEl = layer.querySelector('.pw-caption-title');
+  }
+
+  // An expanding ring flash at the contact point, on every impact (walls
+  // included) -- matches the original kit's signature bounce feedback.
+  function spawnRing(x, y, speed) {
+    if (!ringEls) return;
+    const el = ringEls[ringIdx % RINGS];
+    ringIdx++;
+    const size = 26 + Math.min(70, speed / 9);
+    el.style.width = size + 'px';
+    el.style.height = size + 'px';
+    const t = 'translate3d(' + (x - size / 2) + 'px,' + (y - size / 2) + 'px,0)';
+    el.style.transform = t;
+    if (el.animate) {
+      el.animate(
+        [
+          { opacity: 0.85, transform: t + ' scale(0.35)' },
+          { opacity: 0, transform: t + ' scale(1.5)' },
+        ],
+        { duration: 460, easing: 'cubic-bezier(.15,.7,.3,1)' },
+      );
+    }
   }
 
   /* ---------------- colliders ---------------- */
@@ -189,18 +225,33 @@
   /* ---------------- ambient physics ---------------- */
 
   function impact(x, y, nx, ny, speed, rectHit) {
-    ball.squash = clamp(speed / 1400, 0.05, 0.4);
+    ball.squash = clamp(speed / 1500, 0.06, 0.42);
     ball.squashAngle = Math.atan2(ny, nx);
-    if (rectHit && root.performance.now() - rectHit.meta.lastHit > 120) {
+    if (rectHit && root.performance.now() - rectHit.meta.lastHit > 110) {
       rectHit.meta.lastHit = root.performance.now();
       const hitCls = rectHit.el.classList.contains('pw-text-target') ? 'pw-hit-text' : 'pw-hit';
       rectHit.el.classList.add(hitCls);
-      setTimeout(() => rectHit.el.classList.remove(hitCls), 260);
+      setTimeout(() => rectHit.el.classList.remove(hitCls), 380);
+      // Recoil: the hit element visibly nudges away from the ball, same as
+      // the original kit -- the box/text glow alone reads as decoration, the
+      // element actually flinching is what makes the hit feel real.
+      const recoil = Math.min(5, speed / 260);
+      if (rectHit.el.animate) {
+        rectHit.el.animate(
+          [
+            { transform: 'translate3d(0,0,0)' },
+            { transform: 'translate3d(' + (-nx * recoil) + 'px,' + (-ny * recoil) + 'px,0)' },
+            { transform: 'translate3d(0,0,0)' },
+          ],
+          { duration: 340, easing: 'cubic-bezier(.2,.9,.3,1)' },
+        );
+      }
     }
+    spawnRing(x, y, speed);
   }
 
   function walls() {
-    const w = root.innerWidth, h = root.innerHeight, e = 0.86;
+    const w = root.innerWidth, h = root.innerHeight, e = WALL_E;
     if (ball.x - R < 0) { ball.x = R; if (ball.vx < 0) { impact(R, ball.y, 1, 0, Math.abs(ball.vx)); ball.vx = -ball.vx * e; } }
     else if (ball.x + R > w) { ball.x = w - R; if (ball.vx > 0) { impact(w - R, ball.y, -1, 0, Math.abs(ball.vx)); ball.vx = -ball.vx * e; } }
     if (ball.y - R < 0) { ball.y = R; if (ball.vy < 0) { impact(ball.x, R, 0, 1, Math.abs(ball.vy)); ball.vy = -ball.vy * e; } }
@@ -208,9 +259,9 @@
       ball.y = h - R;
       if (ball.vy > 0) {
         const v = Math.abs(ball.vy);
-        if (v > 50) impact(ball.x, h - R, 0, -1, v);
-        ball.vy = -ball.vy * e; ball.vx *= 0.985;
-        if (gravityOn && Math.abs(ball.vy) < 70) { ball.vy = 0; ball.vx *= 0.94; }
+        if (v > 55) impact(ball.x, h - R, 0, -1, v);
+        ball.vy = -ball.vy * e; ball.vx *= 0.99;
+        if (gravityOn && Math.abs(ball.vy) < 90) { ball.vy = 0; ball.vx *= 0.96; }
       }
     }
   }
@@ -227,15 +278,15 @@
       ball.vx = bv.vx; ball.vy = bv.vy;
       const tx = -hit.ny, ty = hit.nx;
       const vt = ball.vx * tx + ball.vy * ty;
-      ball.vx -= vt * 0.05 * tx; ball.vy -= vt * 0.05 * ty;
-      ball.spin += vt * 0.0018;
+      ball.vx -= vt * 0.045 * tx; ball.vy -= vt * 0.045 * ty;
+      ball.spin += vt * 0.0016;
       impact(ball.x - hit.nx * R, ball.y - hit.ny * R, hit.nx, hit.ny, Math.hypot(ball.vx, ball.vy), r);
     }
   }
 
   function physicsStep(dt) {
     if (gravityOn) { ball.vx += gravity.x * dt; ball.vy += gravity.y * dt; }
-    const damp = Math.exp(-(gravityOn ? 0.1 : 0.04) * dt);
+    const damp = Math.exp(-(gravityOn ? 0.14 : 0.05) * dt);
     ball.vx *= damp; ball.vy *= damp;
     if (!gravityOn) {
       const sp = Math.hypot(ball.vx, ball.vy);
@@ -243,7 +294,7 @@
       else ball.vx = CRUISE;
     }
     const sp = Math.hypot(ball.vx, ball.vy);
-    if (sp > 1800) { ball.vx = (ball.vx / sp) * 1800; ball.vy = (ball.vy / sp) * 1800; }
+    if (sp > MAX_SPEED) { ball.vx = (ball.vx / sp) * MAX_SPEED; ball.vy = (ball.vy / sp) * MAX_SPEED; }
     ball.x += ball.vx * dt; ball.y += ball.vy * dt;
     walls();
     collideRects();
@@ -352,9 +403,13 @@
       ball.vx = pointer.vx; ball.vy = pointer.vy; ball.x = pointer.x; ball.y = pointer.y;
     } else {
       const speed = Math.hypot(ball.vx, ball.vy);
-      const steps = clamp(Math.ceil((speed * dt) / (R * 0.6)), 1, 8);
+      const steps = clamp(Math.ceil((speed * dt) / (R * 0.55)), 1, 12);
       for (let i = 0; i < steps; i++) physicsStep(dt / steps);
     }
+    // Pointer velocity bleeds off when the cursor stops moving, so a paused
+    // drag releases the ball gently instead of firing the last swipe speed.
+    const pdec = Math.exp(-7 * dt);
+    pointer.vx *= pdec; pointer.vy *= pdec;
     ball.spin += (ball.vx / R) * dt * 0.6;
     ball.squash *= Math.exp(-10 * dt);
     render();
@@ -369,8 +424,8 @@
     lt = now;
     const ivx = (e.clientX - lx) / dt, ivy = (e.clientY - ly) / dt;
     lx = e.clientX; ly = e.clientY;
-    pointer.vx = pointer.vx * 0.55 + clamp(ivx, -2600, 2600) * 0.45;
-    pointer.vy = pointer.vy * 0.55 + clamp(ivy, -2600, 2600) * 0.45;
+    pointer.vx = pointer.vx * 0.55 + clamp(ivx, -3200, 3200) * 0.45;
+    pointer.vy = pointer.vy * 0.55 + clamp(ivy, -3200, 3200) * 0.45;
     pointer.x = e.clientX; pointer.y = e.clientY;
   }
   function onDown(e) {
@@ -385,9 +440,9 @@
   function onUp() {
     if (!dragging) return;
     dragging = false;
-    ball.vx = clamp(pointer.vx * 1.05, -2000, 2000);
-    ball.vy = clamp(pointer.vy * 1.05, -2000, 2000);
-    if (Math.hypot(ball.vx, ball.vy) < 100) { ball.vx = 260; ball.vy = -160; }
+    ball.vx = clamp(pointer.vx * 1.05, -2200, 2200);
+    ball.vy = clamp(pointer.vy * 1.05, -2200, 2200);
+    if (Math.hypot(ball.vx, ball.vy) < 120) { ball.vx = 420; ball.vy = -260; }
   }
 
   /* ---------------- tilt gravity ---------------- */

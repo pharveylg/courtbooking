@@ -111,8 +111,12 @@
   .pw-caption-bar{margin:20px auto 0;height:4px;width:130px;border-radius:999px;background:rgba(32,28,25,.18);overflow:hidden}
   .pw-caption-fill{height:100%;width:34%;border-radius:999px;background:#201C19;animation:pw-slide 1.05s ease-in-out infinite}
   @keyframes pw-slide{0%{transform:translateX(-120%)}100%{transform:translateX(320%)}}
-  .pw-target{transition:box-shadow .3s ease}
+  .pw-target{transition:box-shadow .3s ease,text-shadow .3s ease}
   .pw-hit{box-shadow:0 0 0 2px rgba(214,255,95,.9),0 0 24px 2px rgba(214,255,95,.3)}
+  /* Text callouts (the headline, facility names) get a glow that hugs the
+     glyphs instead -- a box-shadow on a multi-line block just draws a
+     rectangle around empty space, not around the actual letters. */
+  .pw-hit-text{text-shadow:0 0 1px rgba(214,255,95,.95),0 0 14px rgba(214,255,95,.85),0 0 30px rgba(214,255,95,.55)}
   .pw-tilt-btn{position:fixed;left:50%;bottom:96px;transform:translateX(-50%);z-index:70;height:38px;padding:0 16px;border-radius:999px;background:#201C19;color:#FFFBF5;border:none;font:700 12px "JetBrains Mono",monospace;display:inline-flex;align-items:center;gap:7px;cursor:pointer;box-shadow:0 8px 22px rgba(32,28,25,.28)}
   @media (prefers-reduced-motion: reduce){.pw-caption-fill{animation:none}.pw-ball{display:none}}
   `;
@@ -189,8 +193,9 @@
     ball.squashAngle = Math.atan2(ny, nx);
     if (rectHit && root.performance.now() - rectHit.meta.lastHit > 120) {
       rectHit.meta.lastHit = root.performance.now();
-      rectHit.el.classList.add('pw-hit');
-      setTimeout(() => rectHit.el.classList.remove('pw-hit'), 260);
+      const hitCls = rectHit.el.classList.contains('pw-text-target') ? 'pw-hit-text' : 'pw-hit';
+      rectHit.el.classList.add(hitCls);
+      setTimeout(() => rectHit.el.classList.remove(hitCls), 260);
     }
   }
 

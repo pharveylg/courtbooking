@@ -6397,6 +6397,7 @@ async function ogJoinGame(gameId, name, email, opts={}){
     logUsageEvent('open_game_joined', {}); // analytics only, never billed
     document.getElementById('ogDetailModal').classList.add('hidden');
     _ogActiveGameId = null; _ogAckPendingGameId = null;
+    ogStopChatListener();
     const joined = openGames.find(x => x.id === gameId);
     const terms = joined && joined.payBeforeJoin ? `<b>Payment:</b> ${joined.payAmount ? fmtMoney(joined.payAmount) + ' per player. ' : ''}${escapeHtml(joined.payNote || 'Arrange it with the organizer.')} (Paid directly to the organizer, not through the facility.)` : '';
     ogShowDone({ title: "You're in!", lead: 'Your spot is saved. See you on court.', gameId, notes: terms, game: joined ? { ...joined, players: Array.from({ length: joinedCount || joined.players.length }, (_, i) => joined.players[i] || {}) } : null });
@@ -6775,6 +6776,120 @@ function ogWireScorePanel(game){
   });
 }
 
+/* ---------- Chat (Find a Game, peer games) ----------
+   Once a game exists, its players (and the organizer) get a simple group
+   chat scoped to that game -- logistics like "running 10 min late", not a
+   general messaging system. Same open per-tenant trust level as the rest of
+   Find a Game: whoever has joined (or created) the game can post, the same
+   way they can already join or leave it. Facility Open Play is coordinated
+   through the Queue instead, so it has no chat. */
+// OG-CHAT-START
+const OG_CHAT_MAX = 300;
+function ogCanChat(game, canPost){
+  return !!(game && game.source !== 'facility' && canPost);
+}
+function ogChatMessageText(raw){
+  const t = String(raw == null ? '' : raw).trim().slice(0, OG_CHAT_MAX);
+  return t || null;
+}
+function ogChatIsMine(msg, myEmail){
+  return !!(myEmail && msg && (msg.email || '').toLowerCase() === String(myEmail).toLowerCase());
+}
+function ogChatSenderLabel(msg, game){
+  const name = (msg && msg.name) ? msg.name : 'Player';
+  const isOrganizer = !!(msg && game && (msg.email || '').toLowerCase() === (game.creatorEmail || '').toLowerCase());
+  return isOrganizer ? name + ' · Organizer' : name;
+}
+function ogChatClockTime(d){
+  let h = d.getHours(), m = d.getMinutes();
+  const ap = h >= 12 ? 'PM' : 'AM';
+  h = h % 12; if(h === 0) h = 12;
+  return h + ':' + String(m).padStart(2, '0') + ' ' + ap;
+}
+function ogChatTimeLabel(value){
+  if(value && typeof value.toDate === 'function') return ogChatClockTime(value.toDate());
+  if(value instanceof Date) return ogChatClockTime(value);
+  if(typeof value === 'number') return ogChatClockTime(new Date(value));
+  return 'Sending…';
+}
+// OG-CHAT-END
+
+let _ogChatGameId = null, _ogChatUnsub = null, _ogChatMsgs = [];
+function ogStopChatListener(){
+  if(_ogChatUnsub) _ogChatUnsub();
+  _ogChatUnsub = null; _ogChatGameId = null; _ogChatMsgs = [];
+}
+function ogStartChatListener(gameId){
+  if(_ogChatGameId === gameId) return;
+  ogStopChatListener();
+  if(!db) return;
+  _ogChatGameId = gameId;
+  _ogChatUnsub = db.collection(`clients/${currentClientId}/openGames/${gameId}/messages`)
+    .orderBy('createdAt').limitToLast(50)
+    .onSnapshot(snap => {
+      _ogChatMsgs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      ogRenderChatMessages();
+    }, e => console.warn('open game chat listener:', e.message));
+}
+async function ogSendChatMessage(gameId, name, email, text){
+  const clean = ogChatMessageText(text);
+  if(!clean) return { ok: false };
+  await db.collection(`clients/${currentClientId}/openGames/${gameId}/messages`).add({
+    name, email, text: clean, createdAt: firebase.firestore.FieldValue.serverTimestamp()
+  });
+  return { ok: true };
+}
+function ogChatPanelHtml(){
+  return `<div class="pt-3 border-t border-[#EAE0D5]">
+    <div class="mono text-[10px] uppercase tracking-widest opacity-60 mb-1.5">Chat</div>
+    <div id="ogChatMessages" class="rounded-[16px] border border-[#EAE0D5] bg-[#FFFBF5] p-3 max-h-[260px] overflow-y-auto space-y-2"></div>
+    <form id="ogChatForm" class="mt-2 flex gap-2">
+      <input type="text" id="ogChatInput" maxlength="300" autocomplete="off" placeholder="Message the group…" aria-label="Chat message" class="flex-1 min-w-0 h-11 rounded-full border border-[#EAE0D5] bg-white px-4 mono text-[13px] outline-none focus:border-[#201C19]"/>
+      <button type="submit" class="h-11 px-4 rounded-full bg-[#201C19] text-white font-[800] text-[12px] cursor-pointer">Send</button>
+    </form>
+  </div>`;
+}
+function ogRenderChatMessages(){
+  const box = document.getElementById('ogChatMessages');
+  if(!box) return;
+  const game = openGames.find(g => g.id === _ogChatGameId);
+  const myEmail = ogIdentity().email || '';
+  if(!_ogChatMsgs.length){
+    box.innerHTML = `<div class="mono text-[11px] opacity-50 text-center py-3">No messages yet. Say hi!</div>`;
+  } else {
+    box.innerHTML = _ogChatMsgs.map(m => {
+      const mine = ogChatIsMine(m, myEmail);
+      return `<div class="flex ${mine ? 'justify-end' : 'justify-start'}">
+        <div class="max-w-[80%] rounded-[14px] px-3 py-2 ${mine ? 'bg-[#D6FF5F] text-[#201C19]' : 'bg-white border border-[#EAE0D5]'}">
+          ${!mine ? `<div class="mono text-[9.5px] font-[700] opacity-60">${escapeHtml(ogChatSenderLabel(m, game))}</div>` : ''}
+          <div class="text-[13px] leading-[1.4] break-words">${escapeHtml(m.text || '')}</div>
+          <div class="mono text-[9px] opacity-45 mt-0.5 text-right">${ogChatTimeLabel(m.createdAt)}</div>
+        </div>
+      </div>`;
+    }).join('');
+  }
+  box.scrollTop = box.scrollHeight;
+}
+function ogWireChatPanel(game){
+  ogStartChatListener(game.id);
+  ogRenderChatMessages();
+  document.getElementById('ogChatForm')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const input = document.getElementById('ogChatInput');
+    const clean = ogChatMessageText(input.value);
+    if(!clean) return;
+    let id = ogIdentity();
+    if(!id.name || !id.email){
+      const name = prompt('Your name?'); if(!name) return;
+      const email = prompt('Your email?'); if(!email) return;
+      id = { name, email }; ogSaveIdentity(name, email);
+    }
+    input.value = '';
+    input.focus();
+    await ogSendChatMessage(game.id, id.name, id.email, clean);
+  });
+}
+
 /* ---------- Detail modal ---------- */
 function openOgDetailModal(gameId){
   _ogActiveGameId = gameId;
@@ -6785,11 +6900,13 @@ function openOgDetailModal(gameId){
 document.getElementById('ogDetailCloseBtn')?.addEventListener('click', () => {
   _ogActiveGameId = null;
   _ogAckPendingGameId = null;
+  ogStopChatListener();
   document.getElementById('ogDetailModal').classList.add('hidden');
 });
 document.getElementById('ogDetailBackdrop')?.addEventListener('click', () => {
   _ogActiveGameId = null;
   _ogAckPendingGameId = null;
+  ogStopChatListener();
   document.getElementById('ogDetailModal').classList.add('hidden');
 });
 
@@ -6855,6 +6972,7 @@ function renderOgDetailModal(gameId){
   }
 
   const scoreHtml = ogCanKeepScore(game, status, alreadyJoined || isCreator || adminUnlocked, Date.now()) ? ogScorePanelHtml(game) : '';
+  const chatHtml = ogCanChat(game, alreadyJoined || isCreator || adminUnlocked) ? ogChatPanelHtml() : '';
 
   const actions = [];
   if(status === 'OPEN' && !alreadyJoined && !(isFacility && game.allowJoin === false) && !payAckPending){
@@ -6895,6 +7013,7 @@ function renderOgDetailModal(gameId){
     </div>
     ${payAckHtml}
     ${actions.length ? `<div class="flex gap-2 pt-2">${actions.join('')}</div>` : ''}
+    ${chatHtml}
   `;
 
   document.getElementById('ogActionJoin')?.addEventListener('click', async () => {
@@ -6954,6 +7073,7 @@ function renderOgDetailModal(gameId){
   });
   if(isCreator && mine) ogWireLink(game, mine);
   if(scoreHtml) ogWireScorePanel(game);
+  if(chatHtml) ogWireChatPanel(game); else ogStopChatListener();
 }
 
 function renderOpenPlayList(){

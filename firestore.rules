@@ -360,6 +360,13 @@ service cloud.firestore {
         allow write: if isValidTenantId(clientId);
       }
 
+      // Chat thread for one Open Game -- same open per-tenant trust level as
+      // the game doc itself (see above: no user auth to gate on further).
+      match /openGames/{gameId}/messages/{document} {
+        allow read: if isValidTenantId(clientId);
+        allow write: if isValidTenantId(clientId);
+      }
+
       // Soft abuse-limiting counters for Open Games creation
       match /abuseTracking/{document} {
         allow read: if isValidTenantId(clientId);

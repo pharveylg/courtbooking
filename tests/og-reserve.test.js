@@ -72,10 +72,16 @@ const submitHandler = grab("document.getElementById('ogCreateForm')?.addEventLis
 check('the PIN is required and format-checked before anything else', /reservePin\.length < 4 \|\| isNaN\(reservePin\)/.test(submitHandler));
 check('availability is re-checked at submit time (not just trusted from Step 1)', /reservedCourtId = ogAvailableCourt\(date, startHour, endHour, court\)/.test(submitHandler));
 check('a conflict at submit time sends the organizer back to Step 1', /if\(!reservedCourtId\)\{[^]*?ogGoStep\(1\);\s*return;/.test(submitHandler));
-check('a real booking record is created alongside the game', /newBooking = \{[^]*?status: 'Reserved',/.test(submitHandler));
+check('a real booking record is created alongside the game, starting Pending like any other reservation', /newBooking = \{[^]*?status: 'Pending',/.test(submitHandler));
 check('the game is created already linked to it (no separate link step needed)', /reservationId: newBooking \? newBooking\.id : null/.test(submitHandler) && /status: newBooking \? 'RESERVED'/.test(submitHandler));
 check('the booking is persisted and the existing linked-queue machinery is reused, not duplicated', /bookings\.unshift\(newBooking\);\s*saveBookings\(bookings\);\s*ogEnsureLinkedQueue\(\{ \.\.\.game, id: ref\.id \}, newBooking\);/.test(submitHandler));
 check('when not reserving, behavior is unchanged (OPEN/FULL from player count, no booking)', /players\.length >= playersNeeded \? 'FULL' : 'OPEN'/.test(submitHandler));
+
+section('wiring: the organizer is sent to pay, not left to remember later');
+check('a reserved game routes straight into the real payment flow (PAY_CTX + routeTo)', /if\(newBooking\)\{[^]*?_currentProofBookingId = newBooking\.id;\s*PAY_CTX = \{ bookingId: newBooking\.id, proofSent: false \};\s*routeTo\('payment'\);/.test(submitHandler));
+check('a non-reserved game still shows the normal "game is up" confirmation', /\} else \{\s*ogShowDone\(\{ title: 'Your game is up'/.test(submitHandler));
+check('renderPayContext (the real payment screen) shows Pending-payment copy for any booking with that status, ours included', /Reservation held · Pending payment/.test(html));
+check('admin confirmation of payment is the same existing toggle (setBookingStatus), not something new', /function setBookingStatus\(bookingId, newStatus\)/.test(html));
 
 console.log(`\n=== FIND A GAME: RESERVE A COURT ON CREATE: ${passed}/${passed + failed} passed ===`);
 process.exit(failed === 0 ? 0 : 1);

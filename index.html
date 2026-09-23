@@ -6406,7 +6406,7 @@ document.getElementById('ogCreateForm')?.addEventListener('submit', async (e) =>
         name, email, group: '', pin: reservePin,
         court: reservedCourtId,
         date, start: startHour, end: endHour,
-        status: 'Reserved',
+        status: 'Pending',
         createdAt: Date.now()
       };
     }
@@ -6430,7 +6430,18 @@ document.getElementById('ogCreateForm')?.addEventListener('submit', async (e) =>
     ogTrackMyGame(ref.id, 'creator', creatorToken);
     logUsageEvent('open_game_created', { court: game.court || null }); // analytics only, never billed
     document.getElementById('ogCreateModal').classList.add('hidden');
-    ogShowDone({ title: 'Your game is up', lead: newBooking ? `Players can now find it and join. The court is reserved — your PIN is ${reservePin}.` : 'Players can now find it and join. You can invite friends or add players from the game page.', gameId: ref.id, game: { id: ref.id, ...game } });
+    if(newBooking){
+      // The court is held but not yet paid for -- send the organizer straight
+      // into the same pay/proof-of-payment flow a normal reservation uses,
+      // instead of leaving payment as something they have to remember later.
+      toast('Your game is up! Now let’s pay for the court.');
+      try { localStorage.setItem(lsKey('cb_last_contact_v1'), JSON.stringify({ name, email })); } catch(ex){}
+      _currentProofBookingId = newBooking.id;
+      PAY_CTX = { bookingId: newBooking.id, proofSent: false };
+      routeTo('payment');
+    } else {
+      ogShowDone({ title: 'Your game is up', lead: 'Players can now find it and join. You can invite friends or add players from the game page.', gameId: ref.id, game: { id: ref.id, ...game } });
+    }
   } catch(ex){
     errEl.textContent = 'Failed to create game: ' + ex.message;
     errEl.classList.remove('hidden');

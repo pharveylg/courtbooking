@@ -1068,6 +1068,19 @@ body:not(.staff-mode) .staff-link{display:none!important}
               <span class="mono text-[10px] uppercase tracking-widest opacity-60">Court (optional)</span>
               <select id="ogCourt" class="h-11 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-3 mono text-[13px] outline-none focus:border-[#201C19]"></select>
             </label>
+            <div class="pt-1 space-y-2.5">
+            <label class="flex items-center gap-2.5 mono text-[12px] cursor-pointer select-none">
+              <input type="checkbox" id="ogReserveCourt" class="w-4 h-4 accent-[#201C19] cursor-pointer"/>
+              <span>Also reserve the court for this time <span class="opacity-50">(we'll check availability before you continue)</span></span>
+            </label>
+            <div id="ogReserveFields" class="hidden">
+              <label class="flex flex-col gap-1.5">
+                <span class="mono text-[10px] uppercase tracking-widest opacity-60">Reservation PIN (4 digits)</span>
+                <input type="text" id="ogReservePin" inputmode="numeric" maxlength="4" placeholder="e.g. 2580" class="h-11 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-4 mono text-[13px] outline-none focus:border-[#201C19]"/>
+              </label>
+              <div class="mono text-[10.5px] opacity-55 mt-1.5">You'll use this PIN to manage the reservation later.</div>
+            </div>
+          </div>
           </div>
           <div data-og-step="2" class="hidden space-y-3">
             <div class="font-[800] text-[18px] tracking-[-0.02em]">Who are you looking for?</div>
@@ -6180,6 +6193,9 @@ function ogPopulateCreateForm(){
   document.getElementById('ogPayFields').classList.add('hidden');
   document.getElementById('ogPayAmount').value = '';
   document.getElementById('ogPayNote').value = '';
+  document.getElementById('ogReserveCourt').checked = false;
+  document.getElementById('ogReserveFields').classList.add('hidden');
+  document.getElementById('ogReservePin').value = '';
 }
 /* One name+email row per pre-added player. Read back on submit; a row left
    fully empty is silently ignored, a half-filled row is rejected. */
@@ -6198,6 +6214,20 @@ document.getElementById('ogAddExtraPlayerBtn')?.addEventListener('click', ogAddE
 document.getElementById('ogPayBeforeJoin')?.addEventListener('change', (e) => {
   document.getElementById('ogPayFields').classList.toggle('hidden', !e.target.checked);
 });
+document.getElementById('ogReserveCourt')?.addEventListener('change', (e) => {
+  document.getElementById('ogReserveFields').classList.toggle('hidden', !e.target.checked);
+});
+/* Resolves an available court for a date/time -- either the requested court
+   (null if it's taken) or, with no preference, the first active court that's
+   free. Reuses the real hasOverlap() so this stays in sync with staff-block/
+   open-play/booking conflicts instead of re-deriving them. */
+// OG-RESERVE-START
+function ogAvailableCourt(date, start, end, preferredCourtId){
+  const candidates = preferredCourtId ? [preferredCourtId] : getActiveCourts().map(c => c.id);
+  for(const id of candidates){ if(!hasOverlap(date, start, end, null, id)) return id; }
+  return null;
+}
+// OG-RESERVE-END
 /* ---------- Create a game: three steps, then a confirmation ---------- */
 const OG_STEPS = ['When', 'The game', 'You'];
 let OG_STEP = 1;
@@ -6220,6 +6250,14 @@ document.getElementById('ogStepNext')?.addEventListener('click', () => {
     if(!date || isNaN(start) || isNaN(end)){ errEl.textContent = 'Pick a date, start time and end time.'; errEl.classList.remove('hidden'); return; }
     if(end <= start){ errEl.textContent = 'The end time must be after the start time.'; errEl.classList.remove('hidden'); return; }
     if(ogGameStartsAt({ date, startHour: start }) < Date.now() - 3600000){ errEl.textContent = 'That date and time has already passed.'; errEl.classList.remove('hidden'); return; }
+    if(document.getElementById('ogReserveCourt').checked){
+      const preferredCourt = (document.getElementById('ogCourt') && !document.getElementById('ogCourtLabel').classList.contains('hidden')) ? (document.getElementById('ogCourt').value || null) : null;
+      if(!ogAvailableCourt(date, start, end, preferredCourt)){
+        errEl.textContent = preferredCourt ? 'That court is already booked for this time — pick a different date, time, or court.' : 'No court is available for this time — pick a different date or time.';
+        errEl.classList.remove('hidden');
+        return;
+      }
+    }
   }
   ogGoStep(Math.min(3, OG_STEP + 1));
 });
@@ -6289,11 +6327,25 @@ document.getElementById('ogCreateForm')?.addEventListener('submit', async (e) =>
   const payAmountRaw = document.getElementById('ogPayAmount').value;
   const payAmount = payBeforeJoin && payAmountRaw !== '' ? Math.max(0, parseFloat(payAmountRaw) || 0) : null;
   const payNote = payBeforeJoin ? document.getElementById('ogPayNote').value.trim() : '';
+  const reserveCourt = document.getElementById('ogReserveCourt').checked;
+  const reservePin = document.getElementById('ogReservePin').value.trim();
 
   if(!date || isNaN(startHour) || isNaN(endHour)){ errEl.textContent = 'Pick a date, start time and end time.'; errEl.classList.remove('hidden'); return; }
   if(endHour <= startHour){ errEl.textContent = 'The end time must be after the start time.'; errEl.classList.remove('hidden'); return; }
   if(!name || !email){ errEl.textContent = 'Your name and email are required.'; errEl.classList.remove('hidden'); return; }
   if(ogGameStartsAt({date, startHour}) < Date.now() - 3600000){ errEl.textContent = 'That date/time has already passed.'; errEl.classList.remove('hidden'); return; }
+  let reservedCourtId = null;
+  if(reserveCourt){
+    if(!reservePin || reservePin.length < 4 || isNaN(reservePin)){ errEl.textContent = 'Enter a 4-digit reservation PIN, or uncheck "reserve the court".'; errEl.classList.remove('hidden'); ogGoStep(1); return; }
+    // Defensive re-check: time may have slipped between Step 1 and now.
+    reservedCourtId = ogAvailableCourt(date, startHour, endHour, court);
+    if(!reservedCourtId){
+      errEl.textContent = court ? 'That court was just booked by someone else — pick a different date, time, or court.' : 'No court is available for this time anymore — pick a different date or time.';
+      errEl.classList.remove('hidden');
+      ogGoStep(1);
+      return;
+    }
+  }
 
   // Read back the organizer's pre-added players. A row with either field
   // filled must have both; a fully empty row is just an unused blank and
@@ -6347,22 +6399,38 @@ document.getElementById('ogCreateForm')?.addEventListener('submit', async (e) =>
       { name, email, joinedAt: Date.now(), addedBy: 'self' },
       ...extraPlayers.map(p => ({ ...p, joinedAt: Date.now(), addedBy: 'organizer' })),
     ];
+    let newBooking = null;
+    if(reserveCourt){
+      newBooking = {
+        id: 'b_'+Date.now(),
+        name, email, group: '', pin: reservePin,
+        court: reservedCourtId,
+        date, start: startHour, end: endHour,
+        status: 'Reserved',
+        createdAt: Date.now()
+      };
+    }
     const game = {
       creatorName: name, creatorEmail: email, creatorToken,
-      status: players.length >= playersNeeded ? 'FULL' : 'OPEN',
+      status: newBooking ? 'RESERVED' : (players.length >= playersNeeded ? 'FULL' : 'OPEN'),
       date, startHour, endHour, skillLevel, format, playersNeeded,
-      court, notes,
+      court: newBooking ? reservedCourtId : court, notes,
       payBeforeJoin, payAmount, payNote,
       players,
-      reservationId: null,
+      reservationId: newBooking ? newBooking.id : null,
       createdAt: firebase.firestore.FieldValue.serverTimestamp(),
       updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     };
     await ref.set(game);
+    if(newBooking){
+      bookings.unshift(newBooking);
+      saveBookings(bookings);
+      ogEnsureLinkedQueue({ ...game, id: ref.id }, newBooking);
+    }
     ogTrackMyGame(ref.id, 'creator', creatorToken);
-    logUsageEvent('open_game_created', { court: court || null }); // analytics only, never billed
+    logUsageEvent('open_game_created', { court: game.court || null }); // analytics only, never billed
     document.getElementById('ogCreateModal').classList.add('hidden');
-    ogShowDone({ title: 'Your game is up', lead: 'Players can now find it and join. You can invite friends or add players from the game page.', gameId: ref.id, game: { id: ref.id, ...game } });
+    ogShowDone({ title: 'Your game is up', lead: newBooking ? `Players can now find it and join. The court is reserved — your PIN is ${reservePin}.` : 'Players can now find it and join. You can invite friends or add players from the game page.', gameId: ref.id, game: { id: ref.id, ...game } });
   } catch(ex){
     errEl.textContent = 'Failed to create game: ' + ex.message;
     errEl.classList.remove('hidden');

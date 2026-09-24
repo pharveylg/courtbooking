@@ -93,6 +93,12 @@ check('the card carries its own small, low-opacity disclaimer (font-size 10px, l
 check('it stays visible while the grid is showing, hidden during loading/error/empty states (same lifecycle as the other sections)', /myMatchesSection\.style\.display = '';/.test(pickerHtml) && /gridSection\.style\.display = 'none'; continueSection\.style\.display = 'none'; myMatchesSection\.style\.display = 'none';/.test(pickerHtml));
 check('unlike the Continue card, it does not hide while actively searching (it is facility-agnostic)', !/query[^;]*myMatchesSection\.style\.display/.test(pickerHtml));
 
+section('wiring: the Continue card offers Book / Find a game shortcuts');
+check('two shortcut buttons sit under the Continue card (not nested inside its <button>, which would be invalid HTML)', /<\/button>\s*<div class="continue-actions">[^]*?data-go="book"[^]*?data-go="opengames"/.test(pickerHtml));
+check('each shortcut selects the remembered facility and passes its route through', /b\.dataset\.go\)\)/.test(pickerHtml) && /function selectTenant\(clientId, label, route\)/.test(pickerHtml));
+check('the route becomes a hash on the facility URL, which index.html already honors on load', /'\/\?client=' \+ encodeURIComponent\(clientId\) \+ \(route \? '#' \+ route : ''\)/.test(pickerHtml) && /routeTo\(location\.hash\.slice\(1\), true\)/.test(indexHtml));
+check('the plain Continue card and facility tiles still open the facility home (no route)', /selectTenant\(last\.clientId \|\| last\.id, last\.name \|\| last\.clientId\)\);/.test(pickerHtml));
+
 section('wiring: my-matches.html\'s page-level device-local disclaimer');
 check('a single page-level note replaces the old inbox-only one, shown regardless of populated/empty state', /<div class="disclaimer">⏱ Reads information saved in this browser only\./.test(myMatchesHtml));
 check('the old, narrower inbox-only disclaimer text is gone (consolidated, not duplicated)', !/Saved on this device only — clearing browser data or switching devices loses this history\./.test(myMatchesHtml));

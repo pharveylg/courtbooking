@@ -140,6 +140,15 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
 .continue-next i{width:7px;height:7px;border-radius:50%;background:var(--ink);flex-shrink:0}
 .continue-next.wait{opacity:0.55;font-weight:600}
 .continue-next.wait i{animation:pulse-dot 1.4s ease-in-out infinite}
+.continue-actions{display:flex;gap:8px;margin-top:8px}
+.continue-action{
+  flex:1;height:42px;border-radius:999px;
+  background:#fff;border:1px solid var(--line);
+  font-family:inherit;font-weight:800;font-size:13px;color:var(--ink);cursor:pointer;
+  transition:border-color .2s,transform .2s cubic-bezier(0.16,1,0.3,1);
+}
+.continue-action:hover{border-color:var(--ink);transform:translateY(-1px)}
+.continue-action:active{transform:scale(0.98)}
 
 /* ── My Matches card (cross-facility, device-local) ──────
    Deliberately quieter than .continue -- it's a secondary entry point,
@@ -577,9 +586,14 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
             ${nextOpen.id === (last.clientId || last.id) && nextOpen.state
               ? `<span class="continue-next mono${nextOpen.state === 'wait' ? ' wait' : ''}"><i></i>${nextOpen.state === 'wait' ? 'Checking open times…' : esc(nextOpen.text)}</span>` : ''}
           </span>
-        </button>`;
+        </button>
+        <div class="continue-actions">
+          <button type="button" class="continue-action" data-go="book">Book a court</button>
+          <button type="button" class="continue-action" data-go="opengames">Find a game</button>
+        </div>`;
       continueSection.style.display = '';
       document.getElementById('continueBtn').addEventListener('click', () => selectTenant(last.clientId || last.id, last.name || last.clientId));
+      continueSlot.querySelectorAll('.continue-action').forEach(b => b.addEventListener('click', () => selectTenant(last.clientId || last.id, last.name || last.clientId, b.dataset.go)));
     } else {
       continueSection.style.display = 'none';
       continueSlot.innerHTML = '';
@@ -661,13 +675,15 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
     } catch (e) { /* the destination just fetches its own copy, same as today */ }
   }
 
-  function selectTenant(clientId, label) {
+  // `route` (optional) deep-links into that facility's own screen via the hash
+  // routes index.html already honors on load ('book', 'opengames').
+  function selectTenant(clientId, label, route) {
     try { localStorage.setItem(LS_TENANT, clientId); } catch (e) { /* private mode: just navigate */ }
     // Same-tab navigation -- a synthetic click on a target="_blank" anchor
     // isn't reliably treated as a trusted user gesture across browsers, so
     // popup blockers can silently swallow it and leave the picker on screen
     // with nothing happening. Plain navigation always works.
-    const go = () => { window.location.href = '/?client=' + encodeURIComponent(clientId); };
+    const go = () => { window.location.href = '/?client=' + encodeURIComponent(clientId) + (route ? '#' + route : ''); };
     if (window.PickleBall) {
       PickleBall.warp({
         label: label || clientId,

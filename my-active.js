@@ -54,7 +54,21 @@
     return out;
   }
 
-  const api = { LS_KEY, MAX_ITEMS, normalize, withAdded, withRemoved, groupByClient };
+  // The three device-local signals that, together, mean "this browser has
+  // something worth showing on My Matches" -- a remembered facility
+  // (picker.html), a remembered phone (tournament.html's lookup), or a
+  // non-empty active-items list (this module). Pure so picker.html's card,
+  // index.html's root-redirect, and my-matches.html's empty state can all
+  // ask the same question the same way instead of drifting apart.
+  const TENANT_LS_KEY = 'cb_selected_tenant';
+  const PHONE_LS_KEY = 'cb_my_phone_v1';
+  function hasAnyLocalTraceFrom(selectedTenant, phone, activeList) {
+    if (selectedTenant) return true;
+    if (phone) return true;
+    return Array.isArray(activeList) && activeList.length > 0;
+  }
+
+  const api = { LS_KEY, MAX_ITEMS, TENANT_LS_KEY, PHONE_LS_KEY, normalize, withAdded, withRemoved, groupByClient, hasAnyLocalTraceFrom };
 
   if (typeof document !== 'undefined') {
     api.load = function () {
@@ -77,6 +91,12 @@
       const next = withRemoved(api.load(), item);
       api.save(next);
       return next;
+    };
+    api.hasAnyLocalTrace = function () {
+      let selectedTenant = null, phone = null;
+      try { selectedTenant = localStorage.getItem(TENANT_LS_KEY); } catch (e) {}
+      try { phone = localStorage.getItem(PHONE_LS_KEY); } catch (e) {}
+      return hasAnyLocalTraceFrom(selectedTenant, phone, api.load());
     };
   }
 

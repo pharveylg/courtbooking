@@ -90,12 +90,13 @@ a.card:hover{transform:translateY(-1px);box-shadow:0 8px 22px rgba(32,28,25,0.08
 <div class="page">
   <h1>What's active</h1>
   <div class="lead">Reservations, games, and tournament matches you're currently part of, across every facility on this device.</div>
+  <div class="disclaimer">⏱ Reads information saved in this browser only. Clearing your browser's site data, using a different browser, or switching devices will clear this list.</div>
 
   <div id="stateLoading" class="state visible"><div class="spinner"></div></div>
 
   <div id="stateEmpty" class="state">
     <div class="empty">
-      <p>Nothing active yet. Once you reserve a court, join a game, or look yourself up in a tournament, it'll show up here.</p>
+      <p>Nothing cached on this device yet. Once you reserve a court, join a game, or look yourself up in a tournament — from this browser — it'll show up here.</p>
       <a class="btn-dark" href="/picker.html">Browse facilities →</a>
     </div>
   </div>
@@ -325,7 +326,7 @@ a.card:hover{transform:translateY(-1px);box-shadow:0 8px 22px rgba(32,28,25,0.08
       </div>`).join('');
     return {
       count: messages.length,
-      html: `<div class="label">Notifications</div><div class="card">${rows}<div class="disclaimer">⏱ Saved on this device only — clearing browser data or switching devices loses this history.</div></div>`,
+      html: `<div class="label">Notifications</div><div class="card">${rows}</div>`,
     };
   }
 

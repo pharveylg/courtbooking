@@ -2393,13 +2393,7 @@ const isRootPath = window.location.pathname === '/' || window.location.pathname 
 // booking/game (see my-active.js), or a phone number used to look up
 // tournament matches (see tournament.html).
 function _isReturningVisitor(){
-  if (localStorage.getItem('cb_selected_tenant')) return true;
-  if (localStorage.getItem('cb_my_phone_v1')) return true;
-  try {
-    const arr = JSON.parse(localStorage.getItem('cb_my_active_v1'));
-    if (Array.isArray(arr) && arr.length) return true;
-  } catch (e) {}
-  return false;
+  return typeof MyActive !== 'undefined' && MyActive.hasAnyLocalTrace();
 }
 
 if (isRootPath && !hasClientParam && FB_ENABLED) {

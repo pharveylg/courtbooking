@@ -12,6 +12,7 @@ const indexHtml = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf
 const tournamentHtml = fs.readFileSync(path.join(__dirname, '..', 'tournament.html'), 'utf8');
 const swJs = fs.readFileSync(path.join(__dirname, '..', 'sw.js'), 'utf8');
 const myMatchesHtml = fs.readFileSync(path.join(__dirname, '..', 'my-matches.html'), 'utf8');
+const pickerHtml = fs.readFileSync(path.join(__dirname, '..', 'picker.html'), 'utf8');
 
 const grab = (src, a, b) => { const i = src.indexOf(a), j = src.indexOf(b, i); if (i < 0 || j < 0) throw new Error('markers not found: ' + a.slice(0, 60)); return src.slice(i, j); };
 
@@ -34,6 +35,13 @@ section('my-active.js -- pure cross-facility pointer list');
   check('withRemoved drops exactly the matching pointer, nothing else', MyActive.withRemoved([item(), item({ refId: 'b2' })], item()).length === 1 && MyActive.withRemoved([item()], item()).length === 0);
   const grouped = MyActive.groupByClient([item({ clientId: 'a' }), item({ clientId: 'b', refId: 'x' }), item({ clientId: 'a', refId: 'y' })]);
   check('groupByClient buckets by facility, preserving each facility\'s own items', grouped.a.length === 2 && grouped.b.length === 1);
+
+  check('nothing remembered at all -> no local trace', !MyActive.hasAnyLocalTraceFrom(null, null, []));
+  check('a remembered facility alone counts as a trace', MyActive.hasAnyLocalTraceFrom('demo', null, []));
+  check('a remembered phone alone counts as a trace', MyActive.hasAnyLocalTraceFrom(null, '639171234567', []));
+  check('a non-empty active-items list alone counts as a trace', MyActive.hasAnyLocalTraceFrom(null, null, [item()]));
+  check('an empty active-items array is NOT a trace by itself (must not false-positive on "[]")', !MyActive.hasAnyLocalTraceFrom(null, null, []));
+  check('a non-array active list is treated as empty, not a crash', !MyActive.hasAnyLocalTraceFrom(null, null, undefined) && !MyActive.hasAnyLocalTraceFrom(null, null, null));
 }
 
 section('push-inbox.js -- pure message shaping');
@@ -55,11 +63,10 @@ check('ogTrackMyGame really is called from both the create and the join paths', 
 
 section('wiring: root-route landing picks picker.html vs my-matches.html');
 const landingLogic = grab(indexHtml, 'function _isReturningVisitor(){', "} else if (!currentClientId && FB_ENABLED) {");
-check('a remembered facility counts as returning', /cb_selected_tenant/.test(landingLogic));
-check('a remembered phone (tournament lookup) counts as returning', /cb_my_phone_v1/.test(landingLogic));
-check('a non-empty active-items index counts as returning (an EMPTY array must not false-positive)', /cb_my_active_v1/.test(landingLogic) && /Array\.isArray\(arr\) && arr\.length/.test(landingLogic));
+check('the redirect decision now delegates to the shared MyActive.hasAnyLocalTrace() (one source of truth, not a duplicated copy)', /function _isReturningVisitor\(\)\{\s*return typeof MyActive !== 'undefined' && MyActive\.hasAnyLocalTrace\(\);\s*\}/.test(indexHtml));
 check('root path with no ?client redirects based on that check', /window\.location\.replace\(_isReturningVisitor\(\) \? '\/my-matches\.html' : '\/picker\.html'\)/.test(landingLogic));
 check("'my-matches' is a reserved path segment so it's never misread as a tenant slug", /RESERVED_PATH_SEGMENTS = \[.*'my-matches'\]/.test(indexHtml));
+check('my-active.js is loaded before the redirect logic runs (script order, not just presence)', indexHtml.indexOf('<script src="/my-active.js">') > 0 && indexHtml.indexOf('<script src="/my-active.js">') < indexHtml.indexOf('function _isReturningVisitor'));
 
 section('wiring: Switch Facility always reaches the picker directly');
 check('handleSwitchFacility navigates straight to /picker.html, not through / (which would just bounce back to My Matches for a returning visitor)', /function handleSwitchFacility\(\) \{[^]*?window\.location\.href = '\/picker\.html';\s*\}/.test(indexHtml));
@@ -74,15 +81,30 @@ check('push-inbox.js is imported into the service worker', /importScripts\('\/pu
 check('both shared modules are precached (cache-first assets)', /'\/my-active\.js'/.test(swJs) && /'\/push-inbox\.js'/.test(swJs));
 check('my-matches.html is precached as a secondary page', /'\/my-matches\.html'/.test(swJs));
 check('the push handler shows the notification AND records it, and a recording failure never blocks the notification (Promise.all + .catch on the record call)', /Promise\.all\(\[\s*self\.registration\.showNotification\([^]*?PushInbox\.record\(d\) : Promise\.resolve\(\)\)\.catch\(\(\) => \{\}\),/.test(swJs));
-check('the cache version was bumped for this deploy (stale sw.js would keep serving the old push handler)', /const CACHE_NAME = 'courtbooking-v30';/.test(swJs));
+check('the cache version was bumped for this deploy (stale sw.js would keep serving the old push handler)', /const CACHE_NAME = 'courtbooking-v31';/.test(swJs));
+
+section('wiring: picker.html has a persistent My Matches entry point');
+check('my-active.js is loaded on the picker too', /<script src="\/my-active\.js"><\/script>/.test(pickerHtml));
+check('the card links straight to my-matches.html', /<a class="mymatches-card rise" href="\/my-matches\.html"/.test(pickerHtml));
+check('the status is computed purely from localStorage (via MyActive), not a Firestore read -- instant, no network dependency', /function refreshMyMatchesStatus\(\)\{[^]*?MyActive\.hasAnyLocalTrace\(\)/.test(pickerHtml));
+check('it\'s a binary signal (has-data / not), not a precise count -- honest about what a localStorage-only check can know', /hasData \? 'Saved on this device' : 'Nothing cached yet'/.test(pickerHtml));
+check('the dot indicator actually reflects that binary state', /myMatchesDot\.classList\.toggle\('has-data', hasData\)/.test(pickerHtml));
+check('the card carries its own small, low-opacity disclaimer (font-size 10px, low opacity -- kept deliberately minor, not a warning banner)', /\.mymatches-note\{font-size:10px;opacity:0\.4/.test(pickerHtml) && /Saved only on this device — clears with your browser data\./.test(pickerHtml));
+check('it stays visible while the grid is showing, hidden during loading/error/empty states (same lifecycle as the other sections)', /myMatchesSection\.style\.display = '';/.test(pickerHtml) && /gridSection\.style\.display = 'none'; continueSection\.style\.display = 'none'; myMatchesSection\.style\.display = 'none';/.test(pickerHtml));
+check('unlike the Continue card, it does not hide while actively searching (it is facility-agnostic)', !/query[^;]*myMatchesSection\.style\.display/.test(pickerHtml));
+
+section('wiring: my-matches.html\'s page-level device-local disclaimer');
+check('a single page-level note replaces the old inbox-only one, shown regardless of populated/empty state', /<div class="disclaimer">⏱ Reads information saved in this browser only\./.test(myMatchesHtml));
+check('the old, narrower inbox-only disclaimer text is gone (consolidated, not duplicated)', !/Saved on this device only — clearing browser data or switching devices loses this history\./.test(myMatchesHtml));
+check('the empty state explains WHY it\'s empty (device-local caching), not just that it is', /Nothing cached on this device yet\. Once you reserve a court, join a game, or look yourself up in a tournament — from this browser/.test(myMatchesHtml));
 
 section('wiring: my-matches.html itself');
 check('it reads the cross-facility index and the device-local inbox via the shared modules', /MyActive\.load\(\)/.test(myMatchesHtml) && /MyActive\.groupByClient\(/.test(myMatchesHtml) && /PushInbox\.list\(\)/.test(myMatchesHtml));
 check('facility name/logo comes from the public tenantDirectory (same source picker.html already uses)', /tenantDirectory\/'/.test(myMatchesHtml));
 check('tournament matches are found via the existing cross-tenant platformPlayers identity, not a new one', /platformPlayers\/'/.test(myMatchesHtml) && /memberTenants/.test(myMatchesHtml));
-check('the inbox is clearly labeled as device-only, not synced', /Saved on this device only/.test(myMatchesHtml));
+check('the whole page is clearly labeled as device-only, not synced (now a single page-level note, see below)', /Reads information saved in this browser only/.test(myMatchesHtml));
 check('there\'s a way back to the facility picker from this page', /href="\/picker\.html"/.test(myMatchesHtml));
-check('an empty state exists for a visitor with nothing tracked yet', /Nothing active yet/.test(myMatchesHtml));
+check('an empty state exists for a visitor with nothing tracked yet', /Nothing cached on this device yet/.test(myMatchesHtml));
 check('game cards show the friendly Pending/Confirmed label, not the raw status', /badge \$\{gameBadge\(status\)\}">\$\{esc\(ogStatusLabel\(status\)\)\}/.test(myMatchesHtml));
 
 section('regression guard: my-matches.html\'s copy of the reservation-expiry rule stays in sync with index.html\'s real one');

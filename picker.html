@@ -141,6 +141,27 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
 .continue-next.wait{opacity:0.55;font-weight:600}
 .continue-next.wait i{animation:pulse-dot 1.4s ease-in-out infinite}
 
+/* ── My Matches card (cross-facility, device-local) ──────
+   Deliberately quieter than .continue -- it's a secondary entry point,
+   not the primary "pick a facility" action. */
+.mymatches-card{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:14px 16px;border-radius:22px;
+  background:#fff;border:1px solid var(--line);
+  cursor:pointer;font-family:inherit;color:inherit;text-decoration:none;
+  transition:border-color .2s,transform .2s cubic-bezier(0.16,1,0.3,1);
+}
+.mymatches-card:hover{border-color:var(--ink);transform:translateY(-1px)}
+.mymatches-card:active{transform:scale(0.99)}
+.mymatches-left{display:flex;align-items:center;gap:12px;min-width:0}
+.mymatches-icon{width:38px;height:38px;border-radius:50%;background:var(--sand);display:grid;place-items:center;font-size:16px;flex-shrink:0}
+.mymatches-title{font-weight:800;font-size:15px;letter-spacing:-0.01em;display:block}
+.mymatches-status{display:flex;align-items:center;gap:6px;font-size:11px;margin-top:2px;opacity:0.6}
+.mymatches-dot{width:6px;height:6px;border-radius:50%;background:rgba(32,28,25,0.3);flex-shrink:0}
+.mymatches-dot.has-data{background:var(--lime);box-shadow:0 0 0 3px rgba(214,255,95,0.35)}
+.mymatches-arrow{opacity:0.4;flex-shrink:0}
+.mymatches-note{font-size:10px;opacity:0.4;margin-top:6px;padding:0 2px}
+
 /* ── Facility rows ────────────────────────────────────── */
 .tenant-grid{display:grid;grid-template-columns:minmax(0,1fr);gap:10px}
 @media(min-width:540px){.tenant-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
@@ -294,6 +315,22 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
     <div id="continueSlot"></div>
   </section>
 
+  <!-- My Matches (cross-facility, device-local -- see my-matches.html) -->
+  <section id="myMatchesSection" style="display:none">
+    <div class="label mono">Your matches</div>
+    <a class="mymatches-card rise" href="/my-matches.html" id="myMatchesCard">
+      <span class="mymatches-left">
+        <span class="mymatches-icon" aria-hidden="true">🎾</span>
+        <span>
+          <span class="mymatches-title">My Matches</span>
+          <span class="mymatches-status mono"><span class="mymatches-dot" id="myMatchesDot"></span><span id="myMatchesStatusText">Checking this device…</span></span>
+        </span>
+      </span>
+      <span class="mymatches-arrow" aria-hidden="true">→</span>
+    </a>
+    <div class="mymatches-note mono">Saved only on this device — clears with your browser data.</div>
+  </section>
+
   <!-- Facilities -->
   <section id="gridSection" style="display:none">
     <div class="label mono" id="gridLabel">Pick your facility</div>
@@ -324,6 +361,7 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
 <script src="/firebase-config.js"></script>
 <script src="/next-open.js"></script>
 <script src="/pickle-ball.js"></script>
+<script src="/my-active.js"></script>
 
 <script>
 (function() {
@@ -345,6 +383,20 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
   const gridLabel = document.getElementById('gridLabel');
   const tenantGrid = document.getElementById('tenantGrid');
   const continueSection = document.getElementById('continueSection');
+  const myMatchesSection = document.getElementById('myMatchesSection');
+  const myMatchesDot = document.getElementById('myMatchesDot');
+  const myMatchesStatusText = document.getElementById('myMatchesStatusText');
+
+  // A binary signal, not a precise count -- an accurate count would need a
+  // Firestore read per tracked item (what my-matches.html itself does), which
+  // this lightweight card deliberately doesn't do. Just localStorage, so it's
+  // instant and safe to call before Firebase has even loaded.
+  function refreshMyMatchesStatus(){
+    const hasData = typeof MyActive !== 'undefined' && MyActive.hasAnyLocalTrace();
+    myMatchesDot.classList.toggle('has-data', hasData);
+    myMatchesStatusText.textContent = hasData ? 'Saved on this device' : 'Nothing cached yet';
+  }
+  refreshMyMatchesStatus();
   const continueSlot = document.getElementById('continueSlot');
   const heroCount = document.getElementById('heroCount');
 
@@ -501,11 +553,16 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
     if (tenants.length === 0) {
       gridSection.style.display = 'none';
       continueSection.style.display = 'none';
+      myMatchesSection.style.display = 'none';
       showState('empty');
       return;
     }
 
     showState('grid');
+    // Unlike the Continue card (tied to a specific facility match), My
+    // Matches is facility-agnostic -- stays visible while searching too.
+    refreshMyMatchesStatus();
+    myMatchesSection.style.display = '';
 
     // Returning player: only when not searching and the saved facility is still listed
     const last = !query ? allTenants.find(t => (t.clientId || t.id) === lastTenantId()) : null;
@@ -642,7 +699,7 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
     stateLoading.classList.toggle('visible', s === 'loading');
     stateError.classList.toggle('visible', s === 'error');
     stateEmpty.classList.toggle('visible', s === 'empty');
-    if (s !== 'grid') { gridSection.style.display = 'none'; continueSection.style.display = 'none'; }
+    if (s !== 'grid') { gridSection.style.display = 'none'; continueSection.style.display = 'none'; myMatchesSection.style.display = 'none'; }
     searchWrap.style.display = (s === 'grid' || s === 'empty') ? '' : 'none';
   }
 

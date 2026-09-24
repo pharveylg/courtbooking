@@ -5043,7 +5043,7 @@ function renderPayContext(){
       <div class="mt-1 text-[22px] font-[800] tracking-[-0.02em]">${escapeHtml(fmtDateLabel(bk.date))}</div>
       <div class="mono text-[13px] mt-0.5">${escapeHtml(to12Range(bk.start, bk.end))}${getActiveCourts().length > 1 ? ' · ' + escapeHtml(getCourtName(bk.court) || '') : ''} · <b>${fmtMoney(amount)}</b></div>
       <p class="mono text-[11.5px] leading-[1.6] opacity-75 mt-3">${sent ? 'Thanks! The club will check your payment and confirm your booking. Keep your Booking PIN (' + escapeHtml(bk.pin) + ').' : 'Pay using the QR below, then send a screenshot so the club can confirm your booking. Your Booking PIN is <b>' + escapeHtml(bk.pin) + '</b>.'}</p>
-      ${isGameReserve && !sent ? `<div class="mono text-[11px] leading-[1.6] mt-3 p-3 rounded-[14px] bg-[#FFF0D6] text-[#92400E] border border-[#FFE0A3]">⏱ Your game listing shows as reserved, but this expires in 1 hour if payment isn't confirmed — after that the reservation and game listing expire automatically.</div>` : ''}
+      ${isGameReserve && !sent ? `<div class="mono text-[11px] leading-[1.6] mt-3 p-3 rounded-[14px] bg-[#FFF0D6] text-[#92400E] border border-[#FFE0A3]">⏱ Your game listing shows as Reservation Pending until the club confirms payment. Send it within 1 hour or the reservation and game listing expire automatically.</div>` : ''}
       <div class="mt-4 flex flex-wrap gap-2">
         ${sent ? '' : `<button type="button" data-upload-proof="${escapeHtml(bk.id)}" class="h-11 px-5 rounded-full bg-[#D6FF5F] border border-[#201C19]/10 font-[800] text-[13px] cursor-pointer">Send payment proof</button>`}
         <button type="button" id="payDoneBtn" class="h-11 px-5 rounded-full ${sent ? 'bg-[#201C19] text-white' : 'bg-white border border-[#EAE0D5]'} font-[800] text-[13px] cursor-pointer">${sent ? 'Back to home' : "I'll send it later"}</button>
@@ -5991,13 +5991,30 @@ function ogReservationExpired(game, allBookings){
   const bk = (allBookings || []).find(b => b.id === game.reservationId);
   return !!bk && bk.status === 'Pending' && (Date.now() - bk.createdAt) > OG_RESERVE_GRACE_MS;
 }
+// True until staff actually confirms the linked booking (toggles it to
+// Reserved/Paid) -- until then the court is only held, not paid for, so the
+// game shouldn't read as fully confirmed yet even though it's not expired.
+function ogReservationAwaitingPayment(game, allBookings){
+  if(game.status !== 'RESERVED' || !game.reservationId) return false;
+  const bk = (allBookings || []).find(b => b.id === game.reservationId);
+  return !!bk && bk.status === 'Pending';
+}
 function ogEffectiveStatus(game, allBookings = bookings){
   const now = Date.now();
   if(game.status === 'CANCELLED') return 'CANCELLED';
   if(ogReservationExpired(game, allBookings)) return 'EXPIRED';
   if(game.status === 'RESERVED' && now > ogGameEndsAt(game)) return 'COMPLETED';
+  if(ogReservationAwaitingPayment(game, allBookings)) return 'RESERVATION_PENDING';
   if((game.status === 'OPEN' || game.status === 'FULL') && now > ogGameEndsAt(game)) return 'EXPIRED';
   return game.status;
+}
+// Display copy for a status value -- separate from the value itself so every
+// other check in this file (=== 'OPEN', !== 'CANCELLED', etc.) keeps working
+// unchanged; only the two reservation states get friendlier wording here.
+function ogStatusLabel(status){
+  if(status === 'RESERVATION_PENDING') return 'Reservation Pending';
+  if(status === 'RESERVED') return 'Reservation Confirmed';
+  return status;
 }
 // OG-EXPIRE-END
 
@@ -6175,12 +6192,12 @@ function renderOpenGames(){
       .sort((a,b) => ogGameStartsAt(b) - ogGameStartsAt(a));
     mineEl.innerHTML = mineGames.map(g => {
       const status = ogEffectiveStatus(g);
-      const badgeColor = status==='RESERVED' ? 'bg-[#E8F5D8] text-[#3F7019]' : status==='FULL' ? 'bg-[#201C19] text-white' : (status==='CANCELLED'||status==='EXPIRED') ? 'bg-[#F1E9DF] text-[#201C19]/50' : 'bg-[#D6FF5F] text-[#201C19]';
+      const badgeColor = status==='RESERVED' ? 'bg-[#E8F5D8] text-[#3F7019]' : status==='RESERVATION_PENDING' ? 'bg-[#FFF0D6] text-[#92400E]' : status==='FULL' ? 'bg-[#201C19] text-white' : (status==='CANCELLED'||status==='EXPIRED') ? 'bg-[#F1E9DF] text-[#201C19]/50' : 'bg-[#D6FF5F] text-[#201C19]';
       return `
       <button type="button" data-og-view="${g.id}" class="w-full text-left p-3 rounded-[14px] border border-[#F1E9DF] bg-[#FFFBF5] hover:border-[#201C19] transition cursor-pointer">
         <div class="flex items-center justify-between gap-2">
           <span class="mono text-[11px] font-[700] truncate">${fmtDateLabel(g.date)} · ${ogTimeLabel(g)}</span>
-          <span class="mono text-[9px] px-2.5 py-1 rounded-full font-[700] uppercase ${badgeColor}">${status}</span>
+          <span class="mono text-[9px] px-2.5 py-1 rounded-full font-[700] uppercase ${badgeColor}">${ogStatusLabel(status)}</span>
         </div>
         <div class="mono text-[10px] opacity-60 mt-1">${g.players.length} / ${g.playersNeeded} players • ${mine[g.id].role === 'creator' ? 'You organized this' : 'You joined'}</div>
       </button>`;
@@ -7086,7 +7103,8 @@ function renderOgDetailModal(gameId){
 
   let reservationHtml;
   if(game.reservationId){
-    reservationHtml = `<div class="mono text-[12px]"><span class="text-[#3F7019] font-[700]">✓ Reservation Confirmed</span>${game.court ? ' · '+escapeHtml(getCourtName(game.court)) : ''}</div>`;
+    const awaitingPayment = status === 'RESERVATION_PENDING';
+    reservationHtml = `<div class="mono text-[12px]"><span class="${awaitingPayment ? 'text-[#92400E]' : 'text-[#3F7019]'} font-[700]">${awaitingPayment ? '⏱ Reservation Pending' : '✓ Reservation Confirmed'}</span>${game.court ? ' · '+escapeHtml(getCourtName(game.court)) : ''}</div>`;
   } else if(isCreator && status !== 'CANCELLED' && status !== 'EXPIRED'){
     reservationHtml = ogLinkPanelHtml(game);
   } else {
@@ -7118,7 +7136,7 @@ function renderOgDetailModal(gameId){
            <span class="mono text-[10px] px-3 py-1 rounded-full bg-[#F1E9DF] text-[#201C19] font-[700]">${rotationRuleLabel(game.rotationRule)}</span>`
         : `<span class="mono text-[10px] px-3 py-1 rounded-full bg-[#F1E9DF] text-[#201C19] font-[700]">${escapeHtml(game.format)}</span>`}
       ${isFacility ? `<span class="mono text-[10px] px-3 py-1 rounded-full font-[700] ${game.allowJoin===false ? 'bg-[#F1E9DF] text-[#201C19]/80' : 'bg-[#E8F5D8] text-[#3F7019]'}">${game.allowJoin===false ? 'Walk-ins only' : 'Public Joining'}</span>` : ''}
-      <span class="mono text-[10px] px-3 py-1 rounded-full font-[800] uppercase ${status==='OPEN'?'bg-[#D6FF5F] text-[#201C19]':status==='FULL'?'bg-[#201C19] text-white':status==='RESERVED'?'bg-[#E8F5D8] text-[#3F7019]':'bg-[#F1E9DF] text-[#201C19]'}">${isFacility ? `${game.players.length} joined` : `${game.players.length} / ${game.playersNeeded} Players`} · ${status}</span>
+      <span class="mono text-[10px] px-3 py-1 rounded-full font-[800] uppercase ${status==='OPEN'?'bg-[#D6FF5F] text-[#201C19]':status==='FULL'?'bg-[#201C19] text-white':status==='RESERVED'?'bg-[#E8F5D8] text-[#3F7019]':status==='RESERVATION_PENDING'?'bg-[#FFF0D6] text-[#92400E]':'bg-[#F1E9DF] text-[#201C19]'}">${isFacility ? `${game.players.length} joined` : `${game.players.length} / ${game.playersNeeded} Players`} · ${ogStatusLabel(status)}</span>
     </div>
     ${isFacility && game.allowJoin !== false && game.perPersonRate ? `<div class="mono text-[12px] font-[700]">${fmtMoney(game.perPersonRate)} / person</div>` : ''}
     ${game.notes ? `<div class="mono text-[12px] opacity-70">${escapeHtml(game.notes)}</div>` : ''}

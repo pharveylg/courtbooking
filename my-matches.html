@@ -166,17 +166,28 @@ a.card:hover{transform:translateY(-1px);box-shadow:0 8px 22px rgba(32,28,25,0.08
     const bk = (allBookings || []).find(b => b.id === game.reservationId);
     return !!bk && bk.status === 'Pending' && (Date.now() - bk.createdAt) > OG_RESERVE_GRACE_MS;
   }
+  function ogReservationAwaitingPayment(game, allBookings) {
+    if (game.status !== 'RESERVED' || !game.reservationId) return false;
+    const bk = (allBookings || []).find(b => b.id === game.reservationId);
+    return !!bk && bk.status === 'Pending';
+  }
   function ogEffectiveStatus(game, allBookings) {
     const now = Date.now();
     if (game.status === 'CANCELLED') return 'CANCELLED';
     if (ogReservationExpired(game, allBookings)) return 'EXPIRED';
     if (game.status === 'RESERVED' && now > ogGameEndsAt(game)) return 'COMPLETED';
+    if (ogReservationAwaitingPayment(game, allBookings)) return 'RESERVATION_PENDING';
     if ((game.status === 'OPEN' || game.status === 'FULL') && now > ogGameEndsAt(game)) return 'EXPIRED';
     return game.status;
   }
+  function ogStatusLabel(status) {
+    if (status === 'RESERVATION_PENDING') return 'Reservation Pending';
+    if (status === 'RESERVED') return 'Reservation Confirmed';
+    return status;
+  }
   // MM-PURE-END
 
-  window.MyMatchesPure = { isBookingActive, isGameActive, isTournamentActive, ogEffectiveStatus, fmtDateLabel, fmtHour };
+  window.MyMatchesPure = { isBookingActive, isGameActive, isTournamentActive, ogEffectiveStatus, ogStatusLabel, fmtDateLabel, fmtHour };
 
   // ---------- Firebase ----------
   const FIREBASE_CFG = (window.FIREBASE_CONFIG && window.FIREBASE_CONFIG.apiKey && !String(window.FIREBASE_CONFIG.apiKey).startsWith('PASTE'))
@@ -254,7 +265,7 @@ a.card:hover{transform:translateY(-1px);box-shadow:0 8px 22px rgba(32,28,25,0.08
         cards.push({
           sortAt: g.date + ' ' + String(g.startHour).padStart(2, '0'),
           html: `<a class="card" href="/?client=${encodeURIComponent(clientId)}">
-            <div class="card-top"><div class="facility-row">${logoHtml(facility)}<span class="facility-name">${esc(facility.name)}</span></div><span class="badge ${gameBadge(status)}">${esc(status)}</span></div>
+            <div class="card-top"><div class="facility-row">${logoHtml(facility)}<span class="facility-name">${esc(facility.name)}</span></div><span class="badge ${gameBadge(status)}">${esc(ogStatusLabel(status))}</span></div>
             <div class="card-title">${fmtDateLabel(g.date)}</div>
             <div class="card-detail">${fmtHour(g.startHour)}${g.endHour != null ? ' – ' + fmtHour(g.endHour) : ''} · Find a Game${status === 'OPEN' ? ` · ${needed} more player${needed === 1 ? '' : 's'} needed` : ''}</div>
           </a>`,

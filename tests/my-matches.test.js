@@ -83,6 +83,7 @@ check('tournament matches are found via the existing cross-tenant platformPlayer
 check('the inbox is clearly labeled as device-only, not synced', /Saved on this device only/.test(myMatchesHtml));
 check('there\'s a way back to the facility picker from this page', /href="\/picker\.html"/.test(myMatchesHtml));
 check('an empty state exists for a visitor with nothing tracked yet', /Nothing active yet/.test(myMatchesHtml));
+check('game cards show the friendly Pending/Confirmed label, not the raw status', /badge \$\{gameBadge\(status\)\}">\$\{esc\(ogStatusLabel\(status\)\)\}/.test(myMatchesHtml));
 
 section('regression guard: my-matches.html\'s copy of the reservation-expiry rule stays in sync with index.html\'s real one');
 {
@@ -97,23 +98,33 @@ section('regression guard: my-matches.html\'s copy of the reservation-expiry rul
     'bodies diverged -- update my-matches.html to match index.html\'s ogReservationExpired'
   );
   check(
+    'ogReservationAwaitingPayment\'s body is identical between the two copies',
+    collapse(bodyOf(realExpire, 'function ogReservationAwaitingPayment(game, allBookings){', '\n}')) === collapse(bodyOf(mmExpire, 'function ogReservationAwaitingPayment(game, allBookings) {', '\n  }')),
+    'bodies diverged -- update my-matches.html to match index.html\'s ogReservationAwaitingPayment'
+  );
+  check(
     'ogEffectiveStatus\'s body is identical between the two copies (only the default-parameter, which needs a global that doesn\'t exist on this page, differs)',
     collapse(bodyOf(realExpire, 'function ogEffectiveStatus(game, allBookings = bookings){', '\n}')) === collapse(bodyOf(mmExpire, 'function ogEffectiveStatus(game, allBookings) {', '\n  }')),
     'bodies diverged -- update my-matches.html to match index.html\'s ogEffectiveStatus'
+  );
+  check(
+    'ogStatusLabel\'s body is identical between the two copies',
+    collapse(bodyOf(realExpire, 'function ogStatusLabel(status){', '\n}')) === collapse(bodyOf(mmExpire, 'function ogStatusLabel(status) {', '\n  }')),
+    'bodies diverged -- update my-matches.html to match index.html\'s ogStatusLabel'
   );
 }
 
 section('my-matches.html pure functions (extracted, same technique as the rest of this suite)');
 {
   const pureSrc = grab(myMatchesHtml, '// MM-PURE-START', '// MM-PURE-END');
-  const api = new Function(`${pureSrc}\nreturn { isBookingActive, isGameActive, isTournamentActive, ogEffectiveStatus };`)();
+  const api = new Function(`${pureSrc}\nreturn { isBookingActive, isGameActive, isTournamentActive, ogEffectiveStatus, ogStatusLabel };`)();
 
   check('an unpaid booking today or in the future is active', api.isBookingActive({ status: 'Pending', date: '2030-01-01' }, '2026-01-01'));
   check('a cancelled booking is never active, regardless of date', !api.isBookingActive({ status: 'Cancelled', date: '2030-01-01' }, '2026-01-01'));
   check('a past-dated booking is not active', !api.isBookingActive({ status: 'Pending', date: '2020-01-01' }, '2026-01-01'));
   check('a null/undefined booking is safely not active', !api.isBookingActive(null) && !api.isBookingActive(undefined));
 
-  check('OPEN/FULL/RESERVED are active game statuses', api.isGameActive('OPEN') && api.isGameActive('FULL') && api.isGameActive('RESERVED'));
+  check('OPEN/FULL/RESERVED/RESERVATION_PENDING are active game statuses', api.isGameActive('OPEN') && api.isGameActive('FULL') && api.isGameActive('RESERVED') && api.isGameActive('RESERVATION_PENDING'));
   check('CANCELLED/EXPIRED/COMPLETED are not', !api.isGameActive('CANCELLED') && !api.isGameActive('EXPIRED') && !api.isGameActive('COMPLETED'));
 
   check('a tournament that hasn\'t ended yet is active', api.isTournamentActive({ startDate: '2030-01-01', endDate: '2030-01-02' }, '2026-01-01'));
@@ -123,7 +134,9 @@ section('my-matches.html pure functions (extracted, same technique as the rest o
   const gm = (o = {}) => ({ id: 'g1', status: 'RESERVED', reservationId: 'b1', date: '2030-01-01', startHour: 18, endHour: 20, ...o });
   const bk = (o = {}) => ({ id: 'b1', status: 'Pending', createdAt: Date.now(), ...o });
   check('a lapsed unpaid reservation reports EXPIRED here too, same as index.html', api.ogEffectiveStatus(gm(), [bk({ createdAt: Date.now() - 3700000 })]) === 'EXPIRED');
-  check('a paid reservation is unaffected by the expiry rule', api.ogEffectiveStatus(gm(), [bk({ status: 'Paid', createdAt: Date.now() - 3700000 })]) === 'RESERVED');
+  check('a still-pending, not-yet-expired reservation reports RESERVATION_PENDING here too', api.ogEffectiveStatus(gm(), [bk({ createdAt: Date.now() - 1000 })]) === 'RESERVATION_PENDING');
+  check('once confirmed (Reserved/Paid), the same game reports RESERVED', api.ogEffectiveStatus(gm(), [bk({ status: 'Paid', createdAt: Date.now() - 3700000 })]) === 'RESERVED');
+  check('the label mapping matches index.html\'s: Pending vs Confirmed, everything else passes through', api.ogStatusLabel('RESERVATION_PENDING') === 'Reservation Pending' && api.ogStatusLabel('RESERVED') === 'Reservation Confirmed' && api.ogStatusLabel('OPEN') === 'OPEN');
 }
 
 console.log(`\n=== RETURNING-VISITOR LANDING (MY MATCHES): ${passed}/${passed + failed} passed ===`);

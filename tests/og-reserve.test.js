@@ -88,7 +88,7 @@ section('reservation-expiry: an unpaid game-linked reservation lapses after an h
 {
   const gameTimeFns = grab('function ogGameStartsAt(game){', '// OG-TIME-START');
   const expireFns = grab('// OG-EXPIRE-START', '// OG-EXPIRE-END');
-  const { ogEffectiveStatus, ogReservationExpired } = new Function(`${gameTimeFns}\n${expireFns}\nreturn { ogEffectiveStatus, ogReservationExpired };`)();
+  const { ogEffectiveStatus, ogReservationExpired, ogReservationAwaitingPayment, ogStatusLabel } = new Function(`${gameTimeFns}\n${expireFns}\nreturn { ogEffectiveStatus, ogReservationExpired, ogReservationAwaitingPayment, ogStatusLabel };`)();
   const gm = (o = {}) => ({ id: 'g1', status: 'RESERVED', reservationId: 'b1', date: '2026-10-10', startHour: 18, endHour: 20, ...o });
   const bkFix = (o = {}) => ({ id: 'b1', status: 'Pending', createdAt: Date.now(), ...o });
 
@@ -99,19 +99,31 @@ section('reservation-expiry: an unpaid game-linked reservation lapses after an h
   check('still Pending and over an hour old -> expired', ogReservationExpired(gm(), [bkFix({ createdAt: Date.now() - 3700000 })]));
   check('exactly on the hour is not yet expired (strictly greater-than the grace period)', !ogReservationExpired(gm(), [bkFix({ createdAt: Date.now() - 3600000 })]));
 
+  check('while payment is pending (and not yet expired), the reservation reads as awaiting payment', ogReservationAwaitingPayment(gm(), [bkFix({ createdAt: Date.now() - 1000 })]));
+  check('once staff confirms (Reserved or Paid), it is no longer "awaiting payment"', !ogReservationAwaitingPayment(gm(), [bkFix({ status: 'Reserved', createdAt: Date.now() - 1000 })]) && !ogReservationAwaitingPayment(gm(), [bkFix({ status: 'Paid', createdAt: Date.now() - 1000 })]));
+  check('a game with no reservation at all is never "awaiting payment"', !ogReservationAwaitingPayment(gm({ reservationId: null }), []));
+
   check('ogEffectiveStatus reports EXPIRED for a lapsed unpaid reservation even while the game time is still upcoming', ogEffectiveStatus(gm({ date: '2030-01-01' }), [bkFix({ createdAt: Date.now() - 3700000 })]) === 'EXPIRED');
-  check('ogEffectiveStatus keeps reporting RESERVED while still inside the grace window', ogEffectiveStatus(gm({ date: '2030-01-01' }), [bkFix({ createdAt: Date.now() - 1000 })]) === 'RESERVED');
+  check('ogEffectiveStatus reports RESERVATION_PENDING (not RESERVED) while still inside the grace window and unpaid -- this is the "pending" the organizer sees before staff toggles it', ogEffectiveStatus(gm({ date: '2030-01-01' }), [bkFix({ createdAt: Date.now() - 1000 })]) === 'RESERVATION_PENDING');
+  check('once staff toggles the booking to Reserved or Paid, the SAME game now reports RESERVED (confirmed)', ogEffectiveStatus(gm({ date: '2030-01-01' }), [bkFix({ status: 'Reserved', createdAt: Date.now() - 1000 })]) === 'RESERVED' && ogEffectiveStatus(gm({ date: '2030-01-01' }), [bkFix({ status: 'Paid', createdAt: Date.now() - 1000 })]) === 'RESERVED');
   check('a paid reservation past its game time reports COMPLETED, not EXPIRED', ogEffectiveStatus(gm({ date: '2000-01-01' }), [bkFix({ status: 'Paid', createdAt: Date.now() - 7200000 })]) === 'COMPLETED');
   check('CANCELLED still wins over an unpaid, lapsed reservation', ogEffectiveStatus(gm({ status: 'CANCELLED' }), [bkFix({ createdAt: Date.now() - 7200000 })]) === 'CANCELLED');
   check('the existing OPEN/FULL past-end-time -> EXPIRED behavior is unchanged', ogEffectiveStatus({ id: 'g2', status: 'OPEN', date: '2000-01-01', startHour: 18, endHour: 19, reservationId: null }, []) === 'EXPIRED');
+
+  check('the display label reads "Reservation Pending" for the pending value', ogStatusLabel('RESERVATION_PENDING') === 'Reservation Pending');
+  check('the display label reads "Reservation Confirmed" for RESERVED (both this flow and the older Link-a-Reservation flow, which is only ever RESERVED once already paid)', ogStatusLabel('RESERVED') === 'Reservation Confirmed');
+  check('every other status label passes through unchanged (OPEN/FULL/CANCELLED/EXPIRED/COMPLETED)', ['OPEN', 'FULL', 'CANCELLED', 'EXPIRED', 'COMPLETED'].every(s => ogStatusLabel(s) === s));
 }
 check('ogEffectiveStatus still works with its old single-argument call sites (defaults to the real global bookings)', /function ogEffectiveStatus\(game, allBookings = bookings\)/.test(html));
 check('an expired game is muted the same as a cancelled one in "My Games", not shown as if still reserved', /status==='CANCELLED'\|\|status==='EXPIRED'/.test(html));
+check('the pending-payment badge gets its own amber color, distinct from confirmed green, in both places it renders', (html.match(/status==='RESERVATION_PENDING' ?\?\s*'bg-\[#FFF0D6\] text-\[#92400E\]'/g) || []).length >= 2);
+check('both badge render sites show the friendly label, not the raw status', (html.match(/ogStatusLabel\(status\)/g) || []).length >= 2);
+check('the "not yet linked" detail-modal blurb distinguishes pending vs confirmed instead of always saying Confirmed', /const awaitingPayment = status === 'RESERVATION_PENDING';/.test(html) && /⏱ Reservation Pending/.test(html) && /✓ Reservation Confirmed/.test(html));
 
 section('wiring: the payment screen warns about the 1-hour expiry before the organizer defers');
 const payCard = grab('function renderPayContext(){', "window.addEventListener('proof-sent'");
 check('a game-linked booking is recognized on the payment screen', /isGameReserve = bk\.source === 'og-create-reserve' && !!bk\.linkedOpenGameId;/.test(payCard));
-check('the warning is shown while pending and unsent, naming the 1-hour window', /isGameReserve && !sent[^]*?expires in 1 hour if payment isn't confirmed/.test(payCard));
+check('the warning names the pending status and the 1-hour window', /isGameReserve && !sent[^]*?Reservation Pending until the club confirms payment[^]*?within 1 hour/.test(payCard));
 check('the warning is not shown once proof has been sent (no more pressure once they\'ve acted)', /\$\{isGameReserve && !sent \? `/.test(payCard));
 check('clicking "I\'ll send it later" on a game-linked reservation reinforces the deadline before leaving', /if\(isGameReserve && !sent\) toast\('Reminder: send payment within 1 hour or your reservation and game listing will expire\.'\);/.test(payCard));
 

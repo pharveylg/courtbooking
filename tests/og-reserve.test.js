@@ -120,6 +120,20 @@ check('the pending-payment badge gets its own amber color, distinct from confirm
 check('both badge render sites show the friendly label, not the raw status', (html.match(/ogStatusLabel\(status\)/g) || []).length >= 2);
 check('the "not yet linked" detail-modal blurb distinguishes pending vs confirmed instead of always saying Confirmed', /const awaitingPayment = status === 'RESERVATION_PENDING';/.test(html) && /⏱ Reservation Pending/.test(html) && /✓ Reservation Confirmed/.test(html));
 
+section('a game with a reserved court stays listed and joinable while it still needs players');
+{
+  const { ogAcceptingPlayers } = new Function(`${grab('// OG-EXPIRE-START', '// OG-EXPIRE-END')}\nreturn { ogAcceptingPlayers };`)();
+  const g = (n, needed = 4) => ({ players: Array.from({ length: n }, () => ({})), playersNeeded: needed });
+  check('OPEN with room is accepting', ogAcceptingPlayers(g(1), 'OPEN'));
+  check('RESERVED (confirmed) with room is accepting -- the incognito-visibility bug', ogAcceptingPlayers(g(1), 'RESERVED'));
+  check('RESERVATION_PENDING with room is accepting', ogAcceptingPlayers(g(1), 'RESERVATION_PENDING'));
+  check('a full roster is not accepting, whatever the status', !ogAcceptingPlayers(g(4), 'RESERVED') && !ogAcceptingPlayers(g(4), 'OPEN'));
+  check('CANCELLED / EXPIRED / COMPLETED / FULL never accept', ['CANCELLED', 'EXPIRED', 'COMPLETED', 'FULL'].every(s => !ogAcceptingPlayers(g(1), s)));
+}
+check('the public discover list includes reserved games with room, not just OPEN', /\.filter\(g => g\._status === 'OPEN' \|\| ogAcceptingPlayers\(g, g\._status\)\)/.test(html));
+check('joining and organizer-adding never rewrite a RESERVED game to OPEN/FULL (the court link must survive)', (html.match(/g\.status === 'RESERVED' \? 'RESERVED' :/g) || []).length >= 2);
+check('the join button shows for reserved peer games with room', /ogAcceptingPlayers\(game, status\)\)\) && !alreadyJoined/.test(html));
+
 section('wiring: the payment screen warns about the 1-hour expiry before the organizer defers');
 const payCard = grab('function renderPayContext(){', "window.addEventListener('proof-sent'");
 check('a game-linked booking is recognized on the payment screen', /isGameReserve = bk\.source === 'og-create-reserve' && !!bk\.linkedOpenGameId;/.test(payCard));

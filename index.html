@@ -6010,6 +6010,13 @@ function ogStatusLabel(status){
   if(status === 'RESERVED') return 'Reservation Confirmed';
   return status;
 }
+// A game with a reserved court is still recruiting: RESERVED / RESERVATION_PENDING
+// stay joinable and discoverable while spots remain, same as OPEN. (Their raw
+// status is never rewritten to OPEN/FULL -- the court link has to survive joins.)
+function ogAcceptingPlayers(game, status){
+  return (status === 'OPEN' || status === 'RESERVED' || status === 'RESERVATION_PENDING')
+    && (game.players || []).length < game.playersNeeded;
+}
 // OG-EXPIRE-END
 
 function startOpenGamesListener(){
@@ -6059,8 +6066,8 @@ function ogNotifyMyGameChanges(prevById){
    in-app only: it can't reach someone who has the app closed (that would
    need real web push -- FCM plus a server-side sender). */
 function ogNeedsPlayers(g){
-  return g.source !== 'facility' && ogEffectiveStatus(g) === 'OPEN'
-    && g.players.length < g.playersNeeded && ogGameStartsAt(g) > Date.now();
+  return g.source !== 'facility' && ogAcceptingPlayers(g, ogEffectiveStatus(g))
+    && ogGameStartsAt(g) > Date.now();
 }
 function ogIsMineOrJoined(g){
   const email = (ogIdentity().email || '').toLowerCase();
@@ -6143,7 +6150,7 @@ function renderOpenGames(){
 
   const discoverable = openGames
     .map(g => ({ ...g, _status: ogEffectiveStatus(g) }))
-    .filter(g => g._status === 'OPEN')
+    .filter(g => g._status === 'OPEN' || ogAcceptingPlayers(g, g._status))
     .sort((a,b) => (ogGameStartsAt(a) - ogGameStartsAt(b)) || ((a.playersNeeded-a.players.length) - (b.playersNeeded-b.players.length)));
 
   if(!discoverable.length){
@@ -6164,6 +6171,7 @@ function renderOpenGames(){
                  <span class="mono text-[10px] px-3 py-1 rounded-full font-[700] ${g.allowJoin===false ? 'bg-[#F1E9DF] text-[#201C19]/80' : 'bg-[#E8F5D8] text-[#3F7019]'}">${g.allowJoin===false ? 'Walk-ins only' : 'Public Joining'}</span>`
               : `<span class="mono text-[10px] px-3 py-1 rounded-full bg-[#EDE8FF] text-[#3B2A9E] font-[700] uppercase">${escapeHtml(g.skillLevel)}</span>
                  <span class="mono text-[10px] px-3 py-1 rounded-full bg-[#F1E9DF] text-[#201C19] font-[700]">${escapeHtml(g.format)}</span>
+                 ${g._status === 'RESERVED' ? `<span class="mono text-[10px] px-3 py-1 rounded-full bg-[#E8F5D8] text-[#3F7019] font-[700]">Court reserved</span>` : g._status === 'RESERVATION_PENDING' ? `<span class="mono text-[10px] px-3 py-1 rounded-full bg-[#FFF0D6] text-[#92400E] font-[700]">Reservation pending</span>` : ''}
                  ${g.payBeforeJoin ? `<span class="mono text-[10px] px-3 py-1 rounded-full bg-[#FFF0D6] text-[#92400E] font-[700]">Pay to Join${g.payAmount != null ? ` · ${fmtMoney(g.payAmount)}/head` : ''}</span>` : ''}`}
             <span class="font-[700] text-[14px]">${fmtDateLabel(g.date)} · ${timeLabel}</span>
           </div>
@@ -6351,7 +6359,7 @@ document.getElementById('ogCreateBackdrop')?.addEventListener('click', () => doc
 
 function ogFindCompatibleOpenGame(date, startHour, skillLevel, format){
   return openGames.find(g => {
-    if(ogEffectiveStatus(g) !== 'OPEN') return false;
+    if(!ogAcceptingPlayers(g, ogEffectiveStatus(g))) return false;
     if(g.date !== date) return false;
     if(Math.abs(g.startHour - startHour) > 1) return false;
     if(skillLevel !== 'Open' && g.skillLevel !== 'Open' && g.skillLevel !== skillLevel) return false;
@@ -6515,14 +6523,15 @@ async function ogJoinGame(gameId, name, email, opts={}){
       const snap = await tx.get(ref);
       if(!snap.exists) throw new Error('This game no longer exists.');
       const g = snap.data();
-      if(ogEffectiveStatus(g) !== 'OPEN') throw new Error('This game is no longer open.');
+      const curStatus = ogEffectiveStatus(g);
+      if(curStatus !== 'OPEN' && !ogAcceptingPlayers(g, curStatus)) throw new Error('This game is no longer open.');
       if(g.players.some(p => p.email.toLowerCase() === email.toLowerCase())) throw new Error('You already joined this game.');
       if(g.players.length >= g.playersNeeded) throw new Error('Sorry, that last spot was just taken.');
       const player = { name, email, joinedAt: Date.now(), addedBy: 'self' };
       if(opts.ackPay) player.ackPay = true; // acknowledged the organizer's pay-before-join terms (informational only -- never enforced/verified)
       const players = [...g.players, player];
       joinedCount = players.length;
-      const status = players.length >= g.playersNeeded ? 'FULL' : 'OPEN';
+      const status = g.status === 'RESERVED' ? 'RESERVED' : (players.length >= g.playersNeeded ? 'FULL' : 'OPEN');
       tx.update(ref, { players, status, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
     });
     ogSaveIdentity(name, email);
@@ -6558,7 +6567,7 @@ async function ogOrganizerAddPlayer(gameId, token, name, email){
       if(g.players.some(p => p.email.toLowerCase() === email.toLowerCase())) throw new Error('That player is already in this game.');
       if(g.players.length >= g.playersNeeded) throw new Error('This game is already full.');
       const players = [...g.players, { name, email, joinedAt: Date.now(), addedBy: 'organizer' }];
-      const status = players.length >= g.playersNeeded ? 'FULL' : g.status;
+      const status = g.status === 'RESERVED' ? 'RESERVED' : (players.length >= g.playersNeeded ? 'FULL' : g.status);
       tx.update(ref, { players, status, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
     });
     toast(`${name} added to the game.`);
@@ -7072,7 +7081,7 @@ function renderOgDetailModal(gameId){
   // pre-add never goes through the pay-before-join acknowledgment a
   // stranger joining themselves has to see, since the organizer is
   // vouching for (and presumably has already squared up with) them.
-  const canOrganizerAdd = isCreator && !isFacility && status === 'OPEN' && game.players.length < game.playersNeeded;
+  const canOrganizerAdd = isCreator && !isFacility && ogAcceptingPlayers(game, status);
   const addPlayerHtml = canOrganizerAdd ? `
     <div class="pt-2">
       <div class="mono text-[10px] uppercase tracking-widest opacity-60 mb-1.5">Add a player</div>
@@ -7109,13 +7118,13 @@ function renderOgDetailModal(gameId){
   const chatHtml = ogCanChat(game, alreadyJoined || isCreator || adminUnlocked) ? ogChatPanelHtml() : '';
 
   const actions = [];
-  if(status === 'OPEN' && !alreadyJoined && !(isFacility && game.allowJoin === false) && !payAckPending){
+  if((status === 'OPEN' || (!isFacility && ogAcceptingPlayers(game, status))) && !alreadyJoined && !(isFacility && game.allowJoin === false) && !payAckPending){
     actions.push(`<button type="button" id="ogActionJoin" class="flex-1 h-11 rounded-full bg-[#D6FF5F] hover:bg-[#CBF052] text-[#201C19] font-[800] text-[13px] border border-[#201C19]/10 transition cursor-pointer">${isFacility ? 'Join & Pay' : (game.payBeforeJoin ? 'Join Game →' : 'Join Game')}</button>`);
   }
   if(status === 'OPEN' && !alreadyJoined && isFacility && game.allowJoin === false){
     actions.push(`<div class="flex-1 h-11 rounded-full bg-[#F1E9DF] grid place-items-center mono text-[11px] font-[700] opacity-70">Walk-ins only — join in person</div>`);
   }
-  if(alreadyJoined && !isCreator && (status === 'OPEN' || status === 'FULL')){
+  if(alreadyJoined && !isCreator && (status === 'OPEN' || status === 'FULL' || status === 'RESERVED' || status === 'RESERVATION_PENDING')){
     actions.push(`<button type="button" id="ogActionLeave" class="flex-1 h-11 rounded-full bg-white border border-[#EAE0D5] mono text-[12px] font-[700] cursor-pointer hover:border-[#201C19]">Leave Game</button>`);
   }
   if(isCreator && status !== 'CANCELLED' && status !== 'COMPLETED' && status !== 'EXPIRED'){

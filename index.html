@@ -1959,6 +1959,7 @@ body:not(.staff-mode) .staff-link{display:none!important}
 </div>
 
 <script src="next-open.js"></script>
+<script src="/my-active.js"></script>
 <script>
 /* ================================================================
    CLIENT WHITE-LABEL LAYER
@@ -2354,7 +2355,7 @@ function getCurrentTenant() {
   // /app/*) straight to this same file with no query param when a visitor
   // hits it directly, and without this exclusion the "app" path segment
   // itself used to get misread as tenant "app".
-  const RESERVED_PATH_SEGMENTS = ['app', 'picker', 'superadmin', 'store', 'tournament-admin', 'tournament', 'gallery'];
+  const RESERVED_PATH_SEGMENTS = ['app', 'picker', 'superadmin', 'store', 'tournament-admin', 'tournament', 'gallery', 'my-matches'];
   const pathParts = window.location.pathname.split('/').filter(p => p);
   if (pathParts.length > 0 && /^[a-z0-9-]+$/.test(pathParts[0]) && !RESERVED_PATH_SEGMENTS.includes(pathParts[0])) {
     return pathParts[0];
@@ -2385,10 +2386,27 @@ const urlParams = new URLSearchParams(window.location.search);
 const hasClientParam = urlParams.has('client');
 const isRootPath = window.location.pathname === '/' || window.location.pathname === '/index.html' || window.location.pathname === '';
 
+// A returning visitor (something's remembered from a previous visit, on
+// THIS device) skips the picker at the root and lands on My Matches
+// instead -- a first-time visitor (nothing remembered yet) still sees the
+// picker. "Remembered" is any of: a last-used facility, a tracked active
+// booking/game (see my-active.js), or a phone number used to look up
+// tournament matches (see tournament.html).
+function _isReturningVisitor(){
+  if (localStorage.getItem('cb_selected_tenant')) return true;
+  if (localStorage.getItem('cb_my_phone_v1')) return true;
+  try {
+    const arr = JSON.parse(localStorage.getItem('cb_my_active_v1'));
+    if (Array.isArray(arr) && arr.length) return true;
+  } catch (e) {}
+  return false;
+}
+
 if (isRootPath && !hasClientParam && FB_ENABLED) {
-  // At root URL with no ?client param → always show picker
+  // At root URL with no ?client param → picker for first-timers, My
+  // Matches for a returning visitor (see _isReturningVisitor above).
   const ls = document.getElementById('loadingScreen'); if (ls) ls.style.display = 'none';
-  window.location.replace('/picker.html');
+  window.location.replace(_isReturningVisitor() ? '/my-matches.html' : '/picker.html');
 } else if (!currentClientId && FB_ENABLED) {
   // Not at root but no tenant found → also show picker
   const ls2 = document.getElementById('loadingScreen'); if (ls2) ls2.style.display = 'none';
@@ -3773,7 +3791,10 @@ function handleSwitchFacility() {
   // an admin who unlocked tenant A would land already-unlocked on tenant B
   // after switching. Admin must default to locked on every tenant visit.
   sessionStorage.setItem(LS.adminUnlocked, 'false');
-  window.location.href = '/';
+  // Straight to the picker, not '/' -- a returning visitor with other
+  // active items tracked (see my-active.js) would otherwise land right
+  // back on My Matches instead of the facility list they asked to see.
+  window.location.href = '/picker.html';
 }
 const headerSwitchFacility = document.getElementById('headerSwitchFacility');
 if(headerSwitchFacility) headerSwitchFacility.addEventListener('click', handleSwitchFacility);
@@ -4926,6 +4947,7 @@ document.getElementById('reserveForm').addEventListener('submit', (ev)=>{
   renderBookingsList();
   if(adminUnlocked) renderAdminBookings();
   // Billing counts confirmed bookings, not creation -- see setBookingStatus().
+  MyActive.add({ clientId: currentClientId, kind: 'booking', refId: newBooking.id });
 
   // remember who is booking, then move on to paying for this reservation
   try { localStorage.setItem(lsKey('cb_last_contact_v1'), JSON.stringify({ name, email })); } catch(e){}
@@ -5011,6 +5033,7 @@ function renderPayContext(){
   const bk = PAY_CTX ? bookings.find(b => b.id === PAY_CTX.bookingId) : null;
   if(!bk){ card.classList.add('hidden'); card.innerHTML = ''; return; }
   const isSpot = bk.source === 'openplay-join';
+  const isGameReserve = bk.source === 'og-create-reserve' && !!bk.linkedOpenGameId;
   const amount = bk.amountDue != null && isSpot ? bk.amountDue : _sumBillableCourtRate(bk.court, bk.start, bk.end);
   const sent = PAY_CTX.proofSent;
   card.classList.remove('hidden');
@@ -5020,12 +5043,16 @@ function renderPayContext(){
       <div class="mt-1 text-[22px] font-[800] tracking-[-0.02em]">${escapeHtml(fmtDateLabel(bk.date))}</div>
       <div class="mono text-[13px] mt-0.5">${escapeHtml(to12Range(bk.start, bk.end))}${getActiveCourts().length > 1 ? ' · ' + escapeHtml(getCourtName(bk.court) || '') : ''} · <b>${fmtMoney(amount)}</b></div>
       <p class="mono text-[11.5px] leading-[1.6] opacity-75 mt-3">${sent ? 'Thanks! The club will check your payment and confirm your booking. Keep your Booking PIN (' + escapeHtml(bk.pin) + ').' : 'Pay using the QR below, then send a screenshot so the club can confirm your booking. Your Booking PIN is <b>' + escapeHtml(bk.pin) + '</b>.'}</p>
+      ${isGameReserve && !sent ? `<div class="mono text-[11px] leading-[1.6] mt-3 p-3 rounded-[14px] bg-[#FFF0D6] text-[#92400E] border border-[#FFE0A3]">⏱ Your game listing shows as reserved, but this expires in 1 hour if payment isn't confirmed — after that the reservation and game listing expire automatically.</div>` : ''}
       <div class="mt-4 flex flex-wrap gap-2">
         ${sent ? '' : `<button type="button" data-upload-proof="${escapeHtml(bk.id)}" class="h-11 px-5 rounded-full bg-[#D6FF5F] border border-[#201C19]/10 font-[800] text-[13px] cursor-pointer">Send payment proof</button>`}
         <button type="button" id="payDoneBtn" class="h-11 px-5 rounded-full ${sent ? 'bg-[#201C19] text-white' : 'bg-white border border-[#EAE0D5]'} font-[800] text-[13px] cursor-pointer">${sent ? 'Back to home' : "I'll send it later"}</button>
       </div>
     </div>`;
-  document.getElementById('payDoneBtn').addEventListener('click', () => { PAY_CTX = null; routeTo('home'); });
+  document.getElementById('payDoneBtn').addEventListener('click', () => {
+    if(isGameReserve && !sent) toast('Reminder: send payment within 1 hour or your reservation and game listing will expire.');
+    PAY_CTX = null; routeTo('home');
+  });
 }
 window.addEventListener('proof-sent', (e) => {
   if(PAY_CTX && (!e.detail || e.detail.bookingId === PAY_CTX.bookingId)){ PAY_CTX.proofSent = true; renderPayContext(); window.scrollTo({ top: 0, behavior: 'smooth' }); }
@@ -5905,6 +5932,7 @@ function ogTrackMyGame(gameId, role, token){
   const mine = ogMyGames();
   mine[gameId] = { role, token: token || (mine[gameId] && mine[gameId].token) || null };
   localStorage.setItem(lsKey('cb_og_mygames_v1'), JSON.stringify(mine));
+  MyActive.add({ clientId: currentClientId, kind: 'game', refId: gameId });
 }
 function ogUntrackMyGame(gameId){
   const mine = ogMyGames();
@@ -5952,13 +5980,26 @@ function ogTimeLabel(g){ return g.endHour != null ? to12Range(g.startHour, g.end
 // OG-TIME-END
 /* Derived, not persisted -- EXPIRED/COMPLETED are computed from the
    stored status + current time rather than written back on every render. */
-function ogEffectiveStatus(game){
+// OG-EXPIRE-START
+// Reserving a court while creating a game marks it RESERVED immediately, before
+// payment is actually confirmed -- so an organizer who never pays would otherwise
+// keep a "confirmed" game listed forever. An hour of no payment proof lapses it,
+// same label/behavior as a normal OPEN/FULL game that ran past its time unfilled.
+const OG_RESERVE_GRACE_MS = 3600000;
+function ogReservationExpired(game, allBookings){
+  if(game.status !== 'RESERVED' || !game.reservationId) return false;
+  const bk = (allBookings || []).find(b => b.id === game.reservationId);
+  return !!bk && bk.status === 'Pending' && (Date.now() - bk.createdAt) > OG_RESERVE_GRACE_MS;
+}
+function ogEffectiveStatus(game, allBookings = bookings){
   const now = Date.now();
   if(game.status === 'CANCELLED') return 'CANCELLED';
+  if(ogReservationExpired(game, allBookings)) return 'EXPIRED';
   if(game.status === 'RESERVED' && now > ogGameEndsAt(game)) return 'COMPLETED';
   if((game.status === 'OPEN' || game.status === 'FULL') && now > ogGameEndsAt(game)) return 'EXPIRED';
   return game.status;
 }
+// OG-EXPIRE-END
 
 function startOpenGamesListener(){
   if(!db || !currentClientId || _ogUnsub) return;
@@ -6407,6 +6448,7 @@ document.getElementById('ogCreateForm')?.addEventListener('submit', async (e) =>
         court: reservedCourtId,
         date, start: startHour, end: endHour,
         status: 'Pending',
+        source: 'og-create-reserve', linkedOpenGameId: ref.id,
         createdAt: Date.now()
       };
     }
@@ -6425,6 +6467,7 @@ document.getElementById('ogCreateForm')?.addEventListener('submit', async (e) =>
     if(newBooking){
       bookings.unshift(newBooking);
       saveBookings(bookings);
+      MyActive.add({ clientId: currentClientId, kind: 'booking', refId: newBooking.id });
       ogEnsureLinkedQueue({ ...game, id: ref.id }, newBooking);
     }
     ogTrackMyGame(ref.id, 'creator', creatorToken);

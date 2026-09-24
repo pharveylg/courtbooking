@@ -777,6 +777,11 @@ async function lookupMyMatches(rawPhone){
     }
     MY = { regs, regIds: new Set(regs.map(r => r.id)), playerId: pid };
     lsSet('phone', rawPhone);
+    // Unlike lsSet above (namespaced per facility), this key is deliberately
+    // shared across every facility on this device -- it's what lets
+    // my-matches.html look this phone up once and surface matches at any
+    // facility it's registered at (see platformPlayers in firestore.rules).
+    try { localStorage.setItem('cb_my_phone_v1', pid); } catch(e){}
     myMsg('');
     subscribeAllMatches();
     renderMyMatches();

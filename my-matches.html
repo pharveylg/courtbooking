@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<meta name="theme-color" content="#FFFBF5"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="default"/>
+<meta name="apple-mobile-web-app-title" content="CourtBook"/>
+<link rel="manifest" href="/manifest.json"/>
+<link rel="apple-touch-icon" href="/icons/icon-192.png"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet"/>
+<title>My Matches — Court Booking</title>
+<style>
+:root{--cream:#FFFBF5;--ink:#201C19;--lime:#D6FF5F;--line:#EAE0D5;--sand:#F1E9DF;--amber:#FFF0D6;--amber-ink:#92400E;--green:#E8F5D8;--green-ink:#3F7019}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  font-family:"Bricolage Grotesque",system-ui,sans-serif;
+  background:var(--cream);color:var(--ink);
+  min-height:100vh;min-height:100dvh;
+  display:flex;flex-direction:column;
+  -webkit-font-smoothing:antialiased;overflow-x:hidden;
+}
+.mono{font-family:"JetBrains Mono",monospace}
+a:focus-visible,button:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+
+.topbar{display:flex;align-items:center;gap:10px;padding:12px 20px;border-bottom:1px solid var(--line);background:var(--cream);position:sticky;top:0;z-index:20}
+.topbar-inner{display:flex;align-items:center;gap:10px;width:100%;max-width:720px;margin:0 auto}
+.mark{width:34px;height:34px;border-radius:50%;background:var(--ink);color:var(--lime);display:grid;place-items:center;font-weight:800;font-size:16px;flex-shrink:0}
+.brand-name{font-weight:800;font-size:15px;letter-spacing:-0.02em;line-height:1.1}
+.brand-sub{font-size:10px;letter-spacing:0.12em;text-transform:uppercase;opacity:0.5;margin-top:2px}
+.switch-btn{margin-left:auto;display:flex;align-items:center;gap:6px;height:36px;padding:0 14px;border-radius:999px;background:#fff;border:1px solid var(--line);font-family:inherit;font-size:12px;font-weight:700;color:var(--ink);cursor:pointer;text-decoration:none}
+.switch-btn:hover{border-color:var(--ink)}
+
+.page{width:100%;max-width:720px;margin:0 auto;padding:18px 20px 40px;flex:1}
+h1{font-size:clamp(24px,6vw,32px);font-weight:800;letter-spacing:-0.03em;line-height:1.05;margin-bottom:4px}
+.lead{font-size:13px;opacity:0.6;margin-bottom:22px}
+.label{font-size:11px;letter-spacing:0.1em;text-transform:uppercase;opacity:0.55;margin:26px 2px 10px}
+.label:first-of-type{margin-top:0}
+
+.card{background:#fff;border:1px solid var(--line);border-radius:20px;padding:16px 18px;display:block;text-decoration:none;color:inherit;font-family:inherit;text-align:left;width:100%;cursor:pointer;transition:transform .15s,box-shadow .15s}
+a.card:hover{transform:translateY(-1px);box-shadow:0 8px 22px rgba(32,28,25,0.08);border-color:var(--ink)}
+.card + .card{margin-top:10px}
+.card-top{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.facility-row{display:flex;align-items:center;gap:8px;min-width:0}
+.logo{width:22px;height:22px;border-radius:50%;background:var(--sand);display:grid;place-items:center;font-size:11px;font-weight:800;flex-shrink:0;overflow:hidden}
+.logo img{width:100%;height:100%;object-fit:cover}
+.facility-name{font-size:12px;font-weight:700;opacity:0.75;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.badge{font-size:9.5px;padding:4px 10px;border-radius:999px;font-weight:800;text-transform:uppercase;letter-spacing:0.04em;flex-shrink:0}
+.badge-green{background:var(--green);color:var(--green-ink)}
+.badge-amber{background:var(--amber);color:var(--amber-ink)}
+.badge-dark{background:var(--ink);color:#fff}
+.badge-muted{background:var(--sand);color:rgba(32,28,25,0.5)}
+.card-title{font-size:16px;font-weight:800;letter-spacing:-0.02em;margin-top:8px}
+.card-detail{font-size:12px;opacity:0.6;margin-top:2px}
+
+.empty{padding:36px 18px;text-align:center;border:1px dashed var(--line);border-radius:20px}
+.empty p{font-size:13px;opacity:0.6;margin:6px 0 16px}
+.btn-dark{display:inline-flex;align-items:center;gap:6px;height:44px;padding:0 20px;border-radius:999px;background:var(--ink);color:var(--cream);font-weight:800;font-size:13px;text-decoration:none}
+
+.inbox-item{border-bottom:1px solid var(--line);padding:12px 0}
+.inbox-item:last-child{border-bottom:none}
+.inbox-title{font-size:13px;font-weight:700}
+.inbox-body{font-size:12px;opacity:0.65;margin-top:2px}
+.inbox-meta{font-size:10px;opacity:0.4;margin-top:4px;font-family:"JetBrains Mono",monospace}
+.disclaimer{font-size:10.5px;opacity:0.5;margin-top:10px;line-height:1.5}
+
+.state{display:none}
+.state.visible{display:block}
+.spinner{width:26px;height:26px;border-radius:50%;border:3px solid var(--line);border-top-color:var(--ink);animation:spin 0.8s linear infinite;margin:40px auto}
+@keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-inner">
+    <div class="mark">🎾</div>
+    <div>
+      <div class="brand-name">My Matches</div>
+      <div class="brand-sub">Court Booking</div>
+    </div>
+    <a class="switch-btn" href="/picker.html" id="switchBtn">⇄ Browse facilities</a>
+  </div>
+</div>
+
+<div class="page">
+  <h1>What's active</h1>
+  <div class="lead">Reservations, games, and tournament matches you're currently part of, across every facility on this device.</div>
+
+  <div id="stateLoading" class="state visible"><div class="spinner"></div></div>
+
+  <div id="stateEmpty" class="state">
+    <div class="empty">
+      <p>Nothing active yet. Once you reserve a court, join a game, or look yourself up in a tournament, it'll show up here.</p>
+      <a class="btn-dark" href="/picker.html">Browse facilities →</a>
+    </div>
+  </div>
+
+  <div id="stateMain" class="state">
+    <div id="upcomingSection"></div>
+    <div id="tournamentSection"></div>
+    <div id="inboxSection"></div>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script src="/firebase-config.js"></script>
+<script src="/my-active.js"></script>
+<script src="/push-inbox.js"></script>
+<script>
+(function () {
+  function esc(str) {
+    const d = document.createElement('div');
+    d.textContent = str || '';
+    return d.innerHTML.replace(/"/g, '&quot;');
+  }
+  function fmtDateLabel(iso) {
+    try {
+      const d = new Date(iso + 'T00:00:00');
+      return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+    } catch (e) { return iso; }
+  }
+  function fmtHour(h) {
+    const hh = ((h % 24) + 24) % 24;
+    const ampm = hh >= 12 ? 'PM' : 'AM';
+    const h12 = hh % 12 === 0 ? 12 : hh % 12;
+    return h12 + ':00 ' + ampm;
+  }
+  function todayISO() { return new Date().toISOString().slice(0, 10); }
+
+  // MM-PURE-START
+  // ---------- Pure "still active" filters (kept pure + exported for tests) ----------
+  // A booking is worth showing if it hasn't been explicitly cancelled and its
+  // date hasn't passed yet (yesterday or older is not "active info").
+  function isBookingActive(b, today) {
+    if (!b) return false;
+    if (b.status === 'Cancelled' || b.status === 'CANCELLED') return false;
+    return b.date >= (today || todayISO());
+  }
+  // A game is worth showing as long as ogEffectiveStatus (below) hasn't
+  // reached one of its terminal states.
+  function isGameActive(status) {
+    return !['CANCELLED', 'EXPIRED', 'COMPLETED'].includes(status);
+  }
+  // A tournament is still worth checking for "my matches" if it hasn't fully
+  // finished yet -- draft/upcoming/live all pass, only a past endDate is out.
+  function isTournamentActive(t, today) {
+    if (!t) return false;
+    const end = t.endDate || t.startDate;
+    if (!end) return true;
+    return end >= (today || todayISO());
+  }
+  // Kept in sync with index.html's ogEffectiveStatus/ogReservationExpired
+  // (same OG_RESERVE_GRACE_MS) -- duplicated rather than shared because this
+  // page has no bundler to pull a function out of index.html's own inline
+  // script, same reasoning as index.html/picker.html's normalizeClientConfig.
+  const OG_RESERVE_GRACE_MS = 3600000;
+  function ogGameEndsAt(game) { return new Date(game.date + 'T00:00:00').getTime() + (game.endHour != null ? game.endHour : game.startHour + 1) * 3600000; }
+  function ogReservationExpired(game, allBookings) {
+    if (game.status !== 'RESERVED' || !game.reservationId) return false;
+    const bk = (allBookings || []).find(b => b.id === game.reservationId);
+    return !!bk && bk.status === 'Pending' && (Date.now() - bk.createdAt) > OG_RESERVE_GRACE_MS;
+  }
+  function ogEffectiveStatus(game, allBookings) {
+    const now = Date.now();
+    if (game.status === 'CANCELLED') return 'CANCELLED';
+    if (ogReservationExpired(game, allBookings)) return 'EXPIRED';
+    if (game.status === 'RESERVED' && now > ogGameEndsAt(game)) return 'COMPLETED';
+    if ((game.status === 'OPEN' || game.status === 'FULL') && now > ogGameEndsAt(game)) return 'EXPIRED';
+    return game.status;
+  }
+  // MM-PURE-END
+
+  window.MyMatchesPure = { isBookingActive, isGameActive, isTournamentActive, ogEffectiveStatus, fmtDateLabel, fmtHour };
+
+  // ---------- Firebase ----------
+  const FIREBASE_CFG = (window.FIREBASE_CONFIG && window.FIREBASE_CONFIG.apiKey && !String(window.FIREBASE_CONFIG.apiKey).startsWith('PASTE'))
+    ? window.FIREBASE_CONFIG : null;
+  if (!FIREBASE_CFG) { document.getElementById('stateLoading').classList.remove('visible'); document.getElementById('stateEmpty').classList.add('visible'); return; }
+  firebase.initializeApp(FIREBASE_CFG);
+  const db = firebase.firestore();
+
+  const facilityCache = {}; // clientId -> { name, logoUrl } | null
+  async function getFacility(clientId) {
+    if (clientId in facilityCache) return facilityCache[clientId];
+    try {
+      const snap = await db.doc('tenantDirectory/' + clientId).get();
+      facilityCache[clientId] = snap.exists ? { name: snap.data().businessName || clientId, logoUrl: snap.data().logoUrl || '' } : { name: clientId, logoUrl: '' };
+    } catch (e) { facilityCache[clientId] = { name: clientId, logoUrl: '' }; }
+    return facilityCache[clientId];
+  }
+  function logoHtml(facility) {
+    return `<span class="logo">${facility.logoUrl ? `<img src="${esc(facility.logoUrl)}" alt=""/>` : esc((facility.name || '?').charAt(0).toUpperCase())}</span>`;
+  }
+
+  async function loadBookingsFor(clientId, refIds) {
+    try {
+      const snap = await db.doc(`clients/${clientId}/bookings/state`).get();
+      const all = (snap.exists && snap.data().data) || [];
+      return all.filter(b => refIds.includes(b.id));
+    } catch (e) { return []; }
+  }
+  async function loadGamesFor(clientId, refIds) {
+    const out = [];
+    await Promise.all(refIds.map(async id => {
+      try {
+        const snap = await db.doc(`clients/${clientId}/openGames/${id}`).get();
+        if (snap.exists) out.push({ id: snap.id, ...snap.data() });
+      } catch (e) {}
+    }));
+    return out;
+  }
+
+  function gameBadge(status) {
+    if (status === 'RESERVED') return 'badge-green';
+    if (status === 'FULL') return 'badge-dark';
+    if (status === 'CANCELLED' || status === 'EXPIRED') return 'badge-muted';
+    return 'badge-amber';
+  }
+
+  async function buildUpcoming() {
+    const items = MyActive.load();
+    const byClient = MyActive.groupByClient(items);
+    const clientIds = Object.keys(byClient);
+    const cardsByClient = {};
+    await Promise.all(clientIds.map(async clientId => {
+      const bookingIds = byClient[clientId].filter(x => x.kind === 'booking').map(x => x.refId);
+      const gameIds = byClient[clientId].filter(x => x.kind === 'game').map(x => x.refId);
+      const [bookings, games] = await Promise.all([
+        bookingIds.length ? loadBookingsFor(clientId, bookingIds) : [],
+        gameIds.length ? loadGamesFor(clientId, gameIds) : [],
+      ]);
+      const facility = await getFacility(clientId);
+      const cards = [];
+      bookings.filter(b => isBookingActive(b)).forEach(b => {
+        cards.push({
+          sortAt: b.date + ' ' + String(b.start).padStart(2, '0'),
+          html: `<a class="card" href="/?client=${encodeURIComponent(clientId)}">
+            <div class="card-top"><div class="facility-row">${logoHtml(facility)}<span class="facility-name">${esc(facility.name)}</span></div><span class="badge ${b.status === 'Pending' ? 'badge-amber' : 'badge-green'}">${esc(b.status)}</span></div>
+            <div class="card-title">${fmtDateLabel(b.date)}</div>
+            <div class="card-detail">${fmtHour(b.start)} – ${fmtHour(b.end)} · Court reservation</div>
+          </a>`,
+        });
+      });
+      games.forEach(g => {
+        const status = ogEffectiveStatus(g, bookings);
+        if (!isGameActive(status)) return;
+        const needed = Math.max(0, (g.playersNeeded || 0) - (g.players || []).length);
+        cards.push({
+          sortAt: g.date + ' ' + String(g.startHour).padStart(2, '0'),
+          html: `<a class="card" href="/?client=${encodeURIComponent(clientId)}">
+            <div class="card-top"><div class="facility-row">${logoHtml(facility)}<span class="facility-name">${esc(facility.name)}</span></div><span class="badge ${gameBadge(status)}">${esc(status)}</span></div>
+            <div class="card-title">${fmtDateLabel(g.date)}</div>
+            <div class="card-detail">${fmtHour(g.startHour)}${g.endHour != null ? ' – ' + fmtHour(g.endHour) : ''} · Find a Game${status === 'OPEN' ? ` · ${needed} more player${needed === 1 ? '' : 's'} needed` : ''}</div>
+          </a>`,
+        });
+      });
+      if (cards.length) cardsByClient[clientId] = cards;
+    }));
+    const allCards = Object.values(cardsByClient).flat().sort((a, b) => a.sortAt.localeCompare(b.sortAt));
+    return allCards;
+  }
+
+  async function buildTournamentMatches() {
+    let phone = null;
+    try { phone = localStorage.getItem('cb_my_phone_v1'); } catch (e) {}
+    if (!phone) return [];
+    let memberTenants = [];
+    try {
+      const snap = await db.doc('platformPlayers/' + phone).get();
+      if (snap.exists) memberTenants = snap.data().memberTenants || [];
+    } catch (e) { return []; }
+    const today = todayISO();
+    const cards = [];
+    await Promise.all(memberTenants.map(async clientId => {
+      try {
+        const tSnap = await db.collection(`clients/${clientId}/tournaments`).get();
+        const facility = await getFacility(clientId);
+        await Promise.all(tSnap.docs.map(async tDoc => {
+          const t = tDoc.data();
+          if (!isTournamentActive(t, today)) return;
+          const regSnap = await db.collection(`clients/${clientId}/tournaments/${tDoc.id}/registrations`).where('playerIds', 'array-contains', phone).get();
+          const active = regSnap.docs.map(d => d.data()).filter(r => r.status !== 'withdrawn');
+          if (!active.length) return;
+          cards.push({
+            sortAt: (t.startDate || '9999') + ' 00',
+            html: `<a class="card" href="/tournament.html?client=${encodeURIComponent(clientId)}&t=${encodeURIComponent(tDoc.id)}">
+              <div class="card-top"><div class="facility-row">${logoHtml(facility)}<span class="facility-name">${esc(facility.name)}</span></div><span class="badge badge-green">Registered</span></div>
+              <div class="card-title">${esc(t.name || 'Tournament')}</div>
+              <div class="card-detail">${t.startDate ? fmtDateLabel(t.startDate) : ''}${t.endDate && t.endDate !== t.startDate ? ' – ' + fmtDateLabel(t.endDate) : ''} · Tap for your schedule and match updates</div>
+            </a>`,
+          });
+        }));
+      } catch (e) { /* leave this facility out rather than fail the whole page */ }
+    }));
+    return cards.sort((a, b) => a.sortAt.localeCompare(b.sortAt));
+  }
+
+  async function buildInbox() {
+    if (!window.PushInbox || !PushInbox.list) return { html: '', count: 0 };
+    let messages = [];
+    try { messages = await PushInbox.list(); } catch (e) { messages = []; }
+    if (!messages.length) return { html: '', count: 0 };
+    const rows = messages.slice(0, 20).map(m => `
+      <div class="inbox-item">
+        <div class="inbox-title">${esc(m.title)}</div>
+        ${m.body ? `<div class="inbox-body">${esc(m.body)}</div>` : ''}
+        <div class="inbox-meta">${new Date(m.receivedAt).toLocaleString()}</div>
+      </div>`).join('');
+    return {
+      count: messages.length,
+      html: `<div class="label">Notifications</div><div class="card">${rows}<div class="disclaimer">⏱ Saved on this device only — clearing browser data or switching devices loses this history.</div></div>`,
+    };
+  }
+
+  async function render() {
+    const [upcoming, tournamentCards, inbox] = await Promise.all([buildUpcoming(), buildTournamentMatches(), buildInbox()]);
+
+    document.getElementById('upcomingSection').innerHTML = upcoming.length
+      ? `<div class="label">Upcoming</div>${upcoming.map(c => c.html).join('')}`
+      : '';
+    document.getElementById('tournamentSection').innerHTML = tournamentCards.length
+      ? `<div class="label">Tournament matches</div>${tournamentCards.map(c => c.html).join('')}`
+      : '';
+    document.getElementById('inboxSection').innerHTML = inbox.html;
+
+    document.getElementById('stateLoading').classList.remove('visible');
+    if (!upcoming.length && !tournamentCards.length && !inbox.count) {
+      document.getElementById('stateEmpty').classList.add('visible');
+    } else {
+      document.getElementById('stateMain').classList.add('visible');
+    }
+  }
+
+  render();
+})();
+</script>
+</body>
+</html>

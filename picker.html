@@ -117,16 +117,24 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
 
 /* ── Continue card (returning players) ────────────────── */
 .continue{
-  display:flex;flex-direction:column;justify-content:space-between;gap:26px;
-  width:100%;min-height:128px;
+  display:flex;flex-direction:column;gap:16px;
+  width:100%;
   padding:18px;border-radius:24px;
   background:var(--lime);color:var(--ink);
   border:1px solid rgba(32,28,25,0.1);
-  cursor:pointer;text-align:left;font-family:inherit;
+  text-align:left;font-family:inherit;
   transition:transform .2s cubic-bezier(0.16,1,0.3,1),box-shadow .2s;
 }
 .continue:hover{transform:translateY(-2px);box-shadow:0 10px 28px rgba(32,28,25,0.14)}
-.continue:active{transform:scale(0.985)}
+/* The main area is its own button (buttons can't nest), so the Book / Find
+   a game shortcuts can live inside the card without being inside it. */
+.continue-main{
+  display:flex;flex-direction:column;justify-content:space-between;gap:26px;
+  width:100%;min-height:96px;padding:0;
+  background:none;border:0;color:inherit;
+  font-family:inherit;text-align:left;cursor:pointer;
+}
+.continue-main:active{transform:scale(0.985)}
 .continue-top{display:flex;align-items:center;justify-content:space-between}
 .continue .logo{width:40px;height:40px;background:var(--ink);color:var(--lime);font-size:17px}
 .continue-arrow{
@@ -140,14 +148,14 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
 .continue-next i{width:7px;height:7px;border-radius:50%;background:var(--ink);flex-shrink:0}
 .continue-next.wait{opacity:0.55;font-weight:600}
 .continue-next.wait i{animation:pulse-dot 1.4s ease-in-out infinite}
-.continue-actions{display:flex;gap:8px;margin-top:8px}
+.continue-actions{display:flex;gap:8px}
 .continue-action{
   flex:1;height:42px;border-radius:999px;
-  background:#fff;border:1px solid var(--line);
+  background:rgba(255,255,255,0.55);border:1px solid rgba(32,28,25,0.18);
   font-family:inherit;font-weight:800;font-size:13px;color:var(--ink);cursor:pointer;
-  transition:border-color .2s,transform .2s cubic-bezier(0.16,1,0.3,1);
+  transition:background .2s,border-color .2s,transform .2s cubic-bezier(0.16,1,0.3,1);
 }
-.continue-action:hover{border-color:var(--ink);transform:translateY(-1px)}
+.continue-action:hover{background:#fff;border-color:var(--ink);transform:translateY(-1px)}
 .continue-action:active{transform:scale(0.98)}
 
 /* ── My Matches card (cross-facility, device-local) ──────
@@ -578,7 +586,8 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
     if (last) {
       const where = metaText(last);
       continueSlot.innerHTML = `
-        <button class="continue rise" id="continueBtn" data-client-id="${esc(last.clientId || last.id)}">
+        <div class="continue rise">
+        <button class="continue-main" id="continueBtn" data-client-id="${esc(last.clientId || last.id)}">
           <span class="continue-top">${logoHtml(last)}<span class="continue-arrow" aria-hidden="true" data-pb="Continue arrow" data-pb-kind="hard"><svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.4" d="M5 12h14m-6-6l6 6-6 6"/></svg></span></span>
           <span>
             <span class="continue-title pw-text-target" style="display:block" data-pb="${esc(last.name || last.clientId)}" data-pb-kind="bouncy">Continue to<br/>${esc(last.name || last.clientId)}</span>
@@ -590,6 +599,7 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
         <div class="continue-actions">
           <button type="button" class="continue-action" data-go="book">Book a court</button>
           <button type="button" class="continue-action" data-go="opengames">Find a game</button>
+        </div>
         </div>`;
       continueSection.style.display = '';
       document.getElementById('continueBtn').addEventListener('click', () => selectTenant(last.clientId || last.id, last.name || last.clientId));

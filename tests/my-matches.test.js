@@ -95,6 +95,7 @@ check('unlike the Continue card, it does not hide while actively searching (it i
 
 section('wiring: the Continue card offers Book / Find a game shortcuts');
 check('two shortcut buttons sit under the Continue card (not nested inside its <button>, which would be invalid HTML)', /<\/button>\s*<div class="continue-actions">[^]*?data-go="book"[^]*?data-go="opengames"/.test(pickerHtml));
+check('the shortcuts live INSIDE the lime .continue card (a div wrapping the main button + actions row)', /<div class="continue rise">\s*<button class="continue-main" id="continueBtn"[^]*?<div class="continue-actions">[^]*?<\/div>\s*<\/div>`;/.test(pickerHtml));
 check('each shortcut selects the remembered facility and passes its route through', /b\.dataset\.go\)\)/.test(pickerHtml) && /function selectTenant\(clientId, label, route\)/.test(pickerHtml));
 check('the route becomes a hash on the facility URL, which index.html already honors on load', /'\/\?client=' \+ encodeURIComponent\(clientId\) \+ \(route \? '#' \+ route : ''\)/.test(pickerHtml) && /routeTo\(location\.hash\.slice\(1\), true\)/.test(indexHtml));
 check('the plain Continue card and facility tiles still open the facility home (no route)', /selectTenant\(last\.clientId \|\| last\.id, last\.name \|\| last\.clientId\)\);/.test(pickerHtml));

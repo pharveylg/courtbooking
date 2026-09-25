@@ -6,7 +6,7 @@
 // Bump this whenever a deploy changes tailwind.css / motion.* / other
 // cache-first assets -- those are served from cache without revalidation, so
 // returning visitors keep the old copy until the cache name changes.
-const CACHE_NAME = 'courtbooking-v33';
+const CACHE_NAME = 'courtbooking-v34';
 
 importScripts('/push-inbox.js');
 
@@ -37,6 +37,7 @@ const SECONDARY_PAGES = [
   '/store.html',
   '/superadmin.html',
   '/my-matches.html',
+  '/account.html',
 ];
 
 // ── Install ─────────────────────────────────────────────────
@@ -104,7 +105,17 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // CSS, JS, images: cache-first with network fallback
+  // Our own scripts change with almost every deploy and are tightly coupled
+  // to the HTML that loads them (e.g. account.html calling a new MyAuth
+  // method) -- cache-first served a stale copy for one load after each deploy,
+  // so a fresh page could run against an old script. Network-first; the
+  // cache is only the offline fallback.
+  if (url.pathname.endsWith('.js')) {
+    event.respondWith(networkFirst(request, CACHE_NAME));
+    return;
+  }
+
+  // CSS, images: cache-first with network fallback
   if (url.pathname.match(/\.(css|js|png|jpg|jpeg|svg|woff2|woff|ttf)$/)) {
     event.respondWith(cacheFirst(request, CACHE_NAME));
     return;
@@ -157,7 +168,7 @@ async function networkFirst(request, cacheName) {
 
 // ── Match alerts (web push) ─────────────────────────────────
 // Payload: { title, body, tag, url }. Sent by the tournament notifier job.
-// Also recorded into PushInbox (IndexedDB) so my-matches.html can show a
+// Also recorded into PushInbox (IndexedDB) so account.html can show a
 // device-local history -- a Service Worker can't touch localStorage, but it
 // shares IndexedDB with the page. Recording is best-effort: a failure there
 // never blocks showing the actual notification.

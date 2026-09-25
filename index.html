@@ -2361,7 +2361,7 @@ function getCurrentTenant() {
   // /app/*) straight to this same file with no query param when a visitor
   // hits it directly, and without this exclusion the "app" path segment
   // itself used to get misread as tenant "app".
-  const RESERVED_PATH_SEGMENTS = ['app', 'picker', 'superadmin', 'store', 'tournament-admin', 'tournament', 'gallery', 'my-matches'];
+  const RESERVED_PATH_SEGMENTS = ['app', 'picker', 'superadmin', 'store', 'tournament-admin', 'tournament', 'gallery', 'my-matches', 'account'];
   const pathParts = window.location.pathname.split('/').filter(p => p);
   if (pathParts.length > 0 && /^[a-z0-9-]+$/.test(pathParts[0]) && !RESERVED_PATH_SEGMENTS.includes(pathParts[0])) {
     return pathParts[0];
@@ -2406,7 +2406,7 @@ if (isRootPath && !hasClientParam && FB_ENABLED) {
   // At root URL with no ?client param → picker for first-timers, My
   // Matches for a returning visitor (see _isReturningVisitor above).
   const ls = document.getElementById('loadingScreen'); if (ls) ls.style.display = 'none';
-  window.location.replace(_isReturningVisitor() ? '/my-matches.html' : '/picker.html');
+  window.location.replace(_isReturningVisitor() ? '/account.html' : '/picker.html');
 } else if (!currentClientId && FB_ENABLED) {
   // Not at root but no tenant found → also show picker
   const ls2 = document.getElementById('loadingScreen'); if (ls2) ls2.style.display = 'none';
@@ -5041,7 +5041,7 @@ function bookGoStep(step){
   if(step === 1) renderBookInfo();
   if(step === 2){
     renderBookSummary();
-    const last = (() => { try { return JSON.parse(localStorage.getItem(lsKey('cb_last_contact_v1')) || 'null'); } catch(e){ return null; } })();
+    const last = (() => { try { return JSON.parse(localStorage.getItem(lsKey('cb_last_contact_v1')) || 'null'); } catch(e){ return null; } })() || profilePrefill();
     if(last){ const n = document.getElementById('fName'), m = document.getElementById('fEmail'); if(n && !n.value) n.value = last.name || ''; if(m && !m.value) m.value = last.email || ''; }
     setTimeout(() => { const el = document.getElementById(document.getElementById('fName').value ? 'fPin' : 'fName'); if(el) el.focus(); }, 60);
   }
@@ -5943,9 +5943,19 @@ let _ogActiveGameId = null; // game currently shown in the detail modal
 let _ogPendingCreateConfirmed = false; // set once "join existing instead?" has been dismissed
 let _ogAckPendingGameId = null; // gameId currently showing the pay-before-join acknowledgment panel
 
+/* Signed-in profile (my-auth.js) -> the name/email to prefill on forms, or
+   null. Only fills what the device hasn't already remembered, and the
+   profile's own switch turns it off. Cleared from the device on sign-out. */
+function profilePrefill(){
+  const p = typeof MyAuth !== 'undefined' && MyAuth.getProfile ? MyAuth.getProfile() : null;
+  return p && p.prefill !== false && (p.name || p.email) ? { name: p.name || '', email: p.email || '' } : null;
+}
 function ogIdentity(){
-  try { return JSON.parse(localStorage.getItem(lsKey('cb_og_identity_v1'))) || {}; }
-  catch { return {}; }
+  let saved = {};
+  try { saved = JSON.parse(localStorage.getItem(lsKey('cb_og_identity_v1'))) || {}; }
+  catch { saved = {}; }
+  const pf = profilePrefill();
+  return pf ? { ...saved, name: saved.name || pf.name, email: saved.email || pf.email } : saved;
 }
 function ogSaveIdentity(name, email){
   localStorage.setItem(lsKey('cb_og_identity_v1'), JSON.stringify({name, email}));

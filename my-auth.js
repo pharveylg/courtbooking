@@ -20,6 +20,7 @@
 })(typeof self !== 'undefined' ? self : this, function () {
   const MAX_ITEMS = 300;
   const PHONE_LS_KEY = 'cb_my_phone_v1';
+  const PROFILE_LS_KEY = 'cb_my_profile_v1'; // device cache of the signed-in profile (cleared on sign-out)
   const MIN_PASSWORD = 6; // Firebase's own minimum
   const key = (x) => x.clientId + '|' + x.kind + '|' + x.refId;
 
@@ -54,6 +55,28 @@
     if (!user) return true;
     return isPlayerUser(user) && !isStaff;
   }
+  // Same rule as tournament.html / tournament-admin.html / functions/notifyRunner.js
+  // (duplicated on purpose -- static pages, no shared bundle; a test keeps them equal).
+  function normalizePhone(raw) {
+    let digits = String(raw || '').replace(/\D/g, '');
+    if (digits.startsWith('0')) digits = '63' + digits.slice(1);
+    else if (digits.startsWith('9') && digits.length === 10) digits = '63' + digits;
+    return digits;
+  }
+  // What the Profile tab stores at users/{uid}.profile.
+  function normalizeProfile(raw) {
+    const p = raw || {};
+    return {
+      name: String(p.name || '').trim().slice(0, 80),
+      phone: p.phone ? normalizePhone(p.phone) : '',
+      homeClientId: /^[a-z0-9-]{1,50}$/.test(String(p.homeClientId || '')) ? String(p.homeClientId) : '',
+      prefill: p.prefill !== false,
+    };
+  }
+  function validPhone(raw) {
+    const n = normalizePhone(raw);
+    return n.length >= 10 && n.length <= 15;
+  }
   function validEmail(e) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(e || '').trim()); }
   // Plain-language messages for the errors people actually hit.
   function friendlyError(code) {
@@ -65,13 +88,14 @@
       case 'auth/invalid-credential':
       case 'auth/wrong-password':
       case 'auth/user-not-found': return 'Email or password is incorrect.';
+      case 'auth/requires-recent-login': return 'For your security, please confirm your sign-in and try again.';
       case 'auth/too-many-requests': return 'Too many attempts — wait a moment and try again.';
       case 'auth/network-request-failed': return 'Network problem — check your connection and try again.';
       default: return 'Something went wrong — please try again.';
     }
   }
 
-  const api = { MAX_ITEMS, MIN_PASSWORD, mergeActive, mergePhone, isPlayerUser, hasStaffClaim, canShowAccountUi, validEmail, friendlyError };
+  const api = { MAX_ITEMS, MIN_PASSWORD, PROFILE_LS_KEY, normalizePhone, normalizeProfile, validPhone, mergeActive, mergePhone, isPlayerUser, hasStaffClaim, canShowAccountUi, validEmail, friendlyError };
 
   if (typeof document !== 'undefined') {
     let user = null;
@@ -82,6 +106,14 @@
     const userRef = () => firebase.firestore().doc('users/' + user.uid);
     const readPhone = () => { try { return localStorage.getItem(PHONE_LS_KEY); } catch (e) { return null; } };
     const isPlayer = () => isPlayerUser(user) && !isStaff;
+    const clearProfileCache = () => { try { localStorage.removeItem(PROFILE_LS_KEY); } catch (e) {} };
+    const writeProfileCache = (profile) => { try { localStorage.setItem(PROFILE_LS_KEY, JSON.stringify(Object.assign({}, profile, { email: user ? user.email || '' : '' }))); } catch (e) {} };
+    // Device cache of the profile so forms can prefill without a network wait.
+    // Only ever written while signed in, removed on sign-out.
+    api.getProfile = function () {
+      try { const p = JSON.parse(localStorage.getItem(PROFILE_LS_KEY)); return p ? Object.assign(normalizeProfile(p), { email: p.email || '' }) : null; }
+      catch (e) { return null; }
+    };
 
     api.onChange = (fn) => { listeners.push(fn); };
     api.currentUser = () => (isPlayer() ? user : null);
@@ -93,10 +125,13 @@
       const snap = await userRef().get();
       const remote = snap.exists ? snap.data() : {};
       const active = mergeActive(MyActive.load(), remote.active);
-      const phone = mergePhone(readPhone(), remote.phone);
+      const remoteProfile = normalizeProfile(remote.profile);
+      const phone = mergePhone(readPhone(), remote.phone || remoteProfile.phone);
       MyActive.save(active);
       if (phone) { try { localStorage.setItem(PHONE_LS_KEY, phone); } catch (e) {} }
-      await userRef().set({ active, phone: phone || null, name: user.displayName || '', email: user.email || '', updatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true });
+      const profile = normalizeProfile(Object.assign({}, remoteProfile, { name: remoteProfile.name || user.displayName || '', phone }));
+      writeProfileCache(profile);
+      await userRef().set({ active, phone: phone || null, profile, name: user.displayName || '', email: user.email || '', updatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true });
     }
     // Debounced upload after a local change (MyActive.save calls this).
     api.pushSoon = function () {
@@ -115,6 +150,7 @@
       firebase.auth().onAuthStateChanged(async (u) => {
         user = u;
         isStaff = false;
+        if (!u) clearProfileCache();
         if (u) {
           try { isStaff = hasStaffClaim((await u.getIdTokenResult()).claims); } catch (e) {}
         }
@@ -144,12 +180,46 @@
       return cred;
     };
     api.resetPassword = (email) => firebase.auth().sendPasswordResetEmail(String(email).trim());
-    api.signOut = () => firebase.auth().signOut();
+    api.signOut = () => { clearProfileCache(); return firebase.auth().signOut(); };
+    // Saves Profile-tab edits to the account and the device cache. A changed
+    // phone also updates the number tournament lookup remembers.
+    api.saveProfile = async function (patch) {
+      if (!isPlayer()) throw new Error('not signed in');
+      const current = api.getProfile() || normalizeProfile({});
+      const next = normalizeProfile(Object.assign({}, current, patch));
+      if (next.phone) { try { localStorage.setItem(PHONE_LS_KEY, next.phone); } catch (e) {} }
+      writeProfileCache(next);
+      await userRef().set({ profile: next, phone: next.phone || null, updatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true });
+      return next;
+    };
+    // Proves it's still the same person (Firebase requires a recent sign-in to
+    // delete an account). Google re-opens the popup; email asks for the password.
+    api.reauthenticate = async function (askPassword) {
+      if ((user.providerData || []).some((p) => p && p.providerId === 'google.com')) return user.reauthenticateWithPopup(new firebase.auth.GoogleAuthProvider());
+      const pw = await askPassword();
+      if (!pw) throw Object.assign(new Error('cancelled'), { code: 'auth/cancelled-popup-request' });
+      return user.reauthenticateWithCredential(firebase.auth.EmailAuthProvider.credential(user.email, pw));
+    };
+    // Deletes the account doc, then the sign-in account itself. The device's own
+    // list is left alone (that's just signed-out behavior).
+    api.deleteAccount = async function (askPassword) {
+      if (!isPlayer()) return;
+      const u = user;
+      await userRef().delete();
+      try { await u.delete(); }
+      catch (e) {
+        if (!e || e.code !== 'auth/requires-recent-login') throw e;
+        await api.reauthenticate(askPassword);
+        await u.delete();
+      }
+      clearProfileCache();
+    };
     // Removes the account's saved copy and signs out. Deliberately leaves the
     // device's own list alone -- that's the signed-out behavior it falls back to.
     api.deleteMyData = async function () {
       if (!isPlayer()) return;
       await userRef().delete();
+      clearProfileCache();
       await firebase.auth().signOut();
     };
   }

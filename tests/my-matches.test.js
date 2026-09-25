@@ -11,7 +11,7 @@ const PushInbox = require('../push-inbox.js');
 const indexHtml = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
 const tournamentHtml = fs.readFileSync(path.join(__dirname, '..', 'tournament.html'), 'utf8');
 const swJs = fs.readFileSync(path.join(__dirname, '..', 'sw.js'), 'utf8');
-const myMatchesHtml = fs.readFileSync(path.join(__dirname, '..', 'my-matches.html'), 'utf8');
+const myMatchesHtml = fs.readFileSync(path.join(__dirname, '..', 'account.html'), 'utf8');
 const pickerHtml = fs.readFileSync(path.join(__dirname, '..', 'picker.html'), 'utf8');
 
 const grab = (src, a, b) => { const i = src.indexOf(a), j = src.indexOf(b, i); if (i < 0 || j < 0) throw new Error('markers not found: ' + a.slice(0, 60)); return src.slice(i, j); };
@@ -64,8 +64,8 @@ check('ogTrackMyGame really is called from both the create and the join paths', 
 section('wiring: root-route landing picks picker.html vs my-matches.html');
 const landingLogic = grab(indexHtml, 'function _isReturningVisitor(){', "} else if (!currentClientId && FB_ENABLED) {");
 check('the redirect decision now delegates to the shared MyActive.hasAnyLocalTrace() (one source of truth, not a duplicated copy)', /function _isReturningVisitor\(\)\{\s*return typeof MyActive !== 'undefined' && MyActive\.hasAnyLocalTrace\(\);\s*\}/.test(indexHtml));
-check('root path with no ?client redirects based on that check', /window\.location\.replace\(_isReturningVisitor\(\) \? '\/my-matches\.html' : '\/picker\.html'\)/.test(landingLogic));
-check("'my-matches' is a reserved path segment so it's never misread as a tenant slug", /RESERVED_PATH_SEGMENTS = \[.*'my-matches'\]/.test(indexHtml));
+check('root path with no ?client redirects based on that check', /window\.location\.replace\(_isReturningVisitor\(\) \? '\/account\.html' : '\/picker\.html'\)/.test(landingLogic));
+check("'my-matches' is a reserved path segment so it's never misread as a tenant slug", /RESERVED_PATH_SEGMENTS = \[.*'my-matches', 'account'\]/.test(indexHtml));
 check('my-active.js is loaded before the redirect logic runs (script order, not just presence)', indexHtml.indexOf('<script src="/my-active.js">') > 0 && indexHtml.indexOf('<script src="/my-active.js">') < indexHtml.indexOf('function _isReturningVisitor'));
 
 section('wiring: Switch Facility always reaches the picker directly');
@@ -81,11 +81,11 @@ check('push-inbox.js is imported into the service worker', /importScripts\('\/pu
 check('both shared modules are precached (cache-first assets)', /'\/my-active\.js'/.test(swJs) && /'\/push-inbox\.js'/.test(swJs));
 check('my-matches.html is precached as a secondary page', /'\/my-matches\.html'/.test(swJs));
 check('the push handler shows the notification AND records it, and a recording failure never blocks the notification (Promise.all + .catch on the record call)', /Promise\.all\(\[\s*self\.registration\.showNotification\([^]*?PushInbox\.record\(d\) : Promise\.resolve\(\)\)\.catch\(\(\) => \{\}\),/.test(swJs));
-check('the cache version was bumped for this deploy (stale sw.js would keep serving the old push handler)', /const CACHE_NAME = 'courtbooking-v33';/.test(swJs));
+check('the cache version was bumped for this deploy (stale sw.js would keep serving the old push handler)', /const CACHE_NAME = 'courtbooking-v34';/.test(swJs));
 
 section('wiring: picker.html has a persistent My Matches entry point');
 check('my-active.js is loaded on the picker too', /<script src="\/my-active\.js"><\/script>/.test(pickerHtml));
-check('the card links straight to my-matches.html', /<a class="mymatches-card rise" href="\/my-matches\.html"/.test(pickerHtml));
+check('the card links straight to the Account page', /<a class="mymatches-card rise" href="\/account\.html"/.test(pickerHtml));
 check('the status is computed purely from localStorage (via MyActive), not a Firestore read -- instant, no network dependency', /function refreshMyMatchesStatus\(\)\{[^]*?MyActive\.hasAnyLocalTrace\(\)/.test(pickerHtml));
 check('it\'s a binary signal (has-data / not), not a precise count -- honest about what a localStorage-only check can know', /hasData \? 'Saved on this device' : 'Nothing cached yet'/.test(pickerHtml));
 check('the dot indicator actually reflects that binary state', /myMatchesDot\.classList\.toggle\('has-data', hasData\)/.test(pickerHtml));
@@ -140,8 +140,8 @@ section('wiring: optional sign-in (Google or email + password)');
   check('the staff check reads the ID token claims on every auth change', /hasStaffClaim\(\(await u\.getIdTokenResult\(\)\)\.claims\)/.test(authJs));
   check('my-matches.html offers an email form (sign in / create account / forgot password) next to Google', /id="emailForm"/.test(myMatchesHtml) && /Create account/.test(myMatchesHtml) && /Forgot password\?/.test(myMatchesHtml) && /Use email instead/.test(myMatchesHtml) && /MyAuth\.signInWithEmail/.test(myMatchesHtml) && /MyAuth\.signUpWithEmail/.test(myMatchesHtml) && /MyAuth\.resetPassword/.test(myMatchesHtml));
   check('the form validates email and password length before calling Firebase', /MyAuth\.validEmail\(email\)/.test(myMatchesHtml) && /password\.length < MyAuth\.MIN_PASSWORD/.test(myMatchesHtml));
-  check('the picker link opens the sign-in form on My Matches (#signin)', /href="\/my-matches\.html#signin"/.test(pickerHtml) && /location\.hash === '#signin'/.test(myMatchesHtml));
-  check('deleting data removes the account doc and signs out but leaves the device list', /await userRef\(\)\.delete\(\);\s*await firebase\.auth\(\)\.signOut\(\);/.test(authJs));
+  check('the picker link opens the sign-in form on My Matches (#signin)', /href="\/account\.html#signin"/.test(pickerHtml) && /location\.hash === '#signin'/.test(myMatchesHtml));
+  check('deleting data removes the account doc and signs out but leaves the device list', /await userRef\(\)\.delete\(\);\s*clearProfileCache\(\);\s*await firebase\.auth\(\)\.signOut\(\);/.test(authJs));
   check('my-matches.html loads auth + my-auth.js, offers sign in/out/delete, and swaps the note when signed in', /firebase-auth-compat\.js/.test(myMatchesHtml) && /<script src="\/my-auth\.js">/.test(myMatchesHtml) && /Sign in with Google/.test(myMatchesHtml) && /Delete my saved data/.test(myMatchesHtml) && /Saved to your account/.test(myMatchesHtml));
   check('the account bar stays hidden until the first auth event (no flash of Sign in for signed-in users)', /id="accountBar" style="display:none"/.test(myMatchesHtml));
   check('the page re-renders after an account sync brings in items from another device', /evt === 'synced'\) render\(\)/.test(myMatchesHtml));

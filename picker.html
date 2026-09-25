@@ -40,6 +40,11 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
   position:sticky;top:0;z-index:20;
 }
 .topbar-inner{display:flex;align-items:center;gap:10px;width:100%;max-width:720px;margin:0 auto}
+.acct-chip{margin-left:auto;display:flex;align-items:center;gap:8px;height:36px;padding:0 14px 0 6px;border-radius:999px;background:#fff;border:1px solid var(--line);font-size:12.5px;font-weight:700;color:var(--ink);text-decoration:none}
+.acct-chip:hover{border-color:var(--ink)}
+.acct-avatar{width:24px;height:24px;border-radius:50%;background:var(--ink);color:var(--lime);display:grid;place-items:center;font-size:11px;font-weight:800}
+.acct-chip.signed-out{padding-left:14px}
+.acct-chip.signed-out .acct-avatar{display:none}
 .mark{
   width:34px;height:34px;border-radius:50%;
   background:var(--ink);color:var(--lime);
@@ -279,6 +284,7 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
       <div class="brand-name">Courts</div>
       <div class="brand-sub mono">by DulaHQ</div>
     </div>
+    <a class="acct-chip" id="acctChip" href="/account.html#signin" style="display:none"><span class="acct-avatar" id="acctAvatar" aria-hidden="true"></span><span id="acctLabel">Sign in</span></a>
   </div>
 </header>
 
@@ -334,10 +340,10 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
     <div id="continueSlot"></div>
   </section>
 
-  <!-- My Matches (cross-facility, device-local -- see my-matches.html) -->
+  <!-- My Matches (cross-facility, device-local -- see account.html) -->
   <section id="myMatchesSection" style="display:none">
     <div class="label mono">Your matches</div>
-    <a class="mymatches-card rise" href="/my-matches.html" id="myMatchesCard">
+    <a class="mymatches-card rise" href="/account.html" id="myMatchesCard">
       <span class="mymatches-left">
         <span class="mymatches-icon" aria-hidden="true">🎾</span>
         <span>
@@ -347,7 +353,7 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
       </span>
       <span class="mymatches-arrow" aria-hidden="true">→</span>
     </a>
-    <div class="mymatches-note mono"><span id="myMatchesNote">Saved only on this device — clears with your browser data.</span> <a class="mymatches-signin" id="myMatchesSignIn" href="/my-matches.html#signin" style="display:none">Sign in to keep it</a></div>
+    <div class="mymatches-note mono"><span id="myMatchesNote">Saved only on this device — clears with your browser data.</span> <a class="mymatches-signin" id="myMatchesSignIn" href="/account.html#signin" style="display:none">Sign in to keep it</a></div>
   </section>
 
   <!-- Facilities -->
@@ -409,7 +415,7 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
   const myMatchesStatusText = document.getElementById('myMatchesStatusText');
 
   // A binary signal, not a precise count -- an accurate count would need a
-  // Firestore read per tracked item (what my-matches.html itself does), which
+  // Firestore read per tracked item (what account.html itself does), which
   // this lightweight card deliberately doesn't do. Just localStorage, so it's
   // instant and safe to call before Firebase has even loaded.
   function refreshMyMatchesStatus(){
@@ -474,7 +480,25 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
     myMatchesNote.textContent = signedIn ? 'Saved to your account.' : 'Saved only on this device — clears with your browser data.';
     myMatchesSignIn.style.display = signedIn ? 'none' : '';
   }
-  MyAuth.onChange((evt) => { if (evt === 'auth' || evt === 'synced') { refreshMyMatchesStatus(); refreshMyMatchesAccount(); } });
+  // Header account chip: "Sign in" when signed out, initials when signed in.
+  // Never shown over a staff session (see my-auth.js).
+  function refreshAccountChip() {
+    const chip = document.getElementById('acctChip');
+    if (!MyAuth.canShowAccountUi()) { chip.style.display = 'none'; return; }
+    const u = MyAuth.currentUser();
+    chip.style.display = '';
+    chip.classList.toggle('signed-out', !u);
+    chip.href = u ? '/account.html#profile' : '/account.html#signin';
+    const who = u ? (u.displayName || u.email || '?') : '';
+    document.getElementById('acctAvatar').textContent = who.trim().charAt(0).toUpperCase();
+    document.getElementById('acctLabel').textContent = u ? 'Account' : 'Sign in';
+  }
+  MyAuth.onChange((evt) => {
+    if (evt === 'auth' || evt === 'synced') {
+      refreshMyMatchesStatus(); refreshMyMatchesAccount(); refreshAccountChip();
+      if (evt === 'synced' && allTenants.length) applySearch(); // the profile's home facility may change the Continue card
+    }
+  });
   MyAuth.init();
 
   // ── Load tenants ───────────────────────────────────────
@@ -518,6 +542,9 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
 
   // ── Render ─────────────────────────────────────────────
   function lastTenantId() {
+    // A signed-in profile's home facility wins over "last visited".
+    const p = typeof MyAuth !== 'undefined' && MyAuth.getProfile ? MyAuth.getProfile() : null;
+    if (p && p.homeClientId) return p.homeClientId;
     try { return localStorage.getItem(LS_TENANT) || ''; } catch (e) { return ''; }
   }
 

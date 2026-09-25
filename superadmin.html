@@ -11,6 +11,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-storage-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-functions-compat.js"></script>
 <script src="firebase-config.js"></script>
+<script src="staff-auth.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
@@ -40,6 +41,10 @@ body{background:#FFFBF5;color:#201C19}
       <div id="signInError" class="hidden mono text-[12px] text-[#8C2C10] bg-[#FFE9E0] border border-[#FFC9B6] rounded-[14px] px-4 py-2.5"></div>
       <button type="submit" class="w-full h-11 rounded-full bg-[#201C19] text-white font-[800] text-[13px] hover:opacity-90 transition cursor-pointer">Sign In</button>
     </form>
+    <!-- Scaffold (staff-auth.js): hidden unless enabled. Email + password above stays the way in. -->
+    <div id="saGoogleWrap" class="hidden mt-3">
+      <button type="button" id="saGoogleBtn" class="w-full h-11 rounded-full bg-white border border-[#EAE0D5] hover:border-[#201C19] font-[700] text-[13px] transition cursor-pointer">Sign in with Google instead</button>
+    </div>
   </div>
 </div>
 
@@ -1916,6 +1921,22 @@ document.getElementById('signInForm').addEventListener('submit', async (e) => {
     err.classList.remove('hidden');
   }
 });
+// Scaffold: Google sign-in for the superadmin. Authorization is unchanged --
+// onAuthStateChanged above still requires the superadmin/platformPerms claim,
+// and an account without one lands on the "Not authorized" screen with its UID.
+if(StaffAuth.uiEnabled()){
+  document.getElementById('saGoogleWrap').classList.remove('hidden');
+  document.getElementById('saGoogleBtn').addEventListener('click', async () => {
+    const err = document.getElementById('signInError');
+    err.classList.add('hidden');
+    try { await StaffAuth.signInWithGoogle(); }
+    catch(ex) {
+      if(ex && (ex.code === 'auth/popup-closed-by-user' || ex.code === 'auth/cancelled-popup-request')) return;
+      err.textContent = ex.message;
+      err.classList.remove('hidden');
+    }
+  });
+}
 document.getElementById('signOutBtn').addEventListener('click', () => auth.signOut());
 document.getElementById('notAuthorizedSignOutBtn').addEventListener('click', () => auth.signOut());
 

@@ -94,6 +94,7 @@ global.firebase = (() => {
   };
 })();
 global.window = global;
+global.StaffAuth = { uiEnabled: () => false }; // staff-auth.js scaffold: Google sign-in is off by default
 global.__signedIn = true;
 global.confirm = () => true;
 global.prompt = () => '1234';

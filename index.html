@@ -1897,6 +1897,10 @@ body:not(.staff-mode) .staff-link{display:none!important}
         <div id="modalPinError" class="hidden mono text-[12px] text-[#8C2C10] bg-[#FFE9E0] border border-[#FFC9B6] rounded-full px-4 py-2.5 text-center font-[600]"></div>
         <button type="submit" class="w-full h-12 rounded-full bg-[#201C19] text-white font-[800] text-[14px] tracking-wide hover:opacity-90 active:scale-[0.98] transition">Unlock All Tabs →</button>
       </form>
+      <!-- Scaffold (staff-auth.js): hidden unless enabled -- the PIN above stays the way in. -->
+      <div id="staffGoogleWrap" class="hidden mt-3">
+        <button type="button" id="staffGoogleBtn" class="w-full h-11 rounded-full bg-white border border-[#EAE0D5] hover:border-[#201C19] font-[700] text-[13px] transition">Staff: sign in with Google instead</button>
+      </div>
       <div class="mt-4 mono text-[10px] opacity-50 text-center">Public Portal: Only Book & Payment are visible to guests.</div>
     </div>
   </div>
@@ -1960,6 +1964,8 @@ body:not(.staff-mode) .staff-link{display:none!important}
 
 <script src="next-open.js"></script>
 <script src="/my-active.js"></script>
+<script src="/my-auth.js"></script>
+<script src="/staff-auth.js"></script>
 <script>
 /* ================================================================
    CLIENT WHITE-LABEL LAYER
@@ -3795,6 +3801,38 @@ if(headerSwitchFacility) headerSwitchFacility.addEventListener('click', handleSw
 const headerSwitchFacilityMobile = document.getElementById('headerSwitchFacilityMobile');
 if(headerSwitchFacilityMobile) headerSwitchFacilityMobile.addEventListener('click', handleSwitchFacility);
 
+function unlockStaffMode(){
+  adminUnlocked = true;
+  sessionStorage.setItem(LS.adminUnlocked, 'true');
+  document.getElementById('adminLoginModal').classList.add('hidden');
+  updateAdminTabsVisibility();
+  const next = PENDING_STAFF_ROUTE; PENDING_STAFF_ROUTE = null;
+  if(next && typeof routeTo === 'function') setTimeout(() => routeTo(next), 60);
+  toast(next ? 'Staff mode on' : 'Staff mode on. Bookings, Queue, Stats and Admin are on Home and in the footer.');
+}
+/* Scaffold: staff Google sign-in. Hidden (and inert) until StaffAuth is
+   switched on, so the PIN remains the only way in while testing. When shown
+   it is an ADDITIONAL path ('pin-or-google'), never a replacement. */
+if(StaffAuth.uiEnabled() && fbAuth){
+  document.getElementById('staffGoogleWrap').classList.remove('hidden');
+  document.getElementById('staffGoogleBtn').addEventListener('click', async () => {
+    const err = document.getElementById('modalPinError');
+    try {
+      const r = await StaffAuth.signInAsStaff(currentClientId);
+      if(StaffAuth.accessDecision({ mode: 'pin-or-google', pinOk: false, googleStaff: r.allowed })){
+        err.classList.add('hidden');
+        unlockStaffMode();
+      } else {
+        err.textContent = "That Google account isn't on this facility's staff list. Use the PIN instead.";
+        err.classList.remove('hidden');
+      }
+    } catch(ex){
+      if(ex && (ex.code === 'auth/popup-closed-by-user' || ex.code === 'auth/cancelled-popup-request')) return;
+      err.textContent = "Couldn't sign in with Google. Use the PIN instead.";
+      err.classList.remove('hidden');
+    }
+  });
+}
 const adminModalForm = document.getElementById('adminModalForm');
 if(adminModalForm){
   adminModalForm.addEventListener('submit', async (e)=>{
@@ -3802,16 +3840,10 @@ if(adminModalForm){
     const input = document.getElementById('modalPinInput');
     const err = document.getElementById('modalPinError');
     const pin = input.value.trim();
-    if(await verifyAdminPin(pin)){
-      adminUnlocked = true;
-      sessionStorage.setItem(LS.adminUnlocked, 'true');
-      document.getElementById('adminLoginModal').classList.add('hidden');
+    if(StaffAuth.accessDecision({ mode: 'pin', pinOk: await verifyAdminPin(pin) })){
+      unlockStaffMode();
       input.value = '';
       err.classList.add('hidden');
-      updateAdminTabsVisibility();
-      const next = PENDING_STAFF_ROUTE; PENDING_STAFF_ROUTE = null;
-      if(next && typeof routeTo === 'function') setTimeout(() => routeTo(next), 60);
-      toast(next ? 'Staff mode on' : 'Staff mode on. Bookings, Queue, Stats and Admin are on Home and in the footer.');
     } else {
       err.textContent = 'Incorrect PIN. Default is 1234.';
       err.classList.remove('hidden');

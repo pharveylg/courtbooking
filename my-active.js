@@ -81,6 +81,8 @@
     };
     api.save = function (list) {
       try { localStorage.setItem(LS_KEY, JSON.stringify(list)); } catch (e) {}
+      // If the visitor is signed in (my-auth.js), keep their account copy current.
+      if (typeof MyAuth !== 'undefined' && MyAuth.pushSoon) MyAuth.pushSoon();
     };
     api.add = function (item) {
       const next = withAdded(api.load(), item);

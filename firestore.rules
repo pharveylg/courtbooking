@@ -490,6 +490,20 @@ service cloud.firestore {
       allow write: if platformPerm('manage_organizations');
     }
 
+    // Optional player accounts (Google or email + password, see my-auth.js):
+    // one doc per person holding their My Matches list. Unlike almost
+    // everything else in this app this is gated on a real identity -- only the
+    // signed-in user whose uid it is can read, write, or delete it. Platform
+    // staff share the email/password pool, so anyone carrying a staff claim is
+    // excluded: they're not players, and nothing here should treat them as one.
+    match /users/{uid} {
+      allow read, write: if request.auth != null
+                         && request.auth.uid == uid
+                         && request.auth.token.firebase.sign_in_provider in ['google.com', 'password']
+                         && !('superadmin' in request.auth.token)
+                         && !('platformPerms' in request.auth.token);
+    }
+
     // Cross-tenant player identity, keyed by a phone-derived id -- reused
     // across tenants so a dual-meet or a player with membership at two
     // clubs is the same record, not a duplicate per tenant. This app has

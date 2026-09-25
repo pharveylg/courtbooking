@@ -177,7 +177,9 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
 .mymatches-dot{width:6px;height:6px;border-radius:50%;background:rgba(32,28,25,0.3);flex-shrink:0}
 .mymatches-dot.has-data{background:var(--lime);box-shadow:0 0 0 3px rgba(214,255,95,0.35)}
 .mymatches-arrow{opacity:0.4;flex-shrink:0}
-.mymatches-note{font-size:10px;opacity:0.4;margin-top:6px;padding:0 2px}
+.mymatches-note{font-size:10px;margin-top:6px;padding:0 2px;color:rgba(32,28,25,0.4)}
+.mymatches-signin{background:none;border:0;padding:0;font:inherit;text-decoration:underline;color:var(--ink);opacity:.75;cursor:pointer}
+.mymatches-signin:hover{opacity:1}
 
 /* ── Facility rows ────────────────────────────────────── */
 .tenant-grid{display:grid;grid-template-columns:minmax(0,1fr);gap:10px}
@@ -345,7 +347,7 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
       </span>
       <span class="mymatches-arrow" aria-hidden="true">→</span>
     </a>
-    <div class="mymatches-note mono">Saved only on this device — clears with your browser data.</div>
+    <div class="mymatches-note mono"><span id="myMatchesNote">Saved only on this device — clears with your browser data.</span> <a class="mymatches-signin" id="myMatchesSignIn" href="/my-matches.html#signin" style="display:none">Sign in to keep it</a></div>
   </section>
 
   <!-- Facilities -->
@@ -374,11 +376,13 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
 
 <!-- Firebase SDK -->
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 <script src="/firebase-config.js"></script>
 <script src="/next-open.js"></script>
 <script src="/pickle-ball.js"></script>
 <script src="/my-active.js"></script>
+<script src="/my-auth.js"></script>
 
 <script>
 (function() {
@@ -459,6 +463,19 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
 
   firebase.initializeApp(FIREBASE_CFG);
   const db = firebase.firestore();
+
+  // Optional Google sign-in (my-auth.js): only changes the wording under the
+  // My Matches card and offers the button -- the card itself is unchanged.
+  const myMatchesNote = document.getElementById('myMatchesNote');
+  const myMatchesSignIn = document.getElementById('myMatchesSignIn');
+  function refreshMyMatchesAccount() {
+    if (!MyAuth.canShowAccountUi()) { myMatchesSignIn.style.display = 'none'; return; }
+    const signedIn = !!MyAuth.currentUser();
+    myMatchesNote.textContent = signedIn ? 'Saved to your account.' : 'Saved only on this device — clears with your browser data.';
+    myMatchesSignIn.style.display = signedIn ? 'none' : '';
+  }
+  MyAuth.onChange((evt) => { if (evt === 'auth' || evt === 'synced') { refreshMyMatchesStatus(); refreshMyMatchesAccount(); } });
+  MyAuth.init();
 
   // ── Load tenants ───────────────────────────────────────
   window.loadTenants = loadTenants;

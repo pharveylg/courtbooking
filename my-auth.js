@@ -1,0 +1,158 @@
+/* ================================================================
+   MyAuth -- optional sign-in (Google, or email + password) that lets My
+   Matches follow a person across devices. Signed-out behavior is
+   unchanged (everything stays device-local, see my-active.js). Signed
+   in, the same data is also kept in Firestore at users/{uid}, readable/
+   writable only by that user (see firestore.rules).
+   What syncs: the tracked bookings/games list (MyActive) and the phone
+   used for tournament lookup. The push-notification inbox stays on the
+   device -- a push subscription belongs to one device.
+   Staff/superadmin accounts live in the same email/password pool and
+   share this origin's sign-in session, so accounts carrying a staff
+   custom claim are never treated as player accounts: no sync, no
+   account UI, and this page can't sign them out.
+   UMD: the merge/error helpers are pure (tested under Node); everything
+   that touches Firebase/localStorage only exists in a browser.
+   ================================================================ */
+(function (root, factory) {
+  if (typeof module === 'object' && module.exports) module.exports = factory();
+  else root.MyAuth = factory();
+})(typeof self !== 'undefined' ? self : this, function () {
+  const MAX_ITEMS = 300;
+  const PHONE_LS_KEY = 'cb_my_phone_v1';
+  const MIN_PASSWORD = 6; // Firebase's own minimum
+  const key = (x) => x.clientId + '|' + x.kind + '|' + x.refId;
+
+  // Union of the device list and the account list. The same booking/game on
+  // both sides keeps its newest addedAt; result is newest-first and capped.
+  function mergeActive(local, remote) {
+    const byKey = new Map();
+    [].concat(remote || [], local || []).forEach((x) => {
+      if (!x || !x.clientId || !x.kind || !x.refId) return;
+      const prev = byKey.get(key(x));
+      if (!prev || (x.addedAt || 0) > (prev.addedAt || 0)) byKey.set(key(x), x);
+    });
+    return Array.from(byKey.values()).sort((a, b) => (b.addedAt || 0) - (a.addedAt || 0)).slice(0, MAX_ITEMS);
+  }
+  // The device's number wins (it's what the person just used); the account's
+  // fills in on a fresh device.
+  function mergePhone(localPhone, remotePhone) {
+    return localPhone || remotePhone || null;
+  }
+  // A player account is one that signed in with Google or email + password.
+  function isPlayerUser(user) {
+    return !!(user && (user.providerData || []).some((p) => p && (p.providerId === 'google.com' || p.providerId === 'password')));
+  }
+  // Platform staff (superadmin console) sign in with email + password too --
+  // the claim is what tells them apart from a player.
+  function hasStaffClaim(claims) {
+    return !!(claims && (claims.superadmin === true || claims.platformPerms));
+  }
+  // Account UI is offered to signed-out visitors and to player accounts, and
+  // never over a staff session.
+  function canShowAccountUi(user, isStaff) {
+    if (!user) return true;
+    return isPlayerUser(user) && !isStaff;
+  }
+  function validEmail(e) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(e || '').trim()); }
+  // Plain-language messages for the errors people actually hit.
+  function friendlyError(code) {
+    switch (code) {
+      case 'auth/invalid-email': return 'That email address doesn’t look right.';
+      case 'auth/missing-password':
+      case 'auth/weak-password': return 'Use a password of at least ' + MIN_PASSWORD + ' characters.';
+      case 'auth/email-already-in-use': return 'That email already has an account — try signing in instead.';
+      case 'auth/invalid-credential':
+      case 'auth/wrong-password':
+      case 'auth/user-not-found': return 'Email or password is incorrect.';
+      case 'auth/too-many-requests': return 'Too many attempts — wait a moment and try again.';
+      case 'auth/network-request-failed': return 'Network problem — check your connection and try again.';
+      default: return 'Something went wrong — please try again.';
+    }
+  }
+
+  const api = { MAX_ITEMS, MIN_PASSWORD, mergeActive, mergePhone, isPlayerUser, hasStaffClaim, canShowAccountUi, validEmail, friendlyError };
+
+  if (typeof document !== 'undefined') {
+    let user = null;
+    let isStaff = false;
+    let pushTimer = null;
+    const listeners = [];
+    const emit = (evt) => listeners.forEach((fn) => { try { fn(evt, user); } catch (e) {} });
+    const userRef = () => firebase.firestore().doc('users/' + user.uid);
+    const readPhone = () => { try { return localStorage.getItem(PHONE_LS_KEY); } catch (e) { return null; } };
+    const isPlayer = () => isPlayerUser(user) && !isStaff;
+
+    api.onChange = (fn) => { listeners.push(fn); };
+    api.currentUser = () => (isPlayer() ? user : null);
+    api.canShowAccountUi = () => canShowAccountUi(user, isStaff);
+
+    // Pulls the account's copy, merges it with this device, and writes the
+    // merged result to BOTH places so they agree from here on.
+    async function syncFromAccount() {
+      const snap = await userRef().get();
+      const remote = snap.exists ? snap.data() : {};
+      const active = mergeActive(MyActive.load(), remote.active);
+      const phone = mergePhone(readPhone(), remote.phone);
+      MyActive.save(active);
+      if (phone) { try { localStorage.setItem(PHONE_LS_KEY, phone); } catch (e) {} }
+      await userRef().set({ active, phone: phone || null, name: user.displayName || '', email: user.email || '', updatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true });
+    }
+    // Debounced upload after a local change (MyActive.save calls this).
+    api.pushSoon = function () {
+      if (typeof firebase === 'undefined' || !firebase.auth || !isPlayer()) return;
+      const uid = user.uid;
+      clearTimeout(pushTimer);
+      pushTimer = setTimeout(() => {
+        firebase.firestore().doc('users/' + uid)
+          .set({ active: MyActive.load(), phone: readPhone(), updatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true })
+          .catch(() => {});
+      }, 1500);
+    };
+
+    api.init = function () {
+      if (typeof firebase === 'undefined' || !firebase.auth) return;
+      firebase.auth().onAuthStateChanged(async (u) => {
+        user = u;
+        isStaff = false;
+        if (u) {
+          try { isStaff = hasStaffClaim((await u.getIdTokenResult()).claims); } catch (e) {}
+        }
+        if (isPlayer()) {
+          try { await syncFromAccount(); emit('synced'); } catch (e) { emit('sync-failed'); }
+        }
+        emit('auth');
+      });
+    };
+    api.signIn = async function () { // Google
+      const provider = new firebase.auth.GoogleAuthProvider();
+      try {
+        await firebase.auth().signInWithPopup(provider);
+      } catch (e) {
+        // In-app browsers and some mobile setups can't open the popup.
+        if (e && (e.code === 'auth/popup-blocked' || e.code === 'auth/operation-not-supported-in-this-environment')) {
+          return firebase.auth().signInWithRedirect(provider);
+        }
+        if (e && (e.code === 'auth/popup-closed-by-user' || e.code === 'auth/cancelled-popup-request')) return;
+        throw e;
+      }
+    };
+    api.signInWithEmail = (email, password) => firebase.auth().signInWithEmailAndPassword(String(email).trim(), password);
+    api.signUpWithEmail = async function (email, password, name) {
+      const cred = await firebase.auth().createUserWithEmailAndPassword(String(email).trim(), password);
+      if (name && cred.user) { try { await cred.user.updateProfile({ displayName: String(name).trim() }); } catch (e) {} }
+      return cred;
+    };
+    api.resetPassword = (email) => firebase.auth().sendPasswordResetEmail(String(email).trim());
+    api.signOut = () => firebase.auth().signOut();
+    // Removes the account's saved copy and signs out. Deliberately leaves the
+    // device's own list alone -- that's the signed-out behavior it falls back to.
+    api.deleteMyData = async function () {
+      if (!isPlayer()) return;
+      await userRef().delete();
+      await firebase.auth().signOut();
+    };
+  }
+
+  return api;
+});

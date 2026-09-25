@@ -81,7 +81,7 @@ check('push-inbox.js is imported into the service worker', /importScripts\('\/pu
 check('both shared modules are precached (cache-first assets)', /'\/my-active\.js'/.test(swJs) && /'\/push-inbox\.js'/.test(swJs));
 check('my-matches.html is precached as a secondary page', /'\/my-matches\.html'/.test(swJs));
 check('the push handler shows the notification AND records it, and a recording failure never blocks the notification (Promise.all + .catch on the record call)', /Promise\.all\(\[\s*self\.registration\.showNotification\([^]*?PushInbox\.record\(d\) : Promise\.resolve\(\)\)\.catch\(\(\) => \{\}\),/.test(swJs));
-check('the cache version was bumped for this deploy (stale sw.js would keep serving the old push handler)', /const CACHE_NAME = 'courtbooking-v31';/.test(swJs));
+check('the cache version was bumped for this deploy (stale sw.js would keep serving the old push handler)', /const CACHE_NAME = 'courtbooking-v33';/.test(swJs));
 
 section('wiring: picker.html has a persistent My Matches entry point');
 check('my-active.js is loaded on the picker too', /<script src="\/my-active\.js"><\/script>/.test(pickerHtml));
@@ -89,7 +89,7 @@ check('the card links straight to my-matches.html', /<a class="mymatches-card ri
 check('the status is computed purely from localStorage (via MyActive), not a Firestore read -- instant, no network dependency', /function refreshMyMatchesStatus\(\)\{[^]*?MyActive\.hasAnyLocalTrace\(\)/.test(pickerHtml));
 check('it\'s a binary signal (has-data / not), not a precise count -- honest about what a localStorage-only check can know', /hasData \? 'Saved on this device' : 'Nothing cached yet'/.test(pickerHtml));
 check('the dot indicator actually reflects that binary state', /myMatchesDot\.classList\.toggle\('has-data', hasData\)/.test(pickerHtml));
-check('the card carries its own small, low-opacity disclaimer (font-size 10px, low opacity -- kept deliberately minor, not a warning banner)', /\.mymatches-note\{font-size:10px;opacity:0\.4/.test(pickerHtml) && /Saved only on this device — clears with your browser data\./.test(pickerHtml));
+check('the card carries its own small, low-opacity disclaimer (font-size 10px, low opacity -- kept deliberately minor, not a warning banner)', /\.mymatches-note\{font-size:10px;margin-top:6px;padding:0 2px;color:rgba\(32,28,25,0\.4\)/.test(pickerHtml) && /Saved only on this device — clears with your browser data\./.test(pickerHtml));
 check('it stays visible while the grid is showing, hidden during loading/error/empty states (same lifecycle as the other sections)', /myMatchesSection\.style\.display = '';/.test(pickerHtml) && /gridSection\.style\.display = 'none'; continueSection\.style\.display = 'none'; myMatchesSection\.style\.display = 'none';/.test(pickerHtml));
 check('unlike the Continue card, it does not hide while actively searching (it is facility-agnostic)', !/query[^;]*myMatchesSection\.style\.display/.test(pickerHtml));
 
@@ -100,8 +100,58 @@ check('each shortcut selects the remembered facility and passes its route throug
 check('the route becomes a hash on the facility URL, which index.html already honors on load', /'\/\?client=' \+ encodeURIComponent\(clientId\) \+ \(route \? '#' \+ route : ''\)/.test(pickerHtml) && /routeTo\(location\.hash\.slice\(1\), true\)/.test(indexHtml));
 check('the plain Continue card and facility tiles still open the facility home (no route)', /selectTenant\(last\.clientId \|\| last\.id, last\.name \|\| last\.clientId\)\);/.test(pickerHtml));
 
+section('MyAuth -- merging device data with an account (pure)');
+{
+  const MyAuth = require('../my-auth.js');
+  const it = (o = {}) => ({ clientId: 'demo', kind: 'booking', refId: 'b1', addedAt: 100, ...o });
+  check('device-only items survive the merge', MyAuth.mergeActive([it()], []).length === 1);
+  check('account-only items (from another device) are added', MyAuth.mergeActive([], [it({ refId: 'x' })]).length === 1);
+  check('the same booking on both sides is one entry, not two', MyAuth.mergeActive([it()], [it()]).length === 1);
+  check('the same entry keeps its newest addedAt', MyAuth.mergeActive([it({ addedAt: 100 })], [it({ addedAt: 900 })])[0].addedAt === 900);
+  check('result is newest-first', MyAuth.mergeActive([it({ refId: 'a', addedAt: 1 })], [it({ refId: 'b', addedAt: 5 })]).map(x => x.refId).join() === 'b,a');
+  check('a booking and a game sharing an id stay distinct', MyAuth.mergeActive([it()], [it({ kind: 'game' })]).length === 2);
+  check('junk / malformed entries in the account doc are dropped, never crash the merge', MyAuth.mergeActive([it()], [null, {}, { clientId: 'x' }]).length === 1 && MyAuth.mergeActive(null, undefined).length === 0);
+  check('the merge is capped like the local list', (() => { const many = Array.from({ length: MyAuth.MAX_ITEMS + 25 }, (_, i) => it({ refId: 'r' + i, addedAt: i })); return MyAuth.mergeActive(many, []).length === MyAuth.MAX_ITEMS; })());
+  check('the device phone wins; the account fills in on a fresh device; neither -> null', MyAuth.mergePhone('63911', '63922') === '63911' && MyAuth.mergePhone(null, '63922') === '63922' && MyAuth.mergePhone(null, null) === null);
+  const google = { providerData: [{ providerId: 'google.com' }] }, pw = { providerData: [{ providerId: 'password' }] };
+  const anon = { providerData: [] };
+  check('Google and email/password users are player accounts; anonymous / signed-out are not', MyAuth.isPlayerUser(google) && MyAuth.isPlayerUser(pw) && !MyAuth.isPlayerUser(anon) && !MyAuth.isPlayerUser(null));
+  check('a staff claim (superadmin or platformPerms) is detected', MyAuth.hasStaffClaim({ superadmin: true }) && MyAuth.hasStaffClaim({ platformPerms: ['manage_plans'] }) && !MyAuth.hasStaffClaim({}) && !MyAuth.hasStaffClaim(null));
+  check('account UI shows for signed-out visitors and ordinary players (Google or email)', MyAuth.canShowAccountUi(null, false) && MyAuth.canShowAccountUi(google, false) && MyAuth.canShowAccountUi(pw, false));
+  check('account UI never shows over a staff session, even though staff use email/password too', !MyAuth.canShowAccountUi(pw, true) && !MyAuth.canShowAccountUi(google, true));
+  check('email validation accepts normal addresses and rejects junk', MyAuth.validEmail('a@b.co') && MyAuth.validEmail(' a@b.co ') && !MyAuth.validEmail('nope') && !MyAuth.validEmail('a@b') && !MyAuth.validEmail(''));
+  check('common Firebase errors get plain-language messages, unknown codes a safe fallback', /already has an account/.test(MyAuth.friendlyError('auth/email-already-in-use')) && /incorrect/.test(MyAuth.friendlyError('auth/invalid-credential')) && /incorrect/.test(MyAuth.friendlyError('auth/wrong-password')) && /at least 6/.test(MyAuth.friendlyError('auth/weak-password')) && /try again/.test(MyAuth.friendlyError('auth/something-new')));
+  check('wrong-password and unknown-email read the same (no account enumeration)', MyAuth.friendlyError('auth/wrong-password') === MyAuth.friendlyError('auth/user-not-found'));
+}
+
+section('wiring: optional sign-in (Google or email + password)');
+{
+  const rules = fs.readFileSync(path.join(__dirname, '..', 'firestore.rules'), 'utf8');
+  const authJs = fs.readFileSync(path.join(__dirname, '..', 'my-auth.js'), 'utf8');
+  const activeJs = fs.readFileSync(path.join(__dirname, '..', 'my-active.js'), 'utf8');
+  check('users/{uid} is readable/writable only by that signed-in user, via Google or email/password', /match \/users\/\{uid\} \{\s*allow read, write: if request\.auth != null\s*&& request\.auth\.uid == uid\s*&& request\.auth\.token\.firebase\.sign_in_provider in \['google\.com', 'password'\]/.test(rules));
+  check('staff accounts (same email/password pool) are excluded by claim in the rule', /!\('superadmin' in request\.auth\.token\)\s*&& !\('platformPerms' in request\.auth\.token\)/.test(rules));
+  check('the account doc rule is NOT the app-wide open pattern', !/match \/users\/\{uid\} \{[^}]*isValidTenantId/.test(rules));
+  check('sign-in uses Google with a redirect fallback for popup-hostile browsers', /GoogleAuthProvider/.test(authJs) && /signInWithRedirect/.test(authJs) && /popup-blocked/.test(authJs));
+  check('first sign-in merges the device list into the account (and writes both ways) instead of overwriting either', /mergeActive\(MyActive\.load\(\), remote\.active\)/.test(authJs) && /MyActive\.save\(active\)/.test(authJs) && /\.set\(\{ active, phone/.test(authJs));
+  check('local changes are pushed to the account (debounced) via MyActive.save', /MyAuth\.pushSoon\(\)/.test(activeJs) && /setTimeout\(\(\) => \{/.test(authJs));
+  check('pushSoon does nothing when signed out or on a staff session, so signed-out use is untouched', /!isPlayer\(\)\) return;/.test(authJs));
+  check('email sign-up sets the display name, sign-in and password reset are wired', /createUserWithEmailAndPassword/.test(authJs) && /updateProfile\(\{ displayName/.test(authJs) && /signInWithEmailAndPassword/.test(authJs) && /sendPasswordResetEmail/.test(authJs));
+  check('the staff check reads the ID token claims on every auth change', /hasStaffClaim\(\(await u\.getIdTokenResult\(\)\)\.claims\)/.test(authJs));
+  check('my-matches.html offers an email form (sign in / create account / forgot password) next to Google', /id="emailForm"/.test(myMatchesHtml) && /Create account/.test(myMatchesHtml) && /Forgot password\?/.test(myMatchesHtml) && /Use email instead/.test(myMatchesHtml) && /MyAuth\.signInWithEmail/.test(myMatchesHtml) && /MyAuth\.signUpWithEmail/.test(myMatchesHtml) && /MyAuth\.resetPassword/.test(myMatchesHtml));
+  check('the form validates email and password length before calling Firebase', /MyAuth\.validEmail\(email\)/.test(myMatchesHtml) && /password\.length < MyAuth\.MIN_PASSWORD/.test(myMatchesHtml));
+  check('the picker link opens the sign-in form on My Matches (#signin)', /href="\/my-matches\.html#signin"/.test(pickerHtml) && /location\.hash === '#signin'/.test(myMatchesHtml));
+  check('deleting data removes the account doc and signs out but leaves the device list', /await userRef\(\)\.delete\(\);\s*await firebase\.auth\(\)\.signOut\(\);/.test(authJs));
+  check('my-matches.html loads auth + my-auth.js, offers sign in/out/delete, and swaps the note when signed in', /firebase-auth-compat\.js/.test(myMatchesHtml) && /<script src="\/my-auth\.js">/.test(myMatchesHtml) && /Sign in with Google/.test(myMatchesHtml) && /Delete my saved data/.test(myMatchesHtml) && /Saved to your account/.test(myMatchesHtml));
+  check('the account bar stays hidden until the first auth event (no flash of Sign in for signed-in users)', /id="accountBar" style="display:none"/.test(myMatchesHtml));
+  check('the page re-renders after an account sync brings in items from another device', /evt === 'synced'\) render\(\)/.test(myMatchesHtml));
+  check('picker.html loads auth + my-auth.js and offers sign-in under the My Matches card', /firebase-auth-compat\.js/.test(pickerHtml) && /<script src="\/my-auth\.js">/.test(pickerHtml) && /id="myMatchesSignIn"/.test(pickerHtml) && /Saved to your account\./.test(pickerHtml));
+  check('index.html loads my-auth.js so changes made while browsing a facility also reach the account', /<script src="\/my-auth\.js"><\/script>/.test(indexHtml));
+  check('my-auth.js is precached', /'\/my-auth\.js'/.test(swJs));
+}
+
 section('wiring: my-matches.html\'s page-level device-local disclaimer');
-check('a single page-level note replaces the old inbox-only one, shown regardless of populated/empty state', /<div class="disclaimer">⏱ Reads information saved in this browser only\./.test(myMatchesHtml));
+check('a single page-level note replaces the old inbox-only one, shown regardless of populated/empty state', /<div class="disclaimer" id="pageNote">⏱ Reads information saved in this browser only\./.test(myMatchesHtml));
 check('the old, narrower inbox-only disclaimer text is gone (consolidated, not duplicated)', !/Saved on this device only — clearing browser data or switching devices loses this history\./.test(myMatchesHtml));
 check('the empty state explains WHY it\'s empty (device-local caching), not just that it is', /Nothing cached on this device yet\. Once you reserve a court, join a game, or look yourself up in a tournament — from this browser/.test(myMatchesHtml));
 

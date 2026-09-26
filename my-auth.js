@@ -154,6 +154,9 @@
       if (typeof firebase === 'undefined' || !firebase.auth) return;
       // Coming back from the redirect flow: surface a failure, or a silent
       // "came back signed out" (browsers that block the return step).
+      // If a Google attempt is in progress, note that the page (re)loaded --
+      // a reload in the middle of sign-in is itself the clue to why it "blinks".
+      if (api.trace()) trace('page loaded');
       const wasRedirecting = (() => { try { const f = sessionStorage.getItem(REDIRECT_FLAG); sessionStorage.removeItem(REDIRECT_FLAG); return !!f; } catch (e) { return false; } })();
       if (wasRedirecting) {
         firebase.auth().getRedirectResult().then((res) => {
@@ -171,6 +174,7 @@
         user = u;
         isStaff = false;
         if (!u) clearProfileCache();
+        else api.clearTrace(); // signed in: the attempt worked, drop its trail
         if (u) {
           try { isStaff = hasStaffClaim((await u.getIdTokenResult()).claims); } catch (e) {}
         }

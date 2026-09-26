@@ -52,6 +52,10 @@ check('the redirect hand-off is remembered so coming back signed-out is reported
 check('the page shows the problem, including the Firebase error code, so it can be diagnosed', accountHtml.includes('signin-problem') && accountHtml.includes("e && e.code ? ' (' + e.code + ')'"));
 check('a redirect-return error message survives the re-render race', accountHtml.includes('MyAuth.lastProblem && !MyAuth.currentUser()'));
 
+section('Google sign-in trail stays visible even if the page reloads');
+check('a reload in the middle of an attempt is recorded and the trail is dropped once signed in', authJs.includes("if (api.trace()) trace('page loaded');") && authJs.includes('else api.clearTrace();'));
+check('the Account page shows "Last Google attempt: ..." on load whenever there is a trail, without needing the error message', accountHtml.includes("Last Google attempt: ' + esc(MyAuth.trace())") && accountHtml.includes('id="traceLine"'));
+
 section('Profile tab');
 check('signed-out visitors get a sign-in prompt instead of the form', /id="profileSignedOut"/.test(accountHtml) && /Sign in to keep a profile/.test(accountHtml));
 check('editable name and phone, read-only email, home facility picker, prefill switch', /id="pfName"/.test(accountHtml) && /id="pfPhone"/.test(accountHtml) && /id="pfEmail" readonly/.test(accountHtml) && /id="pfHome"/.test(accountHtml) && /id="pfPrefill"/.test(accountHtml));

@@ -456,6 +456,7 @@ a.card:hover{transform:translateY(-1px);box-shadow:0 8px 22px rgba(32,28,25,0.08
       '<button type="button" class="btn-google" id="signInBtn">Sign in with Google</button>' +
       '<button type="button" class="btn-google" id="emailToggleBtn">Use email instead</button>' +
       '<span class="account-text">Optional — keeps this list across devices.</span>' +
+      (MyAuth.trace() ? '<div class="auth-msg" id="traceLine" style="width:100%">Last Google attempt: ' + esc(MyAuth.trace()) + '</div>' : '') +
       '<form id="emailForm" class="email-form" style="display:' + (formOpen ? 'flex' : 'none') + '" novalidate>' +
         (signup ? '<input type="text" id="authName" placeholder="Your name (optional)" autocomplete="name"/>' : '') +
         '<input type="email" id="authEmail" placeholder="Email" autocomplete="email"/>' +

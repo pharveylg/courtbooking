@@ -20,6 +20,10 @@
 })(typeof self !== 'undefined' ? self : this, function () {
   const MAX_ITEMS = 300;
   const PHONE_LS_KEY = 'cb_my_phone_v1';
+  const REDIRECT_FLAG = 'cb_google_redirect_pending';
+  function redirectLostMessage() {
+    return 'Google sign-in didn’t finish in this browser — it may be blocking the return step. Use email instead, or try another browser.';
+  }
   const PROFILE_LS_KEY = 'cb_my_profile_v1'; // device cache of the signed-in profile (cleared on sign-out)
   const MIN_PASSWORD = 6; // Firebase's own minimum
   const key = (x) => x.clientId + '|' + x.kind + '|' + x.refId;
@@ -147,6 +151,14 @@
 
     api.init = function () {
       if (typeof firebase === 'undefined' || !firebase.auth) return;
+      // Coming back from the redirect flow: surface a failure, or a silent
+      // "came back signed out" (browsers that block the return step).
+      const wasRedirecting = (() => { try { const f = sessionStorage.getItem(REDIRECT_FLAG); sessionStorage.removeItem(REDIRECT_FLAG); return !!f; } catch (e) { return false; } })();
+      if (wasRedirecting) {
+        firebase.auth().getRedirectResult().then((res) => {
+          if (!res || !res.user) { api.lastProblem = redirectLostMessage(); emit('signin-problem'); }
+        }).catch((e) => { api.lastProblem = friendlyError(e && e.code) + (e && e.code ? ' (' + e.code + ')' : ''); emit('signin-problem'); });
+      }
       firebase.auth().onAuthStateChanged(async (u) => {
         user = u;
         isStaff = false;
@@ -162,17 +174,26 @@
     };
     api.signIn = async function () { // Google
       const provider = new firebase.auth.GoogleAuthProvider();
+      const started = Date.now();
       try {
         await firebase.auth().signInWithPopup(provider);
       } catch (e) {
-        // In-app browsers and some mobile setups can't open the popup.
-        if (e && (e.code === 'auth/popup-blocked' || e.code === 'auth/operation-not-supported-in-this-environment')) {
+        const code = e && e.code;
+        // In-app browsers and some mobile setups can't open the popup, and some
+        // close it the instant it opens (a person doesn't finish signing in
+        // in under two seconds) -- use the full-page redirect instead.
+        const closedInstantly = code === 'auth/popup-closed-by-user' && Date.now() - started < 2000;
+        if (code === 'auth/popup-blocked' || code === 'auth/operation-not-supported-in-this-environment' || closedInstantly) {
+          try { sessionStorage.setItem(REDIRECT_FLAG, '1'); } catch (x) {}
           return firebase.auth().signInWithRedirect(provider);
         }
-        if (e && (e.code === 'auth/popup-closed-by-user' || e.code === 'auth/cancelled-popup-request')) return;
+        if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') return;
         throw e;
       }
     };
+    // Set when we hand off to the redirect flow, so coming back with no user
+    // can be reported instead of silently looking like nothing happened.
+    api.lastProblem = null;
     api.signInWithEmail = (email, password) => firebase.auth().signInWithEmailAndPassword(String(email).trim(), password);
     api.signUpWithEmail = async function (email, password, name) {
       const cred = await firebase.auth().createUserWithEmailAndPassword(String(email).trim(), password);

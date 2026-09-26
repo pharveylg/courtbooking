@@ -42,6 +42,13 @@ check("'account' can never be misread as a facility slug", /'my-matches', 'accou
 section('service worker: scripts are network-first so a fresh page never runs an old script');
 check("our .js files go network-first (cache is only the offline fallback), ahead of the cache-first asset rule", /if \(url\.pathname\.endsWith\('\.js'\)\) \{\s*event\.respondWith\(networkFirst\(request, CACHE_NAME\)\);\s*return;\s*\}[^]*?CSS, images: cache-first/.test(swJs));
 
+section('Google sign-in: never a silent "blink"');
+check('a popup that closes within 2 seconds is treated as a failed popup and falls back to the redirect flow', authJs.includes("closedInstantly = code === 'auth/popup-closed-by-user' && Date.now() - started < 2000") && authJs.includes('signInWithRedirect(provider)'));
+check('a person genuinely closing the window later is still just a quiet cancel', authJs.includes("if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') return;"));
+check('the redirect hand-off is remembered so coming back signed-out is reported, not ignored', authJs.includes("sessionStorage.setItem(REDIRECT_FLAG, '1')") && authJs.includes('getRedirectResult()') && authJs.includes("emit('signin-problem')"));
+check('the page shows the problem, including the Firebase error code, so it can be diagnosed', accountHtml.includes('signin-problem') && accountHtml.includes("e && e.code ? ' (' + e.code + ')'"));
+check('a redirect-return error message survives the re-render race', accountHtml.includes('MyAuth.lastProblem && !MyAuth.currentUser()'));
+
 section('Profile tab');
 check('signed-out visitors get a sign-in prompt instead of the form', /id="profileSignedOut"/.test(accountHtml) && /Sign in to keep a profile/.test(accountHtml));
 check('editable name and phone, read-only email, home facility picker, prefill switch', /id="pfName"/.test(accountHtml) && /id="pfPhone"/.test(accountHtml) && /id="pfEmail" readonly/.test(accountHtml) && /id="pfHome"/.test(accountHtml) && /id="pfPrefill"/.test(accountHtml));

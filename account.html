@@ -465,7 +465,7 @@ a.card:hover{transform:translateY(-1px);box-shadow:0 8px 22px rgba(32,28,25,0.08
         (signup ? '' : '<button type="button" class="btn-link" id="forgotBtn">Forgot password?</button>') + '</div>' +
         '<div class="auth-msg" id="authMsg" role="status"></div>' +
       '</form>';
-    document.getElementById('signInBtn').addEventListener('click', () => MyAuth.signIn().catch(() => { formOpen = true; renderAccount(); setMsg("Couldn't sign in with Google — try again, or use email."); }));
+    document.getElementById('signInBtn').addEventListener('click', () => MyAuth.signIn().catch((e) => { formOpen = true; renderAccount(); setMsg("Couldn't sign in with Google" + (e && e.code ? ' (' + e.code + ')' : '') + ' — try again, or use email.'); }));
     document.getElementById('emailToggleBtn').addEventListener('click', () => {
       const f = document.getElementById('emailForm');
       formOpen = f.style.display === 'none';
@@ -494,8 +494,9 @@ a.card:hover{transform:translateY(-1px);box-shadow:0 8px 22px rgba(32,28,25,0.08
     });
   }
   MyAuth.onChange((evt) => {
-    if (evt === 'auth') renderAccount();
+    if (evt === 'auth') { renderAccount(); if (MyAuth.lastProblem && !MyAuth.currentUser()) { formOpen = true; renderAccount(); setMsg(MyAuth.lastProblem); } }
     if (evt === 'synced') render();
+    if (evt === 'signin-problem') { formOpen = true; renderAccount(); setMsg(MyAuth.lastProblem); }
   });
   MyAuth.init(); // the account bar stays hidden until the first auth event, so a signed-in visitor never sees a flash of "Sign in"
 

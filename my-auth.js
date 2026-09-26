@@ -21,6 +21,7 @@
   const MAX_ITEMS = 300;
   const PHONE_LS_KEY = 'cb_my_phone_v1';
   const REDIRECT_FLAG = 'cb_google_redirect_pending';
+  const TRACE_KEY = 'cb_google_trace';
   function redirectLostMessage() {
     return 'Google sign-in didn’t finish in this browser — it may be blocking the return step. Use email instead, or try another browser.';
   }
@@ -156,8 +157,15 @@
       const wasRedirecting = (() => { try { const f = sessionStorage.getItem(REDIRECT_FLAG); sessionStorage.removeItem(REDIRECT_FLAG); return !!f; } catch (e) { return false; } })();
       if (wasRedirecting) {
         firebase.auth().getRedirectResult().then((res) => {
-          if (!res || !res.user) { api.lastProblem = redirectLostMessage(); emit('signin-problem'); }
-        }).catch((e) => { api.lastProblem = friendlyError(e && e.code) + (e && e.code ? ' (' + e.code + ')' : ''); emit('signin-problem'); });
+          if (res && res.user) { api.clearTrace(); return; }
+          let domain = '';
+          try { domain = ' \u2014 site ' + location.host + ', auth ' + firebase.app().options.authDomain; } catch (e) {}
+          api.lastProblem = redirectLostMessage() + ' [' + api.trace() + ' \u2192 returned signed out' + domain + ']';
+          emit('signin-problem');
+        }).catch((e) => {
+          api.lastProblem = friendlyError(e && e.code) + ' [' + api.trace() + ' \u2192 ' + (e && e.code) + ']';
+          emit('signin-problem');
+        });
       }
       firebase.auth().onAuthStateChanged(async (u) => {
         user = u;
@@ -172,22 +180,46 @@
         emit('auth');
       });
     };
-    api.signIn = async function () { // Google
+    // A short breadcrumb trail of what the Google sign-in did, kept in
+    // sessionStorage so it survives the full-page redirect and can be shown
+    // if sign-in doesn't complete (mobile browsers fail in different ways).
+    const trace = (msg, started) => {
+      try {
+        const secs = started ? ' (' + ((Date.now() - started) / 1000).toFixed(1) + 's)' : '';
+        const prev = sessionStorage.getItem(TRACE_KEY);
+        sessionStorage.setItem(TRACE_KEY, (prev ? prev + ' \u2192 ' : '') + msg + secs);
+      } catch (x) {}
+    };
+    api.trace = () => { try { return sessionStorage.getItem(TRACE_KEY) || ''; } catch (x) { return ''; } };
+    api.clearTrace = () => { try { sessionStorage.removeItem(TRACE_KEY); } catch (x) {} };
+    // Full-page Google sign-in (no popup) -- offered directly too, for browsers
+    // where the popup misbehaves.
+    api.signInWithGoogleRedirect = function (started) {
+      try { sessionStorage.setItem(REDIRECT_FLAG, '1'); } catch (x) {}
+      trace('redirect', started);
+      return firebase.auth().signInWithRedirect(new firebase.auth.GoogleAuthProvider());
+    };
+    api.signIn = async function () { // Google, popup first
       const provider = new firebase.auth.GoogleAuthProvider();
       const started = Date.now();
+      api.clearTrace();
+      trace('popup');
       try {
         await firebase.auth().signInWithPopup(provider);
+        trace('popup ok', started);
       } catch (e) {
         const code = e && e.code;
+        trace(String(code || 'error').replace('auth/', ''), started);
         // In-app browsers and some mobile setups can't open the popup, and some
         // close it the instant it opens (a person doesn't finish signing in
         // in under two seconds) -- use the full-page redirect instead.
         const closedInstantly = code === 'auth/popup-closed-by-user' && Date.now() - started < 2000;
         if (code === 'auth/popup-blocked' || code === 'auth/operation-not-supported-in-this-environment' || closedInstantly) {
-          try { sessionStorage.setItem(REDIRECT_FLAG, '1'); } catch (x) {}
-          return firebase.auth().signInWithRedirect(provider);
+          return api.signInWithGoogleRedirect(started);
         }
-        if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') return;
+        // Double-tap: the first attempt is still in flight, nothing to report.
+        if (code === 'auth/cancelled-popup-request') return;
+        // A popup that closed later (with no sign-in) is reported, never swallowed.
         throw e;
       }
     };

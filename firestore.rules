@@ -519,39 +519,5 @@ service cloud.firestore {
       allow create, update: if true;
       allow delete: if false;
     }
-    
-    // Legacy single-tenant structure (for backward compatibility during migration)
-    // WARNING: These should be removed once all clients are migrated to multi-tenant
-    match /bookings/{document} {
-      allow read, write: if true;
-    }
-    
-    match /openPlay/{document} {
-      allow read, write: if true;
-    }
-    
-    match /morning/{document} {
-      allow read, write: if true;
-    }
-    
-    match /staffReserve/{document} {
-      allow read, write: if true;
-    }
-    
-    match /settings/{document} {
-      allow read, write: if true;
-    }
-    
-    match /queues/{document} {
-      allow read, write: if true;
-    }
-    
-    match /courts/{document} {
-      allow read, write: if true;
-    }
-    
-    match /proofs/{document} {
-      allow read, write: if true;
-    }
   }
 }

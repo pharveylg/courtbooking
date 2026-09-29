@@ -104,11 +104,10 @@ Companion to `CURRENT_ARCHITECTURE.md`. **Nothing in this document has been dele
 - **Classification:** `UNKNOWN — RUNTIME VERIFICATION REQUIRED`. **Confidence:** `MEDIUM` that this is a real bug, based on reading the rule and the call site directly.
 - **Verification method:** sign in as a test account holding only `manage_entitlements` (no `superadmin` claim) in a staging project and attempt to grant/pause an entitlement; check whether the mirror write throws `permission-denied`.
 
-### 10. `billing.html` — no in-app entry point found
+### 10. `billing.html` — no in-app entry point found — ✅ RESOLVED (no action)
 
-- **What's uncertain:** the file is real, tested (`tests/billing-portal.test.js`), and PIN-gated, but a repo-wide search found no `<a href="billing.html">` or equivalent link from any other page. It's reachable only by a direct URL.
-- **Classification:** `UNKNOWN`. **Confidence:** `LOW` on whether this is intentional (e.g., the link is sent out-of-band by the platform operator) or a genuinely missing "Billing" link that should exist somewhere in `index.html`'s tenant Admin console.
-- **Verification method:** ask whoever operates the platform whether tenants are ever given this link manually, or check Hosting access logs for `billing.html` traffic.
+- **What was uncertain:** the file is real, tested (`tests/billing-portal.test.js`), and PIN-gated, but a repo-wide search found no `<a href="billing.html">` or equivalent link from any other page. It's reachable only by a direct URL.
+- **Decision:** confirmed intentional — the link is distributed out-of-band by design, not a missing feature. No in-app link added; no code change made.
 
 ### 11. `ARCHITECTURE_DIAGRAM.html` — standalone, unreferenced
 
@@ -116,11 +115,11 @@ Companion to `CURRENT_ARCHITECTURE.md`. **Nothing in this document has been dele
 - **Classification:** `UNKNOWN` (documentation freshness, not a code-legacy question). **Confidence:** `LOW`.
 - **Verification method:** a human diff of its content against `CURRENT_ARCHITECTURE.md`; if superseded, either delete it or keep it as a dated historical snapshot (rename to make that explicit).
 
-### 12. Duplicate `platformAuditLog` write on the tenant quick-suspend toggle
+### 12. Duplicate `platformAuditLog` write on the tenant quick-suspend toggle — ✅ FIXED
 
 - **Location:** `superadmin.html`, quick-toggle button handler ~lines 2941–2952, which calls `logAudit('suspend'/'activate', ...)` itself **in addition to** the `logAudit('lifecycle-change', ...)` that `setTenantLifecycle()` (~line 753) already performs internally. The separate lifecycle-dropdown path (~lines 2953–2960) does not have this double-write.
-- **Classification:** likely a small bug (duplicate audit-log entry per click), not a legacy artifact. **Confidence:** `MEDIUM`. Listed here for completeness since it surfaced during the same pass.
-- **Recommended next action:** a human decision on whether to remove the redundant `logAudit` call in the quick-toggle handler — small, isolated, easily verified by clicking the toggle once and checking for one vs. two audit-log entries.
+- **Classification:** small bug (duplicate audit-log entry per click), not a legacy artifact. **Confidence:** `MEDIUM`. Listed here for completeness since it surfaced during the same pass.
+- **Action taken:** removed the redundant `logAudit` call from the quick-toggle handler, so it now relies solely on `setTenantLifecycle()`'s internal logging — the same pattern the dropdown path already used. Test suite re-run clean; no test asserted on the double write.
 
 ---
 
@@ -155,9 +154,9 @@ Ordered smallest/safest first, per the brief's prioritization (orphaned → dupl
 
 | Order | Cleanup | Reason | Evidence | Dependencies | Risk | Verification | Rollback |
 |---|---|---|---|---|---|---|---|
-| 1 | Remove the duplicate `logAudit('suspend'/'activate', ...)` call in the tenant quick-suspend-toggle handler (superadmin.html ~2948) | Redundant audit-log entry per click, likely accidental | Direct read; asymmetric vs. the dropdown path | None | Very low | Click the toggle once; confirm exactly one new `platformAuditLog` entry | Single-line revert |
+| 1 | ✅ DONE — removed the duplicate `logAudit('suspend'/'activate', ...)` call in the tenant quick-suspend-toggle handler (superadmin.html ~2948) | Redundant audit-log entry per click, likely accidental | Direct read; asymmetric vs. the dropdown path | None | Very low | Test suite re-run clean. **Not yet manually clicked live** — verify in the running console that exactly one new `platformAuditLog` entry appears | Single-line revert |
 | 2 | ✅ DONE (repo edit only, not yet deployed) — deleted the legacy `firestore.rules` root-level block (§1) | Self-labeled deprecated, zero code callers found, currently an open write surface | `firestore.rules` comment + repo-wide grep (re-confirmed zero hits immediately before removal) | None found | Low | Test suite re-run clean. **Skipped:** live Firestore/Hosting log check for external traffic — proceeded on static evidence alone per explicit instruction. Manually smoke-test booking/queue/staff-reserve flows once deployed | `git revert` the rules change; redeploy rules |
-| 3 | Add an in-app link to `billing.html` from the tenant Admin console (or explicitly document it as operator-distributed only) | Currently unreachable except by direct URL — likely a UX gap, not a code risk | No in-app reference found anywhere | None | Very low (additive) | Click through from Admin console to Billing and back | Remove the link |
+| 3 | ✅ DECIDED — no action. Confirmed the missing in-app link to `billing.html` is intentional (operator-distributed), not a gap | Currently unreachable except by direct URL | No in-app reference found anywhere | None | N/A | N/A | N/A |
 | 4 | ✅ DONE — moved `<!-- Settings -->` (store.html) and `<!-- Tournament Financials -->` (tournament-admin.html) to sit above their actual sections instead of a neighboring one | Pure documentation drift, zero functional impact | Direct read, comment position vs. actual section | None | None | Full test suite re-run clean (no test asserted on comment position; this was a pure readability fix) | `git revert` the commit |
 | 5 | Decide and act on the `.status` vs `.lifecycle` migration (§6) — migrate `picker.html`/reporting to read `.lifecycle`, then retire `.status` | Real technical debt, explicitly self-documented, but high blast radius | `syncTenantRuntime()` comment + `GAP_ANALYSIS.md` | Every reader of `.status` must be migrated first | High until migrated, then low | Full regression pass on picker.html's tenant listing and all reporting views | Keep `syncTenantRuntime()` mirroring both fields until migration is fully verified |
 | 6 | Consolidate the three billing-formula-setting paths and the three credit-adjustment paths in `superadmin.html` into single canonical functions (mirroring `setEntitlement()`'s pattern) | Real duplicate-logic risk for billing data integrity, one path bypasses invoices entirely | Superadmin research pass (§3, §4) | Every existing button/flow must be redirected without behavior change | Medium | Manual test of all affected buttons pre/post refactor | Revert the refactor commit |

@@ -2945,7 +2945,6 @@ function renderTenantRow(slug, data, status, isVisible){
       // status, re-derives the runtime pause flags, and mirrors the public
       // directory -- one path instead of three scattered writes.
       await setTenantLifecycle(slug, wasActive ? 'suspended' : 'active');
-      await logAudit(wasActive ? 'suspend' : 'activate', slug, `${data.businessName || slug} Booking ${wasActive ? 'suspended' : 'activated'}`);
       toast(`${data.businessName || slug} ${wasActive ? 'suspended' : 'activated'}`);
       loadTenants();
     } catch(ex) { toast('Failed: ' + ex.message); }

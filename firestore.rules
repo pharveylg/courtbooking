@@ -10,13 +10,6 @@ service cloud.firestore {
              tenantId.size() <= 50 &&
              tenantId.matches('^[a-z0-9-]+$');
     }
-    
-    // Helper function to check if request is for the correct tenant
-    function isTenantContext(tenantId) {
-      return isValidTenantId(tenantId) && 
-             request.resource.data.keys().hasAny(['__tenant__']) == false; // Prevent tenant field injection
-    }
-    
     /* ---------- B5: Platform Admin permission groups ----------
        Two account shapes exist:
        - superadmin custom claim  = platform owner, every permission

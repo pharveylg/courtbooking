@@ -22,7 +22,15 @@ Companion to `CURRENT_ARCHITECTURE.md`. **Nothing in this document has been dele
 
 ## HIGH-CONFIDENCE ORPHANED
 
-*(Nothing qualified at this tier. The one candidate that looked orphaned — the legacy Firestore rules above — has an explicit deprecation comment, so it was promoted straight to `CONFIRMED DEPRECATED` rather than sitting here. No dead Cloud Function, no dead top-level JS function, and no unreachable screen were found anywhere across all four research passes.)*
+*(Found after the original four research passes — surfaced by a compiler warning during the §1 rules deploy, not by the initial audit. Corrected into this document rather than left as a spoken claim only.)*
+
+### 1a. `firestore.rules` — `isTenantContext()` helper function — ✅ REMOVED
+
+- **What it was:** a `function isTenantContext(tenantId)` (originally lines 14–18, right after `isValidTenantId()`) that referenced `request.resource.data` inside a plain helper function — not valid in that position in the Firestore rules language, which the deploy step confirmed with a compiler warning: `[W] 17:14 - Invalid variable name: request.`
+- **Evidence:** repo-wide grep found it defined and never called — not from any `allow` rule in the same file, and not from any other file (Firestore rules functions aren't callable from client code anyway, so this was always going to be rules-file-only).
+- **Classification:** `ORPHANED`. **Confidence:** `HIGH`.
+- **Action taken:** removed rather than fixed in place, since a corrected-but-still-unused function provides no value. Brace-balance re-verified, full test suite re-run clean.
+- **Deploy note:** confirmed via `git diff` that this warning was pre-existing and unrelated to the §1 rules removal that surfaced it — this function was untouched by that change.
 
 ---
 

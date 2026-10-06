@@ -87,13 +87,65 @@
       next.serverNumber = 1;
     }
 
-    if (gameIsWon(cfg, next[side], next[other(side)])) {
-      next.games.push({ home: next.home, away: next.away });
-      next.gamesWon[side] += 1;
-      next.gameOver = true;
-      if (next.gamesWon[side] >= gamesToWin(cfg)) { next.complete = true; next.winner = side; next.endedAt = at; }
-    }
+    if (gameIsWon(cfg, next[side], next[other(side)])) settleGame(next, side, at);
     return next;
+  }
+
+  /* `side` has won the current game: record it and, if that wins the match, end it. */
+  function settleGame(next, side, at) {
+    next.games.push({ home: next.home, away: next.away });
+    next.gamesWon[side] += 1;
+    next.gameOver = true;
+    if (next.gamesWon[side] >= gamesToWin(next.config)) { next.complete = true; next.winner = side; next.endedAt = at; }
+  }
+
+  const validPoints = (v) => Number.isInteger(v) && v >= 0 && v <= 99;
+
+  /* Correct the points of the game in progress. Returns a NEW state. If the
+     corrected score is already a won game, the game is settled as usual. */
+  function setPoints(state, home, away) {
+    if (state.complete || state.gameOver) return { error: 'This game is already finished. Edit the game score instead.' };
+    if (!validPoints(home) || !validPoints(away)) return { error: 'Points must be whole numbers from 0 to 99.' };
+    const next = { ...state, home, away, gamesWon: { ...state.gamesWon }, games: state.games.slice() };
+    const cfg = state.config;
+    if (gameIsWon(cfg, home, away)) settleGame(next, 'home', state.startedAt || Date.now());
+    else if (gameIsWon(cfg, away, home)) settleGame(next, 'away', state.startedAt || Date.now());
+    return next;
+  }
+
+  /* Correct the score of a finished game (index into state.games). The games
+     are re-counted from scratch, so the match result always follows the games.
+     Returns a NEW state, or { error } if the score or the resulting match is
+     not legal. */
+  function editGame(state, index, home, away) {
+    const cfg = state.config;
+    if (!Number.isInteger(index) || index < 0 || index >= state.games.length) return { error: 'That game does not exist.' };
+    if (!validPoints(home) || !validPoints(away)) return { error: 'Points must be whole numbers from 0 to 99.' };
+    const hi = Math.max(home, away), lo = Math.min(home, away);
+    if (!gameIsWon(cfg, hi, lo) || hi === lo) return { error: `Game ${index + 1} must end on a winning score: to ${cfg.target}, win by ${cfg.winBy}.` };
+
+    const games = state.games.map((g, i) => (i === index ? { home, away } : { home: g.home, away: g.away }));
+    const gamesWon = { home: 0, away: 0 };
+    let winner = null, decidedAt = -1;
+    games.forEach((g, i) => {
+      const side = g.home > g.away ? 'home' : 'away';
+      gamesWon[side] += 1;
+      if (winner === null && gamesWon[side] >= gamesToWin(cfg)) { winner = side; decidedAt = i; }
+    });
+    if (winner !== null && decidedAt < games.length - 1) {
+      return { error: `Game ${decidedAt + 1} would already decide the match, so the games after it cannot stand. Change this game so the match still goes the full distance.` };
+    }
+    if (winner !== null && state.gameOver === false && !state.complete) {
+      return { error: 'Finish the game in progress first, or undo back to the end of the last game, before this change can end the match.' };
+    }
+    /* A game in progress stays in progress; a finished match stays finished. */
+    const finishedBefore = state.gameOver || state.complete;
+    return {
+      ...state, games, gamesWon,
+      gameOver: winner !== null || finishedBefore,
+      complete: winner !== null, winner,
+      endedAt: winner !== null ? (state.endedAt || Date.now()) : null,
+    };
   }
 
   /* After a game that did not decide the match: fresh score, serve alternates. */
@@ -120,7 +172,7 @@
     const nm = next.names;
     if (next.complete) {
       const g = next.games[next.games.length - 1];
-      return `Game and match to ${nm[next.winner]}, ${gameScoreText(g)}.`;
+      return `Winner, ${nm[next.winner]}, ${gameScoreText(g)}.`;
     }
     if (next.gameOver) {
       const g = next.games[next.games.length - 1];
@@ -165,7 +217,7 @@
 
   return {
     TARGETS, BEST_OF, DEFAULT_CONFIG,
-    normalizeConfig, gamesToWin, createMatch, applyRally, startNextGame,
+    normalizeConfig, gamesToWin, createMatch, applyRally, startNextGame, setPoints, editGame,
     scoreCall, scoreCallText, scoreCallSpoken, announcement, summary, liveView, formatLabel,
   };
 }));

@@ -10,6 +10,7 @@
      })
 
    Tap the side that WON the rally. Undo reaches back through the whole match.
+   Edit score corrects the game in progress or any finished game by hand.
    Spoken score calls are on by default (the toggle is remembered). Needs
    pickleball-scoring.js loaded first. Uses textContent only, so names typed by
    players can never inject markup. */
@@ -54,6 +55,15 @@
   .rb-panel .rb-scoreline{font-size:clamp(18px,4.5vmin,28px);font-weight:700;color:var(--rb-accent,#D6FF5F)}
   .rb-panel .rb-actions{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-top:6px}
   .rb-err{color:#F3B562;font-size:13px;min-height:18px}
+  .rb-editor{z-index:3;justify-content:flex-start;overflow:auto}
+  .rb-edit{display:grid;gap:10px;width:min(480px,100%);text-align:left}
+  .rb-erow{display:grid;grid-template-columns:1.2fr 1fr auto 1fr;align-items:center;gap:8px}
+  .rb-ehead{font-size:12px;font-weight:700;color:#91A4B8;text-transform:uppercase;letter-spacing:.06em}
+  .rb-ehead > div{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .rb-elabel{font-size:13px;font-weight:700;color:#91A4B8}
+  .rb-edit input{width:100%;min-height:48px;border-radius:14px;border:1px solid #27405E;background:#101D30;color:#F4E7D0;text-align:center;font-family:inherit;font-size:22px;font-weight:800;padding:0 8px;-webkit-user-select:text;user-select:text}
+  .rb-edit input:focus{outline:none;border-color:var(--rb-accent,#D6FF5F)}
+  .rb-edit .rb-actions{justify-content:flex-end}
   .rb-setup{display:grid;gap:12px;width:min(420px,100%);text-align:left}
   .rb-setup label{display:grid;gap:4px;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#91A4B8}
   .rb-setup input,.rb-setup select{min-height:46px;border-radius:14px;border:1px solid #27405E;background:#101D30;color:#F4E7D0;padding:0 12px;font:600 15px inherit;font-family:inherit}
@@ -129,12 +139,14 @@
 
     const rail = el('div', 'rb-rail');
     const undoBtn = el('button', 'rb-btn', 'Undo'); undoBtn.type = 'button';
+    const editBtn = el('button', 'rb-btn', 'Edit score'); editBtn.type = 'button';
     const audioBtn = el('button', 'rb-btn'); audioBtn.type = 'button';
     const testBtn = el('button', 'rb-btn', 'Test voice'); testBtn.type = 'button';
-    rail.append(undoBtn, audioBtn, testBtn);
+    rail.append(undoBtn, editBtn, audioBtn, testBtn);
 
     const panel = el('div', 'rb-panel'); panel.style.display = 'none';
-    root.append(top, bannerHost, mid, board, rail, panel);
+    const editor = el('div', 'rb-panel rb-editor'); editor.style.display = 'none';
+    root.append(top, bannerHost, mid, board, rail, panel, editor);
     document.body.appendChild(root);
     const prevOverflow = document.body.style.overflow; document.body.style.overflow = 'hidden';
 
@@ -205,7 +217,8 @@
         const actions = el('div', 'rb-actions');
         const fin = el('button', 'rb-btn rb-primary', opts.finishLabel || 'Save result'); fin.type = 'button'; fin.addEventListener('click', () => finish(fin, err));
         const un = el('button', 'rb-btn', 'Fix last point'); un.type = 'button'; un.addEventListener('click', undo);
-        actions.append(fin, un); panel.appendChild(actions);
+        const ed = el('button', 'rb-btn', 'Edit score'); ed.type = 'button'; ed.addEventListener('click', openEditor);
+        actions.append(fin, un, ed); panel.appendChild(actions);
       } else {
         const winner = g.home > g.away ? 'home' : 'away';
         panel.appendChild(el('div', 'rb-mono', `GAME ${state.games.length} COMPLETE`));
@@ -215,7 +228,8 @@
         const actions = el('div', 'rb-actions');
         const nx = el('button', 'rb-btn rb-primary', `Start game ${state.games.length + 1}`); nx.type = 'button'; nx.addEventListener('click', nextGame);
         const un = el('button', 'rb-btn', 'Fix last point'); un.type = 'button'; un.addEventListener('click', undo);
-        actions.append(nx, un); panel.appendChild(actions);
+        const ed = el('button', 'rb-btn', 'Edit score'); ed.type = 'button'; ed.addEventListener('click', openEditor);
+        actions.append(nx, un, ed); panel.appendChild(actions);
       }
     }
 
@@ -247,6 +261,49 @@
       const next = P.startNextGame(state);
       change(next, `Game ${next.games.length + 1}. ${P.scoreCallSpoken(next)}`);
     }
+    /* Correct any score by hand: the game in progress and every finished game.
+       All changes apply together, as one undo step. */
+    function openEditor() {
+      editor.textContent = '';
+      const rows = state.games.map((g, i) => ({ label: `Game ${i + 1}`, index: i, home: g.home, away: g.away }));
+      if (!state.complete && !state.gameOver) rows.push({ label: `Game ${state.games.length + 1} (now)`, index: null, home: state.home, away: state.away });
+      const err = el('div', 'rb-err');
+      const field = (value) => { const i = document.createElement('input'); i.type = 'number'; i.inputMode = 'numeric'; i.min = '0'; i.max = '99'; i.step = '1'; i.value = String(value); i.setAttribute('aria-label', 'Points'); return i; };
+      const grid = el('div', 'rb-edit');
+      const head = el('div', 'rb-erow rb-ehead'); head.append(el('div', '', 'Score'), el('div', '', state.names.home), el('div', ''), el('div', '', state.names.away));
+      grid.appendChild(head);
+      const inputs = rows.map((r) => {
+        const row = el('div', 'rb-erow');
+        const h = field(r.home), a = field(r.away);
+        row.append(el('div', 'rb-mono rb-elabel', r.label), h, el('span', 'rb-mono', '-'), a);
+        grid.appendChild(row);
+        return { r, h, a };
+      });
+      const actions = el('div', 'rb-actions');
+      const apply = el('button', 'rb-btn rb-primary', 'Apply'); apply.type = 'button';
+      const cancel = el('button', 'rb-btn', 'Cancel'); cancel.type = 'button';
+      actions.append(cancel, apply);
+      grid.append(err, actions);
+      editor.appendChild(grid);
+      editor.style.display = 'flex';
+      cancel.addEventListener('click', () => { editor.style.display = 'none'; });
+      apply.addEventListener('click', () => {
+        err.textContent = '';
+        let next = state;
+        for (const { r, h, a } of inputs) {
+          if (h.value === '' || a.value === '') { err.textContent = 'Fill in every score.'; return; }
+          const home = Number(h.value), away = Number(a.value);
+          if (home === r.home && away === r.away) continue;
+          next = r.index === null ? P.setPoints(next, home, away) : P.editGame(next, r.index, home, away);
+          if (next.error) { err.textContent = next.error; return; }
+        }
+        editor.style.display = 'none';
+        if (next === state) return;
+        history.push(state);
+        change(next);
+      });
+    }
+
     function startOver() {
       if (state.rallies > 0 && !confirm('Start the scoreboard over? The current score will be lost.')) return;
       state = P.createMatch(config, names); history = []; resumed = false; forget(); render(); live();
@@ -275,6 +332,7 @@
 
     cancelBtn.addEventListener('click', () => close(false));
     undoBtn.addEventListener('click', undo);
+    editBtn.addEventListener('click', openEditor);
     audioBtn.addEventListener('click', () => {
       audioOn = !audioOn;
       try { localStorage.setItem(AUDIO_KEY, audioOn ? 'on' : 'off'); } catch (e) { /* ignore */ }

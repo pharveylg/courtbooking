@@ -95,8 +95,33 @@ check('rally scoring never says "side out"', (() => { const r = S.createMatch({ 
 const gEnd = { ...S.createMatch({ bestOf: 3, doubles: false }, N), home: 10, away: 4, serving: 'home' };
 check('game end names the winner and score', S.announcement(gEnd, S.applyRally(gEnd, 'home', 1)) === 'Game to Alex & Sam, 11 to 4.');
 const mEnd = { ...S.createMatch({ doubles: false }, N), home: 10, away: 4, serving: 'home' };
-check('match end says match', /^Game and match to Alex & Sam, 11 to 4\./.test(S.announcement(mEnd, S.applyRally(mEnd, 'home', 1))));
+check('match end calls the winner and final game score', S.announcement(mEnd, S.applyRally(mEnd, 'home', 1)) === 'Winner, Alex & Sam, 11 to 4.');
 check('no announcement when nothing changed', S.announcement(g, g) === '');
+
+section('manual score corrections');
+const cb = S.createMatch({ bestOf: 3, doubles: false }, N);
+const cur = S.setPoints(cb, 5, 3);
+check('setPoints corrects the game in progress and keeps the serve', cur.home === 5 && cur.away === 3 && !cur.gameOver && cur.serving === cb.serving && cur.rallies === 0);
+check('setPoints does not mutate the old state', cb.home === 0 && cb.away === 0);
+check('setPoints rejects non-whole or out-of-range points', !!S.setPoints(cb, 2.5, 1).error && !!S.setPoints(cb, -1, 0).error && !!S.setPoints(cb, 100, 0).error);
+const cWon = S.setPoints(S.createMatch({ doubles: false }, N), 11, 4);
+check('setPoints to a won score settles the game and the match', cWon.complete && cWon.winner === 'home' && eq(cWon.games, [{ home: 11, away: 4 }]));
+check('setPoints to a won score in best-of-3 settles one game only', (() => { const s = S.setPoints(cb, 11, 9); return s.gameOver && !s.complete && s.gamesWon.home === 1 && eq(s.games, [{ home: 11, away: 9 }]); })());
+check('setPoints is refused once the game is finished', !!S.setPoints(cWon, 3, 3).error);
+const c1 = S.startNextGame(S.setPoints(cb, 11, 4));
+const c2 = S.startNextGame(S.setPoints(c1, 9, 11));
+const c3 = S.setPoints(c2, 11, 2);
+check('setup: best-of-3 won 1-1 then 2-1', c3.complete && c3.winner === 'home' && eq(c3.gamesWon, { home: 2, away: 1 }));
+const ed = S.editGame(c3, 1, 9, 11);
+check('editGame re-counts the match from the games', !ed.error && ed.complete && ed.winner === 'home' && eq(ed.gamesWon, { home: 2, away: 1 }));
+check('editGame flips a game in progress without ending the match', (() => { const r = S.editGame(c1, 0, 4, 11); return !r.error && !r.complete && !r.gameOver && r.winner === null && r.gamesWon.home === 0 && r.gamesWon.away === 1; })());
+check('editGame refuses a score that is not a legal finish', !!S.editGame(c3, 0, 10, 10).error && !!S.editGame(c3, 0, 10, 8).error && !S.editGame(c3, 0, 11, 2).error);
+check('editGame refuses a change that would end the match early', !!S.editGame(c3, 0, 4, 11).error);
+check('editGame refuses a change that would end the match during the game in progress', (() => { const s = S.setPoints(c2, 3, 2); return !!S.editGame(s, 0, 4, 11).error; })());
+check('a correction that keeps the same winner keeps the match complete', (() => { const r = S.editGame(c3, 0, 11, 2); return !r.error && r.complete && r.winner === 'home' && r.gameOver && eq(r.games[0], { home: 11, away: 2 }); })());
+check('editGame leaves the game in progress alone', (() => { const s = S.setPoints(S.startNextGame(S.setPoints(cb, 11, 4)), 3, 2); const r = S.editGame(s, 0, 11, 5); return !r.error && !r.gameOver && r.home === 3 && r.away === 2 && eq(r.games, [{ home: 11, away: 5 }]) && r.gamesWon.home === 1; })());
+check('editGame rejects a game that does not exist', !!S.editGame(c3, 7, 11, 2).error);
+check('editGame does not mutate the old state', c3.games[1].home === 9 && c3.games[1].away === 11);
 
 section('summary and live view');
 const sum = S.summary(b3final);

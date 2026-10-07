@@ -26,6 +26,12 @@
 
   function teamLabel(names) { return (names || []).join(' & '); }
 
+  /* Partner Rotation holds a foursome together for three rounds so they get to play with
+     every possible partner -- that only makes sense when the queue doesn't comfortably
+     supply a fresh four every round. Above this many players in the whole queue, every
+     round stands alone instead: see checkAndFillActiveMatch and recordMatchResult. */
+  const PARTNER_ROTATION_HOLD_LIMIT = 8;
+
   /* ---------- Fixed Pairs League: team-level standings ---------- */
   function ensureTeam(session, id, names) {
     if (!session.teams) session.teams = {};
@@ -122,7 +128,14 @@
       // unless there aren't enough others to fill the court.
       const players = pullRestedPlayersAvoiding(session, 4, session.lastPartnerGroup);
       if (players) {
-        session.partnerRotationState = { players, round: 1 };
+        // With more than PARTNER_ROTATION_HOLD_LIMIT players in the whole queue (nobody is on
+        // court at this exact moment, so session.waiting is the whole pool), there's no need to
+        // hold this foursome together for three rounds -- there's always a fully fresh four
+        // waiting, so every round stands alone and nobody plays back to back at all. At or
+        // below the limit, keep the three-round, swap-partners structure (session.waiting
+        // already reflects the players NOT picked, since pullRestedPlayersAvoiding removed them).
+        const poolSize = players.length + session.waiting.reduce((sum, w) => sum + w.names.length, 0);
+        if (poolSize <= PARTNER_ROTATION_HOLD_LIMIT) session.partnerRotationState = { players, round: 1 };
         session.activeMatch = { id: 'match_' + Date.now() + '_pr1', teamA: [players[0], players[1]], teamB: [players[2], players[3]] };
       }
       return;
@@ -189,7 +202,16 @@
     } else if (session.rule === 'partner_rotation' && session.mode === 'doubles' && session.partnerRotationState) {
       const prState = session.partnerRotationState;
       const p = prState.players; // [P1, P2, P3, P4]
-      if (prState.round === 1) {
+      // Re-check the threshold at every round, not just when the group formed: if the
+      // queue has grown past the limit since then, stop holding these four together
+      // right now instead of forcing the rest of the 3 rounds through.
+      const poolSize = p.length + session.waiting.reduce((sum, w) => sum + w.names.length, 0);
+      if (poolSize > PARTNER_ROTATION_HOLD_LIMIT) {
+        p.forEach((name) => session.waiting.push({ id: 'w_pr_end_' + Math.random().toString(36).slice(2, 6), names: [name] }));
+        session.lastPartnerGroup = p.slice();
+        delete session.partnerRotationState;
+        session.activeMatch = null;
+      } else if (prState.round === 1) {
         prState.round = 2;
         session.activeMatch = { id: 'match_' + Date.now() + '_pr2', teamA: [p[0], p[2]], teamB: [p[1], p[3]] };
         notices.push('Round 1 finished! Setting up Round 2 partners.');
@@ -204,6 +226,15 @@
         session.activeMatch = null;
         notices.push('Partner rotation complete! Next 4 players stepping up.');
       }
+    } else if (session.rule === 'partner_rotation' && session.mode === 'doubles') {
+      // No partnerRotationState: the queue was large enough (more than
+      // PARTNER_ROTATION_HOLD_LIMIT) that this foursome was never held together --
+      // this one round stands alone. Rotate all four off immediately, same as any
+      // other rule, so nobody plays two rounds back to back.
+      session.waiting.push({ id: 'w_pr_single_' + Date.now(), names: match.teamA });
+      session.waiting.push({ id: 'w_pr_single_' + (Date.now() + 1), names: match.teamB });
+      session.lastPartnerGroup = [...match.teamA, ...match.teamB];
+      session.activeMatch = null;
     } else if (session.rule === 'fixed_rotation') {
       [...match.teamA, ...match.teamB].forEach((name) => session.waiting.push({ id: 'w_fr_end_' + Math.random().toString(36).slice(2, 6), names: [name] }));
       session.activeMatch = null;
@@ -344,11 +375,43 @@
     return Object.values(teams);
   }
 
+  /* Head-to-head: for every pair of players who have ever been on OPPOSING teams
+     (never teammates -- this is "who beat whom", not win-together record), how many
+     times has each beaten the other. Works the same for every rule, including
+     Partner Rotation and Winner Stays, where who's on which side changes match to
+     match -- it only reads session.matches, never which rule produced them. In
+     doubles, both players on one side are counted as having faced both players on
+     the other side for that match. Returns an array sorted by most meetings first
+     (the most-played rivalries), each entry { a, b, aWins, bWins, meetings } with
+     a < b alphabetically so the same pair always gets the same entry regardless of
+     which side either player was on in any given match. */
+  function computeHeadToHead(session) {
+    const pairs = {};
+    if (!session || !session.matches) return [];
+    session.matches.forEach((match) => {
+      const { teamA, teamB, winner } = match;
+      (teamA || []).forEach((x) => {
+        (teamB || []).forEach((y) => {
+          const a = x < y ? x : y;
+          const b = x < y ? y : x;
+          const key = a + '\u0001' + b;
+          if (!pairs[key]) pairs[key] = { a, b, aWins: 0, bWins: 0, meetings: 0 };
+          const rec = pairs[key];
+          rec.meetings++;
+          const xWon = winner === 'teamA';
+          if (x === a) { if (xWon) rec.aWins++; else rec.bWins++; }
+          else { if (xWon) rec.bWins++; else rec.aWins++; }
+        });
+      });
+    });
+    return Object.values(pairs).sort((r1, r2) => r2.meetings - r1.meetings || r1.a.localeCompare(r2.a) || r1.b.localeCompare(r2.b));
+  }
+
   return {
     teamLabel,
     ensureTeam, applyMatchResult, computeStandings,
     pullRestedPlayers, pullRestedPlayersAvoiding, checkAndFillActiveMatch, recordMatchResult,
     normalizeName, nameSimilarity, getAllPlayerNamesInSession, findSimilarNames, promptNameConflict,
-    computePlayerStats, computeTeamStats,
+    computePlayerStats, computeTeamStats, computeHeadToHead,
   };
 }));

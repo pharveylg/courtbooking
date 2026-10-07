@@ -35,6 +35,7 @@ section('shares the rotation engine with the facility queue module -- no duplica
 check('index.html pulls the rule engine from QueueEngine instead of defining its own copy', /\}\s*=\s*QueueEngine;/.test(indexHtml) && !/^function checkAndFillActiveMatch\(/m.test(indexHtml) && !/^function ensureTeam\(/m.test(indexHtml));
 check('both index.html and queue.html call the same QueueEngine.recordMatchResult for scoring', /recordMatchResult\(session, scoreAVal, scoreBVal\)/.test(indexHtml) && /QueueEngine\.recordMatchResult\(session, scoreAVal, scoreBVal\)/.test(queueHtml));
 check('both call the same QueueEngine.checkAndFillActiveMatch to fill the next match', /checkAndFillActiveMatch\(session\)/.test(indexHtml) && /QueueEngine\.checkAndFillActiveMatch\(session\)/.test(queueHtml));
+check('both pages compute head-to-head with the same shared function, not two implementations', /computeHeadToHead\(session\)/.test(indexHtml) && /QueueEngine\.computeHeadToHead\(session\)/.test(queueHtml));
 
 section('setup and dashboard present');
 check('setup form: mode, rule, optional starting players', /id="setMode"/.test(queueHtml) && /id="setRule"/.test(queueHtml) && /id="setInitialPlayers"/.test(queueHtml));
@@ -43,6 +44,8 @@ check('fixed pairs / partner rotation force doubles mode, same guard as the faci
 check('join flow checks for similar/duplicate names via the shared engine', /QueueEngine\.promptNameConflict\(session, p1\)/.test(queueHtml));
 check('a single-queue page: one sessionStorage record, not a list of sessions', !/\bq_og_|loadQueues\(\)|saveQueues\(/.test(queueHtml));
 check('stats tab shows players, teams\/standings, and match history, computed by the shared engine', /QueueEngine\.computePlayerStats\(session\)/.test(queueHtml) && /QueueEngine\.computeStandings\(session\)/.test(queueHtml) && /matchHistory/.test(queueHtml));
+check('player and team tables include points for/against and point differential, same comprehensiveness as the facility module', /id="playerStatsBody"/.test(queueHtml) && /id="teamStatsBody"/.test(queueHtml) && /pointsFor/.test(queueHtml) && /pointsAgainst/.test(queueHtml) && (queueHtml.match(/\bpd\b/g) || []).length > 2);
+check('head-to-head ("win over the other") is shown, computed by the same shared engine function the facility module uses', /QueueEngine\.computeHeadToHead\(session\)/.test(queueHtml) && /id="h2hList"/.test(queueHtml));
 
 console.log(`\n=== STANDALONE QUEUE: ${passed}/${passed + failed} passed ===`);
 process.exit(failed === 0 ? 0 : 1);

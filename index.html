@@ -890,6 +890,7 @@ body:not(.staff-mode) .staff-link{display:none!important}
           <button type="button" data-stats-view="players" class="stats-view-btn px-4 h-8 rounded-full text-[12px] font-[700] bg-[#201C19] text-white shadow-xs transition cursor-pointer">Players</button>
           <button type="button" data-stats-view="teams" class="stats-view-btn px-4 h-8 rounded-full text-[12px] font-[600] opacity-70 hover:opacity-100 transition cursor-pointer">Teams</button>
           <button type="button" data-stats-view="matches" class="stats-view-btn px-4 h-8 rounded-full text-[12px] font-[600] opacity-70 hover:opacity-100 transition cursor-pointer">Matches</button>
+          <button type="button" data-stats-view="h2h" class="stats-view-btn px-4 h-8 rounded-full text-[12px] font-[600] opacity-70 hover:opacity-100 transition cursor-pointer">Head-to-Head</button>
         </div>
         <span id="statsMatchCount" class="mono text-[11px] px-3 h-7 rounded-full bg-[#F1E9DF] font-[700] grid place-items-center ml-auto">0 matches</span>
       </div>
@@ -963,6 +964,17 @@ body:not(.staff-mode) .staff-link{display:none!important}
               </div>
             </div>
             <div id="statsMatchesList" class="space-y-2 max-h-[480px] overflow-auto pr-1"></div>
+          </div>
+
+          <!-- Head-to-Head (hidden by default) -->
+          <div id="statsH2hCard" class="hidden rounded-[24px] bg-white border border-[#EAE0D5] p-5 shadow-xs overflow-hidden">
+            <div class="flex flex-wrap items-center justify-between gap-2 border-b border-[#F1E9DF] pb-2.5 mb-3">
+              <div>
+                <h4 class="font-[800] text-[15px] tracking-[-0.01em]">Head-to-Head</h4>
+                <p class="mono text-[10px] opacity-55 mt-0.5">Every pair who has played as opponents, win over the other -- not who they teamed up with</p>
+              </div>
+            </div>
+            <div id="statsH2hList" class="space-y-2 max-h-[480px] overflow-auto pr-1"></div>
           </div>
         </div>
 
@@ -1965,7 +1977,29 @@ body:not(.staff-mode) .staff-link{display:none!important}
 <script src="/my-active.js"></script>
 <script src="/my-auth.js"></script>
 <script src="/staff-auth.js"></script>
+<!-- Loaded here (not further down with pickleball-scoring.js/court-scoreboard.js) because
+     the inline script below destructures from QueueEngine at its very top: both the global
+     and the destructured bindings must exist before anything in that script runs, not just
+     before the specific lines that use them -- a plain function declaration is hoisted, but
+     seedQueueSessionIfEmpty() (called early, synchronously) calling into a later `const`
+     destructure is a temporal-dead-zone error, not a hoisting one. -->
+<script src="rotation-pick.js"></script>
+<script src="queue-engine.js"></script>
 <script>
+/* Queue rotation engine (shared with the standalone queue tool): ensureTeam/applyMatchResult/
+   computeStandings (Fixed Pairs League), teamLabel, pullRestedPlayers/checkAndFillActiveMatch/
+   recordMatchResult (every rotation rule), name-matching and match stats all live in
+   queue-engine.js, which has no Firestore or DOM dependency of its own -- it just mutates the
+   session object it's given. See QUEUE_MODULE.md. Destructured first thing, before anything
+   else in this script runs (see the comment on the script tags above). */
+const {
+  teamLabel, ensureTeam, applyMatchResult, computeStandings,
+  pullRestedPlayers, checkAndFillActiveMatch, recordMatchResult,
+  normalizeName: _normalizeName, nameSimilarity: _nameSimilarity,
+  getAllPlayerNamesInSession, findSimilarNames, promptNameConflict,
+  computePlayerStats, computeTeamStats, computeHeadToHead,
+} = QueueEngine;
+
 /* ================================================================
    CLIENT WHITE-LABEL LAYER
    Reads client-config.js and applies branding, theme, hours,
@@ -8084,20 +8118,6 @@ function renderActiveQueueDashboard() {
   }
 }
 
-/* ---------- Queue rotation engine (shared with the standalone queue tool) ----------
-   ensureTeam/applyMatchResult/computeStandings (Fixed Pairs League), teamLabel,
-   pullRestedPlayers/checkAndFillActiveMatch/recordMatchResult (every rotation
-   rule), name-matching and match stats all live in queue-engine.js, which has
-   no Firestore or DOM dependency of its own -- it just mutates the session
-   object it's given. See QUEUE_MODULE.md. */
-const {
-  teamLabel, ensureTeam, applyMatchResult, computeStandings,
-  pullRestedPlayers, checkAndFillActiveMatch, recordMatchResult,
-  normalizeName: _normalizeName, nameSimilarity: _nameSimilarity,
-  getAllPlayerNamesInSession, findSimilarNames, promptNameConflict,
-  computePlayerStats, computeTeamStats,
-} = QueueEngine;
-
 // CREATE QUEUE — adapt form hints when Fixed Pairs League is chosen
 document.getElementById('qRule')?.addEventListener('change', () => {
   const rule = document.getElementById('qRule').value;
@@ -8431,6 +8451,8 @@ function renderStatsView() {
     renderStatsTeams(teamStats);
   } else if (statsCurrentView === 'matches') {
     renderStatsMatches(matches);
+  } else if (statsCurrentView === 'h2h') {
+    renderStatsH2h(computeHeadToHead(session));
   }
   
   // Render summary sidebar
@@ -8594,6 +8616,41 @@ function renderStatsMatches(matches) {
 }
 
 /**
+ * Render the head-to-head list: every pair who has played as opponents, win over
+ * the other. Works for any rule -- it only reads match history, not how the teams
+ * that produced it were formed (so it's just as meaningful for Partner Rotation,
+ * where opponents change every round, as for Fixed Pairs).
+ */
+function renderStatsH2h(records) {
+  const listEl = document.getElementById('statsH2hList');
+  if (!listEl) return;
+
+  if (records.length === 0) {
+    listEl.innerHTML = `<div class="p-6 text-center mono text-[11px] opacity-55">No head-to-head matchups yet -- these build up once players have faced each other as opponents.</div>`;
+    return;
+  }
+
+  listEl.innerHTML = records.map((r) => {
+    const aLeads = r.aWins > r.bWins, bLeads = r.bWins > r.aWins;
+    return `
+      <div class="p-3 rounded-[16px] bg-[#FFFBF5] border border-[#F1E9DF] flex items-center justify-between gap-4">
+        <div class="min-w-0 flex-1 flex items-center gap-2 text-[12px]">
+          <span class="truncate ${aLeads ? 'font-[800]' : 'opacity-65'}">${escapeHtml(r.a)}</span>
+          <span class="mono opacity-30 text-[10px]">vs</span>
+          <span class="truncate ${bLeads ? 'font-[800]' : 'opacity-65'}">${escapeHtml(r.b)}</span>
+        </div>
+        <div class="flex items-center gap-1.5 shrink-0">
+          <span class="mono text-[14px] font-black ${aLeads ? 'text-[#201C19]' : 'opacity-40'}">${r.aWins}</span>
+          <span class="mono opacity-30 text-[11px] font-black">:</span>
+          <span class="mono text-[14px] font-black ${bLeads ? 'text-[#201C19]' : 'opacity-40'}">${r.bWins}</span>
+          <span class="mono text-[9px] opacity-50 ml-1">(${r.meetings} meeting${r.meetings !== 1 ? 's' : ''})</span>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+/**
  * Render session summary sidebar.
  */
 function renderStatsSummary(session, playerStats, matches) {
@@ -8746,7 +8803,8 @@ document.querySelectorAll('.stats-view-btn').forEach(btn => {
     document.getElementById('statsPlayersCard').classList.toggle('hidden', statsCurrentView !== 'players');
     document.getElementById('statsTeamsCard').classList.toggle('hidden', statsCurrentView !== 'teams');
     document.getElementById('statsMatchesCard').classList.toggle('hidden', statsCurrentView !== 'matches');
-    
+    document.getElementById('statsH2hCard').classList.toggle('hidden', statsCurrentView !== 'h2h');
+
     renderStatsView();
   });
 });
@@ -8850,8 +8908,6 @@ document.getElementById('modalGoUpload')?.addEventListener('click', () => {
   openProofPicker(null); // resolves to the most recent Pending booking
 });
 </script>
-<script src="rotation-pick.js"></script>
-<script src="queue-engine.js"></script>
 <script src="pickleball-scoring.js"></script>
 <script src="court-scoreboard.js"></script>
 <script src="motion.js"></script>

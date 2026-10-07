@@ -56,7 +56,7 @@ Each pick adds one to `playCounts` for every player picked (`RotationPick.countR
 
 ### Partner Rotation
 
-Four players play three rounds together, each round with a new partner:
+**At 8 or fewer players in the whole queue**, four players play three rounds together, each round with a new partner:
 
 - Round 1: P1 and P2 against P3 and P4.
 - Round 2: P1 and P3 against P2 and P4.
@@ -64,11 +64,17 @@ Four players play three rounds together, each round with a new partner:
 
 When round 3 ends, all four go back to the end of the line as individuals, and `session.lastPartnerGroup` is set to their four names.
 
+**Above 8, every round stands alone instead** — `PARTNER_ROTATION_HOLD_LIMIT` in `queue-engine.js`. Holding a foursome together for three rounds only makes sense when the queue can't comfortably supply a fresh four every round; above the limit it always can, so `session.partnerRotationState` is never set, each round rotates all four players off the instant it ends (exactly like Four Off Four On), and nobody plays two rounds back to back under any circumstance.
+
+The threshold is re-checked at **every** round, not just when a group starts: if a group formed at 8 or fewer and the queue grows past the limit before round 3, the group stops being held together right then — it does not play out its remaining rounds first. (The reverse direction needs no special handling: once a round finishes above the limit, the next pick naturally re-evaluates the current total from scratch.)
+
 **Choosing the next group avoids whoever just played.** The next group of 4 is pulled with `pullRestedPlayersAvoiding(session, 4, session.lastPartnerGroup)` instead of the plain `pullRestedPlayers`. It treats anyone in `lastPartnerGroup` as if they had played far more games than anyone else, for that one pick only — so they sort to the very back and are only picked if there are not enough other players to fill the court:
 
 - **Exactly 4 in the whole queue:** nobody else exists, so the same four repeat. This is the only case where that happens.
-- **8 or more in the whole queue:** the next group of 4 is drawn entirely from players who were not in the group that just finished, even if one of them has a lower lifetime play count than someone who just played — the "just played" exclusion overrides plain rest priority for this one pick.
-- **5 to 7 in the whole queue:** every non-recently-played player available gets a rested spot; the remaining spot(s) are backfilled from the group that just played.
+- **More than 8 in the whole queue:** the next group of 4 is drawn entirely from players who were not in the group that just finished, even if one of them has a lower lifetime play count than someone who just played — the "just played" exclusion overrides plain rest priority for this one pick. Combined with the rule above, this is what guarantees nobody plays consecutive rounds once the queue is large enough.
+- **5 to 8 in the whole queue:** every non-recently-played player available gets a rested spot; the remaining spot(s) are backfilled from the group that just played.
+
+Verified with a 1,000-seed randomized simulation (`node -e` scratch script, not checked in) covering mid-session joins and removals at random points, including while a group is mid-rotation: zero instances of a player appearing in two consecutive matches whenever the true pool at decision time exceeded 8.
 
 `playCounts` are unaffected by this bias — only the ordering of this one pick is biased; the real counts used for every other rule's rest priority, and for stats, are untouched.
 
@@ -80,10 +86,20 @@ When round 3 ends, all four go back to the end of the line as individuals, and `
 | `recordMatchResult(session, scoreA, scoreB)` | Validates the scores, records the match, rotates the queue per the rule, and fills the next match. Returns `{ error }` or `{ winner, winnerNames, loserNames, notices, timerReset }`. Both pages' submit-score handlers are thin wrappers around this. |
 | `pullRestedPlayers` / `pullRestedPlayersAvoiding` | The rest-priority and anti-repeat pulls described above |
 | `ensureTeam`, `applyMatchResult`, `computeStandings` | Fixed Pairs teams and league results |
-| `computePlayerStats`, `computeTeamStats` | Match-stats leaderboards, computed on the fly from `session.matches` |
+| `computePlayerStats`, `computeTeamStats`, `computeHeadToHead` | Match stats, computed on the fly from `session.matches` |
 | `normalizeName`, `nameSimilarity`, `getAllPlayerNamesInSession`, `findSimilarNames`, `promptNameConflict` | Catches a duplicate or misspelled name when someone joins |
 
 `index.html` destructures these from `window.QueueEngine` instead of defining its own copies. `queue.html` calls `QueueEngine.*` directly.
+
+## Match stats
+
+Both pages show the same four views, with identical columns — Matches, Wins, Losses, Points For, Points Against, Point Differential, Win% — computed by the same engine functions, so neither page is more "comprehensive" than the other:
+
+- **Players** (`computePlayerStats`): one row per player.
+- **Teams / Pairings** (`computeTeamStats`): one row per exact pairing (sorted names as the key), so a pair that's played together more than once accumulates in one row regardless of which rule or which match produced the pairing.
+- **Standings** (`computeStandings`): Fixed Pairs League only, since that's the one rule with a persistent team unit and a real head-to-head tiebreak built into the ranking itself (see `applyMatchResult`).
+- **Head-to-head** (`computeHeadToHead`): win over the other, for every pair of players who have ever been on *opposing* teams — teammates are never counted against each other. This is **rule-agnostic**: it only reads `session.matches` (`teamA`, `teamB`, `winner`), never which rule produced them, so it works identically for Partner Rotation (where opponents change every round — two players who were partners in one round and opponents in the next are scored only for the rounds they actually opposed each other) as it does for Fixed Pairs. Returns the pairs sorted by how many times they've met, most first.
+- **Match history**: every finished match, newest first, with its point differential.
 
 ## Live score and resume-on-refresh
 

@@ -150,6 +150,52 @@ check('checkAndFillActiveMatch honors session.lastPartnerGroup end to end', (() 
   return eq(onCourt, ['e', 'f', 'g', 'h']);
 })());
 
+section('partner rotation: no held-over foursome above 8 players');
+// Holding 4 players together for 3 rounds only makes sense when the queue can't easily
+// supply a fresh 4 every round. Above 8 total, every round stands alone instead.
+check('9 players: round 1 does not start a 3-round rotation (no partnerRotationState)', (() => {
+  const s = base('partner_rotation', 'doubles', solo('a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i'));
+  Q.checkAndFillActiveMatch(s);
+  return !s.partnerRotationState && s.activeMatch !== null;
+})());
+check('9 players: the match ends after a single round -- no "setting up round 2" notice, foursome rotates off immediately', (() => {
+  const s = base('partner_rotation', 'doubles', solo('a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i'));
+  Q.checkAndFillActiveMatch(s);
+  const firstFour = [...s.activeMatch.teamA, ...s.activeMatch.teamB].slice().sort();
+  const r = Q.recordMatchResult(s, 11, 4);
+  return !r.error && !/Round/.test(r.notices[0]) && eq(s.lastPartnerGroup.slice().sort(), firstFour) && s.waiting.some((w) => firstFour.includes(w.names[0]));
+})());
+check('9 players: nobody plays two matches in a row, across many matches', (() => {
+  const s = base('partner_rotation', 'doubles', solo('a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i'));
+  Q.checkAndFillActiveMatch(s);
+  let prev = null, bad = null;
+  for (let i = 0; i < 20 && !bad; i++) {
+    if (!s.activeMatch) { bad = 'no active match at match ' + i; break; }
+    const cur = [...s.activeMatch.teamA, ...s.activeMatch.teamB].slice().sort();
+    if (prev && cur.some((p) => prev.includes(p))) bad = `overlap at match ${i}: ${JSON.stringify(cur)} vs previous ${JSON.stringify(prev)}`;
+    prev = cur;
+    const r = Q.recordMatchResult(s, 11, 4);
+    if (r.error) bad = r.error;
+  }
+  return !bad;
+})());
+check('exactly 8 players still holds the foursome for 3 rounds (the limit is "more than 8", not "8 or more")', (() => {
+  const s = base('partner_rotation', 'doubles', solo('a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'));
+  Q.checkAndFillActiveMatch(s);
+  return !!s.partnerRotationState && s.partnerRotationState.round === 1;
+})());
+check('a queue that grows past 8 mid-rotation stops holding the foursome together immediately, not at the end of round 3', (() => {
+  // This is the exact scenario a 500-seed fuzz run caught: a group starts at exactly 8 (holds),
+  // a 9th player joins between round 1 and round 2, and round 2 must NOT repeat round 1's four.
+  const s = base('partner_rotation', 'doubles', solo('a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'));
+  Q.checkAndFillActiveMatch(s); // 8 players: round 1 of a held-together group
+  const round1Four = [...s.activeMatch.teamA, ...s.activeMatch.teamB].slice().sort();
+  s.waiting.push({ id: 'w_i', names: ['i'] }); // a 9th joins before round 1 even finishes
+  const r = Q.recordMatchResult(s, 11, 4); // would normally advance to "round 2" of the same four
+  const nextFour = [...s.activeMatch.teamA, ...s.activeMatch.teamB].slice().sort();
+  return !r.error && !s.partnerRotationState && !/Setting up Round 2/.test(r.notices[0] || '') && nextFour.every((n) => !round1Four.includes(n));
+})());
+
 section('recordMatchResult: fixed rotation, fixed pairs, timed rotation, four off');
 check('fixed rotation breaks pairs, everyone re-queues as individuals', (() => {
   const s = base('fixed_rotation', 'doubles', solo('e', 'f', 'g', 'h'));
@@ -255,11 +301,14 @@ check('winner_stays: a joiner waits behind the original challenger (only 2 are n
   })());
 });
 check('partner rotation: a joiner waits behind the rest of the original 8 across multiple rotations', (() => {
+  // Joining after the first group's 3 rounds finish (not mid-rotation), so the queue
+  // stays at exactly 8 -- at the hold limit -- through the whole first rotation, and
+  // only grows to 9 for the decision about the second group.
   const s = base('partner_rotation', 'doubles', solo('a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'));
   Q.checkAndFillActiveMatch(s); // first group of 4 from the original 8
-  s.waiting.push({ id: 'w_join', names: ['zoe'] }); // joiner arrives while the first group plays
-  // Finish all 3 rounds of the first group.
-  Q.recordMatchResult(s, 11, 4); Q.recordMatchResult(s, 11, 4); Q.recordMatchResult(s, 11, 4);
+  Q.recordMatchResult(s, 11, 4); Q.recordMatchResult(s, 11, 4); Q.recordMatchResult(s, 11, 4); // all 3 rounds, same 4
+  s.waiting.push({ id: 'w_join', names: ['zoe'] }); // joiner arrives now that the first group is done
+  Q.checkAndFillActiveMatch(s);
   // The second group should be the other 4 originals -- zoe still hasn't played.
   let onCourt = [...s.activeMatch.teamA, ...s.activeMatch.teamB];
   const firstFour = s.lastPartnerGroup;
@@ -317,6 +366,53 @@ check('computeTeamStats keys by sorted team name and tallies both sides', (() =>
   return a.wins === 1 && a.pointsFor === 11;
 })());
 check('no matches yet: both stats are empty', eq(Q.computePlayerStats(base('winner_stays', 'doubles')), {}) && eq(Q.computeTeamStats(base('winner_stays', 'doubles')), []));
+
+section('head-to-head (win over the other)');
+check('singles: a beat b twice, b beat a once -- tallied under one entry regardless of name order', (() => {
+  const s = base('winner_stays', 'singles');
+  s.matches = [
+    { teamA: ['a'], teamB: ['b'], scoreA: 11, scoreB: 4, winner: 'teamA' },
+    { teamA: ['b'], teamB: ['a'], scoreA: 9, scoreB: 11, winner: 'teamB' }, // a still wins, now on teamB
+    { teamA: ['a'], teamB: ['b'], scoreA: 8, scoreB: 11, winner: 'teamB' }, // b wins this one
+  ];
+  const h2h = Q.computeHeadToHead(s);
+  return h2h.length === 1 && h2h[0].a === 'a' && h2h[0].b === 'b' && h2h[0].aWins === 2 && h2h[0].bWins === 1 && h2h[0].meetings === 3;
+})());
+check('doubles: both players on one side count as having faced both on the other', (() => {
+  const s = base('winner_stays', 'doubles');
+  s.matches = [{ teamA: ['a', 'b'], teamB: ['c', 'd'], scoreA: 11, scoreB: 4, winner: 'teamA' }];
+  const h2h = Q.computeHeadToHead(s);
+  // 4 opposing pairs: a-c, a-d, b-c, b-d -- each a win for the teamA player
+  return h2h.length === 4 && h2h.every((r) => (r.a === 'a' || r.a === 'b' ? r.aWins === 1 : r.bWins === 1));
+})());
+check('teammates are never counted against each other', (() => {
+  const s = base('winner_stays', 'doubles');
+  s.matches = [{ teamA: ['a', 'b'], teamB: ['c', 'd'], scoreA: 11, scoreB: 4, winner: 'teamA' }];
+  const h2h = Q.computeHeadToHead(s);
+  return !h2h.some((r) => (r.a === 'a' && r.b === 'b') || (r.a === 'b' && r.b === 'a'));
+})());
+check('sorted by most meetings first, ties broken alphabetically', (() => {
+  const s = base('winner_stays', 'singles');
+  s.matches = [
+    { teamA: ['x'], teamB: ['y'], scoreA: 11, scoreB: 4, winner: 'teamA' },
+    { teamA: ['a'], teamB: ['b'], scoreA: 11, scoreB: 4, winner: 'teamA' },
+    { teamA: ['a'], teamB: ['b'], scoreA: 11, scoreB: 4, winner: 'teamA' },
+  ];
+  const h2h = Q.computeHeadToHead(s);
+  return h2h[0].a === 'a' && h2h[0].b === 'b' && h2h[0].meetings === 2 && h2h[1].a === 'x' && h2h[1].meetings === 1;
+})());
+check('works the same regardless of which rule produced the matches (partner rotation included)', (() => {
+  const s = base('partner_rotation', 'doubles');
+  s.matches = [
+    { teamA: ['a', 'b'], teamB: ['c', 'd'], scoreA: 11, scoreB: 4, winner: 'teamA' }, // round 1: a&b vs c&d
+    { teamA: ['a', 'c'], teamB: ['b', 'd'], scoreA: 11, scoreB: 9, winner: 'teamA' }, // round 2: a&c vs b&d -- a and b are now opponents
+  ];
+  const h2h = Q.computeHeadToHead(s);
+  const ab = h2h.find((r) => (r.a === 'a' && r.b === 'b') || (r.a === 'b' && r.b === 'a'));
+  // round 1: a,b teammates (not counted); round 2: a beat b as opponents
+  return ab && ab.meetings === 1 && (ab.a === 'a' ? ab.aWins === 1 : ab.bWins === 1);
+})());
+check('no matches yet: no head-to-head records', eq(Q.computeHeadToHead(base('winner_stays', 'doubles')), []));
 
 console.log(`\n=== QUEUE ENGINE: ${passed}/${passed + failed} passed ===`);
 process.exit(failed === 0 ? 0 : 1);

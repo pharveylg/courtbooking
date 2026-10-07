@@ -751,6 +751,9 @@ body:not(.staff-mode) .staff-link{display:none!important}
                 <span id="waitingCountBadge" class="mono text-[10px] px-2 py-0.5 rounded-full bg-[#F1E9DF]">0 players</span>
               </div>
 
+              <!-- Partner rotation note, shown when the queue does not make full games of four -->
+              <p id="rotationNote" class="hidden mono text-[10px] leading-relaxed opacity-70 mb-2"></p>
+
               <!-- Waiting scrollbox -->
               <div id="waitingRoomList" class="flex-1 space-y-2 max-h-[220px] overflow-auto pr-1 divide-y divide-[#F5EDE4]">
                 <!-- Dynamic waiting player entries -->
@@ -1106,12 +1109,8 @@ body:not(.staff-mode) .staff-link{display:none!important}
             <div>
             <label class="flex flex-col gap-1.5">
               <span class="mono text-[10px] uppercase tracking-widest opacity-60">Players Needed (total)</span>
-              <select id="ogPlayersNeeded" class="h-11 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-3 mono text-[13px] outline-none focus:border-[#201C19]">
-                <option value="2">2</option>
-                <option value="4" selected>4</option>
-                <option value="6">6</option>
-                <option value="8">8</option>
-              </select>
+              <input type="number" id="ogPlayersNeeded" min="2" max="20" step="1" value="4" inputmode="numeric" aria-describedby="ogPlayersNote" class="h-11 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-4 mono text-[13px] outline-none focus:border-[#201C19]"/>
+              <span id="ogPlayersNote" class="mono text-[10px] opacity-60">2 to 20. Odd numbers work too.</span>
             </label></div>
             <label class="flex flex-col gap-1.5">
             <span class="mono text-[10px] uppercase tracking-widest opacity-60">Notes (optional)</span>
@@ -6480,6 +6479,11 @@ document.getElementById('ogCreateForm')?.addEventListener('submit', async (e) =>
     if(seenEmails.has(key)){ errEl.textContent = `${p.email} is already in this game (or was entered twice).`; errEl.classList.remove('hidden'); return; }
     seenEmails.add(key);
   }
+  if(!Number.isInteger(playersNeeded) || playersNeeded < 2 || playersNeeded > 20){
+    errEl.textContent = 'Players needed must be a whole number from 2 to 20.';
+    errEl.classList.remove('hidden');
+    return;
+  }
   if(1 + extraPlayers.length > playersNeeded){
     errEl.textContent = `You've added ${1 + extraPlayers.length} players but this game only needs ${playersNeeded} — increase Players Needed or remove some.`;
     errEl.classList.remove('hidden');
@@ -7922,6 +7926,15 @@ function renderActiveQueueDashboard() {
     }
   }
 
+  // Partner rotation note: say how the next four are chosen when the queue is uneven
+  const rotationNote = document.getElementById('rotationNote');
+  if (rotationNote) {
+    const waitingTotal = session.waiting.reduce((sum, w) => sum + w.names.length, 0);
+    const showNote = session.rule === 'partner_rotation' && session.mode === 'doubles' && waitingTotal % 4 !== 0;
+    rotationNote.textContent = showNote ? 'Uneven queue: partner rotation picks the four who have played the fewest rotations so far (ties go to whoever has waited longest). Anyone left out goes first next time, so games stay close but can differ by one.' : '';
+    rotationNote.classList.toggle('hidden', !showNote);
+  }
+
   // Waiting Room List
   const waitingList = document.getElementById('waitingRoomList');
   const waitingBadge = document.getElementById('waitingCountBadge');
@@ -8138,19 +8151,12 @@ function checkAndFillActiveMatch(session) {
 
   // PARTNER ROTATION logic (Doubles only)
   if (session.rule === 'partner_rotation' && isDoubles) {
-    if (totalWaitingAvailable >= 4) {
-      // Pull exactly 4 players as individual names
-      const players = [];
-      while (players.length < 4 && session.waiting.length > 0) {
-        const nextGroup = session.waiting[0];
-        const take = Math.min(4 - players.length, nextGroup.names.length);
-        players.push(...nextGroup.names.slice(0, take));
-        if (take === nextGroup.names.length) {
-          session.waiting.shift();
-        } else {
-          nextGroup.names = nextGroup.names.slice(take);
-        }
-      }
+    // Pull 4 players. With an uneven queue, the players who have played the fewest rotations go first.
+    const pick = RotationPick.pickPlayers(session.waiting, 4, session.playCounts);
+    if (pick) {
+      const players = pick.picked;
+      session.waiting = pick.waiting;
+      session.playCounts = RotationPick.countRotation(session.playCounts, players);
 
       session.partnerRotationState = {
         players: players, // [P1, P2, P3, P4]
@@ -9299,6 +9305,7 @@ document.getElementById('modalGoUpload')?.addEventListener('click', () => {
   openProofPicker(null); // resolves to the most recent Pending booking
 });
 </script>
+<script src="rotation-pick.js"></script>
 <script src="pickleball-scoring.js"></script>
 <script src="court-scoreboard.js"></script>
 <script src="motion.js"></script>

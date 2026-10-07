@@ -7926,12 +7926,14 @@ function renderActiveQueueDashboard() {
     }
   }
 
-  // Partner rotation note: say how the next four are chosen when the queue is uneven
+  // Rest-priority note: say how the next match is picked when the queue is uneven.
+  // Every rule except Fixed Pairs (teams are the fixed unit there) pulls by rest priority.
   const rotationNote = document.getElementById('rotationNote');
   if (rotationNote) {
+    const countNeeded = session.mode === 'doubles' ? 4 : 2;
     const waitingTotal = session.waiting.reduce((sum, w) => sum + w.names.length, 0);
-    const showNote = session.rule === 'partner_rotation' && session.mode === 'doubles' && waitingTotal % 4 !== 0;
-    rotationNote.textContent = showNote ? 'Uneven queue: partner rotation picks the four who have played the fewest rotations so far (ties go to whoever has waited longest). Anyone left out goes first next time, so games stay close but can differ by one.' : '';
+    const showNote = session.rule !== 'fixed_pairs' && waitingTotal % countNeeded !== 0;
+    rotationNote.textContent = showNote ? `Uneven queue: the next ${countNeeded} are picked by whoever has played the fewest games so far (ties go to whoever has waited longest). Anyone left out goes first next time, so games stay close but can differ by one.` : '';
     rotationNote.classList.toggle('hidden', !showNote);
   }
 
@@ -8124,6 +8126,17 @@ function computeStandings(session) {
 function teamLabel(names) { return (names || []).join(' & '); }
 
 // Automatically pulls players from waiting list if current active match is empty
+/* Pull `count` players from the waiting line for every rotation rule,
+   preferring whoever has played the fewest games so far (RotationPick),
+   so rest time is shared evenly instead of being a strict first-in-line.
+   Returns the picked names in queue order, or null if not enough are waiting. */
+function pullRestedPlayers(session, count) {
+  const pick = RotationPick.pickPlayers(session.waiting, count, session.playCounts);
+  if (!pick) return null;
+  session.waiting = pick.waiting;
+  session.playCounts = RotationPick.countRotation(session.playCounts, pick.picked);
+  return pick.picked;
+}
 function checkAndFillActiveMatch(session) {
   if (session.activeMatch) return; // already running
 
@@ -8145,19 +8158,12 @@ function checkAndFillActiveMatch(session) {
 
   const isDoubles = session.mode === 'doubles';
   const countNeeded = isDoubles ? 4 : 2;
-  
-  // Flat helper to count waiting players
-  let totalWaitingAvailable = session.waiting.reduce((sum, w) => sum + w.names.length, 0);
 
   // PARTNER ROTATION logic (Doubles only)
   if (session.rule === 'partner_rotation' && isDoubles) {
     // Pull 4 players. With an uneven queue, the players who have played the fewest rotations go first.
-    const pick = RotationPick.pickPlayers(session.waiting, 4, session.playCounts);
-    if (pick) {
-      const players = pick.picked;
-      session.waiting = pick.waiting;
-      session.playCounts = RotationPick.countRotation(session.playCounts, players);
-
+    const players = pullRestedPlayers(session, 4);
+    if (players) {
       session.partnerRotationState = {
         players: players, // [P1, P2, P3, P4]
         round: 1 // We have 3 rounds total
@@ -8172,21 +8178,10 @@ function checkAndFillActiveMatch(session) {
     return;
   }
 
-  // FIXED ROTATION (strict individual FIFO sequence, breaks pairs to rotate everyone equally)
+  // FIXED ROTATION (breaks pairs to rotate everyone equally; rest priority decides who's next)
   if (session.rule === 'fixed_rotation') {
-    if (totalWaitingAvailable >= countNeeded) {
-      const players = [];
-      while (players.length < countNeeded && session.waiting.length > 0) {
-        const nextGroup = session.waiting[0];
-        const take = Math.min(countNeeded - players.length, nextGroup.names.length);
-        players.push(...nextGroup.names.slice(0, take));
-        if (take === nextGroup.names.length) {
-          session.waiting.shift();
-        } else {
-          nextGroup.names = nextGroup.names.slice(take);
-        }
-      }
-
+    const players = pullRestedPlayers(session, countNeeded);
+    if (players) {
       const half = countNeeded / 2;
       session.activeMatch = {
         id: 'match_' + Date.now(),
@@ -8197,43 +8192,14 @@ function checkAndFillActiveMatch(session) {
     return;
   }
 
-  // DEFAULT (Winner Stays, Four Off, Timed Rotation)
-  if (totalWaitingAvailable >= countNeeded) {
-    // We can form a match!
-    const sideA = [];
+  // DEFAULT (Winner Stays, Four Off, Timed Rotation): rest priority decides who's next
+  const players = pullRestedPlayers(session, countNeeded);
+  if (players) {
     const teamSize = countNeeded / 2;
-
-    // Pull Team A players
-    while (sideA.length < teamSize && session.waiting.length > 0) {
-      const nextGroup = session.waiting[0];
-      if (sideA.length + nextGroup.names.length <= teamSize) {
-        sideA.push(...nextGroup.names);
-        session.waiting.shift();
-      } else {
-        const countToTake = teamSize - sideA.length;
-        sideA.push(...nextGroup.names.slice(0, countToTake));
-        nextGroup.names = nextGroup.names.slice(countToTake);
-      }
-    }
-
-    const sideB = [];
-    // Pull Team B players
-    while (sideB.length < teamSize && session.waiting.length > 0) {
-      const nextGroup = session.waiting[0];
-      if (sideB.length + nextGroup.names.length <= teamSize) {
-        sideB.push(...nextGroup.names);
-        session.waiting.shift();
-      } else {
-        const countToTake = teamSize - sideB.length;
-        sideB.push(...nextGroup.names.slice(0, countToTake));
-        nextGroup.names = nextGroup.names.slice(countToTake);
-      }
-    }
-
     session.activeMatch = {
       id: 'match_' + Date.now(),
-      teamA: sideA,
-      teamB: sideB
+      teamA: players.slice(0, teamSize),
+      teamB: players.slice(teamSize)
     };
   }
 }
@@ -8568,22 +8534,11 @@ document.getElementById('submitScoreBtn')?.addEventListener('click', () => {
     // Winner stays as Team A. Loser joins the end of waiting list
     session.waiting.push({ id: 'w_ws_lose_' + Date.now(), names: loserNames });
 
-    // Pull next challenger to play B
+    // Pull next challenger to play B. Rest priority decides who's next.
     const teamSize = session.mode === 'doubles' ? 2 : 1;
-    const nextChallengers = [];
-    while (nextChallengers.length < teamSize && session.waiting.length > 0) {
-      const nextGroup = session.waiting[0];
-      if (nextChallengers.length + nextGroup.names.length <= teamSize) {
-        nextChallengers.push(...nextGroup.names);
-        session.waiting.shift();
-      } else {
-        const take = teamSize - nextChallengers.length;
-        nextChallengers.push(...nextGroup.names.slice(0, take));
-        nextGroup.names = nextGroup.names.slice(take);
-      }
-    }
+    const nextChallengers = pullRestedPlayers(session, teamSize);
 
-    if (nextChallengers.length === teamSize) {
+    if (nextChallengers) {
       session.activeMatch = {
         id: 'match_' + Date.now(),
         teamA: winnerNames,
@@ -8591,7 +8546,6 @@ document.getElementById('submitScoreBtn')?.addEventListener('click', () => {
       };
     } else {
       session.waiting.unshift({ id: 'w_win_' + Date.now(), names: winnerNames });
-      if (nextChallengers.length > 0) session.waiting.unshift({ id: 'w_chal_' + Date.now(), names: nextChallengers });
       session.activeMatch = null;
     }
 

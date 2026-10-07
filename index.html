@@ -1952,6 +1952,22 @@ body:not(.staff-mode) .staff-link{display:none!important}
   </div>
 </div>
 
+<!-- Queue overall winner: shown once when a queue session is reset or deleted,
+     declared from all the match stats the session collected. -->
+<div id="queueWinnerModal" class="fixed inset-0 z-50 hidden">
+  <div class="absolute inset-0 bg-[#201C19]/60 backdrop-blur-[6px]"></div>
+  <div class="absolute inset-0 overflow-y-auto overscroll-contain flex items-start justify-center p-4">
+    <div class="w-full max-w-[380px] rounded-[28px] bg-white border border-[#EAE0D5] shadow-[0_20px_60px_rgba(32,28,25,0.25)] overflow-hidden p-6 my-4 text-center">
+      <div class="text-[42px] leading-none mb-2" aria-hidden="true">🏆</div>
+      <div id="queueWinnerLabel" class="mono text-[11px] uppercase tracking-widest opacity-50 mb-1.5">Winner</div>
+      <div id="queueWinnerName" class="text-[22px] font-[800] tracking-[-0.01em] mb-2.5 break-words"></div>
+      <div id="queueWinnerStats" class="mono text-[13px] opacity-70 mb-2 leading-[1.5]"></div>
+      <div id="queueWinnerNote" class="mono text-[11px] opacity-50 mb-5 min-h-[14px]"></div>
+      <button type="button" id="queueWinnerDoneBtn" class="w-full h-12 rounded-full bg-[#D6FF5F] border border-[#201C19]/10 font-[800] text-[14px] cursor-pointer active:scale-[0.98] transition">Done</button>
+    </div>
+  </div>
+</div>
+
 <!-- In-app notification: an open game needs players. Slides in over the top
      of the page, tappable (jumps to the game), dismissible, auto-fades. -->
 <div id="ogNotifBanner" class="fixed top-3 inset-x-3 z-[45] hidden pointer-events-none">
@@ -1997,7 +2013,7 @@ const {
   pullRestedPlayers, checkAndFillActiveMatch, recordMatchResult, removeWaitingPlayer,
   normalizeName: _normalizeName, nameSimilarity: _nameSimilarity,
   getAllPlayerNamesInSession, findSimilarNames, promptNameConflict,
-  computePlayerStats, computeTeamStats, computeHeadToHead,
+  computePlayerStats, computeTeamStats, computeHeadToHead, computeOverallWinner,
 } = QueueEngine;
 
 /* ================================================================
@@ -8365,12 +8381,14 @@ document.getElementById('qResetSessionBtn')?.addEventListener('click', () => {
   if (!session) return;
 
   if (confirm('Are you sure you want to reset this queue session? This will wipe the scoreboard and clear court rotation.')) {
+    const winner = computeOverallWinner(session);
     session.waiting = [];
     session.activeMatch = null;
     session.matches = [];
     saveQueues(sessions);
     renderActiveQueueDashboard();
     toast('Queue rotation reset successfully!');
+    if (winner) showQueueWinner(winner);
   }
 });
 
@@ -8382,12 +8400,37 @@ document.getElementById('qDeleteSessionBtn')?.addEventListener('click', () => {
   if (!session) return;
 
   if (confirm('Permanently delete this entire queue session?')) {
+    const winner = computeOverallWinner(session);
     const filtered = sessions.filter(s => s.id !== selectedQueueSessionId);
     saveQueues(filtered);
     selectedQueueSessionId = null;
     renderQueueModule();
     toast('Session deleted.');
+    if (winner) showQueueWinner(winner);
   }
+});
+
+/* Declares the overall winner of a queue session using every stat it collected --
+   win%, point differential, points scored, and head-to-head as a tiebreak -- when
+   the session is reset or deleted. Fixed Pairs declares the top team instead of a
+   player. Shared with the standalone queue tool via QueueEngine.computeOverallWinner. */
+function showQueueWinner(w) {
+  document.getElementById('queueWinnerLabel').textContent = w.type === 'team' ? 'Winning team' : 'Winner';
+  document.getElementById('queueWinnerName').textContent = w.name;
+  const diffStr = w.pointDiff > 0 ? `+${w.pointDiff}` : `${w.pointDiff}`;
+  document.getElementById('queueWinnerStats').textContent = `${w.wins}-${w.losses} record · ${diffStr} point diff · ${w.winPct}% win rate`;
+  const tiebreakNote = {
+    'point differential': 'Decided by point differential.',
+    'points scored': 'Decided by points scored.',
+    'head-to-head': 'Decided by head-to-head.',
+    'games played': 'Decided by games played.',
+    name: 'Decided by a coin-flip tiebreak (name order) -- everything else was tied.',
+  }[w.decidedBy] || '';
+  document.getElementById('queueWinnerNote').textContent = tiebreakNote;
+  document.getElementById('queueWinnerModal').classList.remove('hidden');
+}
+document.getElementById('queueWinnerDoneBtn')?.addEventListener('click', () => {
+  document.getElementById('queueWinnerModal').classList.add('hidden');
 });
 
 /* ---------- Match Stats Rendering ----------

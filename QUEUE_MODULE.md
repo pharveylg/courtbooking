@@ -102,6 +102,15 @@ Both pages show the same four views, with identical columns — Matches, Wins, L
 - **Head-to-head** (`computeHeadToHead`): win over the other, for every pair of players who have ever been on *opposing* teams — teammates are never counted against each other. This is **rule-agnostic**: it only reads `session.matches` (`teamA`, `teamB`, `winner`), never which rule produced them, so it works identically for Partner Rotation (where opponents change every round — two players who were partners in one round and opponents in the next are scored only for the rounds they actually opposed each other) as it does for Fixed Pairs. Returns the pairs sorted by how many times they've met, most first.
 - **Match history**: every finished match, newest first, with its point differential.
 
+## Declaring the overall winner when a session ends
+
+`computeOverallWinner(session)` declares a single winner using all of the above, shown in both pages when the session's data is about to disappear -- the facility module's Reset Queue and Delete Session, and the standalone tool's End Queue:
+
+- **Fixed Pairs**: the top team from `computeStandings` (win% → point diff → head-to-head → points scored — that ranking already exists for the league table).
+- **Every other rule**: the top player by the same ranking as the Player Leaderboard (win% → point diff → points scored), with **head-to-head added as a further tiebreak** via `computeHeadToHead` when players are still tied — the leaderboard itself doesn't use it, but there's no reason not to when only one winner can be declared. Still tied after that (most often: two players who always played as teammates and so share an identical record): falls back to games played, then name, so a winner is always named. `decidedBy` reports whichever criterion actually separated the winner from the runner-up, so the UI can say e.g. "Decided by head-to-head" -- or, honestly, "everything else was tied" when it comes down to name order.
+
+Returns `null` when no matches have been played yet (nothing is shown).
+
 ## Live score and resume-on-refresh
 
 The Live score button opens `CourtBoard` ([court-scoreboard.js](court-scoreboard.js)) with the match teams and the session's `gameFormat`; scoring and callouts are in [pickleball-scoring.js](pickleball-scoring.js). `CourtBoard` always persists mid-game progress to `localStorage` under its own `storageKey`, so a refresh while the scoreboard is open resumes where it left off, in both pages:

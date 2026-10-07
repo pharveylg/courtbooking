@@ -449,5 +449,70 @@ check('works the same regardless of which rule produced the matches (partner rot
 })());
 check('no matches yet: no head-to-head records', eq(Q.computeHeadToHead(base('winner_stays', 'doubles')), []));
 
+section('overall winner (declared when a session ends)');
+check('no matches yet: no winner to declare', Q.computeOverallWinner(base('winner_stays', 'doubles')) === null);
+check('a clear leader by win% is declared winner, with full stats attached', (() => {
+  const s = base('winner_stays', 'singles');
+  s.matches = [
+    { teamA: ['a'], teamB: ['b'], scoreA: 11, scoreB: 4, winner: 'teamA' },
+    { teamA: ['a'], teamB: ['c'], scoreA: 11, scoreB: 9, winner: 'teamA' },
+    { teamA: ['b'], teamB: ['c'], scoreA: 11, scoreB: 6, winner: 'teamA' },
+  ];
+  const w = Q.computeOverallWinner(s);
+  return w.type === 'player' && w.name === 'a' && w.wins === 2 && w.losses === 0 && w.winPct === 100 && w.pointsFor === 22 && w.pointsAgainst === 13 && w.pointDiff === 9 && w.decidedBy === 'win%';
+})());
+check('a tie on win% is broken by point differential', (() => {
+  const s = base('winner_stays', 'singles');
+  s.matches = [
+    { teamA: ['a'], teamB: ['x'], scoreA: 11, scoreB: 2, winner: 'teamA' }, // a: +9
+    { teamA: ['b'], teamB: ['y'], scoreA: 11, scoreB: 9, winner: 'teamA' }, // b: +2, same 1-0 record
+  ];
+  const w = Q.computeOverallWinner(s);
+  return w.name === 'a' && w.decidedBy === 'point differential';
+})());
+check('a tie on win%, point diff, and points scored is broken by head-to-head between the tied players', (() => {
+  // A 4-player round robin where a and b finish perfectly tied (2-1, +4, 29 points)
+  // but a beat b directly in their one meeting.
+  const s = base('winner_stays', 'singles');
+  s.matches = [
+    { teamA: ['a'], teamB: ['b'], scoreA: 11, scoreB: 7, winner: 'teamA' },
+    { teamA: ['a'], teamB: ['x'], scoreA: 11, scoreB: 7, winner: 'teamA' },
+    { teamA: ['a'], teamB: ['y'], scoreA: 7, scoreB: 11, winner: 'teamB' },
+    { teamA: ['b'], teamB: ['x'], scoreA: 11, scoreB: 7, winner: 'teamA' },
+    { teamA: ['b'], teamB: ['y'], scoreA: 11, scoreB: 7, winner: 'teamA' },
+    { teamA: ['x'], teamB: ['y'], scoreA: 11, scoreB: 7, winner: 'teamA' },
+  ];
+  const w = Q.computeOverallWinner(s);
+  return w.name === 'a' && w.decidedBy === 'head-to-head';
+})());
+check('still tied with no head-to-head between them: falls back to games played, then name, so it is never unresolved', (() => {
+  // a and b never meet, and everything else is identical -- genuinely unbreakable
+  // except by the final, always-deterministic fallback (name).
+  const s = base('winner_stays', 'singles');
+  s.matches = [
+    { teamA: ['a'], teamB: ['x'], scoreA: 11, scoreB: 4, winner: 'teamA' },
+    { teamA: ['b'], teamB: ['y'], scoreA: 11, scoreB: 4, winner: 'teamA' },
+  ];
+  const w = Q.computeOverallWinner(s);
+  return w.name === 'a' && w.decidedBy === 'name';
+})());
+check('fixed pairs: the top team from computeStandings is declared, not an individual player', (() => {
+  const s = base('fixed_pairs', 'doubles');
+  s.matches = [{ teamA: ['a', 'b'], teamB: ['c', 'd'], scoreA: 11, scoreB: 4, winner: 'teamA', teamAId: 'T1', teamBId: 'T2' }];
+  Q.ensureTeam(s, 'T1', ['a', 'b']); Q.ensureTeam(s, 'T2', ['c', 'd']);
+  Q.applyMatchResult(s, 'T1', 'T2', 11, 4);
+  const w = Q.computeOverallWinner(s);
+  return w.type === 'team' && w.name === 'a & b' && w.wins === 1 && w.decidedBy === 'standings';
+})());
+check('works the same regardless of which rule produced the matches (partner rotation included)', (() => {
+  const s = base('partner_rotation', 'doubles');
+  s.matches = [
+    { teamA: ['a', 'b'], teamB: ['c', 'd'], scoreA: 11, scoreB: 4, winner: 'teamA' },
+    { teamA: ['a', 'c'], teamB: ['b', 'd'], scoreA: 11, scoreB: 9, winner: 'teamA' },
+  ];
+  const w = Q.computeOverallWinner(s);
+  return w.type === 'player' && w.name === 'a' && w.wins === 2;
+})());
+
 console.log(`\n=== QUEUE ENGINE: ${passed}/${passed + failed} passed ===`);
 process.exit(failed === 0 ? 0 : 1);

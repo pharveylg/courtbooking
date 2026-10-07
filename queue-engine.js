@@ -419,11 +419,75 @@
     return Object.values(pairs).sort((r1, r2) => r2.meetings - r1.meetings || r1.a.localeCompare(r2.a) || r1.b.localeCompare(r2.b));
   }
 
+  /* The overall winner of a session, for declaring one when the session ends.
+     Fixed Pairs: the top team from computeStandings (win% -> point diff ->
+     head-to-head -> points scored -- that ranking already exists for the
+     league table). Every other rule: the top player by the same Player
+     Leaderboard ranking (win% -> point diff -> points scored), with
+     head-to-head added as a further tiebreak using computeHeadToHead -- the
+     leaderboard alone doesn't use it, but there's no reason not to when
+     declaring a single winner. Still tied after that: most games played,
+     then name, so the result is always decided. Returns null if no matches
+     have been played yet. `decidedBy` names whichever criterion separated
+     the winner from the runner-up, for a transparent "won on countback"
+     message. */
+  function computeOverallWinner(session) {
+    if (!session || !session.matches || session.matches.length === 0) return null;
+
+    if (session.rule === 'fixed_pairs') {
+      const standings = computeStandings(session);
+      if (!standings.length) return null;
+      const top = standings[0];
+      return {
+        type: 'team', name: teamLabel(top.names),
+        matches: top.gp, wins: top.w, losses: top.l,
+        pointsFor: top.pf, pointsAgainst: top.pa, pointDiff: top.pf - top.pa,
+        winPct: top.gp ? Math.round((top.w / top.gp) * 100) : 0,
+        decidedBy: 'standings',
+      };
+    }
+
+    const playerStats = computePlayerStats(session);
+    const names = Object.keys(playerStats);
+    if (!names.length) return null;
+    const h2h = computeHeadToHead(session);
+    const recordBetween = (a, b) => h2h.find((r) => (r.a === a && r.b === b) || (r.a === b && r.b === a));
+
+    const rows = names.map((name) => {
+      const s = playerStats[name];
+      return { name, matches: s.matches, wins: s.wins, losses: s.losses, pointsFor: s.pointsFor, pointsAgainst: s.pointsAgainst, pointDiff: s.pointsFor - s.pointsAgainst, winPct: s.matches ? (s.wins / s.matches) * 100 : 0 };
+    });
+
+    const compare = (a, b) => {
+      if (b.winPct !== a.winPct) return { cmp: b.winPct - a.winPct, by: 'win%' };
+      if (b.pointDiff !== a.pointDiff) return { cmp: b.pointDiff - a.pointDiff, by: 'point differential' };
+      if (b.pointsFor !== a.pointsFor) return { cmp: b.pointsFor - a.pointsFor, by: 'points scored' };
+      const rec = recordBetween(a.name, b.name);
+      if (rec) {
+        const aWins = rec.a === a.name ? rec.aWins : rec.bWins;
+        const bWins = rec.a === a.name ? rec.bWins : rec.aWins;
+        if (aWins !== bWins) return { cmp: bWins - aWins, by: 'head-to-head' };
+      }
+      if (b.matches !== a.matches) return { cmp: b.matches - a.matches, by: 'games played' };
+      return { cmp: a.name.localeCompare(b.name), by: 'name' };
+    };
+
+    rows.sort((a, b) => compare(a, b).cmp);
+    const top = rows[0];
+    const decidedBy = rows.length > 1 ? compare(top, rows[1]).by : 'win%';
+    return {
+      type: 'player', name: top.name,
+      matches: top.matches, wins: top.wins, losses: top.losses,
+      pointsFor: top.pointsFor, pointsAgainst: top.pointsAgainst, pointDiff: top.pointDiff,
+      winPct: Math.round(top.winPct), decidedBy,
+    };
+  }
+
   return {
     teamLabel,
     ensureTeam, applyMatchResult, computeStandings,
     pullRestedPlayers, pullRestedPlayersAvoiding, checkAndFillActiveMatch, recordMatchResult, removeWaitingPlayer,
     normalizeName, nameSimilarity, getAllPlayerNamesInSession, findSimilarNames, promptNameConflict,
-    computePlayerStats, computeTeamStats, computeHeadToHead,
+    computePlayerStats, computeTeamStats, computeHeadToHead, computeOverallWinner,
   };
 }));

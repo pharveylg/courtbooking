@@ -82,6 +82,15 @@ td{padding:7px 6px;border-bottom:1px solid var(--sand)}
 .loss{color:var(--red);font-weight:700}
 
 .toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 18px;border-radius:999px;font:600 12.5px "Bricolage Grotesque",sans-serif;z-index:999;max-width:90vw;text-align:center}
+
+.winner-overlay{position:fixed;inset:0;background:rgba(32,28,25,0.6);display:flex;align-items:center;justify-content:center;z-index:1000;padding:20px}
+.winner-card{background:#fff;border-radius:24px;padding:30px 26px;max-width:360px;width:100%;text-align:center;box-shadow:0 20px 50px rgba(32,28,25,0.25)}
+.winner-trophy{font-size:42px;line-height:1;margin-bottom:8px}
+.winner-label{font-size:11px;text-transform:uppercase;letter-spacing:0.1em;opacity:0.5;margin-bottom:6px}
+.winner-name{font-size:24px;font-weight:800;letter-spacing:-0.01em;margin-bottom:10px;overflow-wrap:anywhere}
+.winner-stats{font-size:13px;opacity:0.7;margin-bottom:8px;line-height:1.5}
+.winner-note{font-size:11px;opacity:0.5;margin-bottom:20px;min-height:14px}
+.winner-card .btn{width:100%}
 </style>
 </head>
 <body>
@@ -221,6 +230,18 @@ td{padding:7px 6px;border-bottom:1px solid var(--sand)}
 
 <div class="toast hidden" id="toast"></div>
 
+<!-- Overall winner, shown once when a queue ends (declared from all the match stats) -->
+<div class="winner-overlay hidden" id="winnerOverlay">
+  <div class="winner-card">
+    <div class="winner-trophy" aria-hidden="true">🏆</div>
+    <div class="winner-label mono" id="winnerLabel">Winner</div>
+    <div class="winner-name" id="winnerName"></div>
+    <div class="winner-stats mono" id="winnerStats"></div>
+    <div class="winner-note mono" id="winnerNote"></div>
+    <button type="button" class="btn lime" id="winnerDoneBtn">Done</button>
+  </div>
+</div>
+
 <script src="/rotation-pick.js"></script>
 <script src="/queue-engine.js"></script>
 <script src="/pickleball-scoring.js"></script>
@@ -324,10 +345,30 @@ td{padding:7px 6px;border-bottom:1px solid var(--sand)}
 
   document.getElementById('endQueueBtn').addEventListener('click', () => {
     if (!confirm('End this queue? Everything -- the waiting line, the match, and the stats -- will be gone.')) return;
+    const session = load();
+    const winner = session ? QueueEngine.computeOverallWinner(session) : null;
     stopTimerLoop();
     clear();
     cleanupBoardKeys(null);
     render();
+    if (winner) showWinner(winner);
+  });
+
+  /* Declares the overall winner using every stat the session collected:
+     win%, point differential, points scored, and (as a tiebreak beyond the
+     Players leaderboard) head-to-head between whoever's tied. Fixed Pairs
+     declares the top team instead of a player. */
+  function showWinner(w){
+    document.getElementById('winnerLabel').textContent = w.type === 'team' ? 'Winning team' : 'Winner';
+    document.getElementById('winnerName').textContent = w.name;
+    const diffStr = w.pointDiff > 0 ? `+${w.pointDiff}` : `${w.pointDiff}`;
+    document.getElementById('winnerStats').textContent = `${w.wins}-${w.losses} record • ${diffStr} point diff • ${w.winPct}% win rate`;
+    const tiebreakNote = { 'point differential': 'Decided by point differential.', 'points scored': 'Decided by points scored.', 'head-to-head': 'Decided by head-to-head.', 'games played': 'Decided by games played.', name: 'Decided by a coin-flip tiebreak (name order) -- everything else was tied.' }[w.decidedBy] || '';
+    document.getElementById('winnerNote').textContent = tiebreakNote;
+    document.getElementById('winnerOverlay').classList.remove('hidden');
+  }
+  document.getElementById('winnerDoneBtn').addEventListener('click', () => {
+    document.getElementById('winnerOverlay').classList.add('hidden');
   });
 
   function ruleLabel(rule){

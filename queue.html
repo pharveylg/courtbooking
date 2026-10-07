@@ -63,8 +63,10 @@ textarea{height:96px;padding:10px 13px;resize:vertical;font-weight:500;line-heig
 
 .wait-item{display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--line)}
 .wait-item:last-child{border-bottom:none}
-.wait-item .names{font-weight:700;font-size:13px}
-.wait-item .rm{background:none;border:none;color:var(--red);font:700 11px "JetBrains Mono",monospace;cursor:pointer;padding:4px}
+.wait-item .names{font-weight:700;font-size:13px;display:flex;flex-wrap:wrap;align-items:center;gap:4px}
+.wait-item .name-chip{display:inline-flex;align-items:center;gap:3px}
+.wait-item .amp{font-weight:400;opacity:0.4;font-size:11px}
+.wait-item .rm{background:none;border:none;color:var(--red);font:700 13px "JetBrains Mono",monospace;cursor:pointer;padding:0 2px;line-height:1}
 .empty-note{opacity:0.5;font-size:12px;text-align:center;padding:10px 0}
 
 .tabs{display:flex;gap:6px;margin-bottom:14px}
@@ -370,15 +372,19 @@ td{padding:7px 6px;border-bottom:1px solid var(--sand)}
     const empty = document.getElementById('waitingEmpty');
     list.innerHTML = '';
     empty.classList.toggle('hidden', session.waiting.length > 0);
-    session.waiting.forEach((w, i) => {
+    session.waiting.forEach((w) => {
       const row = document.createElement('div');
       row.className = 'wait-item';
-      row.innerHTML = `<span class="names">${escapeHtml(QueueEngine.teamLabel(w.names))}</span><button type="button" class="rm" data-i="${i}">Remove</button>`;
+      // One remove button per player, not per group -- removing one half of a
+      // pair leaves the other half still waiting, instead of pulling both out.
+      const names = w.names.map((name) => `<span class="name-chip">${escapeHtml(name)} <button type="button" class="rm" data-id="${w.id}" data-name="${escapeHtml(name)}" title="Remove ${escapeHtml(name)}">&times;</button></span>`).join(' <span class="amp">&amp;</span> ');
+      row.innerHTML = `<span class="names">${names}</span>`;
       list.appendChild(row);
     });
-    list.querySelectorAll('[data-i]').forEach((btn) => btn.addEventListener('click', () => {
+    list.querySelectorAll('.rm').forEach((btn) => btn.addEventListener('click', () => {
       const session = load(); if (!session) return;
-      session.waiting.splice(Number(btn.dataset.i), 1);
+      QueueEngine.removeWaitingPlayer(session, btn.dataset.id, btn.dataset.name);
+      QueueEngine.checkAndFillActiveMatch(session);
       save(session); render();
     }));
   }

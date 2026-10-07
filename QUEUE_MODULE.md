@@ -85,6 +85,7 @@ Verified with a 1,000-seed randomized simulation (`node -e` scratch script, not 
 | `checkAndFillActiveMatch(session)` | Starts the next match when there are enough waiting players. Runs the rule-specific pick. |
 | `recordMatchResult(session, scoreA, scoreB)` | Validates the scores, records the match, rotates the queue per the rule, and fills the next match. Returns `{ error }` or `{ winner, winnerNames, loserNames, notices, timerReset }`. Both pages' submit-score handlers are thin wrappers around this. |
 | `pullRestedPlayers` / `pullRestedPlayersAvoiding` | The rest-priority and anti-repeat pulls described above |
+| `removeWaitingPlayer(session, groupId, name)` | Removes one player from the waiting line by (group id, name) -- never the whole group. If `name` was paired with someone (joined together, or a Fixed Pairs team), the other player stays waiting on their own under the same group id; removing the last name in a group drops the now-empty entry. Both pages' waiting-list "remove" buttons are per-player, not per-row, and go through this. |
 | `ensureTeam`, `applyMatchResult`, `computeStandings` | Fixed Pairs teams and league results |
 | `computePlayerStats`, `computeTeamStats`, `computeHeadToHead` | Match stats, computed on the fly from `session.matches` |
 | `normalizeName`, `nameSimilarity`, `getAllPlayerNamesInSession`, `findSimilarNames`, `promptNameConflict` | Catches a duplicate or misspelled name when someone joins |

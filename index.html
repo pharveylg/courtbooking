@@ -1994,7 +1994,7 @@ body:not(.staff-mode) .staff-link{display:none!important}
    else in this script runs (see the comment on the script tags above). */
 const {
   teamLabel, ensureTeam, applyMatchResult, computeStandings,
-  pullRestedPlayers, checkAndFillActiveMatch, recordMatchResult,
+  pullRestedPlayers, checkAndFillActiveMatch, recordMatchResult, removeWaitingPlayer,
   normalizeName: _normalizeName, nameSimilarity: _nameSimilarity,
   getAllPlayerNamesInSession, findSimilarNames, promptNameConflict,
   computePlayerStats, computeTeamStats, computeHeadToHead,
@@ -7989,20 +7989,24 @@ function renderActiveQueueDashboard() {
         flatCount += w.names.length;
         const entry = document.createElement('div');
         entry.className = 'py-2.5 flex items-center justify-between gap-3 text-[#201C19]';
-        
+
         const sub = w.names.length > 1 ? `<span class="mono text-[9px] px-1.5 py-0.5 rounded-full bg-[#EDE8FF] text-[#3B2A9E] font-[700] ml-1.5 uppercase">Team Pair</span>` : '';
+        // One remove control per PLAYER, not per group -- removing one half of a
+        // pair leaves the other half waiting on their own, instead of pulling
+        // both out together.
+        const names = w.names.map(name => `
+          <span class="inline-flex items-center gap-1">
+            <span class="font-[700] text-[13px] truncate">${escapeHtml(name)}</span>
+            <button type="button" data-remove-wait="${w.id}" data-remove-name="${escapeHtml(name)}" class="w-6 h-6 rounded-full hover:bg-[#FFE9E0] hover:text-[#8C2C10] border border-transparent hover:border-[#FFC9B6] grid place-items-center text-[10px] transition shrink-0 cursor-pointer" title="Remove ${escapeHtml(name)}">✕</button>
+          </span>
+        `).join('<span class="mono text-[10px] opacity-40">&amp;</span>');
 
         entry.innerHTML = `
-          <div class="min-w-0">
-            <div class="flex items-center gap-1">
-              <span class="mono text-[11px] font-[700] opacity-40">#${index + 1}</span>
-              <span class="font-[700] text-[13px] truncate">${escapeHtml(w.names.join(' & '))}</span>
-              ${sub}
-            </div>
+          <div class="min-w-0 flex items-center gap-1 flex-wrap">
+            <span class="mono text-[11px] font-[700] opacity-40">#${index + 1}</span>
+            ${names}
+            ${sub}
           </div>
-          <button type="button" data-remove-wait="${w.id}" class="w-7 h-7 rounded-full hover:bg-[#FFE9E0] hover:text-[#8C2C10] border border-transparent hover:border-[#FFC9B6] grid place-items-center text-[11px] transition shrink-0 cursor-pointer" title="Remove Player">
-            ✕
-          </button>
         `;
         waitingList.appendChild(entry);
       });
@@ -8015,17 +8019,18 @@ function renderActiveQueueDashboard() {
       }
     }
 
-    // Bind remove button
+    // Bind remove button -- removes one player, not the whole pair (QueueEngine.removeWaitingPlayer)
     waitingList.querySelectorAll('button[data-remove-wait]').forEach(btn => {
       btn.addEventListener('click', () => {
         const waitId = btn.dataset.removeWait;
-        if (!confirm('Remove this player from the queue?')) return;
-        session.waiting = session.waiting.filter(x => x.id !== waitId);
+        const removeName = btn.dataset.removeName;
+        if (!confirm(`Remove ${removeName} from the queue?`)) return;
+        removeWaitingPlayer(session, waitId, removeName);
         // Try to auto-start if match empty
         checkAndFillActiveMatch(session);
         saveQueues(sessions);
         renderActiveQueueDashboard();
-        toast('Player removed from queue');
+        toast(`${removeName} removed from queue`);
       });
     });
   }

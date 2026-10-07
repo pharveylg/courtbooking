@@ -36,6 +36,8 @@ check('index.html pulls the rule engine from QueueEngine instead of defining its
 check('both index.html and queue.html call the same QueueEngine.recordMatchResult for scoring', /recordMatchResult\(session, scoreAVal, scoreBVal\)/.test(indexHtml) && /QueueEngine\.recordMatchResult\(session, scoreAVal, scoreBVal\)/.test(queueHtml));
 check('both call the same QueueEngine.checkAndFillActiveMatch to fill the next match', /checkAndFillActiveMatch\(session\)/.test(indexHtml) && /QueueEngine\.checkAndFillActiveMatch\(session\)/.test(queueHtml));
 check('both pages compute head-to-head with the same shared function, not two implementations', /computeHeadToHead\(session\)/.test(indexHtml) && /QueueEngine\.computeHeadToHead\(session\)/.test(queueHtml));
+check('removing a waiting player goes through the shared removeWaitingPlayer -- removes one player, not the whole pair -- in both pages', /removeWaitingPlayer\(session, waitId, removeName\)/.test(indexHtml) && /QueueEngine\.removeWaitingPlayer\(session, btn\.dataset\.id, btn\.dataset\.name\)/.test(queueHtml));
+check('neither page removes a waiting entry by splicing/filtering the whole group directly (that would drop both players of a pair)', !/session\.waiting\.splice\(/.test(queueHtml) && !/session\.waiting = session\.waiting\.filter\(x => x\.id !== waitId\)/.test(indexHtml));
 
 section('setup and dashboard present');
 check('setup form: mode, rule, optional starting players', /id="setMode"/.test(queueHtml) && /id="setRule"/.test(queueHtml) && /id="setInitialPlayers"/.test(queueHtml));

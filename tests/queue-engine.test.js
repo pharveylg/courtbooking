@@ -262,6 +262,41 @@ check('getAllPlayerNamesInSession covers waiting, active match, and history', ((
   return eq(Q.getAllPlayerNamesInSession(s).sort(), ['a', 'b', 'c', 'd', 'e']);
 })());
 
+section('removeWaitingPlayer: removes one player, never the whole pair');
+check('removing one name from a pair leaves the other still waiting, same group id', (() => {
+  const s = base('winner_stays', 'doubles', [{ id: 'g1', names: ['alice', 'bob'] }]);
+  Q.removeWaitingPlayer(s, 'g1', 'bob');
+  return eq(s.waiting, [{ id: 'g1', names: ['alice'] }]);
+})());
+check('removing a solo entry removes the whole group', (() => {
+  const s = base('winner_stays', 'doubles', solo('alice'));
+  Q.removeWaitingPlayer(s, 'w_alice', 'alice');
+  return eq(s.waiting, []);
+})());
+check('removing the last name in a pair drops the empty group entirely', (() => {
+  const s = base('winner_stays', 'doubles', [{ id: 'g1', names: ['alice', 'bob'] }]);
+  Q.removeWaitingPlayer(s, 'g1', 'bob');
+  Q.removeWaitingPlayer(s, 'g1', 'alice');
+  return eq(s.waiting, []);
+})());
+check('removing by (groupId, name) does not touch other groups, even with the same name elsewhere', (() => {
+  const s = base('winner_stays', 'doubles', [{ id: 'g1', names: ['alice', 'bob'] }, { id: 'g2', names: ['carl', 'alice'] }]);
+  Q.removeWaitingPlayer(s, 'g1', 'alice');
+  return eq(s.waiting, [{ id: 'g1', names: ['bob'] }, { id: 'g2', names: ['carl', 'alice'] }]);
+})());
+check('a group/name that does not exist is a no-op', (() => {
+  const s = base('winner_stays', 'doubles', solo('alice', 'bob'));
+  Q.removeWaitingPlayer(s, 'nope', 'alice');
+  Q.removeWaitingPlayer(s, 'w_alice', 'nobody');
+  return eq(s.waiting, solo('alice', 'bob'));
+})());
+check('does not mutate other groups\' object identity (no stray re-renders)', (() => {
+  const g2 = { id: 'g2', names: ['carl'] };
+  const s = base('winner_stays', 'doubles', [{ id: 'g1', names: ['alice', 'bob'] }, g2]);
+  Q.removeWaitingPlayer(s, 'g1', 'bob');
+  return s.waiting[1] === g2;
+})());
+
 section('a recent joiner never cuts ahead of an original queue member who has not played yet');
 // A join adds a new group to the BACK of session.waiting (session.waiting.push, same as
 // both pages' join handlers) -- that, plus the tie-break-by-queue-order already built

@@ -104,6 +104,18 @@
     return pick.picked;
   }
 
+  /* Remove one player from the waiting line by (groupId, name) -- never the whole
+     group. If `name` was part of a pair that joined together, the other player
+     stays in the line as their own entry (same group id, now holding just their
+     name) instead of being removed along with them. If the group was already
+     solo, or this removes its last name, the group itself is dropped. A no-op if
+     the group or name isn't found. Mutates session.waiting. */
+  function removeWaitingPlayer(session, groupId, name) {
+    session.waiting = session.waiting
+      .map((g) => (g.id === groupId ? { ...g, names: g.names.filter((n) => n !== name) } : g))
+      .filter((g) => g.names.length > 0);
+  }
+
   /* Starts the next match when there are enough waiting players and none is
      already running. No-op otherwise. */
   function checkAndFillActiveMatch(session) {
@@ -410,7 +422,7 @@
   return {
     teamLabel,
     ensureTeam, applyMatchResult, computeStandings,
-    pullRestedPlayers, pullRestedPlayersAvoiding, checkAndFillActiveMatch, recordMatchResult,
+    pullRestedPlayers, pullRestedPlayersAvoiding, checkAndFillActiveMatch, recordMatchResult, removeWaitingPlayer,
     normalizeName, nameSimilarity, getAllPlayerNamesInSession, findSimilarNames, promptNameConflict,
     computePlayerStats, computeTeamStats, computeHeadToHead,
   };

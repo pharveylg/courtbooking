@@ -8084,125 +8084,19 @@ function renderActiveQueueDashboard() {
   }
 }
 
-/* ---------- Fixed Pairs League: stats engine ---------- */
-function ensureTeam(session, id, names) {
-  if (!session.teams) session.teams = {};
-  if (!session.teams[id]) {
-    session.teams[id] = { id, names, gp: 0, w: 0, l: 0, pf: 0, pa: 0, h2h: {} };
-  }
-  return session.teams[id];
-}
-
-function applyMatchResult(session, aId, bId, scoreA, scoreB) {
-  const a = ensureTeam(session, aId, (session.activeMatch && session.activeMatch.teamA) || []);
-  const b = ensureTeam(session, bId, (session.activeMatch && session.activeMatch.teamB) || []);
-  a.gp++; b.gp++;
-  a.pf += scoreA; a.pa += scoreB;
-  b.pf += scoreB; b.pa += scoreA;
-  if (scoreA > scoreB) { a.w++; b.l++; } else { b.w++; a.l++; }
-  // head-to-head ledger
-  a.h2h[bId] = a.h2h[bId] || { w: 0, l: 0 };
-  b.h2h[aId] = b.h2h[aId] || { w: 0, l: 0 };
-  if (scoreA > scoreB) { a.h2h[bId].w++; b.h2h[aId].l++; }
-  else { b.h2h[aId].w++; a.h2h[bId].l++; }
-}
-
-function computeStandings(session) {
-  const teams = Object.values(session.teams || {});
-  const winPct = t => t.gp ? t.w / t.gp : 0;
-  const pd = t => t.pf - t.pa;
-  teams.sort((a, b) => {
-    const wa = winPct(a), wb = winPct(b);
-    if (wb !== wa) return wb - wa;                 // 1. winning percentage
-    const da = pd(a), db = pd(b);
-    if (db !== da) return db - da;                 // 2. point differential
-    const ab = a.h2h && a.h2h[b.id];
-    if (ab && ab.w !== ab.l) return ab.l - ab.w;   // 3. head-to-head
-    return b.pf - a.pf;                            // 4. total points scored
-  });
-  return teams;
-}
-
-function teamLabel(names) { return (names || []).join(' & '); }
-
-// Automatically pulls players from waiting list if current active match is empty
-/* Pull `count` players from the waiting line for every rotation rule,
-   preferring whoever has played the fewest games so far (RotationPick),
-   so rest time is shared evenly instead of being a strict first-in-line.
-   Returns the picked names in queue order, or null if not enough are waiting. */
-function pullRestedPlayers(session, count) {
-  const pick = RotationPick.pickPlayers(session.waiting, count, session.playCounts);
-  if (!pick) return null;
-  session.waiting = pick.waiting;
-  session.playCounts = RotationPick.countRotation(session.playCounts, pick.picked);
-  return pick.picked;
-}
-function checkAndFillActiveMatch(session) {
-  if (session.activeMatch) return; // already running
-
-  // FIXED PAIRS LEAGUE: teams are the rotation unit; partners never change
-  if (session.rule === 'fixed_pairs') {
-    if (session.waiting.length >= 2) {
-      const tA = session.waiting.shift();
-      const tB = session.waiting.shift();
-      ensureTeam(session, tA.id, tA.names);
-      ensureTeam(session, tB.id, tB.names);
-      session.activeMatch = {
-        id: 'match_' + Date.now(),
-        teamA: tA.names, teamB: tB.names,
-        teamAId: tA.id, teamBId: tB.id
-      };
-    }
-    return;
-  }
-
-  const isDoubles = session.mode === 'doubles';
-  const countNeeded = isDoubles ? 4 : 2;
-
-  // PARTNER ROTATION logic (Doubles only)
-  if (session.rule === 'partner_rotation' && isDoubles) {
-    // Pull 4 players. With an uneven queue, the players who have played the fewest rotations go first.
-    const players = pullRestedPlayers(session, 4);
-    if (players) {
-      session.partnerRotationState = {
-        players: players, // [P1, P2, P3, P4]
-        round: 1 // We have 3 rounds total
-      };
-
-      session.activeMatch = {
-        id: 'match_' + Date.now() + '_pr1',
-        teamA: [players[0], players[1]],
-        teamB: [players[2], players[3]]
-      };
-    }
-    return;
-  }
-
-  // FIXED ROTATION (breaks pairs to rotate everyone equally; rest priority decides who's next)
-  if (session.rule === 'fixed_rotation') {
-    const players = pullRestedPlayers(session, countNeeded);
-    if (players) {
-      const half = countNeeded / 2;
-      session.activeMatch = {
-        id: 'match_' + Date.now(),
-        teamA: players.slice(0, half),
-        teamB: players.slice(half)
-      };
-    }
-    return;
-  }
-
-  // DEFAULT (Winner Stays, Four Off, Timed Rotation): rest priority decides who's next
-  const players = pullRestedPlayers(session, countNeeded);
-  if (players) {
-    const teamSize = countNeeded / 2;
-    session.activeMatch = {
-      id: 'match_' + Date.now(),
-      teamA: players.slice(0, teamSize),
-      teamB: players.slice(teamSize)
-    };
-  }
-}
+/* ---------- Queue rotation engine (shared with the standalone queue tool) ----------
+   ensureTeam/applyMatchResult/computeStandings (Fixed Pairs League), teamLabel,
+   pullRestedPlayers/checkAndFillActiveMatch/recordMatchResult (every rotation
+   rule), name-matching and match stats all live in queue-engine.js, which has
+   no Firestore or DOM dependency of its own -- it just mutates the session
+   object it's given. See QUEUE_MODULE.md. */
+const {
+  teamLabel, ensureTeam, applyMatchResult, computeStandings,
+  pullRestedPlayers, checkAndFillActiveMatch, recordMatchResult,
+  normalizeName: _normalizeName, nameSimilarity: _nameSimilarity,
+  getAllPlayerNamesInSession, findSimilarNames, promptNameConflict,
+  computePlayerStats, computeTeamStats,
+} = QueueEngine;
 
 // CREATE QUEUE — adapt form hints when Fixed Pairs League is chosen
 document.getElementById('qRule')?.addEventListener('change', () => {
@@ -8296,78 +8190,6 @@ document.getElementById('createQueueForm')?.addEventListener('submit', (e) => {
    name in the session (from matches history + waiting list). Uses a
    simple normalized comparison + Levenshtein-based similarity threshold
    to catch typos and near-duplicates without being overly aggressive. */
-function _normalizeName(name) {
-  return name.toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim();
-}
-function _levenshtein(a, b) {
-  const m = a.length, n = b.length;
-  if (m === 0) return n;
-  if (n === 0) return m;
-  const dp = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
-  for (let i = 0; i <= m; i++) dp[i][0] = i;
-  for (let j = 0; j <= n; j++) dp[0][j] = j;
-  for (let i = 1; i <= m; i++) {
-    for (let j = 1; j <= n; j++) {
-      dp[i][j] = a[i-1] === b[j-1]
-        ? dp[i-1][j-1]
-        : 1 + Math.min(dp[i-1][j], dp[i][j-1], dp[i-1][j-1]);
-    }
-  }
-  return dp[m][n];
-}
-function _nameSimilarity(a, b) {
-  const na = _normalizeName(a), nb = _normalizeName(b);
-  if (na === nb) return 1.0;
-  if (na.includes(nb) || nb.includes(na)) return 0.85;
-  const dist = _levenshtein(na, nb);
-  const maxLen = Math.max(na.length, nb.length);
-  return maxLen === 0 ? 0 : 1 - (dist / maxLen);
-}
-function getAllPlayerNamesInSession(session) {
-  const names = new Set();
-  // From waiting list
-  (session.waiting || []).forEach(w => w.names.forEach(n => names.add(n)));
-  // From active match
-  if (session.activeMatch) {
-    (session.activeMatch.teamA || []).forEach(n => names.add(n));
-    (session.activeMatch.teamB || []).forEach(n => names.add(n));
-  }
-  // From match history
-  (session.matches || []).forEach(m => {
-    (m.teamA || []).forEach(n => names.add(n));
-    (m.teamB || []).forEach(n => names.add(n));
-  });
-  return [...names];
-}
-function findSimilarNames(existingNames, newName, threshold = 0.7) {
-  const matches = [];
-  existingNames.forEach(existing => {
-    const sim = _nameSimilarity(existing, newName);
-    if (sim >= threshold && _normalizeName(existing) !== _normalizeName(newName)) {
-      matches.push({ name: existing, similarity: sim });
-    }
-  });
-  return matches.sort((a, b) => b.similarity - a.similarity);
-}
-/**
- * Prompts the user if a similar name is found. Returns the (possibly updated) name,
- * or null if the user cancelled.
- */
-function promptNameConflict(session, newName) {
-  const existing = getAllPlayerNamesInSession(session);
-  const exactMatch = existing.find(n => _normalizeName(n) === _normalizeName(newName));
-  if (exactMatch) {
-    const useExisting = confirm(`"${newName}" looks like it matches existing player "${exactMatch}".\n\nClick OK to use the existing name "${exactMatch}", or Cancel to keep "${newName}" as a separate player.`);
-    return useExisting ? exactMatch : newName;
-  }
-  const similar = findSimilarNames(existing, newName);
-  if (similar.length > 0) {
-    const top = similar[0];
-    const useExisting = confirm(`"${newName}" is similar to existing player "${top.name}".\n\nIs this the same person?\n\nClick OK to use "${top.name}", or Cancel to add "${newName}" as a new player.`);
-    return useExisting ? top.name : newName;
-  }
-  return newName;
-}
 
 // JOIN QUEUE waiting room
 document.getElementById('joinQueueForm')?.addEventListener('submit', (e) => {
@@ -8485,145 +8307,21 @@ document.getElementById('submitScoreBtn')?.addEventListener('click', () => {
   const session = sessions.find(s => s.id === selectedQueueSessionId);
   if (!session || !session.activeMatch) return;
 
-  const scoreAVal = document.getElementById('scoreA').value;
-  const scoreBVal = document.getElementById('scoreB').value;
-
-  if (scoreAVal === '' || scoreBVal === '') {
-    alert('Please enter final scores for both teams.');
-    return;
-  }
-
-  const scoreA = parseInt(scoreAVal, 10);
-  const scoreB = parseInt(scoreBVal, 10);
-
-  if (isNaN(scoreA) || isNaN(scoreB) || scoreA < 0 || scoreB < 0) {
-    alert('Please enter valid numeric scores.');
-    return;
-  }
-
-  if (scoreA === scoreB) {
-    alert('Pickleball matches cannot end in a draw. Please specify a winner.');
-    return;
-  }
-
-  const match = session.activeMatch;
-  const winner = scoreA > scoreB ? 'teamA' : 'teamB';
-  const winnerNames = winner === 'teamA' ? match.teamA : match.teamB;
-  const loserNames = winner === 'teamA' ? match.teamB : match.teamA;
-
-  // Add to completed match history
-  session.matches.push({
-    id: 'm_' + Date.now(),
-    teamA: match.teamA,
-    teamB: match.teamB,
-    scoreA,
-    scoreB,
-    winner,
-    timestamp: Date.now()
-  });
   // B6: per-match participation event (analytics) -- how many players a
   // rotation actually put on court, across the session's lifetime.
+  const matchPlayerCount = (session.activeMatch.teamA || []).length + (session.activeMatch.teamB || []).length;
+
+  const scoreAVal = document.getElementById('scoreA').value;
+  const scoreBVal = document.getElementById('scoreB').value;
+  const result = recordMatchResult(session, scoreAVal, scoreBVal);
+  if (result.error) { alert(result.error); return; }
+
+  if (result.timerReset) stopActiveTimer();
   logUsageEvent('queue_match_completed', {
     court: session.court || null,
     sessionId: session.id || null,
-    playerCount: (match.teamA || []).length + (match.teamB || []).length
+    playerCount: matchPlayerCount
   });
-
-  // Rotate based on rules
-  if (session.rule === 'winner_stays') {
-    // Winner stays as Team A. Loser joins the end of waiting list
-    session.waiting.push({ id: 'w_ws_lose_' + Date.now(), names: loserNames });
-
-    // Pull next challenger to play B. Rest priority decides who's next.
-    const teamSize = session.mode === 'doubles' ? 2 : 1;
-    const nextChallengers = pullRestedPlayers(session, teamSize);
-
-    if (nextChallengers) {
-      session.activeMatch = {
-        id: 'match_' + Date.now(),
-        teamA: winnerNames,
-        teamB: nextChallengers
-      };
-    } else {
-      session.waiting.unshift({ id: 'w_win_' + Date.now(), names: winnerNames });
-      session.activeMatch = null;
-    }
-
-  } else if (session.rule === 'partner_rotation' && session.mode === 'doubles' && session.partnerRotationState) {
-    const prState = session.partnerRotationState;
-    const p = prState.players; // [P1, P2, P3, P4]
-    
-    if (prState.round === 1) {
-      // Advance to round 2: P1 & P3 vs P2 & P4
-      prState.round = 2;
-      session.activeMatch = {
-        id: 'match_' + Date.now() + '_pr2',
-        teamA: [p[0], p[2]],
-        teamB: [p[1], p[3]]
-      };
-      toast('Round 1 finished! Setting up Round 2 partners.');
-    } else if (prState.round === 2) {
-      // Advance to round 3: P1 & P4 vs P2 & P3
-      prState.round = 3;
-      session.activeMatch = {
-        id: 'match_' + Date.now() + '_pr3',
-        teamA: [p[0], p[3]],
-        teamB: [p[1], p[2]]
-      };
-      toast('Round 2 finished! Setting up Round 3 partners.');
-    } else {
-      // Round 3 finished. Both rotate off and join queue.
-      // Re-queue all 4 players as individual entries so they mix with the rest
-      p.forEach(name => {
-        session.waiting.push({ id: 'w_pr_end_' + Math.random().toString(36).slice(2,6), names: [name] });
-      });
-      delete session.partnerRotationState;
-      session.activeMatch = null;
-      toast('Partner rotation complete! Next 4 players stepping up.');
-    }
-
-  } else if (session.rule === 'fixed_rotation') {
-    // Fixed Rotation: Rotate everyone off to the back of waiting list as individual players
-    const allOnCourt = [...match.teamA, ...match.teamB];
-    allOnCourt.forEach(name => {
-      session.waiting.push({ id: 'w_fr_end_' + Math.random().toString(36).slice(2,6), names: [name] });
-    });
-    session.activeMatch = null;
-
-  } else if (session.rule === 'fixed_pairs') {
-    // Record league stats, then both teams rotate to the back of the queue
-    if (match.teamAId && match.teamBId) {
-      applyMatchResult(session, match.teamAId, match.teamBId, scoreA, scoreB);
-    }
-    const tA = { id: match.teamAId || ('T' + Date.now().toString(36)), names: match.teamA };
-    const tB = { id: match.teamBId || ('T' + (Date.now() + 1).toString(36)), names: match.teamB };
-    ensureTeam(session, tA.id, tA.names);
-    ensureTeam(session, tB.id, tB.names);
-    session.waiting.push(tA);
-    session.waiting.push(tB);
-    session.activeMatch = null;
-
-  } else if (session.rule === 'timed_rotation') {
-    // Timed Rotation: Reset timer back to the limit upon scoring
-    session.timerSecondsLeft = session.timerLimit * 60;
-    session.timerRunning = false;
-    stopActiveTimer();
-    
-    // Rotate both teams off as pairs
-    session.waiting.push({ id: 'w_rot_A_' + Date.now(), names: match.teamA });
-    session.waiting.push({ id: 'w_rot_B_' + Date.now(), names: match.teamB });
-    session.activeMatch = null;
-    toast('Timer reset for the next match!');
-
-  } else {
-    // Four Off, Four On (Default/FIFO): Both teams rotate out as pairs
-    session.waiting.push({ id: 'w_rot_A_' + Date.now(), names: match.teamA });
-    session.waiting.push({ id: 'w_rot_B_' + Date.now(), names: match.teamB });
-    session.activeMatch = null;
-  }
-
-  // Try to fill match with next set of players
-  checkAndFillActiveMatch(session);
 
   saveQueues(sessions);
   renderActiveQueueDashboard();
@@ -8631,7 +8329,7 @@ document.getElementById('submitScoreBtn')?.addEventListener('click', () => {
   // Reset inputs
   document.getElementById('scoreA').value = '';
   document.getElementById('scoreB').value = '';
-  toast(`Match completed! Winners: ${winnerNames.join(' & ')}`);
+  result.notices.forEach(msg => toast(msg));
 });
 
 // Reset Session -- PIN already verified when this queue's manage view was opened
@@ -8667,117 +8365,10 @@ document.getElementById('qDeleteSessionBtn')?.addEventListener('click', () => {
   }
 });
 
-/* ---------- Match Stats Engine & Rendering ---------- */
+/* ---------- Match Stats Rendering ----------
+   computePlayerStats / computeTeamStats are destructured from QueueEngine above. */
 let statsCurrentMode = 'all'; // 'all', 'singles', 'doubles'
 let statsCurrentView = 'players'; // 'players', 'teams', 'matches'
-
-/**
- * Compute individual player statistics from session matches.
- * Stats are computed on-the-fly from session.matches[] array.
- * Returns an object keyed by player name with stats.
- */
-function computePlayerStats(session) {
-  const stats = {};
-  
-  if (!session || !session.matches || session.matches.length === 0) {
-    return stats;
-  }
-  
-  session.matches.forEach(match => {
-    const { teamA, teamB, scoreA, scoreB, winner } = match;
-    const winnerTeam = winner === 'teamA' ? teamA : teamB;
-    
-    // Process all players in this match
-    [...teamA, ...teamB].forEach(player => {
-      if (!stats[player]) {
-        stats[player] = {
-          matches: 0,
-          wins: 0,
-          losses: 0,
-          pointsFor: 0,
-          pointsAgainst: 0
-        };
-      }
-      
-      stats[player].matches++;
-      
-      // Check if player was on winning team
-      if (winnerTeam.includes(player)) {
-        stats[player].wins++;
-      } else {
-        stats[player].losses++;
-      }
-      
-      // Add points scored and against
-      const playerScore = teamA.includes(player) ? scoreA : scoreB;
-      const opponentScore = teamA.includes(player) ? scoreB : scoreA;
-      stats[player].pointsFor += playerScore;
-      stats[player].pointsAgainst += opponentScore;
-    });
-  });
-  
-  return stats;
-}
-
-/**
- * Compute team statistics from session matches.
- * Returns an array of team objects with stats.
- */
-function computeTeamStats(session) {
-  const teams = {};
-  
-  if (!session || !session.matches || session.matches.length === 0) {
-    return [];
-  }
-  
-  session.matches.forEach(match => {
-    const { teamA, teamB, scoreA, scoreB, winner } = match;
-    
-    // Create canonical team key (sorted player names)
-    const teamAKey = [...teamA].sort().join(' & ');
-    const teamBKey = [...teamB].sort().join(' & ');
-    
-    // Initialize team stats if needed
-    if (!teams[teamAKey]) {
-      teams[teamAKey] = {
-        names: teamA,
-        matches: 0,
-        wins: 0,
-        losses: 0,
-        pointsFor: 0,
-        pointsAgainst: 0
-      };
-    }
-    if (!teams[teamBKey]) {
-      teams[teamBKey] = {
-        names: teamB,
-        matches: 0,
-        wins: 0,
-        losses: 0,
-        pointsFor: 0,
-        pointsAgainst: 0
-      };
-    }
-    
-    // Update stats
-    teams[teamAKey].matches++;
-    teams[teamBKey].matches++;
-    teams[teamAKey].pointsFor += scoreA;
-    teams[teamAKey].pointsAgainst += scoreB;
-    teams[teamBKey].pointsFor += scoreB;
-    teams[teamBKey].pointsAgainst += scoreA;
-    
-    if (winner === 'teamA') {
-      teams[teamAKey].wins++;
-      teams[teamBKey].losses++;
-    } else {
-      teams[teamBKey].wins++;
-      teams[teamAKey].losses++;
-    }
-  });
-  
-  return Object.values(teams);
-}
 
 /**
  * Render the Match Stats view.
@@ -9260,6 +8851,7 @@ document.getElementById('modalGoUpload')?.addEventListener('click', () => {
 });
 </script>
 <script src="rotation-pick.js"></script>
+<script src="queue-engine.js"></script>
 <script src="pickleball-scoring.js"></script>
 <script src="court-scoreboard.js"></script>
 <script src="motion.js"></script>

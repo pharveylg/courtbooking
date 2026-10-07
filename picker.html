@@ -310,6 +310,22 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
     <input type="text" id="searchInput" class="search-input" placeholder="Search facilities" aria-label="Search facilities" autocomplete="off"/>
   </div>
 
+  <!-- Walk-in Queue: standalone, no facility/sign-in, not saved -- always visible, independent of facility load state -->
+  <section id="walkinQueueSection" class="rise" style="animation-delay:.14s">
+    <div class="label mono">Quick tools</div>
+    <a class="mymatches-card" href="/queue.html" id="walkinQueueCard">
+      <span class="mymatches-left">
+        <span class="mymatches-icon" aria-hidden="true">🏓</span>
+        <span>
+          <span class="mymatches-title">Walk-in Queue</span>
+          <span class="mymatches-status mono">Run a court rotation right now</span>
+        </span>
+      </span>
+      <span class="mymatches-arrow" aria-hidden="true">→</span>
+    </a>
+    <div class="mymatches-note mono">No sign-in, no facility — not saved, clears when you close the tab.</div>
+  </section>
+
   <!-- Loading -->
   <div id="stateLoading" class="state visible">
     <div class="spinner"></div>

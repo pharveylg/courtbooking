@@ -354,16 +354,17 @@ td{padding:7px 6px;border-bottom:1px solid var(--sand)}
     if (winner) showWinner(winner);
   });
 
-  /* Declares the overall winner using every stat the session collected:
-     win%, point differential, points scored, and (as a tiebreak beyond the
-     Players leaderboard) head-to-head between whoever's tied. Fixed Pairs
-     declares the top team instead of a player. */
+  /* Declares the overall winner, ranked by qualifying games played
+     (QueueEngine.MIN_GAMES_SHARE of the leader's count -- a late joiner can't
+     win on a thin sample) -> win% -> head-to-head -> point differential ->
+     total wins -> games played -> name. Fixed Pairs declares the top team
+     instead of a player. */
   function showWinner(w){
     document.getElementById('winnerLabel').textContent = w.type === 'team' ? 'Winning team' : 'Winner';
     document.getElementById('winnerName').textContent = w.name;
     const diffStr = w.pointDiff > 0 ? `+${w.pointDiff}` : `${w.pointDiff}`;
     document.getElementById('winnerStats').textContent = `${w.wins}-${w.losses} record • ${diffStr} point diff • ${w.winPct}% win rate`;
-    const tiebreakNote = { 'point differential': 'Decided by point differential.', 'points scored': 'Decided by points scored.', 'head-to-head': 'Decided by head-to-head.', 'games played': 'Decided by games played.', name: 'Decided by a coin-flip tiebreak (name order) -- everything else was tied.' }[w.decidedBy] || '';
+    const tiebreakNote = { 'qualifying games played': 'Decided by games played -- the runner-up hadn’t played enough games yet to qualify.', 'head-to-head': 'Decided by head-to-head.', 'point differential': 'Decided by point differential.', 'total wins': 'Decided by total wins.', 'games played': 'Decided by games played.', name: 'Decided by a coin-flip tiebreak (name order) -- everything else was tied.' }[w.decidedBy] || '';
     document.getElementById('winnerNote').textContent = tiebreakNote;
     document.getElementById('winnerOverlay').classList.remove('hidden');
   }

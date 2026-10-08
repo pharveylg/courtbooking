@@ -238,13 +238,46 @@ check('recordMatchResult fills the next match automatically when enough are wait
 })());
 
 section('fixed pairs standings');
-check('computeStandings ranks by win%, then point diff, then head-to-head, then points scored', (() => {
+check('computeStandings ranks by win%, then head-to-head, then point diff, then total wins', (() => {
   const s = base('fixed_pairs', 'doubles');
   Q.ensureTeam(s, 'T1', ['a', 'b']);
   Q.ensureTeam(s, 'T2', ['c', 'd']);
   Q.applyMatchResult(s, 'T1', 'T2', 11, 4);
   const standings = Q.computeStandings(s);
   return standings[0].id === 'T1' && standings[0].w === 1 && standings[1].l === 1;
+})());
+check('a win% tie is broken by head-to-head BEFORE point differential -- a team that beat its rival directly outranks one with a far better point diff elsewhere', (() => {
+  const s = base('fixed_pairs', 'doubles');
+  Q.ensureTeam(s, 'T1', ['a', 'b']);
+  Q.ensureTeam(s, 'T2', ['c', 'd']);
+  Q.ensureTeam(s, 'T3', ['e', 'f']);
+  Q.ensureTeam(s, 'T4', ['g', 'h']);
+  Q.applyMatchResult(s, 'T1', 'T2', 11, 9);  // T1 beats T2 head-to-head, +2/-2
+  Q.applyMatchResult(s, 'T3', 'T1', 11, 2);  // T1 also loses big to T3, -9 net
+  Q.applyMatchResult(s, 'T2', 'T4', 11, 1);  // T2's one other result is a blowout win, +10 net
+  const standings = Q.computeStandings(s);
+  const t1 = standings.findIndex(t => t.id === 'T1'), t2 = standings.findIndex(t => t.id === 'T2');
+  // T1 and T2 both sit at 50% win rate; T2's point diff (+8) beats T1's (-7) by a wide
+  // margin, but T1 beat T2 directly, so T1 must still rank above T2.
+  return t1 >= 0 && t2 >= 0 && t1 < t2;
+})());
+check('with no head-to-head meeting and a tied point diff, the final criterion is total wins, not total points scored', (() => {
+  const s = base('fixed_pairs', 'doubles');
+  Q.ensureTeam(s, 'T1', ['a', 'b']);
+  Q.ensureTeam(s, 'T2', ['c', 'd']);
+  Q.ensureTeam(s, 'P1', ['e', 'f']);
+  Q.ensureTeam(s, 'P2', ['g', 'h']);
+  // T1: 4 low-scoring games, 2W2L, point diff 0 -- more wins, far fewer points scored (4).
+  Q.applyMatchResult(s, 'T1', 'P1', 2, 0);
+  Q.applyMatchResult(s, 'T1', 'P1', 0, 2);
+  Q.applyMatchResult(s, 'T1', 'P2', 2, 0);
+  Q.applyMatchResult(s, 'T1', 'P2', 0, 2);
+  // T2: 2 high-scoring games, 1W1L, point diff 0 -- fewer wins, far more points scored (20).
+  Q.applyMatchResult(s, 'T2', 'P1', 11, 9);
+  Q.applyMatchResult(s, 'T2', 'P1', 9, 11);
+  const standings = Q.computeStandings(s);
+  const t1 = standings.findIndex(t => t.id === 'T1'), t2 = standings.findIndex(t => t.id === 'T2');
+  return t1 >= 0 && t2 >= 0 && t1 < t2; // T1 (2 wins) outranks T2 (1 win) despite scoring a quarter of T2's points
 })());
 
 section('name matching');
@@ -461,7 +494,7 @@ check('a clear leader by win% is declared winner, with full stats attached', (()
   const w = Q.computeOverallWinner(s);
   return w.type === 'player' && w.name === 'a' && w.wins === 2 && w.losses === 0 && w.winPct === 100 && w.pointsFor === 22 && w.pointsAgainst === 13 && w.pointDiff === 9 && w.decidedBy === 'win%';
 })());
-check('a tie on win% is broken by point differential', (() => {
+check('a tie on win% is broken by point differential when the tied players never met (no head-to-head to apply)', (() => {
   const s = base('winner_stays', 'singles');
   s.matches = [
     { teamA: ['a'], teamB: ['x'], scoreA: 11, scoreB: 2, winner: 'teamA' }, // a: +9
@@ -470,7 +503,102 @@ check('a tie on win% is broken by point differential', (() => {
   const w = Q.computeOverallWinner(s);
   return w.name === 'a' && w.decidedBy === 'point differential';
 })());
-check('a tie on win%, point diff, and points scored is broken by head-to-head between the tied players', (() => {
+check('head-to-head is checked BEFORE point differential -- a player who beat their tied rival directly outranks them even with a much worse overall point diff', (() => {
+  // a and b are both 2-1 (66.7%). a beat b directly in their one meeting. b's
+  // other two results are blowouts (point diff +18); a's are modest (+3).
+  // Old ranking (point diff before head-to-head) would have picked b; the
+  // fix must pick a.
+  const s = base('winner_stays', 'singles');
+  s.matches = [
+    { teamA: ['a'], teamB: ['b'], scoreA: 11, scoreB: 9, winner: 'teamA' },
+    { teamA: ['a'], teamB: ['p1'], scoreA: 2, scoreB: 11, winner: 'teamB' },
+    { teamA: ['a'], teamB: ['p1'], scoreA: 11, scoreB: 1, winner: 'teamA' },
+    { teamA: ['b'], teamB: ['p2'], scoreA: 11, scoreB: 1, winner: 'teamA' },
+    { teamA: ['b'], teamB: ['p3'], scoreA: 11, scoreB: 1, winner: 'teamA' },
+  ];
+  const w = Q.computeOverallWinner(s);
+  return w.name === 'a' && w.decidedBy === 'head-to-head' && w.pointDiff === 3;
+})());
+check('with no head-to-head meeting and a tied point diff, the next criterion is total wins, not total points scored', (() => {
+  // a: 4 low-scoring games, 2-2 (50%), point diff 0, only 4 points scored total.
+  // b: 2 high-scoring games, 1-1 (50%), point diff 0, 20 points scored total.
+  // Old ranking (points scored before head-to-head/wins) would have picked b
+  // for scoring more; the fix must pick a for having won more.
+  const s = base('winner_stays', 'singles');
+  s.matches = [
+    { teamA: ['a'], teamB: ['p1'], scoreA: 2, scoreB: 0, winner: 'teamA' },
+    { teamA: ['a'], teamB: ['p1'], scoreA: 0, scoreB: 2, winner: 'teamB' },
+    { teamA: ['a'], teamB: ['p2'], scoreA: 2, scoreB: 0, winner: 'teamA' },
+    { teamA: ['a'], teamB: ['p2'], scoreA: 0, scoreB: 2, winner: 'teamB' },
+    { teamA: ['b'], teamB: ['p3'], scoreA: 11, scoreB: 9, winner: 'teamA' },
+    { teamA: ['b'], teamB: ['p3'], scoreA: 9, scoreB: 11, winner: 'teamB' },
+  ];
+  const w = Q.computeOverallWinner(s);
+  return w.name === 'a' && w.decidedBy === 'total wins' && w.wins === 2 && w.pointsFor === 4;
+})());
+check('an undefeated player outranks one with more total wins but a lower win rate -- as long as both cleared the qualifying bar', (() => {
+  const s = base('winner_stays', 'singles');
+  s.matches = [
+    { teamA: ['a'], teamB: ['x'], scoreA: 11, scoreB: 9, winner: 'teamA' },
+    { teamA: ['a'], teamB: ['y'], scoreA: 11, scoreB: 9, winner: 'teamA' },   // a: 2-0 (100%), 2 games
+    { teamA: ['b'], teamB: ['x'], scoreA: 11, scoreB: 9, winner: 'teamA' },
+    { teamA: ['b'], teamB: ['y'], scoreA: 11, scoreB: 9, winner: 'teamA' },
+    { teamA: ['b'], teamB: ['z'], scoreA: 11, scoreB: 9, winner: 'teamA' },
+    { teamA: ['b'], teamB: ['x'], scoreA: 9, scoreB: 11, winner: 'teamB' },
+    { teamA: ['b'], teamB: ['y'], scoreA: 9, scoreB: 11, winner: 'teamB' },   // b: 3-2 (60%), 5 games -- more wins, lower rate
+  ];
+  const w = Q.computeOverallWinner(s);
+  // a's 2 games clear the bar (5 games max in the session -> needs ceil(0.4*5)=2), so this
+  // is still a fair comparison between two well-sampled records, not a thin-sample fluke.
+  return w.name === 'a' && w.wins === 2 && w.winPct === 100 && w.decidedBy === 'win%';
+})());
+section('overall winner -- qualifying games played (a late joiner with too thin a sample cannot win on win% alone)');
+check('a player who has played under 40% of the session leader\'s games is disqualified from the top spot, even undefeated', (() => {
+  const s = base('winner_stays', 'singles');
+  s.matches = [
+    { teamA: ['a'], teamB: ['x'], scoreA: 11, scoreB: 1, winner: 'teamA' },   // a: 1-0 (100%), only 1 game -- just joined
+    { teamA: ['b'], teamB: ['y'], scoreA: 11, scoreB: 1, winner: 'teamA' },
+    { teamA: ['b'], teamB: ['y'], scoreA: 11, scoreB: 1, winner: 'teamA' },
+    { teamA: ['b'], teamB: ['x'], scoreA: 9, scoreB: 11, winner: 'teamB' },   // b: 2-1 (66.7%), 3 games all night
+  ];
+  const w = Q.computeOverallWinner(s);
+  return w.name === 'b'; // b wins despite the lower win% -- a's one lucky game never even enters the comparison
+})());
+check('decidedBy names the qualifying-games gate specifically when that\'s what separates 1st and 2nd place', (() => {
+  const s = base('winner_stays', 'singles');
+  s.matches = [
+    { teamA: ['a'], teamB: ['b'], scoreA: 11, scoreB: 9, winner: 'teamA' },  // a: 1-0 (100%), 1 game total
+    { teamA: ['b'], teamB: ['x'], scoreA: 11, scoreB: 1, winner: 'teamA' },
+    { teamA: ['b'], teamB: ['z'], scoreA: 11, scoreB: 1, winner: 'teamA' },  // b: 2-1 (66.7%), 3 games -- the session's most active
+  ];
+  const w = Q.computeOverallWinner(s);
+  return w.name === 'b' && w.decidedBy === 'qualifying games played';
+})());
+check('with everyone at roughly the same game count, the bar never kicks in -- the normal chain still governs', (() => {
+  const s = base('winner_stays', 'singles');
+  s.matches = [
+    { teamA: ['a'], teamB: ['b'], scoreA: 11, scoreB: 4, winner: 'teamA' },
+    { teamA: ['a'], teamB: ['c'], scoreA: 11, scoreB: 9, winner: 'teamA' },
+    { teamA: ['b'], teamB: ['c'], scoreA: 11, scoreB: 6, winner: 'teamA' },
+  ];
+  const w = Q.computeOverallWinner(s);
+  return w.name === 'a' && w.decidedBy === 'win%'; // same scenario as the very first test in this section, unaffected by the new gate
+})());
+check('fixed pairs: a team with far fewer games than the leader is disqualified from the top spot too, via computeStandings', (() => {
+  const s = base('fixed_pairs', 'doubles');
+  s.matches = [{ teamA: ['a', 'b'], teamB: ['e', 'f'], scoreA: 11, scoreB: 1, winner: 'teamA', teamAId: 'T1', teamBId: 'T3' }]; // non-empty, computeOverallWinner's only direct read of it
+  Q.ensureTeam(s, 'T1', ['a', 'b']);
+  Q.ensureTeam(s, 'T2', ['c', 'd']);
+  Q.ensureTeam(s, 'T3', ['e', 'f']);
+  Q.ensureTeam(s, 'T4', ['g', 'h']);
+  Q.applyMatchResult(s, 'T1', 'T3', 11, 1);  // T1: 1-0 (100%), only 1 game -- just joined
+  Q.applyMatchResult(s, 'T2', 'T4', 11, 1);
+  Q.applyMatchResult(s, 'T2', 'T4', 11, 1);
+  Q.applyMatchResult(s, 'T2', 'T4', 9, 11);  // T2: 2-1 (66.7%), 3 games all night
+  const w = Q.computeOverallWinner(s);
+  return w.type === 'team' && w.name === 'c & d'; // T2, not the undefeated-but-barely-played T1
+})());
+check('a tie on win% (with point diff and points scored also tied) is resolved by head-to-head, now checked right after win%', (() => {
   // A 4-player round robin where a and b finish perfectly tied (2-1, +4, 29 points)
   // but a beat b directly in their one meeting.
   const s = base('winner_stays', 'singles');

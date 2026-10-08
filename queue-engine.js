@@ -32,6 +32,16 @@
      round stands alone instead: see checkAndFillActiveMatch and recordMatchResult. */
   const PARTNER_ROTATION_HOLD_LIMIT = 8;
 
+  /* Overall-winner qualifying bar (computeStandings, computeOverallWinner): a
+     player/team must have played at least this share of the session's most
+     active player/team's game count to be eligible at all -- regardless of
+     how good their record looks. Without it, someone who joined late and
+     played one lucky game at 100% would outrank a player who's gone 8-2 all
+     night. Below the bar, they still get ranked (by the same criteria,
+     amongst themselves) so the result is always decided; they just can't
+     outrank anyone who cleared it. */
+  const MIN_GAMES_SHARE = 0.4;
+
   /* ---------- Fixed Pairs League: team-level standings ---------- */
   function ensureTeam(session, id, names) {
     if (!session.teams) session.teams = {};
@@ -56,14 +66,25 @@
     const teams = Object.values(session.teams || {});
     const winPct = (t) => (t.gp ? t.w / t.gp : 0);
     const pd = (t) => t.pf - t.pa;
+    // Qualifying threshold (see MIN_GAMES_SHARE): a team that has played far
+    // fewer games than the session's most active team can't win on a thin
+    // sample, no matter how good their record looks -- they rank behind
+    // every qualifying team regardless of win%, before any other criterion.
+    const maxGp = teams.reduce((m, t) => Math.max(m, t.gp), 0);
+    const minQualifyingGp = Math.ceil(maxGp * MIN_GAMES_SHARE);
+    const qualifies = (t) => t.gp >= minQualifyingGp;
     teams.sort((a, b) => {
+      const qa = qualifies(a), qb = qualifies(b);
+      if (qa !== qb) return qa ? -1 : 1;                // 0. enough games played to qualify
       const wa = winPct(a), wb = winPct(b);
-      if (wb !== wa) return wb - wa;                 // 1. winning percentage
-      const da = pd(a), db = pd(b);
-      if (db !== da) return db - da;                 // 2. point differential
+      if (wb !== wa) return wb - wa;                  // 1. winning percentage
       const ab = a.h2h && a.h2h[b.id];
-      if (ab && ab.w !== ab.l) return ab.l - ab.w;    // 3. head-to-head
-      return b.pf - a.pf;                             // 4. total points scored
+      if (ab && ab.w !== ab.l) return ab.l - ab.w;     // 2. head-to-head
+      const da = pd(a), db = pd(b);
+      if (db !== da) return db - da;                  // 3. point differential
+      if (b.w !== a.w) return b.w - a.w;               // 4. total wins
+      if (b.gp !== a.gp) return b.gp - a.gp;           // 5. games played
+      return teamLabel(a.names).localeCompare(teamLabel(b.names)); // 6. name, deterministic
     });
     return teams;
   }
@@ -420,17 +441,28 @@
   }
 
   /* The overall winner of a session, for declaring one when the session ends.
-     Fixed Pairs: the top team from computeStandings (win% -> point diff ->
-     head-to-head -> points scored -- that ranking already exists for the
-     league table). Every other rule: the top player by the same Player
-     Leaderboard ranking (win% -> point diff -> points scored), with
-     head-to-head added as a further tiebreak using computeHeadToHead -- the
-     leaderboard alone doesn't use it, but there's no reason not to when
-     declaring a single winner. Still tied after that: most games played,
-     then name, so the result is always decided. Returns null if no matches
-     have been played yet. `decidedBy` names whichever criterion separated
-     the winner from the runner-up, for a transparent "won on countback"
-     message. */
+     Ranking priority, both for Fixed Pairs (the top team from
+     computeStandings) and every other rule (the top player, using
+     computeHeadToHead for the head-to-head step):
+       0. qualifying games played -- MIN_GAMES_SHARE of the session's most
+          active player/team; someone who joined late and played barely any
+          games can't win on a thin, possibly lucky sample, no matter how
+          good it looks. This is checked BEFORE win% -- it's a gate, not a
+          tiebreak. Below the bar, a player still gets ranked (by the same
+          criteria, among the other players below it), so the result is
+          always decided; they just can't outrank anyone who cleared it.
+       1. win percentage
+       2. head-to-head result (between the two players/teams being compared)
+       3. point differential
+       4. total wins
+       5. games played
+       6. name -- always deterministic, so the result is never unresolved
+     An undefeated player (or team) therefore always outranks one with more
+     total wins but a lower win rate, and a player who has the other tied
+     player's number head-to-head outranks them even if the other has the
+     better point differential. Returns null if no matches have been played
+     yet. `decidedBy` names whichever criterion separated the winner from the
+     runner-up, for a transparent "won on countback" message. */
   function computeOverallWinner(session) {
     if (!session || !session.matches || session.matches.length === 0) return null;
 
@@ -458,16 +490,25 @@
       return { name, matches: s.matches, wins: s.wins, losses: s.losses, pointsFor: s.pointsFor, pointsAgainst: s.pointsAgainst, pointDiff: s.pointsFor - s.pointsAgainst, winPct: s.matches ? (s.wins / s.matches) * 100 : 0 };
     });
 
+    // Qualifying threshold -- see MIN_GAMES_SHARE. A late joiner who's only
+    // played a couple of games can't win on win% alone; they rank behind
+    // every player who cleared the bar, before win% is even compared.
+    const maxMatches = rows.reduce((m, r) => Math.max(m, r.matches), 0);
+    const minQualifyingMatches = Math.ceil(maxMatches * MIN_GAMES_SHARE);
+    const qualifies = (r) => r.matches >= minQualifyingMatches;
+
     const compare = (a, b) => {
+      const qa = qualifies(a), qb = qualifies(b);
+      if (qa !== qb) return { cmp: qa ? -1 : 1, by: 'qualifying games played' };
       if (b.winPct !== a.winPct) return { cmp: b.winPct - a.winPct, by: 'win%' };
-      if (b.pointDiff !== a.pointDiff) return { cmp: b.pointDiff - a.pointDiff, by: 'point differential' };
-      if (b.pointsFor !== a.pointsFor) return { cmp: b.pointsFor - a.pointsFor, by: 'points scored' };
       const rec = recordBetween(a.name, b.name);
       if (rec) {
         const aWins = rec.a === a.name ? rec.aWins : rec.bWins;
         const bWins = rec.a === a.name ? rec.bWins : rec.aWins;
         if (aWins !== bWins) return { cmp: bWins - aWins, by: 'head-to-head' };
       }
+      if (b.pointDiff !== a.pointDiff) return { cmp: b.pointDiff - a.pointDiff, by: 'point differential' };
+      if (b.wins !== a.wins) return { cmp: b.wins - a.wins, by: 'total wins' };
       if (b.matches !== a.matches) return { cmp: b.matches - a.matches, by: 'games played' };
       return { cmp: a.name.localeCompare(b.name), by: 'name' };
     };

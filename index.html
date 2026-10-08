@@ -8410,19 +8410,22 @@ document.getElementById('qDeleteSessionBtn')?.addEventListener('click', () => {
   }
 });
 
-/* Declares the overall winner of a queue session using every stat it collected --
-   win%, point differential, points scored, and head-to-head as a tiebreak -- when
-   the session is reset or deleted. Fixed Pairs declares the top team instead of a
-   player. Shared with the standalone queue tool via QueueEngine.computeOverallWinner. */
+/* Declares the overall winner of a queue session, ranked by qualifying games
+   played (QueueEngine.MIN_GAMES_SHARE of the leader's count -- a late joiner
+   can't win on a thin sample) -> win% -> head-to-head -> point differential ->
+   total wins -> games played -> name, when the session is reset or deleted.
+   Fixed Pairs declares the top team instead of a player. Shared with the
+   standalone queue tool via QueueEngine.computeOverallWinner. */
 function showQueueWinner(w) {
   document.getElementById('queueWinnerLabel').textContent = w.type === 'team' ? 'Winning team' : 'Winner';
   document.getElementById('queueWinnerName').textContent = w.name;
   const diffStr = w.pointDiff > 0 ? `+${w.pointDiff}` : `${w.pointDiff}`;
   document.getElementById('queueWinnerStats').textContent = `${w.wins}-${w.losses} record · ${diffStr} point diff · ${w.winPct}% win rate`;
   const tiebreakNote = {
-    'point differential': 'Decided by point differential.',
-    'points scored': 'Decided by points scored.',
+    'qualifying games played': 'Decided by games played -- the runner-up hadn’t played enough games yet to qualify.',
     'head-to-head': 'Decided by head-to-head.',
+    'point differential': 'Decided by point differential.',
+    'total wins': 'Decided by total wins.',
     'games played': 'Decided by games played.',
     name: 'Decided by a coin-flip tiebreak (name order) -- everything else was tied.',
   }[w.decidedBy] || '';

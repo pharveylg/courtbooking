@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<meta name="theme-color" content="#FFFBF5"/>
+<meta name="robots" content="noindex"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet"/>
+<title>Create your facility — Court Booking</title>
+<!--
+  FACILITY SELF-SERVICE ONBOARDING -- Phase A (build, not hooked up yet).
+  See FACILITY_ONBOARDING_PROPOSAL.md section 11 for the full design.
+  Not linked from picker.html or anywhere else; reachable only by this
+  direct URL until Phase B adds an entry point.
+
+  What this page covers, and what it deliberately does NOT rebuild:
+  - Step 1 (this page): sign in (MyAuth, same as account.html), name the
+    facility, pick a slug/color/PIN, call createFacility.
+  - Step 2 (this page): a readiness checklist computed from the SAME
+    open clients/{slug}/* documents index.html itself reads, with a
+    Publish button that calls publishFacility once the server agrees
+    it's ready.
+  - Everything in between -- courts, operating hours, pricing, payment
+    QR -- is NOT re-implemented here. Those screens already exist and
+    already work in the real Admin Console; this page links the owner
+    straight into it (tap "Staff" with the PIN set below) rather than
+    building a second, parallel copy of forms that already work.
+-->
+<style>
+:root{--cream:#FFFBF5;--ink:#201C19;--lime:#D6FF5F;--line:#EAE0D5;--sand:#F1E9DF;--amber:#FFF0D6;--amber-ink:#92400E;--green:#E8F5D8;--green-ink:#3F7019;--red:#FFE9E0;--red-ink:#8C2C10}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{font-family:"Bricolage Grotesque",system-ui,sans-serif;background:var(--cream);color:var(--ink);min-height:100vh;min-height:100dvh;display:flex;flex-direction:column;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+.mono{font-family:"JetBrains Mono",monospace}
+a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+
+.topbar{display:flex;align-items:center;gap:10px;padding:12px 20px;border-bottom:1px solid var(--line);background:var(--cream);position:sticky;top:0;z-index:20}
+.topbar-inner{display:flex;align-items:center;gap:10px;width:100%;max-width:560px;margin:0 auto}
+.mark{width:34px;height:34px;border-radius:50%;background:var(--ink);color:var(--lime);display:grid;place-items:center;font-weight:800;font-size:16px;flex-shrink:0}
+.brand-name{font-weight:800;font-size:15px;letter-spacing:-0.02em;line-height:1.1}
+.brand-sub{font-size:10px;letter-spacing:0.12em;text-transform:uppercase;opacity:0.5;margin-top:2px}
+
+.page{width:100%;max-width:560px;margin:0 auto;padding:22px 20px 48px;flex:1}
+.step-label{font-size:11px;letter-spacing:0.1em;text-transform:uppercase;opacity:0.5;margin-bottom:8px}
+.label{font-size:11px;letter-spacing:0.1em;text-transform:uppercase;opacity:0.55}
+h1{font-size:clamp(24px,6vw,30px);font-weight:800;letter-spacing:-0.03em;line-height:1.08;margin-bottom:6px}
+.lead{font-size:13px;opacity:0.65;margin-bottom:22px;line-height:1.5}
+
+.card{background:#fff;border:1px solid var(--line);border-radius:20px;padding:20px}
+.card + .card{margin-top:14px}
+
+form{display:flex;flex-direction:column;gap:12px}
+label{display:flex;flex-direction:column;gap:5px;font-size:11px;letter-spacing:.08em;text-transform:uppercase;opacity:.85;font-weight:700}
+input[type=text],input[type=email],input[type=password],input[type=number]{height:44px;border-radius:999px;border:1px solid var(--line);background:#fff;padding:0 16px;font-family:inherit;font-size:14px;text-transform:none;letter-spacing:0;outline:none;width:100%}
+input:focus{border-color:var(--ink)}
+input[type=color]{width:44px;height:44px;border-radius:50%;border:1px solid var(--line);padding:2px;cursor:pointer}
+.color-row{display:flex;align-items:center;gap:10px}
+.color-row input[type=text]{flex:1}
+.hint{font-size:11px;opacity:.55;margin-top:-2px}
+
+.btn-dark{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:46px;padding:0 20px;border-radius:999px;background:var(--ink);color:var(--cream);font-weight:800;font-size:13.5px;border:0;cursor:pointer;font-family:inherit;text-decoration:none}
+.btn-dark:disabled{opacity:.5;cursor:default}
+.btn-google{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:44px;padding:0 16px;border-radius:999px;background:#fff;border:1px solid var(--line);font-family:inherit;font-weight:700;font-size:13px;color:var(--ink);cursor:pointer;width:100%}
+.btn-google:hover{border-color:var(--ink)}
+.btn-link{background:none;border:0;padding:0;font-family:inherit;font-size:12px;text-decoration:underline;color:var(--ink);opacity:0.6;cursor:pointer}
+.btn-link:hover{opacity:1}
+.email-actions{display:flex;flex-wrap:wrap;align-items:center;gap:12px}
+.or-row{display:flex;align-items:center;gap:10px;margin:4px 0;font-size:11px;opacity:.45;text-transform:uppercase;letter-spacing:.08em}
+.or-row::before,.or-row::after{content:'';flex:1;height:1px;background:var(--line)}
+.msg{font-size:12px;min-height:14px}
+.msg.error{color:var(--red-ink)}
+.msg.ok{color:var(--green-ink)}
+.account-line{font-size:12px;opacity:.65;display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:18px}
+
+.checklist{list-style:none;display:flex;flex-direction:column;gap:10px}
+.checklist li{display:flex;align-items:flex-start;gap:10px;font-size:13.5px;line-height:1.4}
+.chk{width:20px;height:20px;border-radius:50%;flex-shrink:0;display:grid;place-items:center;font-size:11px;font-weight:800;margin-top:1px}
+.chk.done{background:var(--green);color:var(--green-ink)}
+.chk.pending{background:var(--sand);color:rgba(32,28,25,0.4)}
+.pin-box{background:var(--sand);border-radius:14px;padding:12px 16px;font-size:13px;margin-top:4px}
+.pin-box .mono{font-size:15px;font-weight:700;letter-spacing:.04em}
+.slug-url{font-size:12px;opacity:.6;margin-top:4px}
+.badge{font-size:9.5px;padding:4px 10px;border-radius:999px;font-weight:800;text-transform:uppercase;letter-spacing:0.04em;flex-shrink:0;display:inline-block}
+.badge-amber{background:var(--amber);color:var(--amber-ink)}
+.badge-green{background:var(--green);color:var(--green-ink)}
+.resume-row{margin-top:18px;padding-top:16px;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:8px}
+</style>
+</head>
+<body>
+
+<div class="topbar"><div class="topbar-inner">
+  <div class="mark">CB</div>
+  <div><div class="brand-name">Court Booking</div><div class="brand-sub">Facility Onboarding</div></div>
+</div></div>
+
+<div class="page">
+  <div id="app"><div class="lead">Loading…</div></div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-functions-compat.js"></script>
+<script src="/firebase-config.js"></script>
+<script src="/my-auth.js"></script>
+<script>
+(function(){
+  const SLUG_LS_KEY = 'cb_onboarding_slug_v1';
+  const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const slugify = (s) => String(s || '').toLowerCase().trim().replace(/[^a-z0-9-]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '').slice(0, 50);
+
+  const FIREBASE_CFG = (window.FIREBASE_CONFIG && window.FIREBASE_CONFIG.apiKey && !String(window.FIREBASE_CONFIG.apiKey).startsWith('PASTE'))
+    ? window.FIREBASE_CONFIG : null;
+  const app = document.getElementById('app');
+  if (!FIREBASE_CFG) {
+    app.innerHTML = '<div class="card"><p class="lead" style="margin-bottom:0">Self-service facility creation needs a connected Firebase project, which this environment doesn\'t have configured.</p></div>';
+    return;
+  }
+  firebase.initializeApp(FIREBASE_CFG);
+  const db = firebase.firestore();
+  const fns = { httpsCallable: (name) => firebase.app().functions('asia-southeast1').httpsCallable(name) };
+
+  let view = 'loading'; // loading | signin | create | checklist
+  let slug = (() => { try { return localStorage.getItem(SLUG_LS_KEY) || ''; } catch (e) { return ''; } })();
+  let createMsg = { text: '', kind: '' };
+  let checklistMsg = { text: '', kind: '' };
+  let emailMode = 'signin'; // 'signin' | 'signup'
+  let emailFormOpen = false;
+
+  function setSlug(s) { slug = s; try { if (s) localStorage.setItem(SLUG_LS_KEY, s); else localStorage.removeItem(SLUG_LS_KEY); } catch (e) {} }
+
+  function render() {
+    if (view === 'loading') { app.innerHTML = '<div class="lead">Loading…</div>'; return; }
+    if (view === 'signin') return renderSignIn();
+    if (view === 'create') return renderCreate();
+    if (view === 'checklist') return renderChecklist();
+  }
+
+  // ---------- Step 0: sign in (same Google/email pattern as account.html) ----------
+  function renderSignIn() {
+    const signup = emailMode === 'signup';
+    app.innerHTML = `
+      <div class="step-label">Step 1 of 2</div>
+      <h1>Sign in to create your facility</h1>
+      <p class="lead">A facility needs an owner, so the next step and the final "Publish" step both require you to be signed in. This is the same sign-in used by player accounts elsewhere in this app.</p>
+      <div class="card">
+        <form id="emailForm" style="gap:10px">
+          <button type="button" class="btn-google" id="googleBtn">Sign in with Google</button>
+          <div class="or-row">or</div>
+          ${signup ? '<label>Your name<input type="text" id="authName" autocomplete="name"/></label>' : ''}
+          <label>Email<input type="email" id="authEmail" autocomplete="email"/></label>
+          <label>Password<input type="password" id="authPassword" autocomplete="${signup ? 'new-password' : 'current-password'}"/></label>
+          <div class="email-actions">
+            <button type="submit" class="btn-dark" id="authSubmit">${signup ? 'Create account' : 'Sign in'}</button>
+            <button type="button" class="btn-link" id="modeToggle">${signup ? 'I already have an account' : 'Create an account'}</button>
+          </div>
+          <div class="msg" id="authMsg" role="status"></div>
+        </form>
+      </div>
+      <div class="resume-row">
+        <span class="hint">Already started on this device?</span>
+        <button type="button" class="btn-link" id="skipToChecklist">Go to my facility's checklist</button>
+      </div>`;
+    document.getElementById('googleBtn').addEventListener('click', () => MyAuth.signIn().catch((e) => {
+      setMsg('authMsg', "Couldn't sign in with Google" + (e && e.code ? ' (' + e.code + ')' : '') + ' — try email instead.', 'error');
+    }));
+    document.getElementById('modeToggle').addEventListener('click', () => { emailMode = signup ? 'signin' : 'signup'; render(); });
+    document.getElementById('skipToChecklist').addEventListener('click', () => { if (slug) { view = 'checklist'; render(); } else { promptForSlug(); } });
+    document.getElementById('emailForm').addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const email = document.getElementById('authEmail').value;
+      const password = document.getElementById('authPassword').value;
+      if (!MyAuth.validEmail(email)) { setMsg('authMsg', MyAuth.friendlyError('auth/invalid-email'), 'error'); return; }
+      if (password.length < MyAuth.MIN_PASSWORD) { setMsg('authMsg', MyAuth.friendlyError('auth/weak-password'), 'error'); return; }
+      const btn = document.getElementById('authSubmit'); btn.disabled = true; setMsg('authMsg', '', '');
+      try {
+        if (signup) await MyAuth.signUpWithEmail(email, password, (document.getElementById('authName') || {}).value);
+        else await MyAuth.signInWithEmail(email, password);
+        // onAuthStateChanged (via MyAuth.onChange below) takes it from here.
+      } catch (e) { setMsg('authMsg', MyAuth.friendlyError(e && e.code), 'error'); btn.disabled = false; }
+    });
+  }
+  function setMsg(id, text, kind) { const el = document.getElementById(id); if (el) { el.textContent = text || ''; el.className = 'msg' + (kind ? ' ' + kind : ''); } }
+  function promptForSlug() {
+    const entered = slugify(window.prompt('Enter your facility\'s slug (the part after ?client= in its URL):') || '');
+    if (entered) { setSlug(entered); view = 'checklist'; render(); }
+  }
+
+  // ---------- Step 1: name the facility, call createFacility ----------
+  function renderCreate() {
+    const u = MyAuth.currentUser();
+    app.innerHTML = `
+      <div class="step-label">Step 1 of 2</div>
+      <h1>Create your facility</h1>
+      <p class="lead">This sets up a brand-new facility with its own booking page. You can change all of this later from the Admin Console.</p>
+      <div class="account-line">Signed in as ${esc((u && (u.displayName || u.email)) || 'you')} · <button type="button" class="btn-link" id="signOutBtn">Sign out</button></div>
+      <div class="card">
+        <form id="createForm">
+          <label>Business / facility name<input type="text" id="cfName" autocomplete="organization" required/></label>
+          <label>Web address slug<input type="text" id="cfSlug" placeholder="e.g. riverside-courts" required/></label>
+          <div class="hint" id="slugPreview">Your booking page: ${location.origin}/?client=</div>
+          <label>Starter color<div class="color-row"><input type="color" id="cfColorPicker" value="#D6FF5F"/><input type="text" id="cfColor" value="#D6FF5F"/></div></label>
+          <label>Number of courts<input type="number" id="cfCourtCount" min="1" max="20" step="1" value="1" required/></label>
+          <div class="hint">Each one is seeded active, named "Court 1", "Court 2", etc. — rename them later in Court Management.</div>
+          <label>Hourly rate<input type="number" id="cfRate" min="1" step="any" placeholder="e.g. 300" required/></label>
+          <div class="hint">What you charge per court, per hour — without this, bookings would silently use a generic placeholder price that has nothing to do with your facility.</div>
+          <label>Admin PIN<input type="text" inputmode="numeric" id="cfPin" placeholder="e.g. 1234" required/></label>
+          <div class="hint">Staff will use this PIN to unlock the Admin Console — pick something you'll remember, you can change it later.</div>
+          <button type="submit" class="btn-dark" id="createSubmit">Create facility</button>
+          <div class="msg ${createMsg.kind}" id="createMsg" role="status">${esc(createMsg.text)}</div>
+        </form>
+      </div>`;
+    document.getElementById('signOutBtn').addEventListener('click', () => MyAuth.signOut());
+    const nameEl = document.getElementById('cfName'), slugEl = document.getElementById('cfSlug');
+    let slugTouched = false;
+    slugEl.addEventListener('input', () => { slugTouched = true; slugEl.value = slugify(slugEl.value); updateSlugPreview(); });
+    nameEl.addEventListener('input', () => { if (!slugTouched) { slugEl.value = slugify(nameEl.value); updateSlugPreview(); } });
+    function updateSlugPreview() { document.getElementById('slugPreview').textContent = `${location.origin}/?client=${slugEl.value || '…'}`; }
+    const colorPicker = document.getElementById('cfColorPicker'), colorText = document.getElementById('cfColor');
+    colorPicker.addEventListener('input', () => { colorText.value = colorPicker.value; });
+    colorText.addEventListener('input', () => { if (/^#[0-9a-fA-F]{6}$/.test(colorText.value)) colorPicker.value = colorText.value; });
+    document.getElementById('createForm').addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const businessName = nameEl.value.trim();
+      const cSlug = slugify(slugEl.value);
+      const color = /^#[0-9a-fA-F]{6}$/.test(colorText.value) ? colorText.value : '#D6FF5F';
+      const pin = document.getElementById('cfPin').value.trim();
+      const courtCount = Math.round(Number(document.getElementById('cfCourtCount').value));
+      const hourlyRate = Number(document.getElementById('cfRate').value);
+      if (!businessName) { createMsg = { text: 'Business name is required.', kind: 'error' }; render(); return; }
+      if (!cSlug) { createMsg = { text: 'Enter a web address slug.', kind: 'error' }; render(); return; }
+      if (!pin) { createMsg = { text: 'An admin PIN is required.', kind: 'error' }; render(); return; }
+      if (!Number.isInteger(courtCount) || courtCount < 1 || courtCount > 20) { createMsg = { text: 'Number of courts must be between 1 and 20.', kind: 'error' }; render(); return; }
+      if (!Number.isFinite(hourlyRate) || hourlyRate <= 0) { createMsg = { text: 'Enter your real hourly rate — this is what customers get quoted.', kind: 'error' }; render(); return; }
+      const btn = document.getElementById('createSubmit'); btn.disabled = true;
+      createMsg = { text: 'Creating…', kind: '' }; render();
+      try {
+        await fns.httpsCallable('createFacility')({ slug: cSlug, businessName, color, pin, courtCount, hourlyRate });
+        setSlug(cSlug);
+        createMsg = { text: '', kind: '' };
+        view = 'checklist'; render();
+      } catch (e) {
+        createMsg = { text: (e && e.message) || 'Something went wrong — please try again.', kind: 'error' };
+        render();
+      }
+    });
+  }
+
+  // ---------- Step 2: readiness checklist + Publish ----------
+  // REQUIRED gates Publish (mirrors publishFacility's own server-side
+  // re-check). RECOMMENDED never blocks Publish -- it's the "proceed now,
+  // finish later" half: real gaps (an unconfigured QR means customers can't
+  // actually pay in-app yet) that shouldn't stop a facility from going live,
+  // just nudge the owner back to Admin Console for them.
+  const READINESS = [
+    { key: 'name', label: 'Business name set' },
+    { key: 'court', label: 'At least one active court' },
+    { key: 'pin', label: 'Admin PIN set' },
+    { key: 'pricing', label: 'Hourly rate set for every active court' },
+  ];
+  const RECOMMENDED = [
+    { key: 'payMethods', label: 'A real payment QR uploaded', detail: 'Until then, customers see a placeholder QR that can\'t actually be paid — staff can still confirm bookings manually (cash, bank transfer) from Confirm & Tag Bookings.', tab: 'Payment QR & Channels' },
+    { key: 'hours', label: 'Operating hours reviewed', detail: 'Your facility is live with a generic 7 AM–10 PM default until you set your real hours.', tab: 'Operating Hours' },
+  ];
+  async function loadReadiness(s) {
+    const [configSnap, courtsSnap, settingsSnap, pricingSnap, hoursSnap] = await Promise.all([
+      db.doc(`clients/${s}/config/state`).get(),
+      db.doc(`clients/${s}/courts/state`).get(),
+      db.doc(`clients/${s}/settings/state`).get(),
+      db.doc(`clients/${s}/pricing/state`).get(),
+      db.doc(`clients/${s}/courtHours/state`).get(),
+    ]);
+    if (!configSnap.exists) return null; // no such facility on this device/slug
+    const businessName = configSnap.data()?.data?.business?.name || '';
+    const courts = (courtsSnap.exists && courtsSnap.data()?.data) || [];
+    const activeCourts = courts.filter((c) => c && c.active);
+    const hasActiveCourt = activeCourts.length > 0;
+    const hasPin = !!(settingsSnap.exists && settingsSnap.data()?.data?.pin);
+    const pricing = (pricingSnap.exists && pricingSnap.data()?.data) || {};
+    const hasPricing = hasActiveCourt && activeCourts.every((c) => pricing[c.id] && Number(pricing[c.id].default) > 0);
+    const payMethods = (settingsSnap.exists && settingsSnap.data()?.data?.payMethods) || {};
+    const hasRealQr = Object.values(payMethods).some((m) => m && m.qrData);
+    const hoursData = (hoursSnap.exists && hoursSnap.data()?.data) || {};
+    const hasCustomHours = Object.keys(hoursData).length > 0;
+    return {
+      businessName,
+      done: { name: !!businessName, court: hasActiveCourt, pin: hasPin, pricing: hasPricing },
+      recommended: { payMethods: hasRealQr, hours: hasCustomHours },
+    };
+  }
+  async function renderChecklist() {
+    app.innerHTML = '<div class="lead">Loading your facility…</div>';
+    let readiness;
+    try { readiness = await loadReadiness(slug); } catch (e) { readiness = undefined; }
+    if (readiness === null) {
+      app.innerHTML = `<div class="card"><p class="lead" style="margin-bottom:10px">No facility found for slug "${esc(slug)}" yet.</p><button type="button" class="btn-link" id="backBtn">Start over</button></div>`;
+      document.getElementById('backBtn').addEventListener('click', () => { setSlug(''); view = MyAuth.currentUser() ? 'create' : 'signin'; render(); });
+      return;
+    }
+    if (readiness === undefined) {
+      app.innerHTML = '<div class="card"><p class="lead" style="margin-bottom:0">Couldn\'t load your facility\'s setup right now — check your connection and reload.</p></div>';
+      return;
+    }
+    const allDone = READINESS.every((item) => readiness.done[item.key]);
+    const adminUrl = `${location.origin}/?client=${encodeURIComponent(slug)}`;
+    app.innerHTML = `
+      <div class="step-label">Step 2 of 2</div>
+      <h1>Finish setting up ${esc(readiness.businessName || slug)}</h1>
+      <p class="lead">These are the basics every facility starts with. Branding, operating hours, pricing, and payment details all live in the real Admin Console — open it below with the PIN you set, finish those there, then come back to publish.</p>
+      <div class="card">
+        <ul class="checklist">
+          ${READINESS.map((item) => `<li><span class="chk ${readiness.done[item.key] ? 'done' : 'pending'}">${readiness.done[item.key] ? '✓' : ''}</span>${esc(item.label)}</li>`).join('')}
+        </ul>
+      </div>
+      <div class="card">
+        <p style="font-size:13.5px;margin-bottom:10px"><strong>Open your Admin Console</strong> to set up courts, operating hours, pricing, and payment QR codes.</p>
+        <a class="btn-dark" href="${adminUrl}" target="_blank" rel="noopener">Open Admin Console ↗</a>
+        <p class="slug-url">${esc(adminUrl)} — tap "Staff" in the header and enter your PIN.</p>
+      </div>
+      <div class="card">
+        <p style="font-size:13.5px;margin-bottom:10px">${allDone
+          ? 'Ready to go live — publishing makes your facility visible on the public facility picker.'
+          : 'Once the checklist above is complete, you can publish your facility so it appears on the public facility picker.'}</p>
+        <button type="button" class="btn-dark" id="publishBtn" ${allDone ? '' : 'disabled'}>Publish facility</button>
+        <div class="msg ${checklistMsg.kind}" id="checklistMsg" role="status">${esc(checklistMsg.text)}</div>
+      </div>
+      <div class="card">
+        <p class="label" style="margin:0 0 4px">Worth finishing before you tell people</p>
+        <p style="font-size:12px;opacity:.6;margin-bottom:14px">Not required to publish — you can do these anytime from the Admin Console.</p>
+        <ul class="checklist">
+          ${RECOMMENDED.map((item) => `<li>
+            <span class="chk ${readiness.recommended[item.key] ? 'done' : 'pending'}">${readiness.recommended[item.key] ? '✓' : ''}</span>
+            <span><span class="badge ${readiness.recommended[item.key] ? 'badge-green' : 'badge-amber'}" style="margin-right:6px">${readiness.recommended[item.key] ? 'Done' : 'Open'}</span>${esc(item.label)}<br/><span style="font-size:11.5px;opacity:.6">${esc(item.detail)} <a href="${adminUrl}" target="_blank" rel="noopener" style="color:inherit">Open ${esc(item.tab)} ↗</a></span></span>
+          </li>`).join('')}
+        </ul>
+      </div>
+      <div class="resume-row">
+        <button type="button" class="btn-link" id="refreshBtn">I just finished setup elsewhere — refresh this checklist</button>
+      </div>`;
+    document.getElementById('refreshBtn').addEventListener('click', () => render());
+    const publishBtn = document.getElementById('publishBtn');
+    if (publishBtn && !publishBtn.disabled) publishBtn.addEventListener('click', async () => {
+      publishBtn.disabled = true;
+      checklistMsg = { text: 'Publishing…', kind: '' }; setMsg('checklistMsg', checklistMsg.text, checklistMsg.kind);
+      try {
+        await fns.httpsCallable('publishFacility')({ slug });
+        checklistMsg = { text: 'Published! Your facility now appears on the public facility picker.', kind: 'ok' };
+      } catch (e) {
+        checklistMsg = { text: (e && e.message) || 'Could not publish — please try again.', kind: 'error' };
+        publishBtn.disabled = false;
+      }
+      render();
+    });
+  }
+
+  // ---------- Wire up auth state -> view ----------
+  MyAuth.onChange((evt) => {
+    if (evt !== 'auth') return;
+    const u = MyAuth.currentUser();
+    if (!u) { view = 'signin'; render(); return; }
+    view = slug ? 'checklist' : 'create';
+    render();
+  });
+  MyAuth.init();
+})();
+</script>
+</body>
+</html>

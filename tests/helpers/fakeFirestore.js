@@ -7,7 +7,8 @@ const Module = require('module');
 const store = new Map();
 const DELETE = { __delete: true };
 const TS = { __ts: true };
-const isPlain = (v) => v && typeof v === 'object' && !Array.isArray(v) && !(v instanceof Date) && v !== DELETE && v !== TS;
+const ARRAY_UNION = (...items) => ({ __arrayUnion: items });
+const isPlain = (v) => v && typeof v === 'object' && !Array.isArray(v) && !(v instanceof Date) && v !== DELETE && v !== TS && !v.__arrayUnion;
 
 function resolveValue(v, where) {
   if (v === undefined) throw new Error(`Unsupported field value: undefined (${where})`);
@@ -20,13 +21,18 @@ function resolveValue(v, where) {
   }
   return v;
 }
+// arrayUnion only needs to work at the field level a write actually touches
+// (never deep-nested inside a plain-object value), which is the only shape
+// any caller in this codebase uses it.
+function applyField(existing, k, v, out, merge, where) {
+  if (v === DELETE) { delete out[k]; return; }
+  if (v && v.__arrayUnion) { out[k] = [...(Array.isArray(out[k]) ? out[k] : []), ...v.__arrayUnion]; return; }
+  if (merge && isPlain(v) && isPlain(out[k])) { out[k] = applyWrite(out[k], v, true, `${where}.${k}`); return; }
+  out[k] = resolveValue(v, `${where}.${k}`);
+}
 function applyWrite(existing, incoming, merge, where) {
   const out = merge && existing ? structuredClone(existing) : {};
-  for (const [k, v] of Object.entries(incoming)) {
-    if (v === DELETE) delete out[k];
-    else if (merge && isPlain(v) && isPlain(out[k])) out[k] = applyWrite(out[k], v, true, `${where}.${k}`);
-    else out[k] = resolveValue(v, `${where}.${k}`);
-  }
+  for (const [k, v] of Object.entries(incoming)) applyField(existing, k, v, out, merge, where);
   return out;
 }
 const getPath = (obj, dotted) => dotted.split('.').reduce((o, k) => (o == null ? undefined : o[k]), obj);
@@ -38,10 +44,7 @@ class DocRef {
   async update(data) {
     if (!store.has(this.path)) throw new Error(`NOT_FOUND: no document to update: ${this.path}`);
     const cur = structuredClone(store.get(this.path));
-    for (const [k, v] of Object.entries(data)) {
-      if (v === DELETE) delete cur[k];
-      else cur[k] = resolveValue(v, `${this.path}.${k}`);
-    }
+    for (const [k, v] of Object.entries(data)) applyField(null, k, v, cur, false, this.path);
     store.set(this.path, cur);
   }
   async delete() { store.delete(this.path); }
@@ -98,7 +101,7 @@ const fakeDb = {
   },
 };
 class HttpsError extends Error { constructor(code, message, details) { super(message); this.code = code; this.details = details; } }
-const fakeAdmin = { initializeApp() {}, firestore: Object.assign(() => fakeDb, { FieldValue: { serverTimestamp: () => TS, delete: () => DELETE } }) };
+const fakeAdmin = { initializeApp() {}, firestore: Object.assign(() => fakeDb, { FieldValue: { serverTimestamp: () => TS, delete: () => DELETE, arrayUnion: ARRAY_UNION } }) };
 
 /* Records every push the code under test tries to send. */
 const pushCalls = [];

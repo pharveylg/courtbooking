@@ -1187,3 +1187,304 @@ exports.dismissMatchProposal = onCall({ region: REGION }, async (request) => {
   await tournamentRef(clientId, tournamentId).collection('proposals').doc(matchId).delete();
   return { dismissed: true };
 });
+
+/* ================================================================
+   FACILITY SELF-SERVICE ONBOARDING (Phase A -- built, not hooked up).
+   ================================================================
+   Nothing in the live app calls these yet: there is no entry point on
+   picker.html, and the standalone onboarding.html page that calls them
+   is reachable only by direct URL. See FACILITY_ONBOARDING_PROPOSAL.md
+   section 11 for the full design these two callables implement.
+
+   These are the FIRST functions in this file that require
+   `request.auth`. Everywhere else in this codebase, "whoever reached
+   the dashboard for a tenant" is the trust boundary (shared PIN,
+   checked client-side, open per-tenant Firestore rule) -- that model
+   has no concept of an individual owner to check against. Creating a
+   tenant is different: self-service means a stranger's browser can
+   now call a function that provisions a brand-new `clients/{slug}`
+   tree, so these callables need a real signed-in identity (via
+   MyAuth, the same Firebase Auth already used for player accounts)
+   to (a) stamp an owner and (b) let publishFacility refuse anyone
+   else. This is a deliberate, novel departure from the file's usual
+   trust model -- not an oversight.
+
+   Deliberate simplifications for Phase A (see proposal section 11.5):
+   - No entitlements/runtime-sync machinery is ported here. A
+     self-service tenant starts life exactly the way an "organic"
+     tenant already does today (no entitlement docs at all) --
+     SUPERADMIN_GUIDE.md documents that the platform already
+     synthesizes sane defaults for tenants without them.
+   - A slug already registered in platformTenants, OR one that
+     already has organic clients/{slug}/config/state data, is treated
+     as simply taken. superadmin.html's own create-tenant flow can
+     knowingly adopt an existing organic tenant because a human staff
+     member is making that call; a public self-service endpoint can't
+     safely guess whether a stranger's browser landing on an
+     already-active court's slug should be handed ownership of it.
+   ================================================================ */
+
+function isValidFacilityHex(h) { return typeof h === 'string' && /^#[0-9a-fA-F]{6}$/.test(h); }
+
+/* Mirrors superadmin.html's darkenHex exactly -- same formula, so a
+   self-service tenant's hover color matches what staff-provisioned
+   tenants get. */
+function darkenFacilityHex(hex, amt = 0.15) {
+  const n = parseInt(hex.slice(1), 16);
+  const r = Math.max(0, Math.round(((n >> 16) & 255) * (1 - amt)));
+  const g = Math.max(0, Math.round(((n >> 8) & 255) * (1 - amt)));
+  const b = Math.max(0, Math.round((n & 255) * (1 - amt)));
+  return '#' + [r, g, b].map((v) => v.toString(16).padStart(2, '0')).join('');
+}
+
+/* Node equivalent of index.html/superadmin.html's browser hashPin --
+   same algorithm (SHA-256 of pin + a fixed salt), so a PIN set during
+   self-service onboarding unlocks the Admin console exactly the way
+   a staff-provisioned PIN does. */
+const crypto = require('crypto');
+function hashFacilityPin(pin) {
+  return crypto.createHash('sha256').update(pin + 'picklecourt-salt-2024').digest('hex');
+}
+
+async function logPlatformAudit(action, slug, details, actorEmail) {
+  try {
+    await db.collection('platformAuditLog').add({
+      action,
+      slug: slug || null,
+      details: details || '',
+      actorEmail: actorEmail || 'unknown',
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+  } catch (ex) { console.warn('[createFacility] Audit log write failed:', ex.message); }
+}
+
+/* Same default per-tenant documents superadmin.html's
+   provisionTenantDefaults writes for a staff-provisioned tenant --
+   kept in lockstep with that function on purpose, so a self-service
+   facility starts in an identical state to one a platform staffer
+   creates by hand. Two deliberate departures, both closing gaps that
+   exist for EVERY tenant today (staff-provisioned ones included):
+   provisionTenantDefaults never seeds `pricing/state` either, so an
+   unconfigured court silently charges the app's generic placeholder
+   rate (CLIENT.rates.hourly, index.html) with no warning to anyone --
+   real money quoted to real customers that has nothing to do with
+   this facility. courtCount replaces the single always-"Court 1"
+   default so a multi-court facility doesn't have to visit Court
+   Management just to exist. */
+async function provisionFacilityDefaults(slug, businessName, color, pin, courtCount, hourlyRate) {
+  const stamp = () => ({ updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+  const pinHash = hashFacilityPin(pin);
+  const courts = [];
+  const pricing = {};
+  for (let i = 1; i <= courtCount; i++) {
+    const id = 'court' + i;
+    courts.push({ id, name: 'Court ' + i, startHour: 13, active: true });
+    pricing[id] = { default: hourlyRate, hours: {} };
+  }
+  await db.doc(`clients/${slug}/config/state`).set({
+    data: {
+      business: { name: businessName },
+      branding: { monogram: businessName.slice(0, 2).toUpperCase() },
+      theme: { primary: color, primaryHover: darkenFacilityHex(color) },
+    },
+    ...stamp(),
+  });
+  await db.doc(`clients/${slug}/courts/state`).set({ data: courts, ...stamp() });
+  await db.doc(`clients/${slug}/pricing/state`).set({ data: pricing, ...stamp() });
+  await db.doc(`clients/${slug}/settings/state`).set({ data: { pin: pinHash, payMethods: {} }, ...stamp() });
+  await db.doc(`clients/${slug}/bookings/state`).set({ data: [], ...stamp() });
+  await db.doc(`clients/${slug}/openPlay/state`).set({ data: [], ...stamp() });
+  await db.doc(`clients/${slug}/morning/state`).set({ data: { '7': false, '8': false, '9': false, '10': false, '11': false }, ...stamp() });
+  await db.doc(`clients/${slug}/staffReserve/state`).set({ data: {}, ...stamp() });
+  await db.doc(`clients/${slug}/queues/state`).set({ data: [], ...stamp() });
+}
+
+/* Step 1 of the self-service flow: a signed-in owner names their
+   facility and picks a slug, a starter color, and an admin PIN.
+   Writes platformTenants/{slug} with lifecycle 'provisioning' and
+   ownerUid stamped to the caller -- deliberately does NOT write
+   tenantDirectory, which is what keeps a draft facility off the
+   public picker (picker.html only lists tenantDirectory rows with
+   status 'active'; see proposal section 7). publishFacility is the
+   only thing that writes tenantDirectory. */
+exports.createFacility = onCall({ region: REGION }, async (request) => {
+  if (!request.auth) throw new HttpsError('unauthenticated', 'Sign in before creating a facility.');
+  const { slug, businessName, color, pin, courtCount, hourlyRate } = request.data || {};
+  assertValidTenantId(slug);
+  requireString(businessName, 'businessName');
+  requireString(pin, 'pin');
+  const normalizedColor = isValidFacilityHex(color) ? color : '#D6FF5F';
+  const normalizedCourtCount = Number.isInteger(courtCount) && courtCount >= 1 && courtCount <= 20 ? courtCount : null;
+  if (normalizedCourtCount === null) throw new HttpsError('invalid-argument', 'Number of courts must be a whole number from 1 to 20.');
+  const normalizedRate = Number.isFinite(hourlyRate) && hourlyRate > 0 ? hourlyRate : null;
+  if (normalizedRate === null) throw new HttpsError('invalid-argument', 'Hourly rate must be a positive number.');
+
+  const [platformSnap, organicSnap] = await Promise.all([
+    db.doc(`platformTenants/${slug}`).get(),
+    db.doc(`clients/${slug}/config/state`).get(),
+  ]);
+  if (platformSnap.exists || organicSnap.exists) {
+    throw new HttpsError('already-exists', `"${slug}" is already taken. Choose a different slug.`);
+  }
+
+  const trimmedName = businessName.trim();
+  await provisionFacilityDefaults(slug, trimmedName, normalizedColor, pin, normalizedCourtCount, normalizedRate);
+  await db.doc(`platformTenants/${slug}`).set({
+    businessName: trimmedName,
+    theme: { primary: normalizedColor },
+    status: 'active',
+    lifecycle: 'provisioning',
+    source: 'self-serve', // distinguishes this from staff-provisioned tenants in superadmin's Tenant Directory filter
+    ownerUid: request.auth.uid,
+    ownerEmail: request.auth.token.email || null,
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+  await logPlatformAudit('create-facility-self-service', slug, `Self-service facility "${trimmedName}" created by ${request.auth.token.email || request.auth.uid}`, request.auth.token.email);
+  return { ok: true, slug };
+});
+
+/* Final step: the owner publishes their facility once setup looks
+   complete, which is the one action that makes it visible on the
+   public picker. Re-checks readiness server-side (mirrors proposal
+   section 6's table) rather than trusting whatever the client's own
+   checklist UI last showed -- the same "don't trust the browser for
+   the one sensitive check" posture as the rest of this file, just
+   applied to ownership instead of bracket structure. */
+exports.publishFacility = onCall({ region: REGION }, async (request) => {
+  if (!request.auth) throw new HttpsError('unauthenticated', 'Sign in before publishing a facility.');
+  const { slug } = request.data || {};
+  assertValidTenantId(slug);
+
+  const tenantRef = db.doc(`platformTenants/${slug}`);
+  const tenantSnap = await tenantRef.get();
+  if (!tenantSnap.exists) throw new HttpsError('not-found', `No facility found for "${slug}".`);
+  const tenant = tenantSnap.data();
+  if (tenant.ownerUid !== request.auth.uid) {
+    throw new HttpsError('permission-denied', 'Only the facility\'s owner can publish it.');
+  }
+
+  const [configSnap, courtsSnap, settingsSnap, pricingSnap] = await Promise.all([
+    db.doc(`clients/${slug}/config/state`).get(),
+    db.doc(`clients/${slug}/courts/state`).get(),
+    db.doc(`clients/${slug}/settings/state`).get(),
+    db.doc(`clients/${slug}/pricing/state`).get(),
+  ]);
+  const businessName = configSnap.exists && configSnap.data()?.data?.business?.name;
+  const courts = (courtsSnap.exists && courtsSnap.data()?.data) || [];
+  const hasActiveCourt = Array.isArray(courts) && courts.some((c) => c && c.active);
+  const hasPin = !!(settingsSnap.exists && settingsSnap.data()?.data?.pin);
+  const pricing = (pricingSnap.exists && pricingSnap.data()?.data) || {};
+  // A real rate on every active court -- not just a non-empty pricing doc,
+  // since a court added after creation (Court Management) has no pricing
+  // entry yet and would otherwise silently inherit the app's generic
+  // placeholder rate (see provisionFacilityDefaults).
+  const activeCourts = courts.filter((c) => c && c.active);
+  const hasPricing = activeCourts.length > 0 && activeCourts.every((c) => pricing[c.id] && Number.isFinite(pricing[c.id].default) && pricing[c.id].default > 0);
+  const missing = [];
+  if (!businessName) missing.push('business name');
+  if (!hasActiveCourt) missing.push('at least one active court');
+  if (!hasPin) missing.push('an admin PIN');
+  if (!hasPricing) missing.push('an hourly rate for every active court');
+  if (missing.length) {
+    throw new HttpsError('failed-precondition', `Can't publish yet -- missing: ${missing.join(', ')}.`);
+  }
+
+  await tenantRef.set({ lifecycle: 'trial', publishedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+  await db.doc(`tenantDirectory/${slug}`).set({
+    businessName,
+    status: 'active',
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+  }, { merge: true });
+  const billingNote = await applySelfServeBilling(slug, tenant, businessName, request.auth);
+  await logPlatformAudit('publish-facility', slug, `Facility "${businessName}" published by ${request.auth.token.email || request.auth.uid}${billingNote ? ' -- ' + billingNote : ''}`, request.auth.token.email);
+  return { ok: true, slug };
+});
+
+/* Assigns the self-serve default plan (superadmin sets which plan that is,
+   under platformSettings/selfServe.defaultPlanId) to a newly-published
+   self-serve facility: stamps subscription/billing the same shape
+   initializeTenantCommercial writes in superadmin.html, grants entitlements
+   for whatever non-booking products the plan includes (store/tournament --
+   "just like tournament" extends to store identically, both billed via the
+   plan's addonFees and both gated by the SAME clients/{slug}/status/state
+   runtime flags index.html already reads), and raises a one-time onboarding
+   invoice if the plan has a non-zero onboardingFee. Reuses the exact
+   platformInvoices doc shape generateDraftInvoices already writes, so it
+   shows up on the existing Invoices tab with no new UI needed there.
+
+   Deliberately never blocks or fails publish: a facility going live and a
+   facility getting billed are different concerns, and a missing/misconfigured
+   self-serve plan setting is a superadmin setup gap, not the owner's problem.
+   Only staff-provisioned tenants (tenant.source !== 'self-serve') are left
+   alone entirely -- this never touches a tenant's billing unless it came
+   through createFacility. */
+async function applySelfServeBilling(slug, tenant, businessName, auth) {
+  if (tenant.source !== 'self-serve') return null;
+  try {
+    const settingsSnap = await db.doc('platformSettings/selfServe').get();
+    const defaultPlanId = settingsSnap.exists && settingsSnap.data().defaultPlanId;
+    if (!defaultPlanId) return null;
+    const planSnap = await db.doc(`platformPlans/${defaultPlanId}`).get();
+    if (!planSnap.exists) return null;
+    const plan = { id: defaultPlanId, ...planSnap.data() };
+
+    const subscription = { planId: plan.id, planName: plan.name || plan.id, pricingVersion: plan.pricingVersion || null, startedAt: admin.firestore.FieldValue.serverTimestamp() };
+    const billing = { baseFee: Number(plan.monthlyBase) || 0, freeBookings: Number(plan.includedBookings) || 0, perBookingRate: Number(plan.perBookingRate) || 0 };
+    await db.doc(`platformTenants/${slug}`).set({ subscription, billing }, { merge: true });
+
+    // Grant entitlements for every non-booking product the plan includes.
+    // Booking itself is never written as an explicit entitlement doc here --
+    // same as an organic tenant, its runtime gate is derived from lifecycle
+    // alone (deriveRuntimeExpectation's virtual-booking fallback,
+    // superadmin.html), so leaving it unwritten is correct, not an omission.
+    const grantedProducts = Array.isArray(plan.products) ? plan.products.filter((p) => p === 'store' || p === 'tournament') : [];
+    const actorEmail = (auth.token && auth.token.email) || auth.uid;
+    for (const product of grantedProducts) {
+      await db.doc(`platformTenants/${slug}/entitlements/${product}`).set({
+        product,
+        status: 'trial',
+        paused: false,
+        grantedAt: admin.firestore.FieldValue.serverTimestamp(),
+        grantedBy: actorEmail,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedBy: actorEmail,
+        history: admin.firestore.FieldValue.arrayUnion({ at: new Date().toISOString(), action: 'grant', from: 'not_added', to: 'trial', by: actorEmail, note: 'Self-serve publish, via self-serve default plan' }),
+      }, { merge: true });
+    }
+    // Mirror the runtime gate the tenant-facing apps actually read -- the
+    // same clients/{slug}/status/state doc syncTenantRuntime writes.
+    // Lifecycle is 'trial' (just set above), which is always online, so
+    // every granted product is simply enabled/unpaused.
+    await db.doc(`clients/${slug}/status/state`).set({
+      data: {
+        bookingPaused: false,
+        storeEnabled: grantedProducts.includes('store'),
+        storePaused: false,
+        tournamentEnabled: grantedProducts.includes('tournament'),
+        tournamentPaused: false,
+      },
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+
+    const onboardingFee = Number(plan.onboardingFee) || 0;
+    if (onboardingFee > 0) {
+      const invoiceId = `inv_${slug}_onboarding`; // distinct from the monthly inv_{slug}_{YYYY-MM} id scheme -- never collides
+      const existing = await db.doc(`platformInvoices/${invoiceId}`).get();
+      if (!existing.exists) {
+        await db.doc(`platformInvoices/${invoiceId}`).set({
+          tenantId: slug, tenantName: businessName, period: 'onboarding',
+          lines: [{ sourceType: 'onboarding_fee', sourceId: 'self-serve-onboarding', description: `One-time onboarding fee -- ${plan.name || plan.id}`, qty: 1, unitAmount: onboardingFee, amount: onboardingFee }],
+          subtotal: onboardingFee, total: onboardingFee,
+          creditsApplied: 0, status: 'draft', payments: [], adjustments: [],
+          snapshot: { planId: plan.id, generatedAt: new Date().toISOString(), note: 'One-time charge raised automatically when this self-serve facility published.' },
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      }
+    }
+    return `assigned self-serve plan "${plan.name || plan.id}"${grantedProducts.length ? ' with ' + grantedProducts.join(' + ') : ''}${onboardingFee > 0 ? `, onboarding fee ${onboardingFee}` : ''}`;
+  } catch (ex) {
+    console.warn('[publishFacility] self-serve billing step failed, facility still published:', ex.message);
+    return null;
+  }
+}

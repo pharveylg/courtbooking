@@ -130,9 +130,15 @@ body{background:#FFFBF5;color:#201C19}
       <!-- PANEL: Tenants (directory + per-tenant cockpit) -->
       <div id="sa-panel-directory" class="sa-panel hidden">
         <div class="rounded-[24px] bg-white border border-[#EAE0D5] overflow-hidden">
-          <div class="px-6 h-[56px] flex items-center justify-between border-b border-[#F1E9DF]">
+          <div class="px-6 h-[56px] flex items-center justify-between border-b border-[#F1E9DF] flex-wrap gap-2">
             <div class="font-[750] text-[15px]">Tenant Directory</div>
-            <div class="mono text-[11px] opacity-60"><span id="tenantCount">0</span> tenants</div>
+            <div class="flex items-center gap-3">
+              <label class="flex items-center gap-1.5 cursor-pointer">
+                <input type="checkbox" id="selfServeOnlyFilter" class="w-3.5 h-3.5 accent-[#201C19]"/>
+                <span class="mono text-[10px] font-[700] opacity-70">Self-serve only</span>
+              </label>
+              <div class="mono text-[11px] opacity-60"><span id="tenantCount">0</span> tenants</div>
+            </div>
           </div>
           <div id="tenantTabBar" class="flex gap-1.5 overflow-x-auto px-4 pt-3 pb-1 border-b border-[#F1E9DF]"></div>
           <div id="tenantList" class="divide-y divide-[#F5EDE4]"></div>
@@ -238,9 +244,16 @@ body{background:#FFFBF5;color:#201C19}
             <label class="flex flex-col gap-1.5"><span class="mono text-[10px] uppercase tracking-widest opacity-60">Included Bookings / mo</span><input type="number" id="pfIncluded" min="0" step="1" value="0" class="h-9 rounded-full border border-[#EAE0D5] bg-white px-3 mono text-[11px] font-[700] outline-none focus:border-[#201C19]"/></label>
             <label class="flex flex-col gap-1.5"><span class="mono text-[10px] uppercase tracking-widest opacity-60">Rate / Booking Over Allowance (₱)</span><input type="number" id="pfRate" min="0" step="0.01" value="0" class="h-9 rounded-full border border-[#EAE0D5] bg-white px-3 mono text-[11px] font-[700] outline-none focus:border-[#201C19]"/></label>
             <label class="flex flex-col gap-1.5"><span class="mono text-[10px] uppercase tracking-widest opacity-60">Max Courts (0 = unlimited)</span><input type="number" id="pfMaxCourts" min="0" step="1" value="0" class="h-9 rounded-full border border-[#EAE0D5] bg-white px-3 mono text-[11px] font-[700] outline-none focus:border-[#201C19]"/></label>
-            <label class="flex flex-col gap-1.5"><span class="mono text-[10px] uppercase tracking-widest opacity-60">Store Add-on Fee / mo (₱)</span><input type="number" id="pfStoreFee" min="0" step="0.01" value="0" class="h-9 rounded-full border border-[#EAE0D5] bg-white px-3 mono text-[11px] font-[700] outline-none focus:border-[#201C19]"/></label>
-            <label class="flex flex-col gap-1.5"><span class="mono text-[10px] uppercase tracking-widest opacity-60">Tournament Add-on Fee / mo (₱)</span><input type="number" id="pfTournFee" min="0" step="0.01" value="0" class="h-9 rounded-full border border-[#EAE0D5] bg-white px-3 mono text-[11px] font-[700] outline-none focus:border-[#201C19]"/></label>
+            <label class="flex flex-col gap-1.5"><span class="mono text-[10px] uppercase tracking-widest opacity-60">One-Time Onboarding Fee (₱)</span><input type="number" id="pfOnboardingFee" min="0" step="0.01" value="0" class="h-9 rounded-full border border-[#EAE0D5] bg-white px-3 mono text-[11px] font-[700] outline-none focus:border-[#201C19]"/></label>
             <label class="flex flex-col gap-1.5"><span class="mono text-[10px] uppercase tracking-widest opacity-60">Pricing Version</span><input type="text" id="pfVersion" placeholder="e.g. 2026-09" class="h-9 rounded-full border border-[#EAE0D5] bg-white px-3 mono text-[11px] font-[700] outline-none focus:border-[#201C19]"/></label>
+            <div></div>
+            <label class="flex items-center gap-2 h-9 px-3 rounded-full border border-[#EAE0D5] bg-white cursor-pointer"><input type="checkbox" id="pfIncludeStore" class="w-4 h-4 accent-[#201C19]"/><span class="mono text-[10px] font-[700]">Include Store</span></label>
+            <label class="flex flex-col gap-1.5"><span class="mono text-[10px] uppercase tracking-widest opacity-60">Store Add-on Fee / mo (₱)</span><input type="number" id="pfStoreFee" min="0" step="0.01" value="0" class="h-9 rounded-full border border-[#EAE0D5] bg-white px-3 mono text-[11px] font-[700] outline-none focus:border-[#201C19]"/></label>
+            <div></div>
+            <label class="flex items-center gap-2 h-9 px-3 rounded-full border border-[#EAE0D5] bg-white cursor-pointer"><input type="checkbox" id="pfIncludeTournament" class="w-4 h-4 accent-[#201C19]"/><span class="mono text-[10px] font-[700]">Include Tournament</span></label>
+            <label class="flex flex-col gap-1.5"><span class="mono text-[10px] uppercase tracking-widest opacity-60">Tournament Add-on Fee / mo (₱)</span><input type="number" id="pfTournFee" min="0" step="0.01" value="0" class="h-9 rounded-full border border-[#EAE0D5] bg-white px-3 mono text-[11px] font-[700] outline-none focus:border-[#201C19]"/></label>
+            <div></div>
+            <span class="mono text-[9px] opacity-50 md:col-span-3 -mt-1">"Include" grants that product to any tenant assigned this plan (self-serve publish, or Assign Plan below) alongside the add-on fee -- same products array a tenant's entitlement matrix already tracks. Booking is always included.</span>
             <label class="flex flex-col gap-1.5 md:col-span-3"><span class="mono text-[10px] uppercase tracking-widest opacity-60">Features / Notes (one per line)</span><textarea id="pfFeatures" rows="3" class="rounded-[14px] border border-[#EAE0D5] bg-white px-3 py-2 mono text-[11px] leading-[1.6] outline-none focus:border-[#201C19] resize-y"></textarea></label>
             <div class="md:col-span-3 flex gap-2">
               <button type="submit" class="h-9 px-4 rounded-full bg-[#201C19] text-white mono text-[11px] font-[700] cursor-pointer">Save Plan</button>
@@ -257,6 +270,16 @@ body{background:#FFFBF5;color:#201C19}
             <label class="flex flex-col gap-1.5"><span class="mono text-[10px] uppercase tracking-widest opacity-60">Tenant</span><select id="assignTenant" class="h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-3 mono text-[11px] font-[700] outline-none focus:border-[#201C19] min-w-[200px]"><option value="">Select tenant...</option></select></label>
             <label class="flex flex-col gap-1.5"><span class="mono text-[10px] uppercase tracking-widest opacity-60">Plan</span><select id="assignPlan" class="h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-3 mono text-[11px] font-[700] outline-none focus:border-[#201C19] min-w-[200px]"><option value="">Select plan...</option></select></label>
             <button type="button" id="assignPlanBtn" class="h-10 px-4 rounded-full bg-[#D6FF5F] hover:bg-[#CBF052] text-[#201C19] font-[800] text-[12px] border border-[#201C19]/10 transition cursor-pointer">Assign Plan</button>
+          </div>
+        </div>
+
+        <div class="rounded-[24px] bg-white border border-[#EAE0D5] p-6 shadow-xs mb-5">
+          <div class="font-[750] text-[15px]">Self-Serve Default Plan</div>
+          <p class="mono text-[11px] opacity-60 mt-0.5">The plan a facility is assigned the moment it publishes itself through the self-service onboarding flow (onboarding.html) -- its onboarding fee, included-booking allowance, per-booking rate, and Store/Tournament add-ons all apply automatically, no manual Assign Plan step needed. Staff-provisioned tenants are never affected by this setting.</p>
+          <div class="mt-3 flex flex-wrap items-end gap-2">
+            <label class="flex flex-col gap-1.5"><span class="mono text-[10px] uppercase tracking-widest opacity-60">Plan</span><select id="selfServePlan" class="h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-3 mono text-[11px] font-[700] outline-none focus:border-[#201C19] min-w-[220px]"><option value="">No plan — self-serve facilities publish unbilled</option></select></label>
+            <button type="button" id="saveSelfServePlanBtn" class="h-10 px-4 rounded-full bg-[#201C19] text-white mono text-[11px] font-[700] cursor-pointer">Save</button>
+            <span id="selfServePlanNote" class="mono text-[10px] opacity-50"></span>
           </div>
         </div>
 
@@ -551,6 +574,7 @@ let ENT_STATE = {};          // slug -> { booking|store|tournament -> ent doc or
 let _lastEntries = [];       // last platformTenants snapshot for re-renders
 let _lastStatusMap = {};     // last clients/{slug}/status/state snapshot
 let PLANS_CACHE = {};        // planId -> plan doc
+let SELF_SERVE_DEFAULT_PLAN_ID = ''; // platformSettings/selfServe.defaultPlanId -- assigned automatically by publishFacility
 let PAY_SETTINGS = null;     // platformSettings/billing doc data
 let POLICY = {};             // platformSettings/policy doc (B3 lifecycle policy engine)
 
@@ -777,11 +801,38 @@ function populatePlanSelects(){
   if(ct) ct.innerHTML = '<option value="">No plan — manual billing formula</option>' + opts;
   const ap = document.getElementById('assignPlan');
   if(ap) ap.innerHTML = '<option value="">Select plan...</option>' + opts;
+  const ss = document.getElementById('selfServePlan');
+  if(ss){
+    ss.innerHTML = '<option value="">No plan — self-serve facilities publish unbilled</option>' + opts;
+    ss.value = SELF_SERVE_DEFAULT_PLAN_ID && PLANS_CACHE[SELF_SERVE_DEFAULT_PLAN_ID] ? SELF_SERVE_DEFAULT_PLAN_ID : '';
+  }
+}
+/* platformSettings/selfServe.defaultPlanId -- the one thing publishFacility
+   (functions/index.js) reads to bill a self-serve facility automatically.
+   Kept as its own tiny doc, same pattern as platformSettings/billing. */
+async function loadSelfServeSettings(){
+  try {
+    const snap = await db.doc('platformSettings/selfServe').get();
+    SELF_SERVE_DEFAULT_PLAN_ID = (snap.exists && snap.data().defaultPlanId) || '';
+  } catch(ex) { console.warn('[Platform] self-serve settings load failed:', ex.message); }
+  populatePlanSelects();
+  renderPlansTab();
+}
+async function saveSelfServeDefaultPlan(){
+  requirePerm('manage_plans');
+  const planId = document.getElementById('selfServePlan').value || null;
+  await db.doc('platformSettings/selfServe').set({ defaultPlanId: planId, updatedAt: firebase.firestore.FieldValue.serverTimestamp(), updatedBy: actorEmail() }, { merge: true });
+  SELF_SERVE_DEFAULT_PLAN_ID = planId || '';
+  await logAudit('self-serve-plan-set', null, planId ? `Self-serve default plan -> ${PLANS_CACHE[planId]?.name || planId}` : 'Self-serve default plan cleared — facilities publish unbilled');
+  const note = document.getElementById('selfServePlanNote');
+  if(note){ note.textContent = 'Saved.'; setTimeout(() => { if(note.textContent === 'Saved.') note.textContent = ''; }, 2500); }
+  renderPlansTab();
 }
 const STARTER_PLANS = {
-  'demo': { name: 'Demo / Validation', monthlyBase: 0, includedBookings: 50, perBookingRate: 0, maxCourts: 4, addonFees: { store: 0, tournament: 0 }, products: ['booking'], features: ['Full booking product for demos and validation', 'No charge — internal and prospect use'], pricingVersion: '2026-09' },
-  'plan-a': { name: 'Plan A — Monthly', monthlyBase: 500, includedBookings: 100, perBookingRate: 15, maxCourts: 4, addonFees: { store: 250, tournament: 250 }, products: ['booking'], features: ['Hosting, updates, support', '₱3,000 one-time setup (first 12 months)', '₱500/mo continues after month 12'], pricingVersion: '2026-09' },
-  'plan-c': { name: 'Plan C — Annual', monthlyBase: 0, includedBookings: 200, perBookingRate: 10, maxCourts: 4, addonFees: { store: 200, tournament: 200 }, products: ['booking'], features: ['Setup + 12 months all-in (₱10,000 setup)', 'Optional ₱500/mo after month 12; else export & sunset'], pricingVersion: '2026-09' },
+  'demo': { name: 'Demo / Validation', monthlyBase: 0, includedBookings: 50, perBookingRate: 0, maxCourts: 4, onboardingFee: 0, addonFees: { store: 0, tournament: 0 }, products: ['booking'], features: ['Full booking product for demos and validation', 'No charge — internal and prospect use'], pricingVersion: '2026-09' },
+  'plan-a': { name: 'Plan A — Monthly', monthlyBase: 500, includedBookings: 100, perBookingRate: 15, maxCourts: 4, onboardingFee: 3000, addonFees: { store: 250, tournament: 250 }, products: ['booking'], features: ['Hosting, updates, support', '₱3,000 one-time setup (first 12 months)', '₱500/mo continues after month 12'], pricingVersion: '2026-09' },
+  'plan-c': { name: 'Plan C — Annual', monthlyBase: 0, includedBookings: 200, perBookingRate: 10, maxCourts: 4, onboardingFee: 10000, addonFees: { store: 200, tournament: 200 }, products: ['booking'], features: ['Setup + 12 months all-in (₱10,000 setup)', 'Optional ₱500/mo after month 12; else export & sunset'], pricingVersion: '2026-09' },
+  'self-serve-standard': { name: 'Self-Serve Standard', monthlyBase: 0, includedBookings: 20, perBookingRate: 15, maxCourts: 0, onboardingFee: 0, addonFees: { store: 150, tournament: 150 }, products: ['booking', 'store', 'tournament'], features: ['Starting point for self-service facilities — a free monthly booking allowance, then billed per checkout', 'Store and Tournament included from day one, each with their own add-on fee', 'Set the onboarding fee here, then pick this plan under Self-Serve Default Plan'], pricingVersion: '2026-10' },
 };
 async function seedStarterPlans(){
   requirePerm('manage_plans');
@@ -810,11 +861,16 @@ async function savePlanFromForm(){
     includedBookings: parseInt(document.getElementById('pfIncluded').value, 10) || 0,
     perBookingRate: parseFloat(document.getElementById('pfRate').value) || 0,
     maxCourts: parseInt(document.getElementById('pfMaxCourts').value, 10) || 0,
+    onboardingFee: parseFloat(document.getElementById('pfOnboardingFee').value) || 0,
     addonFees: {
       store: parseFloat(document.getElementById('pfStoreFee').value) || 0,
       tournament: parseFloat(document.getElementById('pfTournFee').value) || 0,
     },
-    products: ['booking'],
+    products: [
+      'booking',
+      ...(document.getElementById('pfIncludeStore').checked ? ['store'] : []),
+      ...(document.getElementById('pfIncludeTournament').checked ? ['tournament'] : []),
+    ],
     features: document.getElementById('pfFeatures').value.split('\n').map(s => s.trim()).filter(Boolean),
     pricingVersion: document.getElementById('pfVersion').value.trim() || new Date().toISOString().slice(0,7),
     updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
@@ -1546,14 +1602,15 @@ function renderPlansTab(){
         <div class="font-[750] text-[14px]">${escapeHtml(p.name || id)} <span class="mono text-[9px] px-1.5 py-0.5 rounded-full bg-[#F1E9DF] font-[700] ml-1">v${escapeHtml(p.pricingVersion || 'n/a')}</span></div>
         <button type="button" data-plan-edit="${id}" class="h-8 px-3 rounded-full bg-white border border-[#EAE0D5] mono text-[10px] font-[700] cursor-pointer hover:border-[#201C19]">Edit</button>
       </div>
-      <div class="mono text-[9px] opacity-50 mb-3">${escapeHtml(id)} · ${tenantsOnPlan.length} tenant(s) subscribed</div>
+      <div class="mono text-[9px] opacity-50 mb-3">${escapeHtml(id)} · ${tenantsOnPlan.length} tenant(s) subscribed${SELF_SERVE_DEFAULT_PLAN_ID === id ? ' · <span class="font-[700] text-[#3B2A9E]">self-serve default</span>' : ''}</div>
       <div class="grid grid-cols-2 md:grid-cols-3 gap-2 mono text-[10px]">
+        <div class="p-2 rounded-[10px] bg-[#FFFBF5] border border-[#F1E9DF]">Onboarding fee <span class="font-[800] float-right">${fmtMoneySA(p.onboardingFee)}</span></div>
         <div class="p-2 rounded-[10px] bg-[#FFFBF5] border border-[#F1E9DF]">Base <span class="font-[800] float-right">${fmtMoneySA(p.monthlyBase)}</span></div>
         <div class="p-2 rounded-[10px] bg-[#FFFBF5] border border-[#F1E9DF]">Included bookings <span class="font-[800] float-right">${Number(p.includedBookings) || 0}</span></div>
         <div class="p-2 rounded-[10px] bg-[#FFFBF5] border border-[#F1E9DF]">Overage/booking <span class="font-[800] float-right">${fmtMoneySA(p.perBookingRate)}</span></div>
         <div class="p-2 rounded-[10px] bg-[#FFFBF5] border border-[#F1E9DF]">Max courts <span class="font-[800] float-right">${Number(p.maxCourts) || 0 || '∞'}</span></div>
-        <div class="p-2 rounded-[10px] bg-[#FFFBF5] border border-[#F1E9DF]">Store add-on <span class="font-[800] float-right">${fmtMoneySA((p.addonFees || {}).store)}</span></div>
-        <div class="p-2 rounded-[10px] bg-[#FFFBF5] border border-[#F1E9DF]">Tournament add-on <span class="font-[800] float-right">${fmtMoneySA((p.addonFees || {}).tournament)}</span></div>
+        <div class="p-2 rounded-[10px] bg-[#FFFBF5] border border-[#F1E9DF]">Store add-on <span class="font-[800] float-right">${fmtMoneySA((p.addonFees || {}).store)}${(p.products || []).includes('store') ? '' : ' <span class="opacity-40">(not included)</span>'}</span></div>
+        <div class="p-2 rounded-[10px] bg-[#FFFBF5] border border-[#F1E9DF]">Tournament add-on <span class="font-[800] float-right">${fmtMoneySA((p.addonFees || {}).tournament)}${(p.products || []).includes('tournament') ? '' : ' <span class="opacity-40">(not included)</span>'}</span></div>
       </div>
       ${((p.features || []).length) ? `<div class="mt-3 mono text-[10px] leading-[1.7] opacity-70">${p.features.map(f => '• ' + escapeHtml(f)).join('<br>')}</div>` : ''}
     </div>`;
@@ -1571,8 +1628,11 @@ function renderPlansTab(){
       document.getElementById('pfIncluded').value = p.includedBookings || 0;
       document.getElementById('pfRate').value = p.perBookingRate || 0;
       document.getElementById('pfMaxCourts').value = p.maxCourts || 0;
+      document.getElementById('pfOnboardingFee').value = p.onboardingFee || 0;
       document.getElementById('pfStoreFee').value = (p.addonFees || {}).store || 0;
       document.getElementById('pfTournFee').value = (p.addonFees || {}).tournament || 0;
+      document.getElementById('pfIncludeStore').checked = (p.products || []).includes('store');
+      document.getElementById('pfIncludeTournament').checked = (p.products || []).includes('tournament');
       document.getElementById('pfVersion').value = p.pricingVersion || '';
       document.getElementById('pfFeatures').value = (p.features || []).join('\n');
       form.scrollIntoView({ behavior: 'smooth' });
@@ -1597,6 +1657,8 @@ document.getElementById('pfCancelBtn').addEventListener('click', () => {
 });
 document.getElementById('planForm').addEventListener('submit', (e) => { e.preventDefault(); savePlanFromForm(); });
 document.getElementById('assignPlanBtn').addEventListener('click', () => assignPlanToTenant());
+document.getElementById('saveSelfServePlanBtn').addEventListener('click', () => saveSelfServeDefaultPlan().catch(ex => toast('Failed: ' + ex.message)));
+document.getElementById('selfServeOnlyFilter').addEventListener('change', () => { selectedDirectoryTenant = null; renderTenantList(_lastEntries, _lastStatusMap); });
 document.getElementById('paySettingsForm').addEventListener('submit', async (e) => {
   e.preventDefault();
     requirePerm('manage_platform_configuration');
@@ -1899,6 +1961,7 @@ auth.onAuthStateChanged(async (user) => {
     loadFeatureIdeas();
     loadSecurityPanel();
     loadPlans();
+    loadSelfServeSettings();
     loadPaymentSettings();
     loadPolicySettings();
   } else {
@@ -1957,15 +2020,17 @@ document.getElementById('ctColor').addEventListener('change', (e) => {
    which row is visible changes. */
 const LS_TENANT_CACHE = 'sa_tenant_cache_v1';
 let selectedDirectoryTenant = null;
-function renderTenantList(entries, statusMap){
+function renderTenantList(allEntries, statusMap){
   const list = document.getElementById('tenantList');
   const tabBar = document.getElementById('tenantTabBar');
   const countEl = document.getElementById('tenantCount');
+  const selfServeOnly = document.getElementById('selfServeOnlyFilter')?.checked;
+  const entries = selfServeOnly ? allEntries.filter(e => e.data.source === 'self-serve') : allEntries;
   countEl.textContent = entries.length;
   if(entries.length === 0){
     tabBar.innerHTML = '';
-    list.innerHTML = `<div class="p-8 text-center mono text-[12px] opacity-50">No tenants registered yet. Create one above.</div>`;
-    document.getElementById('reportingList').innerHTML = `<div class="p-8 text-center mono text-[12px] opacity-50">No tenants to report on yet.</div>`;
+    list.innerHTML = `<div class="p-8 text-center mono text-[12px] opacity-50">${selfServeOnly ? 'No self-serve tenants yet.' : 'No tenants registered yet. Create one above.'}</div>`;
+    if(allEntries.length === 0) document.getElementById('reportingList').innerHTML = `<div class="p-8 text-center mono text-[12px] opacity-50">No tenants to report on yet.</div>`;
     return;
   }
   // Keep whatever tenant was already selected (e.g. after a save re-renders
@@ -2786,7 +2851,7 @@ function renderTenantRow(slug, data, status, isVisible){
       <div class="flex items-center gap-3 min-w-0">
         <div class="w-9 h-9 rounded-full shrink-0 border border-[#EAE0D5] grid place-items-center mono text-[10px] font-[800]" style="background:${escapeHtml(data.theme?.primary || '#D6FF5F')}">${escapeHtml((data.businessName||slug).slice(0,2).toUpperCase())}</div>
         <div class="min-w-0">
-          <div class="font-[750] text-[14px] truncate">${escapeHtml(data.businessName || slug)}</div>
+          <div class="font-[750] text-[14px] truncate">${escapeHtml(data.businessName || slug)}${data.source === 'self-serve' ? ' <span class="mono text-[8.5px] px-1.5 py-0.5 rounded-full bg-[#EDE8FF] text-[#3B2A9E] font-[800] align-middle">SELF-SERVE</span>' : ''}</div>
           <div class="mono text-[10px] opacity-60">?client=${escapeHtml(slug)} • <span class="${isActive?'text-[#3F7019]':'text-[#8A5A00]'} font-[700]">${isActive?'ACTIVE':'SUSPENDED'}</span> • <span class="px-1.5 py-0.5 rounded-full" style="background:${lcMeta.bg};color:${lcMeta.fg}">${lcMeta.label}</span>${sub ? ` • <span class="font-[700]" title="pricing v${escapeHtml(sub.pricingVersion || 'n/a')}">${escapeHtml(sub.planName || sub.planId)}</span>` : ' • <span class="opacity-50">no plan</span>'}</div>
         </div>
       </div>
@@ -3274,6 +3339,7 @@ document.getElementById('createTenantForm').addEventListener('submit', async (e)
         businessName: existingName,
         theme: { primary: existingPrimary },
         status: 'active',
+        source: 'staff',
         createdAt: firebase.firestore.FieldValue.serverTimestamp()
       }, { merge: true });
       // Mirror to public tenantDirectory for the picker page
@@ -3294,6 +3360,7 @@ document.getElementById('createTenantForm').addEventListener('submit', async (e)
         businessName: name,
         theme: { primary: color },
         status: 'active',
+        source: 'staff',
         createdAt: firebase.firestore.FieldValue.serverTimestamp()
       });
       // Mirror to public tenantDirectory for the picker page

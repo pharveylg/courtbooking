@@ -125,6 +125,7 @@ const inline = scripts.map(s => s.replace(/^<script>/, '').replace(/<\/script>$/
 const code = inline[inline.length - 1];
 const EXPOSE = `
 globalThis.__makeCtx = () => ({ get TENANT_INDEX(){return TENANT_INDEX}, get ENT_STATE(){return ENT_STATE}, get PLANS_CACHE(){return PLANS_CACHE},
+  get SELF_SERVE_DEFAULT_PLAN_ID(){return SELF_SERVE_DEFAULT_PLAN_ID}, loadSelfServeSettings, saveSelfServeDefaultPlan, savePlanFromForm,
   setEntitlement, setTenantLifecycle, setTenantBillingStatus, seedStarterPlans, assignPlanToTenant, generateDraftInvoices, invoiceApplyAction,
   loadPendingSubmissions, loadInvoiceSubmissions, verifySubmission, rejectSubmission, renderInvoiceQueue, monthInputToOffset, computeTenantReport,
   renderEntitlementsTab, renderPlansTab, renderInvoicesTab, renderOverview, exportReportingCsv, usagePeriod, monthStartDate, invoiceDocId, loadTenants, deriveRuntimeExpectation, computeBillingSuggestions, updatePlatformPolicy, get POLICY(){return POLICY}, renderDiagnostics,
@@ -166,7 +167,34 @@ const C = globalThis.__makeCtx();
 
   /* ===== plans ===== */
   await C.seedStarterPlans();
-  check('3 starter plans', Object.keys(C.PLANS_CACHE).length === 3);
+  check('4 starter plans', Object.keys(C.PLANS_CACHE).length === 4);
+
+  /* ===== self-serve: plan fields + default-plan setting ===== */
+  const ssPlan = C.PLANS_CACHE['self-serve-standard'];
+  check('self-serve starter plan includes store + tournament', ssPlan && ssPlan.products.includes('store') && ssPlan.products.includes('tournament'));
+  check('self-serve starter plan has a free monthly allowance (no onboarding fee pre-set -- staff sets that)', ssPlan && ssPlan.includedBookings > 0 && ssPlan.onboardingFee === 0);
+  check('plan-a keeps its one-time setup fee as a real field now, not just text copy', C.PLANS_CACHE['plan-a'].onboardingFee === 3000);
+
+  document.getElementById('pfId').value = 'self-serve-custom';
+  document.getElementById('pfName').value = 'Self-Serve Custom';
+  document.getElementById('pfOnboardingFee').value = '2500';
+  document.getElementById('pfIncluded').value = '25';
+  document.getElementById('pfRate').value = '20';
+  document.getElementById('pfIncludeStore').checked = true;
+  document.getElementById('pfIncludeTournament').checked = false;
+  document.getElementById('pfStoreFee').value = '300';
+  await C.savePlanFromForm();
+  const customPlan = C.PLANS_CACHE['self-serve-custom'];
+  check('savePlanFromForm reads the onboarding fee field', customPlan && customPlan.onboardingFee === 2500);
+  check('savePlanFromForm reads which products are checked -- store in, tournament out', customPlan && customPlan.products.join(',') === 'booking,store');
+
+  document.getElementById('selfServePlan').value = 'self-serve-custom';
+  await C.saveSelfServeDefaultPlan();
+  check('saveSelfServeDefaultPlan writes platformSettings/selfServe', store.get('platformSettings/selfServe')?.defaultPlanId === 'self-serve-custom');
+  check('SELF_SERVE_DEFAULT_PLAN_ID updates in memory immediately, no reload needed', C.SELF_SERVE_DEFAULT_PLAN_ID === 'self-serve-custom');
+  await C.loadSelfServeSettings();
+  check('loadSelfServeSettings reads it back the same way', C.SELF_SERVE_DEFAULT_PLAN_ID === 'self-serve-custom');
+
   document.getElementById('assignTenant').value = 'alpha';
   document.getElementById('assignPlan').value = 'plan-a';
   await C.assignPlanToTenant();

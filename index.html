@@ -1558,6 +1558,23 @@ body:not(.staff-mode) .staff-link{display:none!important}
                 </div>
               </div>
 
+              <!-- Poster / Hero Background -->
+              <div class="mt-5 pt-5 border-t border-[#EAE0D5]">
+                <div class="font-[750] text-[14px]">Poster</div>
+                <div class="mono text-[11px] opacity-60 mt-1">A wide photo shown faintly behind your hero headline on the home screen -- a court shot, your venue, your players. Optional; the hero looks fine without one.</div>
+                <div class="mt-3.5 flex items-center gap-4">
+                  <div id="posterPreview" class="w-24 h-16 rounded-[12px] bg-[#F1E9DF] grid place-items-center text-[10px] mono opacity-50 shrink-0 overflow-hidden border border-[#EAE0D5]">No poster</div>
+                  <div class="flex flex-col gap-2">
+                    <input type="file" id="posterFileInput" accept="image/png,image/jpeg,image/webp" class="hidden"/>
+                    <div class="flex gap-2">
+                      <button type="button" id="posterUploadBtn" class="h-9 px-4 rounded-full bg-[#D6FF5F] hover:bg-[#CBF052] text-[#201C19] font-[800] text-[12px] border border-[#201C19]/10 transition cursor-pointer">Upload Poster...</button>
+                      <button type="button" id="posterRemoveBtn" class="h-9 px-4 rounded-full bg-[#FFE9E0] text-[#8C2C10] border border-[#FFC9B6] mono text-[11px] font-[700] hover:bg-[#FFD7C7] transition cursor-pointer">Remove</button>
+                    </div>
+                    <div id="posterSizeNote" class="mono text-[10px] opacity-50"></div>
+                  </div>
+                </div>
+              </div>
+
               <!-- Business & Contact -->
               <div class="mt-5 pt-5 border-t border-[#EAE0D5]">
                 <div class="font-[750] text-[14px]">Business &amp; Contact</div>
@@ -4372,6 +4389,11 @@ function renderAdminBranding(){
     ? `<img src="${br.logoUrl}" alt="Logo" class="w-full h-full object-cover"/>`
     : (br.monogram || (b.name || 'CB').slice(0, 2).toUpperCase());
 
+  const posterPreview = document.getElementById('posterPreview');
+  posterPreview.innerHTML = br.watermarkUrl
+    ? `<img src="${br.watermarkUrl}" alt="Poster" class="w-full h-full object-cover"/>`
+    : 'No poster';
+
   document.getElementById('bizNameInput').value = b.name || '';
   document.getElementById('bizAddressInput').value = c.address || '';
   document.getElementById('bizPhoneInput').value = c.phone || '';
@@ -4456,6 +4478,50 @@ document.getElementById('logoRemoveBtn')?.addEventListener('click', async () => 
   });
   renderAdminBranding();
   if(ok) toast('Logo removed');
+});
+
+/* Poster (hero watermark): unlike the Logo, which is small enough to keep as
+   a data URL straight in the config doc, this is a wider photo -- stored in
+   Firebase Storage instead (clients/{id}/branding/...), same path shape and
+   open write rule superadmin's own watermark upload already uses during
+   provisioning. Self-service parity: a facility created through onboarding
+   never got a staff member to set one for them, so this is the only way
+   they can add one at all. */
+document.getElementById('posterUploadBtn')?.addEventListener('click', () => {
+  document.getElementById('posterFileInput').click();
+});
+document.getElementById('posterFileInput')?.addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if(!file) return;
+  if(!currentClientId || !fbStorage){ toast('Poster upload requires a tenant (?client=yourslug)'); e.target.value = ''; return; }
+  if(file.size > 2 * 1024 * 1024){ toast('Poster file is too large — keep it under 2MB'); e.target.value = ''; return; }
+  const sizeNote = document.getElementById('posterSizeNote');
+  sizeNote.textContent = 'Uploading...';
+  try {
+    const ext = (file.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
+    const path = `clients/${currentClientId}/branding/watermark_${Date.now()}.${ext}`;
+    const ref = fbStorage.ref(path);
+    await ref.put(file, { contentType: file.type || 'image/jpeg' });
+    const url = await ref.getDownloadURL();
+    const ok = await saveTenantConfigPatch(cfg => {
+      cfg.branding = { ...(cfg.branding || {}), watermarkUrl: url };
+    });
+    renderAdminBranding();
+    sizeNote.textContent = '';
+    if(ok) toast('Poster updated');
+  } catch(ex) {
+    console.warn('Poster upload failed:', ex.message);
+    sizeNote.textContent = '';
+    toast('Poster upload failed: ' + ex.message);
+  }
+  e.target.value = '';
+});
+document.getElementById('posterRemoveBtn')?.addEventListener('click', async () => {
+  const ok = await saveTenantConfigPatch(cfg => {
+    cfg.branding = { ...(cfg.branding || {}), watermarkUrl: '' };
+  });
+  renderAdminBranding();
+  if(ok) toast('Poster removed');
 });
 
 function renderPinStatus(){

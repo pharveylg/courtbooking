@@ -13,6 +13,8 @@ const { store, fakeDb, installMocks } = require('./helpers/fakeFirestore');
 installMocks();
 const fns = require(path.join(__dirname, '..', 'functions', 'index.js'));
 const pickerHtml = fs.readFileSync(path.join(__dirname, '..', 'picker.html'), 'utf8');
+const indexHtml = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+const onboardingHtml = fs.readFileSync(path.join(__dirname, '..', 'onboarding.html'), 'utf8');
 
 let passed = 0, failed = 0;
 function check(name, ok, detail) { if (ok) passed++; else { failed++; console.log(`  FAIL: ${name}${detail ? ' -- ' + detail : ''}`); } }
@@ -305,6 +307,39 @@ check('always visible, independent of facility load state -- not inside <footer>
   return i !== -1 && footerStart !== -1 && i < footerStart && !/id="ownerLink"/.test(pickerHtml);
 })());
 check('copy reads exactly "Own a facility? Set it up yourself."', pickerHtml.includes('Own a facility? Set it up yourself.'));
+
+section('Admin Console -- location, contact, logo, and poster are all self-service (not staff-only)');
+check('Business & Contact already covers address, phone, email, and socials -- this existed before, the gap was never telling owners about it', /id="bizAddressInput"/.test(indexHtml) && /id="bizPhoneInput"/.test(indexHtml) && /id="bizEmailInput"/.test(indexHtml) && /id="bizFacebookInput"/.test(indexHtml));
+check('map pin is settable without typing coordinates (current location or a pasted Maps link)', /id="bizUseLocationBtn"/.test(indexHtml) && /id="bizMapLinkInput"/.test(indexHtml));
+check('Logo upload already existed and is unaffected', /id="logoUploadBtn"/.test(indexHtml) && /id="logoRemoveBtn"/.test(indexHtml));
+check('Poster upload is new -- the real gap: no self-service way to set the hero watermark before this', /id="posterUploadBtn"/.test(indexHtml) && /id="posterRemoveBtn"/.test(indexHtml) && /id="posterFileInput"/.test(indexHtml));
+check('poster upload goes to Firebase Storage (clients/{id}/branding/...), not a data URL in Firestore -- same path shape superadmin’s own watermark upload already uses, so a self-serve poster behaves identically to a staff-set one', /clients\/\$\{currentClientId\}\/branding\/watermark_/.test(indexHtml) && /fbStorage\.ref\(path\)/.test(indexHtml));
+check('poster writes to branding.watermarkUrl, which index.html already renders behind the hero -- wiring a new writer onto an existing reader, not inventing a new field', /watermarkUrl:\s*url/.test(indexHtml) && /br\.watermarkUrl/.test(indexHtml));
+check('poster upload is capped (2MB) and requires a tenant context, same defensive posture as every other upload in this file', /file\.size > 2 \* 1024 \* 1024/.test(indexHtml) && /Poster upload requires a tenant/.test(indexHtml));
+
+section('onboarding.html checklist -- points new owners at branding/location/contact, not just payments and hours');
+check('a "branding" item is in the Recommended list, linking to the Branding & Site Settings tab', /key:\s*'branding'/.test(onboardingHtml) && /tab:\s*'Branding & Site Settings'/.test(onboardingHtml));
+check('readiness is computed from the config doc already being read for this screen -- no extra Firestore round trip needed', /branding\.logoUrl \|\| branding\.watermarkUrl \|\| contact\.address \|\| contact\.phone \|\| contact\.email/.test(onboardingHtml));
+
+section('onboarding.html -- Open Admin Console unlocks the PIN gate instead of just linking to the lock screen');
+check('"Open Admin Console" is a PIN form now, not a plain link', /id="adminUnlockForm"/.test(onboardingHtml) && /id="adminUnlockPin"/.test(onboardingHtml) && /Unlock &amp;/.test(onboardingHtml));
+check('the per-item "Open {tab}" deep links (Payment QR, Operating Hours, Branding) are untouched -- still plain manual links, only the primary CTA changed', /href="\$\{adminUrl\}" target="_blank" rel="noopener" style="color:inherit">Open \$\{esc\(item\.tab\)\}/.test(onboardingHtml));
+check('hashes the entered PIN with the exact same algorithm (SHA-256 + picklecourt-salt-2024) createFacility hashes it with server-side', /hashOnboardingPin/.test(onboardingHtml) && /pin \+ 'picklecourt-salt-2024'/.test(onboardingHtml));
+check('re-reads settings/state fresh rather than trusting a cached value -- the PIN could have just been changed from inside Admin Console itself', /settingsSnap\.data\(\)\?\.data\?\.pin/.test(onboardingHtml));
+check('never compares against a falsy/missing stored hash (a tenant with no PIN set must not "match" an empty input)', /storedHash && inputHash === storedHash/.test(onboardingHtml));
+check('on a match, pre-sets the EXACT sessionStorage key index.html’s own PIN gate reads (lsKey(\'cb_admin_unlocked_v7\') = `${base}_${clientId}`) -- so landing on #admin skips that gate entirely', /sessionStorage\.setItem\('cb_admin_unlocked_v7_' \+ slug, 'true'\)/.test(onboardingHtml));
+check('navigates same-tab (window.location.href), not target=_blank -- sessionStorage set here is not reliably inherited by a new tab opened with rel="noopener"', /window\.location\.href = adminUrl \+ '#admin'/.test(onboardingHtml));
+check('a wrong PIN shows an inline error and re-enables the button instead of silently failing or locking the owner out', /That PIN doesn.t match/.test(onboardingHtml) && /btn\.disabled = false/.test(onboardingHtml));
+
+section('index.html -- confirms the sessionStorage key format onboarding.html must match exactly');
+check('lsKey() appends the client id to the base key (cb_admin_unlocked_v7_{clientId}), read at page load before any Admin click', /function lsKey\(baseKey\)\s*\{\s*return currentClientId \? `\$\{baseKey\}_\$\{currentClientId\}` : baseKey;/.test(indexHtml));
+check('adminUnlocked is initialized straight from that sessionStorage key on load -- a pre-set flag is honored with no extra click', /let adminUnlocked = sessionStorage\.getItem\(LS\.adminUnlocked\) === 'true'/.test(indexHtml));
+check('currentClientId is resolved from ?client= before adminUnlocked is read, so the key is tenant-scoped from the very first read, not just after a manual unlock', (() => {
+  const clientIdx = indexHtml.indexOf('let currentClientId = getCurrentTenant()');
+  const unlockedIdx = indexHtml.indexOf("let adminUnlocked = sessionStorage.getItem(LS.adminUnlocked)");
+  return clientIdx > -1 && unlockedIdx > -1 && clientIdx < unlockedIdx;
+})());
+check('#admin in the URL hash is honored on load via routeTo(), which re-checks adminUnlocked and skips the PIN modal when already true', /if\(location\.hash && location\.hash !== '#home'\) setTimeout\(\(\) => routeTo\(location\.hash\.slice\(1\), true\), 350\);/.test(indexHtml));
 
 console.log(`\n=== FACILITY ONBOARDING: ${passed}/${passed + failed} passed ===`);
 process.exit(failed === 0 ? 0 : 1);

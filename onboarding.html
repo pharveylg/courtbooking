@@ -24,9 +24,10 @@
     it's ready.
   - Everything in between -- courts, operating hours, pricing, payment
     QR -- is NOT re-implemented here. Those screens already exist and
-    already work in the real Admin Console; this page links the owner
-    straight into it (tap "Staff" with the PIN set below) rather than
-    building a second, parallel copy of forms that already work.
+    already work in the real Admin Console; this page hands the owner
+    straight into it, already unlocked (PIN checked here, then a
+    pre-set sessionStorage flag skips index.html's own PIN gate) rather
+    than building a second, parallel copy of forms that already work.
 -->
 <style>
 :root{--cream:#FFFBF5;--ink:#201C19;--lime:#D6FF5F;--line:#EAE0D5;--sand:#F1E9DF;--amber:#FFF0D6;--amber-ink:#92400E;--green:#E8F5D8;--green-ink:#3F7019;--red:#FFE9E0;--red-ink:#8C2C10}
@@ -126,10 +127,21 @@ input[type=color]{width:44px;height:44px;border-radius:50%;border:1px solid var(
   let slug = (() => { try { return localStorage.getItem(SLUG_LS_KEY) || ''; } catch (e) { return ''; } })();
   let createMsg = { text: '', kind: '' };
   let checklistMsg = { text: '', kind: '' };
+  let adminUnlockMsg = { text: '', kind: '' };
   let emailMode = 'signin'; // 'signin' | 'signup'
   let emailFormOpen = false;
 
   function setSlug(s) { slug = s; try { if (s) localStorage.setItem(SLUG_LS_KEY, s); else localStorage.removeItem(SLUG_LS_KEY); } catch (e) {} }
+
+  // Same algorithm as index.html/superadmin.html's browser hashPin -- a
+  // self-serve PIN is always freshly hashed with this salt (createFacility,
+  // functions/index.js), never the legacy pre-migration salt index.html
+  // still falls back to for older tenants, so no fallback is needed here.
+  async function hashOnboardingPin(pin) {
+    const data = new TextEncoder().encode(pin + 'picklecourt-salt-2024');
+    const buf = await crypto.subtle.digest('SHA-256', data);
+    return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, '0')).join('');
+  }
 
   function render() {
     if (view === 'loading') { app.innerHTML = '<div class="lead">Loading…</div>'; return; }
@@ -261,6 +273,7 @@ input[type=color]{width:44px;height:44px;border-radius:50%;border:1px solid var(
     { key: 'pricing', label: 'Hourly rate set for every active court' },
   ];
   const RECOMMENDED = [
+    { key: 'branding', label: 'Logo, poster, location & contact info added', detail: 'Players see a blank monogram and no way to reach you or find your court until you add these — logo, poster photo, address/map pin, phone, email, and socials are all in this one place.', tab: 'Branding & Site Settings' },
     { key: 'payMethods', label: 'A real payment QR uploaded', detail: 'Until then, customers see a placeholder QR that can\'t actually be paid — staff can still confirm bookings manually (cash, bank transfer) from Confirm & Tag Bookings.', tab: 'Payment QR & Channels' },
     { key: 'hours', label: 'Operating hours reviewed', detail: 'Your facility is live with a generic 7 AM–10 PM default until you set your real hours.', tab: 'Operating Hours' },
   ];
@@ -274,6 +287,9 @@ input[type=color]{width:44px;height:44px;border-radius:50%;border:1px solid var(
     ]);
     if (!configSnap.exists) return null; // no such facility on this device/slug
     const businessName = configSnap.data()?.data?.business?.name || '';
+    const branding = configSnap.data()?.data?.branding || {};
+    const contact = configSnap.data()?.data?.contact || {};
+    const hasBranding = !!(branding.logoUrl || branding.watermarkUrl || contact.address || contact.phone || contact.email);
     const courts = (courtsSnap.exists && courtsSnap.data()?.data) || [];
     const activeCourts = courts.filter((c) => c && c.active);
     const hasActiveCourt = activeCourts.length > 0;
@@ -287,7 +303,7 @@ input[type=color]{width:44px;height:44px;border-radius:50%;border:1px solid var(
     return {
       businessName,
       done: { name: !!businessName, court: hasActiveCourt, pin: hasPin, pricing: hasPricing },
-      recommended: { payMethods: hasRealQr, hours: hasCustomHours },
+      recommended: { branding: hasBranding, payMethods: hasRealQr, hours: hasCustomHours },
     };
   }
   async function renderChecklist() {
@@ -316,8 +332,12 @@ input[type=color]{width:44px;height:44px;border-radius:50%;border:1px solid var(
       </div>
       <div class="card">
         <p style="font-size:13.5px;margin-bottom:10px"><strong>Open your Admin Console</strong> to set up courts, operating hours, pricing, and payment QR codes.</p>
-        <a class="btn-dark" href="${adminUrl}" target="_blank" rel="noopener">Open Admin Console ↗</a>
-        <p class="slug-url">${esc(adminUrl)} — tap "Staff" in the header and enter your PIN.</p>
+        <form id="adminUnlockForm" style="gap:10px">
+          <label>Admin PIN<input type="text" inputmode="numeric" id="adminUnlockPin" placeholder="e.g. 1234" autocomplete="off" required/></label>
+          <button type="submit" class="btn-dark" id="adminUnlockSubmit">Unlock &amp; Open Admin Console</button>
+          <div class="msg ${adminUnlockMsg.kind}" id="adminUnlockMsg" role="status">${esc(adminUnlockMsg.text)}</div>
+        </form>
+        <p class="slug-url">${esc(adminUrl)} — opens straight into Admin, already unlocked.</p>
       </div>
       <div class="card">
         <p style="font-size:13.5px;margin-bottom:10px">${allDone
@@ -340,6 +360,42 @@ input[type=color]{width:44px;height:44px;border-radius:50%;border:1px solid var(
         <button type="button" class="btn-link" id="refreshBtn">I just finished setup elsewhere — refresh this checklist</button>
       </div>`;
     document.getElementById('refreshBtn').addEventListener('click', () => render());
+    document.getElementById('adminUnlockForm').addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const pin = document.getElementById('adminUnlockPin').value.trim();
+      if (!pin) return;
+      const btn = document.getElementById('adminUnlockSubmit');
+      btn.disabled = true;
+      adminUnlockMsg = { text: 'Checking…', kind: '' }; setMsg('adminUnlockMsg', adminUnlockMsg.text, adminUnlockMsg.kind);
+      try {
+        // Re-read fresh rather than trusting whatever loadReadiness cached --
+        // the PIN could have just been changed from inside the Admin Console
+        // itself (e.g. on a second visit).
+        const settingsSnap = await db.doc(`clients/${slug}/settings/state`).get();
+        const storedHash = settingsSnap.exists && settingsSnap.data()?.data?.pin;
+        const inputHash = await hashOnboardingPin(pin);
+        if (storedHash && inputHash === storedHash) {
+          // Pre-unlock Admin on the destination page before it even loads --
+          // same sessionStorage key index.html's own PIN gate reads
+          // (cb_admin_unlocked_v7_{clientId}, see index.html's lsKey()), so
+          // landing on #admin skips that gate entirely instead of prompting
+          // again. Same-tab navigation (not target=_blank): sessionStorage
+          // set here isn't reliably inherited by a new tab opened with
+          // rel="noopener", and this codebase already avoids target=_blank
+          // for primary navigation elsewhere for the same reason (picker.html).
+          try { sessionStorage.setItem('cb_admin_unlocked_v7_' + slug, 'true'); } catch (e) {}
+          window.location.href = adminUrl + '#admin';
+        } else {
+          adminUnlockMsg = { text: 'That PIN doesn’t match — try again.', kind: 'error' };
+          btn.disabled = false;
+          setMsg('adminUnlockMsg', adminUnlockMsg.text, adminUnlockMsg.kind);
+        }
+      } catch (e) {
+        adminUnlockMsg = { text: 'Couldn’t check your PIN right now — check your connection and try again.', kind: 'error' };
+        btn.disabled = false;
+        setMsg('adminUnlockMsg', adminUnlockMsg.text, adminUnlockMsg.kind);
+      }
+    });
     const publishBtn = document.getElementById('publishBtn');
     if (publishBtn && !publishBtn.disabled) publishBtn.addEventListener('click', async () => {
       publishBtn.disabled = true;

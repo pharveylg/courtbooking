@@ -55,8 +55,15 @@ textarea{height:96px;padding:10px 13px;resize:vertical;font-weight:500;line-heig
 
 .matchup{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:10px;margin:10px 0}
 .side{text-align:center}
-.side .names{font-weight:800;font-size:15px;margin-bottom:6px;min-height:20px}
+.side .names{font-weight:800;font-size:15px;margin-bottom:6px;min-height:20px;display:flex;flex-wrap:wrap;justify-content:center;gap:2px}
 .vs{font-family:"JetBrains Mono",monospace;font-size:11px;opacity:0.4}
+.name-edit{appearance:none;-webkit-appearance:none;background:none;border:none;border-bottom:1px dashed rgba(32,28,25,.35);font:inherit;font-weight:800;font-size:15px;color:var(--ink);text-align:center;cursor:pointer;padding:0 1px;max-width:100%}
+.name-edit:hover,.name-edit:focus{border-bottom-color:var(--ink)}
+.amp-static{font-weight:400;opacity:0.4;font-size:12px;margin:0 1px}
+.serve-row{display:flex;align-items:center;justify-content:center;gap:6px;flex-wrap:wrap;margin:-4px 0 10px}
+.serve-label{font-family:"JetBrains Mono",monospace;font-size:10px;opacity:0.5;text-transform:uppercase;letter-spacing:0.04em;width:100%;text-align:center}
+.serve-pill{font-family:"JetBrains Mono",monospace;font-size:10.5px;font-weight:700;padding:4px 11px;border-radius:999px;background:var(--sand);border:1px solid var(--line);cursor:pointer;color:var(--ink);opacity:.6}
+.serve-pill[aria-pressed="true"]{background:var(--ink);color:var(--lime);opacity:1;border-color:var(--ink)}
 .score-row{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:10px}
 .score-row input{text-align:center;font-size:20px;font-weight:800}
 .no-match{text-align:center;padding:18px 0;opacity:0.5;font-size:13px}
@@ -386,15 +393,59 @@ td{padding:7px 6px;border-bottom:1px solid var(--sand)}
       : (session.rule === 'fixed_pairs' ? 'Fixed Pairs League: teams rotate strictly in the order they joined.' : '');
   }
 
+  /* Admin override: who's on court right now, and who serves first, are
+     always editable mid-match -- never validated against the rotation rule,
+     only flagged (justPlayed / consecutiveWarning) if the pick just played,
+     never blocked. "Change the whole match" is just changing every select
+     in turn, same mechanism as changing one. */
+  function nameOptionsHtml(session, team, index, current){
+    const m = session.activeMatch;
+    const seen = new Set([current]);
+    let opts = `<option value="${escapeHtml(current)}" selected>${escapeHtml(current)}</option>`;
+    ['teamA', 'teamB'].forEach((t) => {
+      (m[t] || []).forEach((n, i) => {
+        if (t === team && i === index) return;
+        if (seen.has(n)) return;
+        seen.add(n);
+        opts += `<option value="${escapeHtml(n)}">${escapeHtml(n)} (on court)</option>`;
+      });
+    });
+    session.waiting.flatMap((g) => g.names).forEach((n) => {
+      if (seen.has(n)) return;
+      seen.add(n);
+      const flag = QueueEngine.justPlayed(session, n) ? ' — just played' : '';
+      opts += `<option value="${escapeHtml(n)}">${escapeHtml(n)}${flag}</option>`;
+    });
+    return opts;
+  }
+  function teamOptionsHtml(session, side, currentId){
+    const m = session.activeMatch;
+    let opts = `<option value="${escapeHtml(currentId)}" selected>${escapeHtml(QueueEngine.teamLabel(m[side]))}</option>`;
+    session.waiting.forEach((g) => {
+      const flag = g.names.some((n) => QueueEngine.justPlayed(session, n)) ? ' — just played' : '';
+      opts += `<option value="${escapeHtml(g.id)}">${escapeHtml(QueueEngine.teamLabel(g.names))}${flag}</option>`;
+    });
+    return opts;
+  }
   function renderActiveMatch(session){
     const block = document.getElementById('activeMatchBlock');
     const m = session.activeMatch;
     if (!m) { block.innerHTML = '<div class="no-match">Waiting for enough players to start a match…</div>'; return; }
+    const fixedPairs = session.rule === 'fixed_pairs';
+    const sideHtml = (team) => fixedPairs
+      ? `<select class="name-edit" data-team-swap="${team}">${teamOptionsHtml(session, team, team === 'teamA' ? m.teamAId : m.teamBId)}</select>`
+      : m[team].map((n, i) => `<select class="name-edit" data-team="${team}" data-index="${i}">${nameOptionsHtml(session, team, i, n)}</select>`).join('<span class="amp-static">&amp;</span>');
+    const serving = m.firstServer === 'teamB' ? 'teamB' : 'teamA';
     block.innerHTML = `
       <div class="matchup">
-        <div class="side"><div class="names">${escapeHtml(QueueEngine.teamLabel(m.teamA))}</div></div>
+        <div class="side"><div class="names">${sideHtml('teamA')}</div></div>
         <div class="vs">VS</div>
-        <div class="side"><div class="names">${escapeHtml(QueueEngine.teamLabel(m.teamB))}</div></div>
+        <div class="side"><div class="names">${sideHtml('teamB')}</div></div>
+      </div>
+      <div class="serve-row">
+        <span class="serve-label">Serves first</span>
+        <button type="button" class="serve-pill" data-serve="teamA" aria-pressed="${serving === 'teamA'}">${escapeHtml(QueueEngine.teamLabel(m.teamA))}</button>
+        <button type="button" class="serve-pill" data-serve="teamB" aria-pressed="${serving === 'teamB'}">${escapeHtml(QueueEngine.teamLabel(m.teamB))}</button>
       </div>
       <div class="score-row">
         <input type="number" id="scoreA" min="0" placeholder="0"/>
@@ -407,6 +458,25 @@ td{padding:7px 6px;border-bottom:1px solid var(--sand)}
       </div>`;
     document.getElementById('submitScoreBtn').addEventListener('click', onSubmitScore);
     document.getElementById('liveScoreBtn').addEventListener('click', onLiveScore);
+    block.querySelectorAll('.serve-pill').forEach((btn) => btn.addEventListener('click', () => {
+      const s = load(); if (!s || !s.activeMatch) return;
+      QueueEngine.setFirstServer(s, btn.dataset.serve);
+      save(s); render();
+    }));
+    block.querySelectorAll('select[data-team]').forEach((sel) => sel.addEventListener('change', () => {
+      const s = load(); if (!s || !s.activeMatch) return;
+      const r = QueueEngine.swapActivePlayer(s, sel.dataset.team, Number(sel.dataset.index), sel.value);
+      if (r.error) { toast(r.error); return; }
+      save(s); render();
+      if (r.consecutiveWarning) toast(`${r.added} just played last match — added anyway.`);
+    }));
+    block.querySelectorAll('select[data-team-swap]').forEach((sel) => sel.addEventListener('change', () => {
+      const s = load(); if (!s || !s.activeMatch) return;
+      const r = QueueEngine.swapActiveTeam(s, sel.dataset.teamSwap, sel.value);
+      if (r.error) { toast(r.error); return; }
+      save(s); render();
+      if (r.consecutiveWarning) toast(`That team just played last match — added anyway.`);
+    }));
   }
 
   function renderWaitingList(session){
@@ -524,6 +594,7 @@ td{padding:7px 6px;border-bottom:1px solid var(--sand)}
     CourtBoard.open({
       title: 'Walk-in Queue — live score',
       names: { home: QueueEngine.teamLabel(m.teamA), away: QueueEngine.teamLabel(m.teamB) },
+      firstServer: m.firstServer === 'teamB' ? 'away' : 'home',
       config: { target: f.target, winBy: f.winBy, scoring: f.scoring, bestOf: 1, doubles: session.mode === 'doubles' },
       storageKey: boardKeyFor(m.id),
       finishLabel: 'Submit & rotate queue',

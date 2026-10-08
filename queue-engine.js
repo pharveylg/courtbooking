@@ -7,7 +7,7 @@
    A session looks like:
      { mode: 'singles'|'doubles', rule: <one of the six rules>,
        waiting: [{ id, names: [...] }], activeMatch: { teamA, teamB, ... } | null,
-       matches: [...], playCounts: {}, teams: {}, partnerRotationState, ... }
+       matches: [...], playCounts: {}, teams: {}, lastPartnerGroup, ... }
 
    Six rotation rules: winner_stays, four_off_four_on (the default), fixed_rotation,
    timed_rotation, partner_rotation (doubles only), fixed_pairs (doubles only).
@@ -25,12 +25,6 @@
   'use strict';
 
   function teamLabel(names) { return (names || []).join(' & '); }
-
-  /* Partner Rotation holds a foursome together for three rounds so they get to play with
-     every possible partner -- that only makes sense when the queue doesn't comfortably
-     supply a fresh four every round. Above this many players in the whole queue, every
-     round stands alone instead: see checkAndFillActiveMatch and recordMatchResult. */
-  const PARTNER_ROTATION_HOLD_LIMIT = 8;
 
   /* Overall-winner qualifying bar (computeStandings, computeOverallWinner): a
      player/team must have played at least this share of the session's most
@@ -137,6 +131,146 @@
       .filter((g) => g.names.length > 0);
   }
 
+  /* ---------- Editing the active match (admin override) ----------
+     Staff can always override who's on court right now and who serves
+     first -- these never validate against the rotation rule or the
+     consecutive-games concern, they only ever WARN about it (see
+     justPlayed below) and let the admin decide. */
+
+  function setFirstServer(session, side) {
+    if (!session || !session.activeMatch) return { error: 'No active match.' };
+    if (side !== 'teamA' && side !== 'teamB') return { error: 'Invalid side.' };
+    session.activeMatch = { ...session.activeMatch, firstServer: side };
+    return { ok: true };
+  }
+
+  /* Did `name` play in the match that just finished? The one signal used to
+     flag (never block) a consecutive-games pick, regardless of which rule
+     is running -- rest-priority already keeps this from happening on its
+     own, this is purely for when an admin overrides it by hand. */
+  function justPlayed(session, name) {
+    const last = session && session.matches && session.matches[session.matches.length - 1];
+    return !!(last && [...(last.teamA || []), ...(last.teamB || [])].includes(name));
+  }
+
+  /* Swaps the player at session.activeMatch[team][index] for `newName`, which
+     is either (a) another player currently on court -- a straight position
+     swap, no waiting-line involved, no consecutive-games concern since
+     neither player is new to this match -- or (b) someone from the waiting
+     line, who is pulled in while the replaced player goes back to the FRONT
+     of the line (they were about to play and got bumped, so they're first
+     up next round among equal playCounts, not shuffled to the back).
+     Calling this once per slot is also how "change the whole match" works --
+     there's no separate bulk version, it's the same edit repeated. Not for
+     Fixed Pairs: see swapActiveTeam. Returns { error } or
+     { ok, replaced, added, consecutiveWarning, swappedWithinMatch }. */
+  function swapActivePlayer(session, team, index, newName) {
+    if (!session || !session.activeMatch) return { error: 'No active match.' };
+    if (session.rule === 'fixed_pairs') return { error: 'Fixed Pairs swaps whole teams, not individual players -- see swapActiveTeam.' };
+    const roster = session.activeMatch[team];
+    if (!Array.isArray(roster) || index < 0 || index >= roster.length) return { error: 'Invalid player slot.' };
+    const oldName = roster[index];
+    if (newName === oldName) return { error: `${newName} is already playing there.` };
+
+    for (const t of ['teamA', 'teamB']) {
+      const i = (session.activeMatch[t] || []).indexOf(newName);
+      if (i !== -1 && (t !== team || i !== index)) {
+        const nextA = session.activeMatch.teamA.slice();
+        const nextB = session.activeMatch.teamB.slice();
+        (t === 'teamA' ? nextA : nextB)[i] = oldName;
+        (team === 'teamA' ? nextA : nextB)[index] = newName;
+        session.activeMatch = { ...session.activeMatch, teamA: nextA, teamB: nextB };
+        return { ok: true, replaced: oldName, added: newName, consecutiveWarning: false, swappedWithinMatch: true };
+      }
+    }
+
+    let found = false;
+    const waiting = [];
+    for (const g of session.waiting) {
+      if (!found && g.names.includes(newName)) {
+        found = true;
+        const rest = g.names.filter((n) => n !== newName);
+        if (rest.length) waiting.push({ ...g, names: rest });
+        continue;
+      }
+      waiting.push(g);
+    }
+    if (!found) return { error: `${newName} isn't on court or in the waiting line.` };
+    const consecutiveWarning = justPlayed(session, newName);
+    session.waiting = waiting;
+    session.waiting.unshift({ id: 'w_swap_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6), names: [oldName] });
+    const nextRoster = roster.slice();
+    nextRoster[index] = newName;
+    session.activeMatch = { ...session.activeMatch, [team]: nextRoster };
+    return { ok: true, replaced: oldName, added: newName, consecutiveWarning, swappedWithinMatch: false };
+  }
+
+  /* Fixed Pairs equivalent of swapActivePlayer: teams are a stable, named
+     unit with its own accumulated win/loss record (session.teams), so
+     swapping one player out would mean quietly reassigning that record to a
+     different roster -- instead this swaps the WHOLE team on `side` for a
+     different team currently waiting (by its waiting-group id). The
+     replaced team goes back to the front of the line, same reasoning as
+     swapActivePlayer. Returns { error } or
+     { ok, replacedTeamId, addedTeamId, consecutiveWarning }. */
+  function swapActiveTeam(session, side, newTeamGroupId) {
+    if (!session || !session.activeMatch) return { error: 'No active match.' };
+    if (session.rule !== 'fixed_pairs') return { error: 'Not a Fixed Pairs match -- see swapActivePlayer.' };
+    if (side !== 'teamA' && side !== 'teamB') return { error: 'Invalid side.' };
+    const oldTeamId = side === 'teamA' ? session.activeMatch.teamAId : session.activeMatch.teamBId;
+    const otherTeamId = side === 'teamA' ? session.activeMatch.teamBId : session.activeMatch.teamAId;
+    if (newTeamGroupId === otherTeamId) return { error: 'That team is already on court.' };
+    const idx = session.waiting.findIndex((g) => g.id === newTeamGroupId);
+    if (idx === -1) return { error: 'That team is not in the waiting line.' };
+    const incoming = session.waiting[idx];
+    const oldNames = session.activeMatch[side];
+    const consecutiveWarning = incoming.names.some((n) => justPlayed(session, n));
+    session.waiting = session.waiting.slice(0, idx).concat(session.waiting.slice(idx + 1));
+    session.waiting.unshift({ id: oldTeamId, names: oldNames });
+    session.activeMatch = { ...session.activeMatch, [side]: incoming.names, [side + 'Id']: incoming.id };
+    ensureTeam(session, incoming.id, incoming.names);
+    return { ok: true, replacedTeamId: oldTeamId, addedTeamId: incoming.id, consecutiveWarning };
+  }
+
+  /* How many times `a` and `b` have been TEAMMATES (same side) in any
+     recorded match -- derived from session.matches, same "no separate
+     counter to keep in sync" style as computeHeadToHead. This is partner
+     history, not opponent history: two players who've faced each other many
+     times but never partnered score 0 here. */
+  function partnerCount(session, a, b) {
+    if (!session || !session.matches) return 0;
+    let n = 0;
+    session.matches.forEach((m) => {
+      if ((m.teamA.includes(a) && m.teamA.includes(b)) || (m.teamB.includes(a) && m.teamB.includes(b))) n++;
+    });
+    return n;
+  }
+
+  /* Of the 3 ways to split 4 players into two teams, picks whichever
+     pairing(s) have partnered each other the FEWEST times before (summed
+     across both teams), so Partner Rotation actually rotates partners
+     instead of repeating the same couple of duos. A random tie-break among
+     equally-fresh pairings (common early in a session, when everything is
+     still 0) keeps the rotation from settling into one guessable sequence --
+     selection is never random, only which of several EQUALLY good pairings
+     gets used this round. */
+  function bestPartnerPairing(session, players) {
+    const [a, b, c, d] = players;
+    const options = [
+      { teamA: [a, b], teamB: [c, d] },
+      { teamA: [a, c], teamB: [b, d] },
+      { teamA: [a, d], teamB: [b, c] },
+    ];
+    const scored = options.map((opt) => ({
+      ...opt,
+      score: partnerCount(session, opt.teamA[0], opt.teamA[1]) + partnerCount(session, opt.teamB[0], opt.teamB[1]),
+    }));
+    const minScore = Math.min(...scored.map((o) => o.score));
+    const tied = scored.filter((o) => o.score === minScore);
+    const pick = tied[Math.floor(Math.random() * tied.length)];
+    return { teamA: pick.teamA, teamB: pick.teamB };
+  }
+
   /* Starts the next match when there are enough waiting players and none is
      already running. No-op otherwise. */
   function checkAndFillActiveMatch(session) {
@@ -157,19 +291,17 @@
     const countNeeded = isDoubles ? 4 : 2;
 
     if (session.rule === 'partner_rotation' && isDoubles) {
-      // Pull 4 players, avoiding the group that just played (session.lastPartnerGroup)
-      // unless there aren't enough others to fill the court.
+      // Pull the 4 LEAST-PLAYED eligible players every round (same
+      // rest-priority mechanism every other rule uses), avoiding the exact
+      // group that just played unless there aren't enough others -- nobody
+      // is ever held together for a fixed block of rounds, so a queue
+      // larger than four never leaves anyone sitting out while the same
+      // four play repeatedly. Then pair them to minimize repeated
+      // teammates: see bestPartnerPairing.
       const players = pullRestedPlayersAvoiding(session, 4, session.lastPartnerGroup);
       if (players) {
-        // With more than PARTNER_ROTATION_HOLD_LIMIT players in the whole queue (nobody is on
-        // court at this exact moment, so session.waiting is the whole pool), there's no need to
-        // hold this foursome together for three rounds -- there's always a fully fresh four
-        // waiting, so every round stands alone and nobody plays back to back at all. At or
-        // below the limit, keep the three-round, swap-partners structure (session.waiting
-        // already reflects the players NOT picked, since pullRestedPlayersAvoiding removed them).
-        const poolSize = players.length + session.waiting.reduce((sum, w) => sum + w.names.length, 0);
-        if (poolSize <= PARTNER_ROTATION_HOLD_LIMIT) session.partnerRotationState = { players, round: 1 };
-        session.activeMatch = { id: 'match_' + Date.now() + '_pr1', teamA: [players[0], players[1]], teamB: [players[2], players[3]] };
+        const pairing = bestPartnerPairing(session, players);
+        session.activeMatch = { id: 'match_' + Date.now(), teamA: pairing.teamA, teamB: pairing.teamB };
       }
       return;
     }
@@ -232,38 +364,12 @@
         session.waiting.unshift({ id: 'w_win_' + Date.now(), names: winnerNames });
         session.activeMatch = null;
       }
-    } else if (session.rule === 'partner_rotation' && session.mode === 'doubles' && session.partnerRotationState) {
-      const prState = session.partnerRotationState;
-      const p = prState.players; // [P1, P2, P3, P4]
-      // Re-check the threshold at every round, not just when the group formed: if the
-      // queue has grown past the limit since then, stop holding these four together
-      // right now instead of forcing the rest of the 3 rounds through.
-      const poolSize = p.length + session.waiting.reduce((sum, w) => sum + w.names.length, 0);
-      if (poolSize > PARTNER_ROTATION_HOLD_LIMIT) {
-        p.forEach((name) => session.waiting.push({ id: 'w_pr_end_' + Math.random().toString(36).slice(2, 6), names: [name] }));
-        session.lastPartnerGroup = p.slice();
-        delete session.partnerRotationState;
-        session.activeMatch = null;
-      } else if (prState.round === 1) {
-        prState.round = 2;
-        session.activeMatch = { id: 'match_' + Date.now() + '_pr2', teamA: [p[0], p[2]], teamB: [p[1], p[3]] };
-        notices.push('Round 1 finished! Setting up Round 2 partners.');
-      } else if (prState.round === 2) {
-        prState.round = 3;
-        session.activeMatch = { id: 'match_' + Date.now() + '_pr3', teamA: [p[0], p[3]], teamB: [p[1], p[2]] };
-        notices.push('Round 2 finished! Setting up Round 3 partners.');
-      } else {
-        p.forEach((name) => session.waiting.push({ id: 'w_pr_end_' + Math.random().toString(36).slice(2, 6), names: [name] }));
-        session.lastPartnerGroup = p.slice(); // avoided for the next group, unless too few others are waiting
-        delete session.partnerRotationState;
-        session.activeMatch = null;
-        notices.push('Partner rotation complete! Next 4 players stepping up.');
-      }
     } else if (session.rule === 'partner_rotation' && session.mode === 'doubles') {
-      // No partnerRotationState: the queue was large enough (more than
-      // PARTNER_ROTATION_HOLD_LIMIT) that this foursome was never held together --
-      // this one round stands alone. Rotate all four off immediately, same as any
-      // other rule, so nobody plays two rounds back to back.
+      // Every round stands alone now (see checkAndFillActiveMatch): rotate
+      // all four off immediately, same as any other rule, so nobody plays
+      // twice in a row and the next checkAndFillActiveMatch call re-draws
+      // the next 4 LEAST-PLAYED players from the full, current waiting
+      // line -- never the same held-together foursome.
       session.waiting.push({ id: 'w_pr_single_' + Date.now(), names: match.teamA });
       session.waiting.push({ id: 'w_pr_single_' + (Date.now() + 1), names: match.teamB });
       session.lastPartnerGroup = [...match.teamA, ...match.teamB];
@@ -528,6 +634,8 @@
     teamLabel,
     ensureTeam, applyMatchResult, computeStandings,
     pullRestedPlayers, pullRestedPlayersAvoiding, checkAndFillActiveMatch, recordMatchResult, removeWaitingPlayer,
+    setFirstServer, justPlayed, swapActivePlayer, swapActiveTeam,
+    partnerCount, bestPartnerPairing,
     normalizeName, nameSimilarity, getAllPlayerNamesInSession, findSimilarNames, promptNameConflict,
     computePlayerStats, computeTeamStats, computeHeadToHead, computeOverallWinner,
   };

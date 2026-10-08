@@ -2,6 +2,7 @@
 
      CourtBoard.open({
        title, names: { home, away }, config,        // format: see pickleball-scoring.js
+       firstServer,                                  // 'home'|'away', optional -- who serves first (default 'home')
        storageKey,                                  // resume after a refresh
        finishLabel,                                 // e.g. "Submit result"
        onFinish(summary, state) -> Promise|void,    // called when the match is done and saved
@@ -97,7 +98,7 @@
     const names = { home: String((opts.names && opts.names.home) || 'Home'), away: String((opts.names && opts.names.away) || 'Away') };
     const sig = JSON.stringify([config, names]);
     const key = opts.storageKey || null;
-    let state = P.createMatch(config, names);
+    let state = P.createMatch(config, names, opts.firstServer);
     let history = [];
     let resumed = false;
     let saving = false;

@@ -41,17 +41,22 @@
   const gamesToWin = (config) => Math.ceil(config.bestOf / 2);
   const startsAtServerTwo = (config) => config.scoring === 'sideout' && config.doubles;
 
-  function createMatch(rawConfig, names) {
+  /* `firstServer` ('home'|'away', optional): who serves the match's first
+     game -- defaults to 'home' (every existing caller that doesn't pass it
+     keeps today's behavior). Only matters at match start; mid-match it's
+     just the current `serving` side, which alternates normally from there. */
+  function createMatch(rawConfig, names, firstServer) {
     const config = normalizeConfig(rawConfig);
     const n = names || {};
+    const first = firstServer === 'away' ? 'away' : 'home';
     return {
       config,
       names: { home: String(n.home || 'Home').slice(0, 60), away: String(n.away || 'Away').slice(0, 60) },
       games: [],
       home: 0, away: 0,
       gamesWon: { home: 0, away: 0 },
-      firstServer: 'home',
-      serving: 'home',
+      firstServer: first,
+      serving: first,
       serverNumber: startsAtServerTwo(config) ? 2 : 1,
       gameOver: false,
       complete: false,

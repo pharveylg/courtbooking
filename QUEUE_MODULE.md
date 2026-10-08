@@ -56,27 +56,21 @@ Each pick adds one to `playCounts` for every player picked (`RotationPick.countR
 
 ### Partner Rotation
 
-**At 8 or fewer players in the whole queue**, four players play three rounds together, each round with a new partner:
+Every round stands alone: each time a match is needed, `checkAndFillActiveMatch` pulls a fresh 4 and pairs them up from scratch. Nobody is ever held together for a fixed block of rounds, so a queue larger than four never leaves other waiting players sitting out while the same four play repeatedly (that *was* the old design's failure mode -- see below).
 
-- Round 1: P1 and P2 against P3 and P4.
-- Round 2: P1 and P3 against P2 and P4.
-- Round 3: P1 and P4 against P2 and P3.
+**Picking the 4, same as every other rule.** `pullRestedPlayersAvoiding(session, 4, session.lastPartnerGroup)` -- the 4 least-played eligible players, treating anyone in `lastPartnerGroup` (whoever was in the match that just finished) as if they'd played far more games than anyone else *for that one pick only*, so they sort to the back and are only picked if there aren't enough other players to fill the court:
 
-When round 3 ends, all four go back to the end of the line as individuals, and `session.lastPartnerGroup` is set to their four names.
+- **Exactly 4 in the whole queue:** nobody else exists, so the same four repeat every round. The only case where that happens.
+- **8 or more in the whole queue:** a fully fresh four is always available, so nobody ever plays two rounds in a row.
+- **5 to 7 in the whole queue:** there physically aren't enough rested players for an entirely fresh four -- e.g. at 5 players only 1 can ever be on the bench, so 3 of the next match's 4 are forced repeats no matter how smart the picker is. The engine still picks the *fewest possible* forced repeats (`8 - playerCount`, floored at 0); this is a hard lower bound, not a shortcoming of the algorithm.
 
-**Above 8, every round stands alone instead** — `PARTNER_ROTATION_HOLD_LIMIT` in `queue-engine.js`. Holding a foursome together for three rounds only makes sense when the queue can't comfortably supply a fresh four every round; above the limit it always can, so `session.partnerRotationState` is never set, each round rotates all four players off the instant it ends (exactly like Four Off Four On), and nobody plays two rounds back to back under any circumstance.
+`playCounts` are unaffected by this bias -- only the ordering of this one pick is biased; the real counts used for every other rule's rest priority, and for stats, are untouched.
 
-The threshold is re-checked at **every** round, not just when a group starts: if a group formed at 8 or fewer and the queue grows past the limit before round 3, the group stops being held together right then — it does not play out its remaining rounds first. (The reverse direction needs no special handling: once a round finishes above the limit, the next pick naturally re-evaluates the current total from scratch.)
+**Pairing the 4 minimizes repeated teammates.** Given the 4 selected players, there are exactly 3 ways to split them into two teams. `bestPartnerPairing` scores each option by `partnerCount` -- how many times each pairing's two teammates have played *together* before (derived from `session.matches`, same "no separate counter to keep in sync" style as `computeHeadToHead`; this is teammate history, not opponent history) -- and picks whichever pairing(s) scored lowest. When multiple pairings are equally fresh (common early in a session, when everything is still 0), the tie is broken **randomly** among just those equally-good options -- selection and pairing are never random, only which of several *equally* good pairings gets used this round. That keeps the rotation from settling into one guessable, fixed sequence without making it feel arbitrary.
 
-**Choosing the next group avoids whoever just played.** The next group of 4 is pulled with `pullRestedPlayersAvoiding(session, 4, session.lastPartnerGroup)` instead of the plain `pullRestedPlayers`. It treats anyone in `lastPartnerGroup` as if they had played far more games than anyone else, for that one pick only — so they sort to the very back and are only picked if there are not enough other players to fill the court:
+When a match ends, all 4 players go back to the end of the line as individuals (same as Four Off Four On), and `session.lastPartnerGroup` is set to their four names so the very next pick avoids repeating them.
 
-- **Exactly 4 in the whole queue:** nobody else exists, so the same four repeat. This is the only case where that happens.
-- **More than 8 in the whole queue:** the next group of 4 is drawn entirely from players who were not in the group that just finished, even if one of them has a lower lifetime play count than someone who just played — the "just played" exclusion overrides plain rest priority for this one pick. Combined with the rule above, this is what guarantees nobody plays consecutive rounds once the queue is large enough.
-- **5 to 8 in the whole queue:** every non-recently-played player available gets a rested spot; the remaining spot(s) are backfilled from the group that just played.
-
-Verified with a 1,000-seed randomized simulation (`node -e` scratch script, not checked in) covering mid-session joins and removals at random points, including while a group is mid-rotation: zero instances of a player appearing in two consecutive matches whenever the true pool at decision time exceeded 8.
-
-`playCounts` are unaffected by this bias — only the ordering of this one pick is biased; the real counts used for every other rule's rest priority, and for stats, are untouched.
+**Previously**, groups of 8 or fewer held the same 4 players together for a fixed 3-round block (round-robin through all 3 possible pairings) before releasing them -- `PARTNER_ROTATION_HOLD_LIMIT`/`session.partnerRotationState`, now removed. That meant anyone else waiting (queues of 5-8) sat out for all 3 rounds while the held four played three games straight -- fine for participation *within* the held group, badly uneven for anyone outside it. The current design re-draws the least-played players every single round instead, so participation stays even regardless of queue size, and still rotates partners via `bestPartnerPairing` rather than a fixed round order.
 
 ## Key functions (queue-engine.js)
 
@@ -85,6 +79,7 @@ Verified with a 1,000-seed randomized simulation (`node -e` scratch script, not 
 | `checkAndFillActiveMatch(session)` | Starts the next match when there are enough waiting players. Runs the rule-specific pick. |
 | `recordMatchResult(session, scoreA, scoreB)` | Validates the scores, records the match, rotates the queue per the rule, and fills the next match. Returns `{ error }` or `{ winner, winnerNames, loserNames, notices, timerReset }`. Both pages' submit-score handlers are thin wrappers around this. |
 | `pullRestedPlayers` / `pullRestedPlayersAvoiding` | The rest-priority and anti-repeat pulls described above |
+| `bestPartnerPairing(session, players)` / `partnerCount(session, a, b)` | Partner Rotation's pairing step: of the 3 ways to split 4 players into two teams, picks whichever minimizes repeated teammates (derived from `session.matches`), with a random tie-break among equally-fresh options |
 | `removeWaitingPlayer(session, groupId, name)` | Removes one player from the waiting line by (group id, name) -- never the whole group. If `name` was paired with someone (joined together, or a Fixed Pairs team), the other player stays waiting on their own under the same group id; removing the last name in a group drops the now-empty entry. Both pages' waiting-list "remove" buttons are per-player, not per-row, and go through this. |
 | `ensureTeam`, `applyMatchResult`, `computeStandings` | Fixed Pairs teams and league results |
 | `computePlayerStats`, `computeTeamStats`, `computeHeadToHead` | Match stats, computed on the fly from `session.matches` |

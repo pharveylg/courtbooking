@@ -1,17 +1,18 @@
-/* Facility self-service onboarding (Phase A) -- createFacility and
-   publishFacility, the two Cloud Functions behind onboarding.html.
-   Nothing here is hooked up to the live app yet: see
-   FACILITY_ONBOARDING_PROPOSAL.md section 11.
+/* Facility self-service onboarding -- createFacility and publishFacility,
+   the two Cloud Functions behind onboarding.html, plus (Phase B) its entry
+   point on picker.html. See FACILITY_ONBOARDING_PROPOSAL.md section 11.
 
    Integration test against the same in-memory Firestore double the
    tournament callables use, so Firestore-writing logic gets real
    coverage instead of just regex wiring checks. Usage:
    node tests/facility-onboarding.test.js */
+const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { store, fakeDb, installMocks } = require('./helpers/fakeFirestore');
 installMocks();
 const fns = require(path.join(__dirname, '..', 'functions', 'index.js'));
+const pickerHtml = fs.readFileSync(path.join(__dirname, '..', 'picker.html'), 'utf8');
 
 let passed = 0, failed = 0;
 function check(name, ok, detail) { if (ok) passed++; else { failed++; console.log(`  FAIL: ${name}${detail ? ' -- ' + detail : ''}`); } }
@@ -284,6 +285,26 @@ section('publishFacility -- self-serve billing: staff-provisioned tenants are ne
   check('no subscription/billing stamped for a non self-serve tenant', !tenant.subscription && !tenant.billing);
   check('no onboarding invoice for a non self-serve tenant', (await fakeDb.doc('platformInvoices/inv_riverside_onboarding').get()).exists === false);
 }
+
+section('Phase B -- entry point on picker.html');
+check('picker.html links to /onboarding.html', /href="\/onboarding\.html"/.test(pickerHtml));
+check('the link sits right below the search field, above Walk-in Queue', (() => {
+  const searchWrapOpen = pickerHtml.indexOf('id="searchWrap"');
+  const searchWrapEnd = pickerHtml.indexOf('</div>', searchWrapOpen);
+  const queueStart = pickerHtml.indexOf('id="walkinQueueSection"');
+  const i = pickerHtml.indexOf('class="owner-link');
+  return searchWrapOpen !== -1 && searchWrapEnd !== -1 && queueStart !== -1 && i !== -1 && i > searchWrapEnd && i < queueStart;
+})());
+check('always visible, independent of facility load state -- not inside <footer>, not toggled by showState()', (() => {
+  const i = pickerHtml.indexOf('class="owner-link');
+  const footerStart = pickerHtml.indexOf('<footer');
+  // showState() only ever toggles stateLoading/stateError/stateEmpty/gridSection/
+  // continueSection/myMatchesSection/searchWrap -- the owner link isn't in that
+  // list (no id of its own for JS to reach), so it's always rendered, same as
+  // the Walk-in Queue entry point right below it.
+  return i !== -1 && footerStart !== -1 && i < footerStart && !/id="ownerLink"/.test(pickerHtml);
+})());
+check('copy reads exactly "Own a facility? Set it up yourself."', pickerHtml.includes('Own a facility? Set it up yourself.'));
 
 console.log(`\n=== FACILITY ONBOARDING: ${passed}/${passed + failed} passed ===`);
 process.exit(failed === 0 ? 0 : 1);

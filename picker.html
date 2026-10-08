@@ -114,6 +114,13 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
   width:18px;height:18px;color:rgba(32,28,25,0.4);pointer-events:none;
 }
 
+/* Facility-owner entry point -- a different audience than the player-facing
+   page around it, so it's a quiet line under the search field, not a card;
+   always visible, independent of facility load state (not toggled by
+   showState(), same as Walk-in Queue right below it). */
+.owner-link{display:block;margin-top:12px;padding:0 4px;font-size:11.5px;font-weight:700;color:var(--ink);opacity:0.55;text-decoration:underline;text-underline-offset:2px}
+.owner-link:hover{opacity:0.85}
+
 /* ── Section labels ───────────────────────────────────── */
 .label{
   font-size:11px;letter-spacing:0.1em;text-transform:uppercase;
@@ -309,6 +316,11 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
     </svg>
     <input type="text" id="searchInput" class="search-input" placeholder="Search facilities" aria-label="Search facilities" autocomplete="off"/>
   </div>
+
+  <!-- Facility-owner entry point -- a different audience than the player-facing
+       page around it, so it's a quiet line, not a card; always visible,
+       independent of facility load state, same as Walk-in Queue below it. -->
+  <a class="owner-link rise" href="/onboarding.html" style="animation-delay:.13s">Own a facility? Set it up yourself.</a>
 
   <!-- Walk-in Queue: standalone, no facility/sign-in, not saved -- always visible, independent of facility load state -->
   <section id="walkinQueueSection" class="rise" style="animation-delay:.14s">

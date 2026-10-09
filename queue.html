@@ -41,6 +41,13 @@ label{display:block;font-family:"JetBrains Mono",monospace;font-size:10px;text-t
 input[type=text],input[type=number],select,textarea{width:100%;height:42px;border-radius:12px;border:1px solid var(--line);background:var(--cream);padding:0 13px;font:600 14px "Bricolage Grotesque",sans-serif;color:var(--ink)}
 textarea{height:96px;padding:10px 13px;resize:vertical;font-weight:500;line-height:1.4}
 .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.rank-list{list-style:none;display:flex;flex-direction:column;gap:6px}
+.rank-item{display:flex;align-items:center;justify-content:space-between;gap:8px;background:var(--cream);border:1px solid var(--line);border-radius:12px;padding:7px 6px 7px 12px;font-size:13px;font-weight:700}
+.rank-item .rank-num{font-family:"JetBrains Mono",monospace;font-size:10px;opacity:0.4;margin-right:7px}
+.rank-item .rank-btns{display:flex;gap:2px}
+.rank-item button{width:26px;height:26px;border-radius:999px;border:1px solid var(--line);background:#fff;font-size:11px;line-height:1;cursor:pointer;color:var(--ink)}
+.rank-item button:disabled{opacity:0.25;cursor:not-allowed}
+.hint{font-size:10.5px;opacity:0.5;margin-top:5px;line-height:1.4}
 .btn{height:42px;padding:0 18px;border-radius:999px;border:1px solid var(--ink);background:var(--ink);color:#fff;font:700 13px "Bricolage Grotesque",sans-serif;cursor:pointer}
 .btn:active{transform:scale(0.98)}
 .btn.ghost{background:transparent;color:var(--ink)}
@@ -146,6 +153,16 @@ td{padding:7px 6px;border-bottom:1px solid var(--sand)}
       <label for="setInitialPlayers">Starting players (optional)</label>
       <textarea id="setInitialPlayers" placeholder="One player per line.&#10;For Fixed Pairs: one team per line, e.g. &quot;Jun &amp; Pat&quot;"></textarea>
     </div>
+    <div class="field">
+      <label>Overall winner ranking order</label>
+      <ol class="rank-list" id="setRankOrderList"></ol>
+      <p class="hint">Highest priority first. Used to decide the overall winner when the queue ends.</p>
+    </div>
+    <div class="field">
+      <label for="setMinGames">Min. games to qualify for winner</label>
+      <input type="number" id="setMinGames" min="1" placeholder="Auto (40% of leader's games)"/>
+      <p class="hint">Leave blank so a late joiner can't win on a thin sample -- they'll need at least 40% of the leader's games played.</p>
+    </div>
     <div class="btn-row">
       <button type="button" class="btn lime" id="startQueueBtn">Start queue</button>
     </div>
@@ -245,6 +262,7 @@ td{padding:7px 6px;border-bottom:1px solid var(--sand)}
     <div class="winner-name" id="winnerName"></div>
     <div class="winner-stats mono" id="winnerStats"></div>
     <div class="winner-note mono" id="winnerNote"></div>
+    <button type="button" class="btn ghost" id="winnerPdfBtn" style="border:1px solid var(--ink);margin-bottom:10px">⬇ Download stats (PDF)</button>
     <button type="button" class="btn lime" id="winnerDoneBtn">Done</button>
   </div>
 </div>
@@ -289,6 +307,36 @@ td{padding:7px 6px;border-bottom:1px solid var(--sand)}
   }
 
   /* ---------- Setup ---------- */
+
+  /* Overall winner ranking order: a reorderable priority list of the 5
+     configurable criteria (QueueEngine.DEFAULT_RANKING_ORDER), set once at
+     queue creation like mode/rule. Up/down buttons instead of drag-and-drop
+     -- simplest thing that works reliably on both mouse and touch, no
+     library needed. Read into session.winnerConfig.rankingOrder when the
+     queue starts; QueueEngine falls back to the same default order if this
+     is ever missing or invalid, so an empty/old session is unaffected. */
+  let setRankOrderState = QueueEngine.DEFAULT_RANKING_ORDER.slice();
+  function renderSetRankOrderList(){
+    const list = document.getElementById('setRankOrderList');
+    list.innerHTML = setRankOrderState.map((key, i) => `
+      <li class="rank-item">
+        <span><span class="rank-num">${i + 1}.</span>${escapeHtml(QueueEngine.RANKING_CRITERIA_LABELS[key])}</span>
+        <span class="rank-btns">
+          <button type="button" data-key="${key}" data-dir="up" ${i === 0 ? 'disabled' : ''}>&#9650;</button>
+          <button type="button" data-key="${key}" data-dir="down" ${i === setRankOrderState.length - 1 ? 'disabled' : ''}>&#9660;</button>
+        </span>
+      </li>
+    `).join('');
+    list.querySelectorAll('button[data-dir]').forEach((btn) => btn.addEventListener('click', () => {
+      const idx = setRankOrderState.indexOf(btn.dataset.key);
+      const swapIdx = idx + (btn.dataset.dir === 'up' ? -1 : 1);
+      if (swapIdx < 0 || swapIdx >= setRankOrderState.length) return;
+      [setRankOrderState[idx], setRankOrderState[swapIdx]] = [setRankOrderState[swapIdx], setRankOrderState[idx]];
+      renderSetRankOrderList();
+    }));
+  }
+  renderSetRankOrderList();
+
   document.getElementById('setRule').addEventListener('change', () => {
     const rule = document.getElementById('setRule').value;
     const modeSel = document.getElementById('setMode');
@@ -332,10 +380,16 @@ td{padding:7px 6px;border-bottom:1px solid var(--sand)}
       });
     }
 
+    const minGamesVal = parseInt(document.getElementById('setMinGames').value, 10);
+
     const session = {
       mode, rule, waiting, teams, activeMatch: null, matches: [], playCounts: {},
       timerLimit, timerSecondsLeft: timerLimit * 60, timerRunning: false,
       gameFormat: { target: 11, winBy: 2, scoring: 'sideout' },
+      winnerConfig: {
+        minGames: Number.isFinite(minGamesVal) && minGamesVal > 0 ? minGamesVal : null,
+        rankingOrder: setRankOrderState.slice(),
+      },
     };
     QueueEngine.checkAndFillActiveMatch(session);
     save(session);
@@ -350,10 +404,17 @@ td{padding:7px 6px;border-bottom:1px solid var(--sand)}
     document.getElementById('pane-stats').classList.toggle('hidden', dashboardTab !== 'stats');
   }));
 
+  // Captured right before a session's data is wiped, so the "Download
+  // stats (PDF)" button on the winner overlay still has something to show --
+  // sessionStorage is cleared the instant a queue ends, before the winner
+  // is even on screen.
+  let lastEndedStatsReport = null;
+
   document.getElementById('endQueueBtn').addEventListener('click', () => {
     if (!confirm('End this queue? Everything -- the waiting line, the match, and the stats -- will be gone.')) return;
     const session = load();
     const winner = session ? QueueEngine.computeOverallWinner(session) : null;
+    lastEndedStatsReport = session ? QueueEngine.buildStatsReport(session) : null;
     stopTimerLoop();
     clear();
     cleanupBoardKeys(null);
@@ -361,11 +422,13 @@ td{padding:7px 6px;border-bottom:1px solid var(--sand)}
     if (winner) showWinner(winner);
   });
 
-  /* Declares the overall winner, ranked by qualifying games played
-     (QueueEngine.MIN_GAMES_SHARE of the leader's count -- a late joiner can't
+  /* Declares the overall winner, ranked (by default) by qualifying games
+     played (the session's winnerConfig.minGames, or QueueEngine.
+     MIN_GAMES_SHARE of the leader's count otherwise -- a late joiner can't
      win on a thin sample) -> win% -> head-to-head -> point differential ->
-     total wins -> games played -> name. Fixed Pairs declares the top team
-     instead of a player. */
+     total wins -> games played -> name, in whatever order that session's
+     winnerConfig.rankingOrder set at creation. Fixed Pairs declares the
+     top team instead of a player. */
   function showWinner(w){
     document.getElementById('winnerLabel').textContent = w.type === 'team' ? 'Winning team' : 'Winner';
     document.getElementById('winnerName').textContent = w.name;
@@ -373,11 +436,82 @@ td{padding:7px 6px;border-bottom:1px solid var(--sand)}
     document.getElementById('winnerStats').textContent = `${w.wins}-${w.losses} record • ${diffStr} point diff • ${w.winPct}% win rate`;
     const tiebreakNote = { 'qualifying games played': 'Decided by games played -- the runner-up hadn’t played enough games yet to qualify.', 'head-to-head': 'Decided by head-to-head.', 'point differential': 'Decided by point differential.', 'total wins': 'Decided by total wins.', 'games played': 'Decided by games played.', name: 'Decided by a coin-flip tiebreak (name order) -- everything else was tied.' }[w.decidedBy] || '';
     document.getElementById('winnerNote').textContent = tiebreakNote;
+    document.getElementById('winnerPdfBtn').onclick = () => downloadStatsPdf(lastEndedStatsReport, w);
     document.getElementById('winnerOverlay').classList.remove('hidden');
   }
   document.getElementById('winnerDoneBtn').addEventListener('click', () => {
     document.getElementById('winnerOverlay').classList.add('hidden');
   });
+
+  /* Opens a print-friendly stats report in a new tab and triggers the
+     browser's print dialog -- same "download as PDF" pattern already used
+     elsewhere in this app (superadmin.html's Print button): no PDF library,
+     just print-to-PDF via the browser's own dialog. report comes from
+     QueueEngine.buildStatsReport, captured right before the session that
+     produced it was wiped. */
+  function downloadStatsPdf(report, winner){
+    if (!report) { toast('No stats to download.'); return; }
+    const win = window.open('', '_blank');
+    if (!win) { toast('Allow popups to download the PDF.'); return; }
+    const esc = escapeHtml;
+    const title = `${report.name || 'Walk-in Queue'} — Final Stats`;
+    const genAt = new Date(report.generatedAt).toLocaleString();
+    const pdStr = (n) => (n > 0 ? '+' : '') + n;
+    const winnerHtml = winner ? `
+      <div class="winner">
+        <div class="wlabel">${winner.type === 'team' ? 'WINNING TEAM' : 'WINNER'}</div>
+        <div class="wname">${esc(winner.name)}</div>
+        <div class="wstats">${winner.wins}-${winner.losses} record &middot; ${pdStr(winner.pointDiff)} point diff &middot; ${winner.winPct}% win rate</div>
+      </div>` : '';
+    const standingsHtml = report.standings.length ? `
+      <h2>Standings</h2>
+      <table><thead><tr><th>Team</th><th>GP</th><th>W</th><th>L</th><th>PD</th><th>Win%</th></tr></thead><tbody>
+        ${report.standings.map((t) => `<tr><td>${esc(t.name)}</td><td>${t.gp}</td><td>${t.w}</td><td>${t.l}</td><td>${pdStr(t.pd)}</td><td>${t.winPct}%</td></tr>`).join('')}
+      </tbody></table>` : '';
+    const playersHtml = `
+      <h2>Players</h2>
+      <table><thead><tr><th>Name</th><th>M</th><th>W</th><th>L</th><th>PF</th><th>PA</th><th>+/-</th><th>Win%</th></tr></thead><tbody>
+        ${report.players.map((p) => `<tr><td>${esc(p.name)}</td><td>${p.matches}</td><td>${p.wins}</td><td>${p.losses}</td><td>${p.pointsFor}</td><td>${p.pointsAgainst}</td><td>${pdStr(p.pd)}</td><td>${p.winPct}%</td></tr>`).join('') || '<tr><td colspan="8">No matches played.</td></tr>'}
+      </tbody></table>`;
+    const teamsHtml = report.teams.length ? `
+      <h2>Pairings</h2>
+      <table><thead><tr><th>Team</th><th>M</th><th>W</th><th>L</th><th>PF</th><th>PA</th><th>+/-</th><th>Win%</th></tr></thead><tbody>
+        ${report.teams.map((t) => `<tr><td>${esc(t.name)}</td><td>${t.matches}</td><td>${t.wins}</td><td>${t.losses}</td><td>${t.pointsFor}</td><td>${t.pointsAgainst}</td><td>${pdStr(t.pd)}</td><td>${t.winPct}%</td></tr>`).join('')}
+      </tbody></table>` : '';
+    const h2hHtml = report.headToHead.length ? `
+      <h2>Head-to-head</h2>
+      <table><thead><tr><th>Player</th><th>W</th><th>W</th><th>Player</th><th>Meetings</th></tr></thead><tbody>
+        ${report.headToHead.map((r) => `<tr><td>${esc(r.a)}</td><td>${r.aWins}</td><td>${r.bWins}</td><td>${esc(r.b)}</td><td>${r.meetings}</td></tr>`).join('')}
+      </tbody></table>` : '';
+    const matchesHtml = `
+      <h2>Match history</h2>
+      <table><thead><tr><th>Team A</th><th></th><th></th><th>Team B</th></tr></thead><tbody>
+        ${report.matches.map((m) => `<tr><td>${esc(m.teamA)}</td><td>${m.scoreA}</td><td>${m.scoreB}</td><td>${esc(m.teamB)}</td></tr>`).join('') || '<tr><td colspan="4">No matches played.</td></tr>'}
+      </tbody></table>`;
+
+    win.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${esc(title)}</title><style>
+      body{font-family:-apple-system,"Segoe UI",Arial,sans-serif;color:#201C19;padding:28px;max-width:720px;margin:0 auto}
+      h1{font-size:20px;margin:0 0 2px}
+      .meta{font-size:11px;opacity:0.6;margin-bottom:18px}
+      .winner{border:2px solid #201C19;border-radius:12px;padding:14px 18px;margin-bottom:22px}
+      .wlabel{font-size:10px;letter-spacing:0.08em;opacity:0.6;font-weight:700}
+      .wname{font-size:22px;font-weight:800;margin:2px 0}
+      .wstats{font-size:12px;opacity:0.75}
+      h2{font-size:13px;letter-spacing:0.04em;text-transform:uppercase;margin:22px 0 8px;opacity:0.75}
+      table{width:100%;border-collapse:collapse;font-size:12px;margin-bottom:4px}
+      th,td{text-align:left;padding:5px 8px;border-bottom:1px solid #eee}
+      th{opacity:0.55;font-weight:600;font-size:10px;text-transform:uppercase}
+      td:not(:first-child),th:not(:first-child){text-align:right}
+      @media print{body{padding:0}}
+    </style></head><body>
+      <h1>${esc(report.name || 'Walk-in Queue')}</h1>
+      <div class="meta">Final stats &middot; ${esc(genAt)} &middot; ${report.mode === 'singles' ? 'Singles' : 'Doubles'} &middot; ${esc(ruleLabel(report.rule))}</div>
+      ${winnerHtml}${standingsHtml}${playersHtml}${teamsHtml}${h2hHtml}${matchesHtml}
+    </body></html>`);
+    win.document.close();
+    win.focus();
+    win.print();
+  }
 
   function ruleLabel(rule){
     return { winner_stays: 'Winner Stays', four_off_four_on: 'Four Off, Four On', fixed_rotation: 'Fixed Rotation', timed_rotation: 'Timed Rotation', partner_rotation: 'Partner Rotation', fixed_pairs: 'Fixed Pairs League' }[rule] || rule;

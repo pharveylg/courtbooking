@@ -809,5 +809,140 @@ check('rejects a non-Fixed-Pairs session -- use swapActivePlayer instead', (() =
   return !!Q.swapActiveTeam(s, 'teamA', 'T3').error;
 })());
 
+section('normalizeRankingOrder: only a genuine permutation of the 5 criteria is accepted');
+check('a valid custom permutation is kept as-is', eq(
+  Q.normalizeRankingOrder(['pointDiff', 'wins', 'winPct', 'gamesPlayed', 'headToHead']),
+  ['pointDiff', 'wins', 'winPct', 'gamesPlayed', 'headToHead']
+));
+check('missing a criterion falls back to the default order', eq(Q.normalizeRankingOrder(['winPct', 'wins']), Q.DEFAULT_RANKING_ORDER));
+check('a duplicated criterion falls back to the default order', eq(Q.normalizeRankingOrder(['winPct', 'winPct', 'pointDiff', 'wins', 'gamesPlayed']), Q.DEFAULT_RANKING_ORDER));
+check('an unknown key falls back to the default order', eq(Q.normalizeRankingOrder(['winPct', 'headToHead', 'pointDiff', 'wins', 'notReal']), Q.DEFAULT_RANKING_ORDER));
+check('not an array falls back to the default order', eq(Q.normalizeRankingOrder(null), Q.DEFAULT_RANKING_ORDER));
+check('DEFAULT_RANKING_ORDER itself matches the documented default (win% -> h2h -> point diff -> wins -> games played)', eq(Q.DEFAULT_RANKING_ORDER, ['winPct', 'headToHead', 'pointDiff', 'wins', 'gamesPlayed']));
+
+section('computeOverallWinner: configurable ranking order (session.winnerConfig.rankingOrder)');
+check('reordering to put point differential ahead of win% flips the winner when it would otherwise be decided by win%', (() => {
+  // a: 2-0 (100%), point diff +4, playing close games against b.
+  // c: 1-1 (50%), point diff +9 -- one 11-0 blowout win, one 9-11 loss.
+  // Equal game counts for both (2), so the qualifying bar never enters it.
+  // By default win% decides in a's favor; with pointDiff promoted to the
+  // top of the order, c's bigger margin wins instead.
+  const s = base('winner_stays', 'singles');
+  s.matches = [
+    { teamA: ['a'], teamB: ['b'], scoreA: 11, scoreB: 9, winner: 'teamA' },
+    { teamA: ['a'], teamB: ['b'], scoreA: 11, scoreB: 9, winner: 'teamA' },
+    { teamA: ['c'], teamB: ['d'], scoreA: 11, scoreB: 0, winner: 'teamA' },
+    { teamA: ['c'], teamB: ['d'], scoreA: 9, scoreB: 11, winner: 'teamB' },
+  ];
+  const byDefault = Q.computeOverallWinner(s);
+  s.winnerConfig = { rankingOrder: ['pointDiff', 'winPct', 'headToHead', 'wins', 'gamesPlayed'] };
+  const byCustomOrder = Q.computeOverallWinner(s);
+  return byDefault.name === 'a' && byDefault.decidedBy === 'win%' &&
+    byCustomOrder.name === 'c' && byCustomOrder.decidedBy === 'point differential';
+})());
+check('an invalid rankingOrder is ignored, falling back to the default chain', (() => {
+  const s = base('winner_stays', 'singles');
+  s.matches = [
+    { teamA: ['a'], teamB: ['b'], scoreA: 11, scoreB: 4, winner: 'teamA' },
+    { teamA: ['a'], teamB: ['c'], scoreA: 11, scoreB: 9, winner: 'teamA' },
+    { teamA: ['b'], teamB: ['c'], scoreA: 11, scoreB: 6, winner: 'teamA' },
+  ];
+  s.winnerConfig = { rankingOrder: ['winPct', 'winPct'] }; // corrupt: duplicate key
+  const w = Q.computeOverallWinner(s);
+  return w.name === 'a' && w.decidedBy === 'win%'; // same result as the unconfigured default
+})());
+check('fixed pairs standings respect the same configurable order via computeStandings', (() => {
+  // T1 and T2 split their two meetings 1-1 each -- tied on both win% (50%)
+  // and head-to-head, so by default the chain falls through to point diff
+  // anyway (T1's 11-1 win outweighs its 9-11 loss: +22 vs T2's +2). Custom
+  // order just confirms it still runs cleanly and puts T1 on top.
+  const s = base('fixed_pairs', 'doubles');
+  Q.ensureTeam(s, 'T1', ['a', 'b']);
+  Q.ensureTeam(s, 'T2', ['c', 'd']);
+  Q.applyMatchResult(s, 'T1', 'T2', 11, 1);
+  Q.applyMatchResult(s, 'T1', 'T2', 9, 11);
+  s.winnerConfig = { rankingOrder: ['pointDiff', 'winPct', 'headToHead', 'wins', 'gamesPlayed'] };
+  const standings = Q.computeStandings(s);
+  return standings[0].id === 'T1';
+})());
+
+section('computeOverallWinner / computeStandings: configurable minimum games for eligibility (session.winnerConfig.minGames)');
+check('an explicit minGames overrides the automatic 40%-of-leader share', (() => {
+  // Every opponent below is a one-off (p1..p5) so none of them accumulates
+  // a competitive record of their own -- only a and b are real contenders.
+  const s = base('winner_stays', 'singles');
+  s.matches = [
+    { teamA: ['a'], teamB: ['p1'], scoreA: 11, scoreB: 1, winner: 'teamA' },  // a: 1-0 (100%), 1 game -- under the default 40%-of-4 bar (needs 2)
+    { teamA: ['b'], teamB: ['p2'], scoreA: 11, scoreB: 1, winner: 'teamA' },
+    { teamA: ['b'], teamB: ['p3'], scoreA: 11, scoreB: 1, winner: 'teamA' },
+    { teamA: ['b'], teamB: ['p4'], scoreA: 1, scoreB: 11, winner: 'teamB' },
+    { teamA: ['b'], teamB: ['p5'], scoreA: 1, scoreB: 11, winner: 'teamB' },  // b: 2-2 (50%), 4 games -- the session leader
+  ];
+  const byDefault = Q.computeOverallWinner(s); // a's 1 game < ceil(0.4*4)=2 -> disqualified -> b wins on qualifying games played
+  s.winnerConfig = { minGames: 1 }; // explicit override: just 1 game is enough to qualify
+  const byOverride = Q.computeOverallWinner(s); // a now qualifies and is undefeated
+  return byDefault.name === 'b' && byDefault.decidedBy === 'qualifying games played' && byOverride.name === 'a';
+})());
+check('a minGames higher than anyone has played still always decides a winner (nobody qualifies, so ranking proceeds among everyone)', (() => {
+  const s = base('winner_stays', 'singles');
+  s.matches = [
+    { teamA: ['a'], teamB: ['b'], scoreA: 11, scoreB: 4, winner: 'teamA' },
+    { teamA: ['a'], teamB: ['c'], scoreA: 11, scoreB: 9, winner: 'teamA' },
+  ];
+  s.winnerConfig = { minGames: 50 }; // nobody has played anywhere close to 50
+  const w = Q.computeOverallWinner(s);
+  return w !== null && w.name === 'a'; // still resolved by the normal chain among the (all disqualified) field
+})());
+check('minGames also governs Fixed Pairs standings via computeStandings', (() => {
+  const s = base('fixed_pairs', 'doubles');
+  Q.ensureTeam(s, 'T1', ['a', 'b']);
+  Q.ensureTeam(s, 'T2', ['c', 'd']);
+  Q.ensureTeam(s, 'T3', ['e', 'f']);
+  Q.applyMatchResult(s, 'T1', 'T3', 11, 1);   // T1: 1-0 (100%), 1 game -- thin sample
+  Q.applyMatchResult(s, 'T2', 'T3', 11, 1);
+  Q.applyMatchResult(s, 'T2', 'T3', 1, 11);
+  Q.applyMatchResult(s, 'T2', 'T3', 11, 1);
+  Q.applyMatchResult(s, 'T2', 'T3', 1, 11);   // T2: 2-2 (50%), 4 games -- the most active team
+  const withoutOverride = Q.computeStandings(s)[0].id; // T1's 1 game < ceil(0.4*4)=2 -> disqualified
+  s.winnerConfig = { minGames: 1 };
+  const withOverride = Q.computeStandings(s)[0].id; // T1 now qualifies, and is undefeated
+  return withoutOverride === 'T2' && withOverride === 'T1';
+})());
+
+section('buildStatsReport: a serializable snapshot of final stats, captured before a session is wiped');
+check('returns null for a null session', Q.buildStatsReport(null) === null);
+check('carries session identity (name, mode, rule) and a generatedAt timestamp', (() => {
+  const s = base('winner_stays', 'singles');
+  s.name = 'Friday Singles';
+  const r = Q.buildStatsReport(s);
+  return r.name === 'Friday Singles' && r.mode === 'singles' && r.rule === 'winner_stays' && typeof r.generatedAt === 'number';
+})());
+check('players, teams, head-to-head and match history mirror computePlayerStats/computeTeamStats/computeHeadToHead exactly', (() => {
+  const s = base('winner_stays', 'doubles');
+  s.matches = [
+    { teamA: ['a', 'b'], teamB: ['c', 'd'], scoreA: 11, scoreB: 4, winner: 'teamA' },
+    { teamA: ['a', 'c'], teamB: ['b', 'd'], scoreA: 11, scoreB: 9, winner: 'teamA' },
+  ];
+  const r = Q.buildStatsReport(s);
+  const aRow = r.players.find((p) => p.name === 'a');
+  return r.players.length === 4 && aRow.matches === 2 && aRow.wins === 2 && aRow.pd === 9 &&
+    r.teams.length === 4 && r.headToHead.length === Q.computeHeadToHead(s).length &&
+    r.matches.length === 2 && r.matches[0].teamA === 'a & c'; // most recent match first (reversed)
+})());
+check('fixed pairs sessions include a standings table; other rules leave it empty', (() => {
+  const fp = base('fixed_pairs', 'doubles');
+  Q.ensureTeam(fp, 'T1', ['a', 'b']);
+  Q.ensureTeam(fp, 'T2', ['c', 'd']);
+  Q.applyMatchResult(fp, 'T1', 'T2', 11, 4);
+  const other = base('winner_stays', 'doubles');
+  other.matches = [{ teamA: ['a', 'b'], teamB: ['c', 'd'], scoreA: 11, scoreB: 4, winner: 'teamA' }];
+  return Q.buildStatsReport(fp).standings.length === 2 && Q.buildStatsReport(other).standings.length === 0;
+})());
+check('an empty session (no matches) still returns a well-formed report with empty collections, not an error', (() => {
+  const s = base('winner_stays', 'doubles');
+  const r = Q.buildStatsReport(s);
+  return eq(r.players, []) && eq(r.teams, []) && eq(r.headToHead, []) && eq(r.matches, []) && eq(r.standings, []);
+})());
+
 console.log(`\n=== QUEUE ENGINE: ${passed}/${passed + failed} passed ===`);
 process.exit(failed === 0 ? 0 : 1);

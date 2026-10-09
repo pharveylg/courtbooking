@@ -629,6 +629,22 @@ body:not(.staff-mode) .staff-link{display:none!important}
               <span class="mono text-[9px] opacity-50 block mt-0.5">Separate player names by hitting Enter. Minimum 2 (singles) or 4 (doubles) to auto-start.</span>
             </div>
 
+            <details class="rounded-[14px] border border-[#EAE0D5] bg-[#FFFBF5] px-3.5 py-2.5">
+              <summary class="mono text-[10px] uppercase tracking-widest font-[700] cursor-pointer select-none">Advanced: overall winner ⌄</summary>
+              <div class="mt-3">
+                <div class="flex items-center justify-between mb-1.5">
+                  <label class="mono text-[10px] uppercase tracking-widest font-[700]">Ranking order</label>
+                  <span class="mono text-[9px] opacity-50">Highest priority first</span>
+                </div>
+                <ol id="qRankOrderList" class="space-y-1.5"></ol>
+              </div>
+              <div class="mt-3">
+                <label class="block mono text-[10px] uppercase tracking-widest font-[700] mb-1">Min. games to qualify for winner</label>
+                <input type="number" min="1" id="qMinGames" placeholder="Auto (40% of leader's games)" class="w-full h-9 rounded-full border border-[#EAE0D5] bg-white px-3.5 text-[12px] font-[600] outline-none focus:border-[#201C19]"/>
+                <span class="mono text-[9px] opacity-50 block mt-1">Leave blank so a late joiner can't win on a thin sample -- they'll need at least 40% of the leader's games.</span>
+              </div>
+            </details>
+
             <button type="submit" class="w-full h-11 rounded-full bg-[#D6FF5F] hover:bg-[#CBF052] text-[#201C19] font-[800] text-[13px] tracking-wide border border-[#201C19]/10 shadow-xs transition flex items-center justify-center gap-1.5 cursor-pointer">
               <span>🚀 Generate Queue Board</span>
             </button>
@@ -1987,6 +2003,7 @@ body:not(.staff-mode) .staff-link{display:none!important}
       <div id="queueWinnerName" class="text-[22px] font-[800] tracking-[-0.01em] mb-2.5 break-words"></div>
       <div id="queueWinnerStats" class="mono text-[13px] opacity-70 mb-2 leading-[1.5]"></div>
       <div id="queueWinnerNote" class="mono text-[11px] opacity-50 mb-5 min-h-[14px]"></div>
+      <button type="button" id="queueWinnerPdfBtn" class="w-full h-11 rounded-full bg-white border border-[#201C19]/15 font-[750] text-[13px] cursor-pointer active:scale-[0.98] transition mb-2.5">⬇ Download stats (PDF)</button>
       <button type="button" id="queueWinnerDoneBtn" class="w-full h-12 rounded-full bg-[#D6FF5F] border border-[#201C19]/10 font-[800] text-[14px] cursor-pointer active:scale-[0.98] transition">Done</button>
     </div>
   </div>
@@ -2038,7 +2055,8 @@ const {
   setFirstServer, swapActivePlayer, swapActiveTeam,
   normalizeName: _normalizeName, nameSimilarity: _nameSimilarity,
   getAllPlayerNamesInSession, findSimilarNames, promptNameConflict,
-  computePlayerStats, computeTeamStats, computeHeadToHead, computeOverallWinner,
+  computePlayerStats, computeTeamStats, computeHeadToHead, computeOverallWinner, buildStatsReport,
+  DEFAULT_RANKING_ORDER, RANKING_CRITERIA_LABELS,
 } = QueueEngine;
 
 /* ================================================================
@@ -8239,6 +8257,36 @@ function renderActiveQueueDashboard() {
   }
 }
 
+/* Overall winner ranking order: a reorderable priority list of the 5
+   configurable criteria (DEFAULT_RANKING_ORDER), set once at queue creation
+   like mode/rule. Up/down buttons instead of drag-and-drop -- simplest
+   thing that works reliably on both mouse and touch, no library needed.
+   Read into session.winnerConfig.rankingOrder on submit; QueueEngine falls
+   back to the same default order if this is ever missing or invalid, so
+   existing/older sessions are unaffected. */
+let qRankOrderState = DEFAULT_RANKING_ORDER.slice();
+function renderQRankOrderList() {
+  const list = document.getElementById('qRankOrderList');
+  if (!list) return;
+  list.innerHTML = qRankOrderState.map((key, i) => `
+    <li class="flex items-center justify-between gap-2 bg-white rounded-full border border-[#EAE0D5] px-3 py-1.5 text-[12px] font-[650]">
+      <span><span class="opacity-40 mono text-[10px] mr-1.5">${i + 1}.</span>${escapeHtml(RANKING_CRITERIA_LABELS[key])}</span>
+      <span class="flex gap-1">
+        <button type="button" data-key="${key}" data-dir="up" ${i === 0 ? 'disabled' : ''} class="w-6 h-6 rounded-full hover:bg-[#F1E9DF] disabled:opacity-25 text-[11px] cursor-pointer">▲</button>
+        <button type="button" data-key="${key}" data-dir="down" ${i === qRankOrderState.length - 1 ? 'disabled' : ''} class="w-6 h-6 rounded-full hover:bg-[#F1E9DF] disabled:opacity-25 text-[11px] cursor-pointer">▼</button>
+      </span>
+    </li>
+  `).join('');
+  list.querySelectorAll('button[data-dir]').forEach((btn) => btn.addEventListener('click', () => {
+    const idx = qRankOrderState.indexOf(btn.dataset.key);
+    const swapIdx = idx + (btn.dataset.dir === 'up' ? -1 : 1);
+    if (swapIdx < 0 || swapIdx >= qRankOrderState.length) return;
+    [qRankOrderState[idx], qRankOrderState[swapIdx]] = [qRankOrderState[swapIdx], qRankOrderState[idx]];
+    renderQRankOrderList();
+  }));
+}
+renderQRankOrderList();
+
 // CREATE QUEUE — adapt form hints when Fixed Pairs League is chosen
 document.getElementById('qRule')?.addEventListener('change', () => {
   const rule = document.getElementById('qRule').value;
@@ -8291,6 +8339,8 @@ document.getElementById('createQueueForm')?.addEventListener('submit', (e) => {
     });
   }
 
+  const minGamesVal = parseInt(document.getElementById('qMinGames').value, 10);
+
   const session = {
     id: 'q_' + Date.now(),
     name,
@@ -8305,6 +8355,10 @@ document.getElementById('createQueueForm')?.addEventListener('submit', (e) => {
     teams,
     activeMatch: null,
     matches: [],
+    winnerConfig: {
+      minGames: Number.isFinite(minGamesVal) && minGamesVal > 0 ? minGamesVal : null,
+      rankingOrder: qRankOrderState.slice(),
+    },
     createdAt: Date.now(),
     expiresAt: getMidnightTimestamp()
   };
@@ -8323,6 +8377,8 @@ document.getElementById('createQueueForm')?.addEventListener('submit', (e) => {
 
   // Reset form inputs
   document.getElementById('createQueueForm').reset();
+  qRankOrderState = DEFAULT_RANKING_ORDER.slice(); // form.reset() doesn't touch this JS-tracked list
+  renderQRankOrderList();
   toast('New rotation board generated!');
 });
 
@@ -8549,6 +8605,10 @@ document.getElementById('submitScoreBtn')?.addEventListener('click', () => {
   result.notices.forEach(msg => toast(msg));
 });
 
+// Captured right before a session's data is wiped, so the "Download stats
+// (PDF)" button on the winner modal still has something to show.
+let lastEndedQueueStats = null;
+
 // Reset Session -- PIN already verified when this queue's manage view was opened
 document.getElementById('qResetSessionBtn')?.addEventListener('click', () => {
   if (!selectedQueueSessionId) return;
@@ -8558,6 +8618,7 @@ document.getElementById('qResetSessionBtn')?.addEventListener('click', () => {
 
   if (confirm('Are you sure you want to reset this queue session? This will wipe the scoreboard and clear court rotation.')) {
     const winner = computeOverallWinner(session);
+    lastEndedQueueStats = buildStatsReport(session);
     session.waiting = [];
     session.activeMatch = null;
     session.matches = [];
@@ -8577,6 +8638,7 @@ document.getElementById('qDeleteSessionBtn')?.addEventListener('click', () => {
 
   if (confirm('Permanently delete this entire queue session?')) {
     const winner = computeOverallWinner(session);
+    lastEndedQueueStats = buildStatsReport(session);
     const filtered = sessions.filter(s => s.id !== selectedQueueSessionId);
     saveQueues(filtered);
     selectedQueueSessionId = null;
@@ -8586,12 +8648,15 @@ document.getElementById('qDeleteSessionBtn')?.addEventListener('click', () => {
   }
 });
 
-/* Declares the overall winner of a queue session, ranked by qualifying games
-   played (QueueEngine.MIN_GAMES_SHARE of the leader's count -- a late joiner
-   can't win on a thin sample) -> win% -> head-to-head -> point differential ->
-   total wins -> games played -> name, when the session is reset or deleted.
-   Fixed Pairs declares the top team instead of a player. Shared with the
-   standalone queue tool via QueueEngine.computeOverallWinner. */
+/* Declares the overall winner of a queue session, ranked (by default) by
+   qualifying games played (that session's winnerConfig.minGames, or
+   QueueEngine.MIN_GAMES_SHARE of the leader's count otherwise -- a late
+   joiner can't win on a thin sample) -> win% -> head-to-head -> point
+   differential -> total wins -> games played -> name, in whatever order
+   that session's winnerConfig.rankingOrder set at creation, when the
+   session is reset or deleted. Fixed Pairs declares the top team instead
+   of a player. Shared with the standalone queue tool via
+   QueueEngine.computeOverallWinner. */
 function showQueueWinner(w) {
   document.getElementById('queueWinnerLabel').textContent = w.type === 'team' ? 'Winning team' : 'Winner';
   document.getElementById('queueWinnerName').textContent = w.name;
@@ -8606,11 +8671,89 @@ function showQueueWinner(w) {
     name: 'Decided by a coin-flip tiebreak (name order) -- everything else was tied.',
   }[w.decidedBy] || '';
   document.getElementById('queueWinnerNote').textContent = tiebreakNote;
+  document.getElementById('queueWinnerPdfBtn').onclick = () => downloadQueueStatsPdf(lastEndedQueueStats, w);
   document.getElementById('queueWinnerModal').classList.remove('hidden');
 }
 document.getElementById('queueWinnerDoneBtn')?.addEventListener('click', () => {
   document.getElementById('queueWinnerModal').classList.add('hidden');
 });
+
+/* Opens a print-friendly stats report in a new tab and triggers the
+   browser's print dialog -- same "download as PDF" pattern already used
+   elsewhere in this app (superadmin.html's Print button): no PDF library,
+   just print-to-PDF via the browser's own dialog. report comes from
+   QueueEngine.buildStatsReport, captured right before the session that
+   produced it was wiped. Shared logic/markup with the standalone queue
+   tool's downloadStatsPdf (queue.html) -- kept separate per page, same as
+   every other render function in this file, since the two pages don't
+   share a script. */
+function downloadQueueStatsPdf(report, winner) {
+  if (!report) { toast('No stats to download.'); return; }
+  const win = window.open('', '_blank');
+  if (!win) { toast('Allow popups to download the PDF.'); return; }
+  const esc = escapeHtml;
+  const ruleLabels = {
+    winner_stays: 'Winner Stays', four_off_four_on: 'Four Off, Four On', fixed_rotation: 'Fixed Rotation',
+    timed_rotation: 'Timed Rotation', partner_rotation: 'Partner Rotation', fixed_pairs: 'Fixed Pairs League',
+  };
+  const title = `${report.name || 'Walk-in Queue'} — Final Stats`;
+  const genAt = new Date(report.generatedAt).toLocaleString();
+  const pdStr = (n) => (n > 0 ? '+' : '') + n;
+  const winnerHtml = winner ? `
+    <div class="winner">
+      <div class="wlabel">${winner.type === 'team' ? 'WINNING TEAM' : 'WINNER'}</div>
+      <div class="wname">${esc(winner.name)}</div>
+      <div class="wstats">${winner.wins}-${winner.losses} record &middot; ${pdStr(winner.pointDiff)} point diff &middot; ${winner.winPct}% win rate</div>
+    </div>` : '';
+  const standingsHtml = report.standings.length ? `
+    <h2>Standings</h2>
+    <table><thead><tr><th>Team</th><th>GP</th><th>W</th><th>L</th><th>PD</th><th>Win%</th></tr></thead><tbody>
+      ${report.standings.map((t) => `<tr><td>${esc(t.name)}</td><td>${t.gp}</td><td>${t.w}</td><td>${t.l}</td><td>${pdStr(t.pd)}</td><td>${t.winPct}%</td></tr>`).join('')}
+    </tbody></table>` : '';
+  const playersHtml = `
+    <h2>Players</h2>
+    <table><thead><tr><th>Name</th><th>M</th><th>W</th><th>L</th><th>PF</th><th>PA</th><th>+/-</th><th>Win%</th></tr></thead><tbody>
+      ${report.players.map((p) => `<tr><td>${esc(p.name)}</td><td>${p.matches}</td><td>${p.wins}</td><td>${p.losses}</td><td>${p.pointsFor}</td><td>${p.pointsAgainst}</td><td>${pdStr(p.pd)}</td><td>${p.winPct}%</td></tr>`).join('') || '<tr><td colspan="8">No matches played.</td></tr>'}
+    </tbody></table>`;
+  const teamsHtml = report.teams.length ? `
+    <h2>Pairings</h2>
+    <table><thead><tr><th>Team</th><th>M</th><th>W</th><th>L</th><th>PF</th><th>PA</th><th>+/-</th><th>Win%</th></tr></thead><tbody>
+      ${report.teams.map((t) => `<tr><td>${esc(t.name)}</td><td>${t.matches}</td><td>${t.wins}</td><td>${t.losses}</td><td>${t.pointsFor}</td><td>${t.pointsAgainst}</td><td>${pdStr(t.pd)}</td><td>${t.winPct}%</td></tr>`).join('')}
+    </tbody></table>` : '';
+  const h2hHtml = report.headToHead.length ? `
+    <h2>Head-to-head</h2>
+    <table><thead><tr><th>Player</th><th>W</th><th>W</th><th>Player</th><th>Meetings</th></tr></thead><tbody>
+      ${report.headToHead.map((r) => `<tr><td>${esc(r.a)}</td><td>${r.aWins}</td><td>${r.bWins}</td><td>${esc(r.b)}</td><td>${r.meetings}</td></tr>`).join('')}
+    </tbody></table>` : '';
+  const matchesHtml = `
+    <h2>Match history</h2>
+    <table><thead><tr><th>Team A</th><th></th><th></th><th>Team B</th></tr></thead><tbody>
+      ${report.matches.map((m) => `<tr><td>${esc(m.teamA)}</td><td>${m.scoreA}</td><td>${m.scoreB}</td><td>${esc(m.teamB)}</td></tr>`).join('') || '<tr><td colspan="4">No matches played.</td></tr>'}
+    </tbody></table>`;
+
+  win.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${esc(title)}</title><style>
+    body{font-family:-apple-system,"Segoe UI",Arial,sans-serif;color:#201C19;padding:28px;max-width:720px;margin:0 auto}
+    h1{font-size:20px;margin:0 0 2px}
+    .meta{font-size:11px;opacity:0.6;margin-bottom:18px}
+    .winner{border:2px solid #201C19;border-radius:12px;padding:14px 18px;margin-bottom:22px}
+    .wlabel{font-size:10px;letter-spacing:0.08em;opacity:0.6;font-weight:700}
+    .wname{font-size:22px;font-weight:800;margin:2px 0}
+    .wstats{font-size:12px;opacity:0.75}
+    h2{font-size:13px;letter-spacing:0.04em;text-transform:uppercase;margin:22px 0 8px;opacity:0.75}
+    table{width:100%;border-collapse:collapse;font-size:12px;margin-bottom:4px}
+    th,td{text-align:left;padding:5px 8px;border-bottom:1px solid #eee}
+    th{opacity:0.55;font-weight:600;font-size:10px;text-transform:uppercase}
+    td:not(:first-child),th:not(:first-child){text-align:right}
+    @media print{body{padding:0}}
+  </style></head><body>
+    <h1>${esc(report.name || 'Walk-in Queue')}</h1>
+    <div class="meta">Final stats &middot; ${esc(genAt)} &middot; ${report.mode === 'singles' ? 'Singles' : 'Doubles'} &middot; ${esc(ruleLabels[report.rule] || report.rule)}</div>
+    ${winnerHtml}${standingsHtml}${playersHtml}${teamsHtml}${h2hHtml}${matchesHtml}
+  </body></html>`);
+  win.document.close();
+  win.focus();
+  win.print();
+}
 
 /* ---------- Match Stats Rendering ----------
    computePlayerStats / computeTeamStats are destructured from QueueEngine above. */

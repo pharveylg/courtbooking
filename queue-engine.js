@@ -7,7 +7,8 @@
    A session looks like:
      { mode: 'singles'|'doubles', rule: <one of the six rules>,
        waiting: [{ id, names: [...] }], activeMatch: { teamA, teamB, ... } | null,
-       matches: [...], playCounts: {}, teams: {}, lastPartnerGroup, ... }
+       matches: [...], playCounts: {}, teams: {}, lastPartnerGroup,
+       winnerConfig: { minGames, rankingOrder } | undefined, ... }
 
    Six rotation rules: winner_stays, four_off_four_on (the default), fixed_rotation,
    timed_rotation, partner_rotation (doubles only), fixed_pairs (doubles only).
@@ -33,8 +34,46 @@
      played one lucky game at 100% would outrank a player who's gone 8-2 all
      night. Below the bar, they still get ranked (by the same criteria,
      amongst themselves) so the result is always decided; they just can't
-     outrank anyone who cleared it. */
+     outrank anyone who cleared it. This is the AUTOMATIC default; a session
+     can override it with an explicit absolute count via
+     session.winnerConfig.minGames (see qualifyingBar below). */
   const MIN_GAMES_SHARE = 0.4;
+
+  /* Ranking criteria, in the order they're applied by default, both for
+     computeStandings (Fixed Pairs) and computeOverallWinner (every other
+     rule). A session can override the order via session.winnerConfig.
+     rankingOrder -- any permutation of these same 5 keys -- to rearrange
+     which tiebreak matters most. The qualifying-games gate always runs
+     first (see qualifyingBar) and name is always the final, deterministic
+     tiebreak; neither is part of the configurable order. */
+  const DEFAULT_RANKING_ORDER = ['winPct', 'headToHead', 'pointDiff', 'wins', 'gamesPlayed'];
+  const RANKING_CRITERIA_LABELS = {
+    winPct: 'Win rate', headToHead: 'Head-to-head', pointDiff: 'Point differential',
+    wins: 'Total wins', gamesPlayed: 'Games played',
+  };
+
+  /* Falls back to DEFAULT_RANKING_ORDER unless `order` is a genuine
+     permutation of it (same 5 keys, no dupes, nothing missing) -- so a
+     corrupted or hand-edited session can never produce an order that
+     silently drops or duplicates a criterion. */
+  function normalizeRankingOrder(order) {
+    if (Array.isArray(order) && order.length === DEFAULT_RANKING_ORDER.length &&
+        new Set(order).size === DEFAULT_RANKING_ORDER.length &&
+        order.every((k) => DEFAULT_RANKING_ORDER.includes(k))) {
+      return order.slice();
+    }
+    return DEFAULT_RANKING_ORDER.slice();
+  }
+
+  /* The qualifying bar itself: an explicit positive session.winnerConfig.
+     minGames (an absolute games-played count) overrides the automatic
+     MIN_GAMES_SHARE-of-the-leader default entirely. Either way, someone
+     below the bar still gets ranked among themselves (see the comment on
+     MIN_GAMES_SHARE) -- this only decides where the bar sits. */
+  function qualifyingBar(configuredMin, maxCount) {
+    if (Number.isFinite(configuredMin) && configuredMin > 0) return configuredMin;
+    return Math.ceil(maxCount * MIN_GAMES_SHARE);
+  }
 
   /* ---------- Fixed Pairs League: team-level standings ---------- */
   function ensureTeam(session, id, names) {
@@ -58,26 +97,34 @@
 
   function computeStandings(session) {
     const teams = Object.values(session.teams || {});
+    const winnerConfig = (session && session.winnerConfig) || {};
+    const order = normalizeRankingOrder(winnerConfig.rankingOrder);
     const winPct = (t) => (t.gp ? t.w / t.gp : 0);
     const pd = (t) => t.pf - t.pa;
-    // Qualifying threshold (see MIN_GAMES_SHARE): a team that has played far
-    // fewer games than the session's most active team can't win on a thin
-    // sample, no matter how good their record looks -- they rank behind
-    // every qualifying team regardless of win%, before any other criterion.
+    // Qualifying threshold (see qualifyingBar/MIN_GAMES_SHARE): a team that
+    // hasn't played enough games can't win on a thin sample, no matter how
+    // good their record looks -- they rank behind every qualifying team
+    // regardless of win%, before any other criterion.
     const maxGp = teams.reduce((m, t) => Math.max(m, t.gp), 0);
-    const minQualifyingGp = Math.ceil(maxGp * MIN_GAMES_SHARE);
+    const minQualifyingGp = qualifyingBar(winnerConfig.minGames, maxGp);
     const qualifies = (t) => t.gp >= minQualifyingGp;
+    // Each configurable criterion, as a comparator returning <0 when `a`
+    // should rank above `b`, >0 when `b` should, 0 when tied (fall through
+    // to the next criterion in session.winnerConfig.rankingOrder).
+    const criteria = {
+      winPct: (a, b) => winPct(b) - winPct(a),
+      headToHead: (a, b) => { const ab = a.h2h && a.h2h[b.id]; return ab && ab.w !== ab.l ? ab.l - ab.w : 0; },
+      pointDiff: (a, b) => pd(b) - pd(a),
+      wins: (a, b) => b.w - a.w,
+      gamesPlayed: (a, b) => b.gp - a.gp,
+    };
     teams.sort((a, b) => {
       const qa = qualifies(a), qb = qualifies(b);
-      if (qa !== qb) return qa ? -1 : 1;                // 0. enough games played to qualify
-      const wa = winPct(a), wb = winPct(b);
-      if (wb !== wa) return wb - wa;                  // 1. winning percentage
-      const ab = a.h2h && a.h2h[b.id];
-      if (ab && ab.w !== ab.l) return ab.l - ab.w;     // 2. head-to-head
-      const da = pd(a), db = pd(b);
-      if (db !== da) return db - da;                  // 3. point differential
-      if (b.w !== a.w) return b.w - a.w;               // 4. total wins
-      if (b.gp !== a.gp) return b.gp - a.gp;           // 5. games played
+      if (qa !== qb) return qa ? -1 : 1;              // 0. enough games played to qualify
+      for (let i = 0; i < order.length; i++) {
+        const c = criteria[order[i]](a, b);
+        if (c !== 0) return c;                        // 1-5. configured order (default: win% -> h2h -> point diff -> wins -> games played)
+      }
       return teamLabel(a.names).localeCompare(teamLabel(b.names)); // 6. name, deterministic
     });
     return teams;
@@ -550,27 +597,33 @@
      Ranking priority, both for Fixed Pairs (the top team from
      computeStandings) and every other rule (the top player, using
      computeHeadToHead for the head-to-head step):
-       0. qualifying games played -- MIN_GAMES_SHARE of the session's most
-          active player/team; someone who joined late and played barely any
-          games can't win on a thin, possibly lucky sample, no matter how
-          good it looks. This is checked BEFORE win% -- it's a gate, not a
-          tiebreak. Below the bar, a player still gets ranked (by the same
-          criteria, among the other players below it), so the result is
-          always decided; they just can't outrank anyone who cleared it.
-       1. win percentage
-       2. head-to-head result (between the two players/teams being compared)
-       3. point differential
-       4. total wins
-       5. games played
-       6. name -- always deterministic, so the result is never unresolved
-     An undefeated player (or team) therefore always outranks one with more
-     total wins but a lower win rate, and a player who has the other tied
-     player's number head-to-head outranks them even if the other has the
-     better point differential. Returns null if no matches have been played
-     yet. `decidedBy` names whichever criterion separated the winner from the
-     runner-up, for a transparent "won on countback" message. */
+       0. qualifying games played -- qualifyingBar's threshold (an explicit
+          session.winnerConfig.minGames, or MIN_GAMES_SHARE of the session's
+          most active player/team by default); someone who joined late and
+          played barely any games can't win on a thin, possibly lucky
+          sample, no matter how good it looks. This is checked BEFORE the
+          configured order below -- it's a gate, not a tiebreak. Below the
+          bar, a player still gets ranked (by the same criteria, among the
+          other players below it), so the result is always decided; they
+          just can't outrank anyone who cleared it.
+       1-5. win percentage -> head-to-head -> point differential -> total
+          wins -> games played, IN THAT ORDER BY DEFAULT -- but any
+          permutation of these 5 can be set via session.winnerConfig.
+          rankingOrder (see normalizeRankingOrder) to rearrange which
+          tiebreak matters most for a given session.
+       6. name -- always deterministic, so the result is never unresolved,
+          and never part of the configurable order.
+     With the default order, an undefeated player (or team) therefore always
+     outranks one with more total wins but a lower win rate, and a player
+     who has the other tied player's number head-to-head outranks them even
+     if the other has the better point differential. Returns null if no
+     matches have been played yet. `decidedBy` names whichever criterion
+     separated the winner from the runner-up, for a transparent "won on
+     countback" message. */
   function computeOverallWinner(session) {
     if (!session || !session.matches || session.matches.length === 0) return null;
+    const winnerConfig = (session && session.winnerConfig) || {};
+    const order = normalizeRankingOrder(winnerConfig.rankingOrder);
 
     if (session.rule === 'fixed_pairs') {
       const standings = computeStandings(session);
@@ -596,26 +649,38 @@
       return { name, matches: s.matches, wins: s.wins, losses: s.losses, pointsFor: s.pointsFor, pointsAgainst: s.pointsAgainst, pointDiff: s.pointsFor - s.pointsAgainst, winPct: s.matches ? (s.wins / s.matches) * 100 : 0 };
     });
 
-    // Qualifying threshold -- see MIN_GAMES_SHARE. A late joiner who's only
-    // played a couple of games can't win on win% alone; they rank behind
-    // every player who cleared the bar, before win% is even compared.
+    // Qualifying threshold -- see qualifyingBar/MIN_GAMES_SHARE. A late
+    // joiner who's only played a couple of games can't win on win% alone;
+    // they rank behind every player who cleared the bar, before the
+    // configured order is even compared.
     const maxMatches = rows.reduce((m, r) => Math.max(m, r.matches), 0);
-    const minQualifyingMatches = Math.ceil(maxMatches * MIN_GAMES_SHARE);
+    const minQualifyingMatches = qualifyingBar(winnerConfig.minGames, maxMatches);
     const qualifies = (r) => r.matches >= minQualifyingMatches;
+
+    // Each configurable criterion, as a comparator returning either
+    // { cmp, by } when it separates a from b, or null when tied (fall
+    // through to the next criterion in session.winnerConfig.rankingOrder).
+    const criteria = {
+      winPct: (a, b) => (b.winPct !== a.winPct ? { cmp: b.winPct - a.winPct, by: 'win%' } : null),
+      headToHead: (a, b) => {
+        const rec = recordBetween(a.name, b.name);
+        if (!rec) return null;
+        const aWins = rec.a === a.name ? rec.aWins : rec.bWins;
+        const bWins = rec.a === a.name ? rec.bWins : rec.aWins;
+        return aWins !== bWins ? { cmp: bWins - aWins, by: 'head-to-head' } : null;
+      },
+      pointDiff: (a, b) => (b.pointDiff !== a.pointDiff ? { cmp: b.pointDiff - a.pointDiff, by: 'point differential' } : null),
+      wins: (a, b) => (b.wins !== a.wins ? { cmp: b.wins - a.wins, by: 'total wins' } : null),
+      gamesPlayed: (a, b) => (b.matches !== a.matches ? { cmp: b.matches - a.matches, by: 'games played' } : null),
+    };
 
     const compare = (a, b) => {
       const qa = qualifies(a), qb = qualifies(b);
       if (qa !== qb) return { cmp: qa ? -1 : 1, by: 'qualifying games played' };
-      if (b.winPct !== a.winPct) return { cmp: b.winPct - a.winPct, by: 'win%' };
-      const rec = recordBetween(a.name, b.name);
-      if (rec) {
-        const aWins = rec.a === a.name ? rec.aWins : rec.bWins;
-        const bWins = rec.a === a.name ? rec.bWins : rec.aWins;
-        if (aWins !== bWins) return { cmp: bWins - aWins, by: 'head-to-head' };
+      for (let i = 0; i < order.length; i++) {
+        const result = criteria[order[i]](a, b);
+        if (result) return result;
       }
-      if (b.pointDiff !== a.pointDiff) return { cmp: b.pointDiff - a.pointDiff, by: 'point differential' };
-      if (b.wins !== a.wins) return { cmp: b.wins - a.wins, by: 'total wins' };
-      if (b.matches !== a.matches) return { cmp: b.matches - a.matches, by: 'games played' };
       return { cmp: a.name.localeCompare(b.name), by: 'name' };
     };
 
@@ -630,6 +695,39 @@
     };
   }
 
+  /* A complete, serializable snapshot of a session's final stats --
+     standings (Fixed Pairs only), the player leaderboard, the team/pairing
+     leaderboard, head-to-head, and full match history -- captured once so
+     it survives the caller wiping the session right after (both queue
+     pages clear their stored session the moment a queue ends, before the
+     winner is even shown). This is the data behind the "download stats"
+     PDF/print view; pure, no DOM, just plain data the caller renders. */
+  function buildStatsReport(session) {
+    if (!session) return null;
+    const pdOf = (f, a) => f - a;
+    const standings = session.rule === 'fixed_pairs' ? computeStandings(session).map((t) => ({
+      name: teamLabel(t.names), gp: t.gp, w: t.w, l: t.l, pf: t.pf, pa: t.pa, pd: pdOf(t.pf, t.pa),
+      winPct: t.gp ? Math.round((t.w / t.gp) * 100) : 0,
+    })) : [];
+    const playerStats = computePlayerStats(session);
+    const players = Object.entries(playerStats).map(([name, s]) => ({
+      name, matches: s.matches, wins: s.wins, losses: s.losses, pointsFor: s.pointsFor, pointsAgainst: s.pointsAgainst,
+      pd: pdOf(s.pointsFor, s.pointsAgainst), winPct: s.matches ? Math.round((s.wins / s.matches) * 100) : 0,
+    })).sort((a, b) => b.winPct - a.winPct || b.pd - a.pd || b.pointsFor - a.pointsFor);
+    const teams = computeTeamStats(session).map((t) => ({
+      name: teamLabel(t.names), matches: t.matches, wins: t.wins, losses: t.losses, pointsFor: t.pointsFor, pointsAgainst: t.pointsAgainst,
+      pd: pdOf(t.pointsFor, t.pointsAgainst), winPct: t.matches ? Math.round((t.wins / t.matches) * 100) : 0,
+    })).sort((a, b) => b.winPct - a.winPct || b.pd - a.pd || b.pointsFor - a.pointsFor);
+    const headToHead = computeHeadToHead(session);
+    const matches = (session.matches || []).slice().reverse().map((m) => ({
+      teamA: teamLabel(m.teamA), teamB: teamLabel(m.teamB), scoreA: m.scoreA, scoreB: m.scoreB,
+    }));
+    return {
+      name: session.name || null, mode: session.mode, rule: session.rule,
+      generatedAt: Date.now(), standings, players, teams, headToHead, matches,
+    };
+  }
+
   return {
     teamLabel,
     ensureTeam, applyMatchResult, computeStandings,
@@ -637,6 +735,7 @@
     setFirstServer, justPlayed, swapActivePlayer, swapActiveTeam,
     partnerCount, bestPartnerPairing,
     normalizeName, nameSimilarity, getAllPlayerNamesInSession, findSimilarNames, promptNameConflict,
-    computePlayerStats, computeTeamStats, computeHeadToHead, computeOverallWinner,
+    computePlayerStats, computeTeamStats, computeHeadToHead, computeOverallWinner, buildStatsReport,
+    DEFAULT_RANKING_ORDER, RANKING_CRITERIA_LABELS, normalizeRankingOrder,
   };
 }));

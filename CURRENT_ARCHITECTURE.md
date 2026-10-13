@@ -24,7 +24,6 @@ One Firebase project (Hosting + Firestore + Storage + Functions v2 + Auth), serv
 | `gallery.html` | Anonymous, token-gated tournament photo upload |
 | `billing.html` | Tenant billing portal (PIN-gated), no in-app link found — reached only by direct URL (see §11) |
 | `superadmin.html` | Platform operator console (10 tabs) |
-| `ARCHITECTURE_DIAGRAM.html` | Standalone documentation page, not part of app navigation (see §11) |
 
 **Shared client-side modules (loaded via `<script src>`, UMD-style, each also `require()`-able from Node for tests):**
 
@@ -59,7 +58,6 @@ Every screen found has at least one confirmed entry point and at least one confi
 | Gallery Upload | `gallery.html?client=slug&t=id&token=...` | Anonymous, token-gated tournament photo upload | Only via a token link generated in Tournament Admin's Gallery panel | Pick/upload photos | "Thanks!" confirmation | Firestore (`uploadTokens`, `photos`) + Storage (no auth check — rules explicitly call this "the one truly open-to-the-internet upload surface") | Token doc tracks usage cap | ACTIVE |
 | Tenant Billing Portal | `billing.html?client=slug` | Tenant views its own invoices/payment status, submits payment proof | **No in-app link found** — direct URL only | View invoices, submit a payment claim | Stays on page | `getBillingPortalData` Cloud Function (PIN-verified server-side); writes `platformSubmissions` | Own PIN check (server-verified) | ACTIVE, but see §11 (unclear entry point) |
 | Superadmin Console | `superadmin.html` (10 tabs) | Platform-operator control plane | Direct URL, sign-in gated | Manage tenants/entitlements/plans/invoices/reports/diagnostics/feature ideas/audit | Stays on page (tabbed) | Direct Firestore + 2 Cloud Functions callables (`syncTournamentCharges`, `setTournamentChargeOverride`) | `platformTenants`, `platformPlans`, `platformInvoices`, etc. | ACTIVE — all 10 tabs confirmed fully wired |
-| Architecture Diagram (doc) | `ARCHITECTURE_DIAGRAM.html` | Standalone documentation page | None found — no in-app link | Read-only | N/A | N/A | N/A | UNREFERENCED — documentation artifact, not app navigation |
 
 ---
 
@@ -221,7 +219,7 @@ Region: all callables and the client's callable factory agree on `asia-southeast
 ## 7. Data flow and state
 
 - **Firestore data shape is inconsistent by design in one specific way**: most "list" data is one-doc-per-collection (`openGames`, `tournaments`, `matches`, `registrations`, ...), but `bookings`, `openPlay`, `courts`, `pricing`, `staffReserve`, and `storeProducts` are each a **single document holding a whole array** (`clients/{slug}/{collection}/state`, `{data: [...]}`), read/written wholesale via `fbSave`/`fbLoadCache` in `index.html`. This is documented in-code as a real concurrency ceiling, not an oversight, but it means two people booking at the exact same moment race on a single document rather than being naturally serialized like the array-collections are.
-- **Two parallel "is this tenant online" fields exist by design**: `platformTenants/{slug}.lifecycle` (new, authoritative, superadmin-managed) and the same doc's `.status` plus `tenantDirectory/{slug}.status` (old boolean, kept mirrored by `syncTenantRuntime()` specifically because `picker.html` and reporting still read the old field). This is the clearest "OLD FLOW / REPLACED BY / NEW FLOW, both still present" pattern found in the app (see §11 and `GAP_ANALYSIS.md`).
+- **Two parallel "is this tenant online" fields exist by design**: `platformTenants/{slug}.lifecycle` (new, authoritative, superadmin-managed) and the same doc's `.status` plus `tenantDirectory/{slug}.status` (old boolean, kept mirrored by `syncTenantRuntime()` specifically because `picker.html` and reporting still read the old field). This is the clearest "OLD FLOW / REPLACED BY / NEW FLOW, both still present" pattern found in the app (see §11).
 - **Entitlement flags**: `storeEnabled`/`storePaused`/`tournamentEnabled`/`tournamentPaused` live on `clients/{slug}/status/state` (derived/mirrored, superadmin-writable only per rules) and are the ONLY thing tenant apps actually read to gate Store/Tournaments — confirmed identical field names across `index.html`, `store.html`, `tournament-admin.html`. The richer `platformTenants/{slug}/entitlements/{product}` lifecycle documents (trial/active/suspended/...) are the platform's own source of truth; tenant apps never read them directly.
 - **Device-local vs account-synced vs tenant-shared state**, three genuinely different scopes coexist in the same browser:
   - Device-only, never synced anywhere: the push-notification inbox (`push-inbox.js`, IndexedDB) — explicit design choice, labeled as such in the UI.
@@ -263,11 +261,10 @@ Region: all callables and the client's callable factory agree on `asia-southeast
 
 ## 11. Legacy candidates (summary — full table in `LEGACY_CANDIDATES.md`)
 
-- **`firestore.rules` bottom section** ("Legacy single-tenant structure... WARNING: should be removed") — self-labeled, confirmed zero client callers anywhere in the repo, still live and wide open. Highest-confidence cleanup candidate found.
-- **`ARCHITECTURE_DIAGRAM.html`** — standalone doc page, zero in-app references. Not dead *code* (nothing calls it, but nothing was ever supposed to); likely superseded by this very document going forward.
+- **`firestore.rules` bottom section** ("Legacy single-tenant structure... WARNING: should be removed") — self-labeled, confirmed zero client callers anywhere in the repo. ✅ Removed from the rules file (see `LEGACY_CANDIDATES.md` §1 for the deploy note).
 - **`billing.html`** — active, tested, PIN-gated, but no `<a href="billing.html">` found anywhere in the app. Either reached by a direct link given out-of-band, or a genuinely missing in-app entry point.
-- Two misplaced HTML section comments (`store.html`, `tournament-admin.html`) — cosmetic documentation drift from a past tab reordering, zero functional impact.
-- A duplicate `platformAuditLog` write on one tenant-suspend button in `superadmin.html` — a small, likely-accidental bug, not a legacy artifact.
+- Two misplaced HTML section comments (`store.html`, `tournament-admin.html`) — cosmetic documentation drift from a past tab reordering, zero functional impact. ✅ Fixed.
+- A duplicate `platformAuditLog` write on one tenant-suspend button in `superadmin.html` — a small, likely-accidental bug, not a legacy artifact. ✅ Fixed.
 
 ---
 
@@ -275,6 +272,6 @@ Region: all callables and the client's callable factory agree on `asia-southeast
 
 - Whether a real (non-superadmin-claim) staff account with only `manage_entitlements`/`manage_organizations`/`diagnose_access` can actually perform those actions today, given the `firestore.rules` mismatch noted in §10.4.
 - Whether `billing.html` is actually reached by any current tenant, and how (out-of-band link? Never used?).
-- Whether the legacy `firestore.rules` block (§11) is truly unreferenced by anything outside this repo (e.g., an old mobile client, a partner integration) — static analysis can only confirm nothing *in this repo* calls it.
+- Whether the now-removed legacy `firestore.rules` block (§11) was truly unreferenced by anything outside this repo (e.g., an old mobile client, a partner integration) before removal — static analysis could only confirm nothing *in this repo* called it. See `LEGACY_CANDIDATES.md` §1 for the rules-file edit's deploy status.
 
 See `LEGACY_CANDIDATES.md` for the full evidence-based classification, dependency/blast-radius analysis, and a proposed verification + cleanup sequence.

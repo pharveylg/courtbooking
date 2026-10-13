@@ -34,8 +34,9 @@ Looking for people to play with instead of booking solo?
 No reservation needed — the **Queue** tab is a free walk-in rotation board:
 
 - Create or join a queue (singles or doubles).
-- Matches rotate by Winner Stays or Fixed Order, whichever the queue creator picked.
-- Whoever created the queue set a PIN for it — you'll need that PIN to open the queue's live scoreboard/management screen at all, so get it from the creator if you're helping run the session.
+- Rotation style is whatever the queue creator picked at setup — Winner Stays, Four Off Four On, Fixed Rotation, Timed Rotation, or (doubles) Partner Rotation / Fixed Pairs League.
+- Whoever created the queue set a PIN for it — you'll need that PIN to open the queue's live scoreboard/management screen at all, so get it from the creator if you're helping run the session. Whoever's running it can always adjust who's on court or who serves first if the rotation doesn't match reality.
+- When the queue ends, an overall winner is declared and the session's stats can be downloaded as a PDF.
 - Queues clear out automatically after midnight.
 
 ## A Few Reminders

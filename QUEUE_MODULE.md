@@ -17,12 +17,12 @@ A session has:
 | `mode` | `singles` or `doubles` |
 | `rule` | The rotation rule (see below) |
 | `waiting` | Ordered list of groups `{ id, names: [...] }`. A pair that came together is one group. |
-| `activeMatch` | The match on court now: `teamA`, `teamB`, and team ids for fixed pairs |
+| `activeMatch` | The match on court now: `teamA`, `teamB`, team ids for fixed pairs, and `firstServer` (which side serves first — admin-settable, see below) |
 | `matches` | Finished matches, used for match numbers and stats |
-| `partnerRotationState` | Partner rotation only: the four players and the current round (1 to 3) |
 | `lastPartnerGroup` | Partner rotation only: the four names from the rotation that just finished, avoided by the next pick (see below) |
 | `playCounts` | Every rule except Fixed Pairs: how many games each player has been picked for, used for rest priority |
 | `gameFormat` | Points target, win-by, and scoring for the live scoreboard |
+| `winnerConfig` | `{ minGames, rankingOrder }`, set once at queue creation — overrides the automatic qualifying bar and/or the default winner-ranking order (see "Declaring the overall winner" below). Optional; a missing or invalid value falls back to the defaults. |
 | `expiresAt` | Facility module only: expired sessions are removed on load |
 
 The facility module stores sessions in `localStorage` under `LS.queues` (`loadQueues` / `saveQueues`), with a cloud copy via `fbSave('queues', ...)`. Sessions created from a Find a Game are linked to the game with the id `q_og_<gameId>` (`ogLinkedQueueId`); their rule is always `winner_stays`. The standalone page stores its one session in `sessionStorage` under `cb_standalone_queue_v1` — never `localStorage`, and never sent anywhere.
@@ -37,6 +37,15 @@ The facility module stores sessions in `localStorage` under `LS.queues` (`loadQu
 | Timed Rotation | both | Like the others, with a timer that resets each time a score is submitted. |
 | Partner Rotation | doubles only | See below. |
 | Fixed Pairs League | doubles only | Teams stay together for the whole session and record league results (`applyMatchResult`, `computeStandings`). Teams are pulled strictly FIFO — rest priority does not apply, since the team, not the player, is the rotation unit. |
+
+## Admin override: editing the active match
+
+Whoever has the queue's PIN can always change who's on court and who serves first, in both pages — the rotation rule decides who plays *next*, but never locks in who's playing *now*:
+
+- **Change who serves first.** A "serves first" toggle on the active match calls `setFirstServer(session, side)`; it's forwarded straight into the live scoreboard (`CourtBoard.open({ firstServer, ... })`) so the serve indicator starts on the chosen side.
+- **Swap an individual player.** Each on-court name is an editable select (`swapActivePlayer(session, team, index, newName)`), offering every name currently in the waiting line or elsewhere in the active match. Picking someone else either swaps the two players' positions (if both are already on court) or pulls the new name in from waiting and returns whoever they replaced to the back of the line.
+- **Swap a whole team (Fixed Pairs only).** Since Fixed Pairs' rotation unit is the team, not the player, its active-match selects swap the entire team (`swapActiveTeam(session, side, newTeamGroupId)`) instead of one player at a time.
+- **The "just played" rule warns, never blocks.** `justPlayed(session, name)` flags anyone who was in the match that just finished. Picking them anyway still works — the UI shows a toast ("consecutive warning"), but staff can always override it. This is deliberate: the rotation rule's job is to suggest a fair next match, not to override a human's judgment about who's actually ready to play.
 
 ### Rest priority (every rule except Fixed Pairs)
 
@@ -81,8 +90,12 @@ When a match ends, all 4 players go back to the end of the line as individuals (
 | `pullRestedPlayers` / `pullRestedPlayersAvoiding` | The rest-priority and anti-repeat pulls described above |
 | `bestPartnerPairing(session, players)` / `partnerCount(session, a, b)` | Partner Rotation's pairing step: of the 3 ways to split 4 players into two teams, picks whichever minimizes repeated teammates (derived from `session.matches`), with a random tie-break among equally-fresh options |
 | `removeWaitingPlayer(session, groupId, name)` | Removes one player from the waiting line by (group id, name) -- never the whole group. If `name` was paired with someone (joined together, or a Fixed Pairs team), the other player stays waiting on their own under the same group id; removing the last name in a group drops the now-empty entry. Both pages' waiting-list "remove" buttons are per-player, not per-row, and go through this. |
+| `setFirstServer(session, side)` / `justPlayed(session, name)` | Admin override: who serves first, and the "just played" warning flag -- see Admin override above |
+| `swapActivePlayer(session, team, index, newName)` / `swapActiveTeam(session, side, newTeamGroupId)` | Admin override: changing who's on court, per player or (Fixed Pairs) per team -- see Admin override above |
 | `ensureTeam`, `applyMatchResult`, `computeStandings` | Fixed Pairs teams and league results |
 | `computePlayerStats`, `computeTeamStats`, `computeHeadToHead` | Match stats, computed on the fly from `session.matches` |
+| `computeOverallWinner(session)` / `buildStatsReport(session)` | Declaring the overall winner and the full final-stats snapshot used for the PDF download -- see "Declaring the overall winner" below |
+| `normalizeRankingOrder(order)` | Validates a `session.winnerConfig.rankingOrder`, falling back to `DEFAULT_RANKING_ORDER` if it isn't a genuine permutation of the 5 criteria |
 | `normalizeName`, `nameSimilarity`, `getAllPlayerNamesInSession`, `findSimilarNames`, `promptNameConflict` | Catches a duplicate or misspelled name when someone joins |
 
 `index.html` destructures these from `window.QueueEngine` instead of defining its own copies. `queue.html` calls `QueueEngine.*` directly.
@@ -99,12 +112,22 @@ Both pages show the same four views, with identical columns — Matches, Wins, L
 
 ## Declaring the overall winner when a session ends
 
-`computeOverallWinner(session)` declares a single winner using all of the above, shown in both pages when the session's data is about to disappear -- the facility module's Reset Queue and Delete Session, and the standalone tool's End Queue:
+`computeOverallWinner(session)` declares a single winner using all of the above, shown in both pages when the session's data is about to disappear -- the facility module's Reset Queue and Delete Session, and the standalone tool's End Queue. Returns `null` when no matches have been played yet (nothing is shown).
 
-- **Fixed Pairs**: the top team from `computeStandings` (win% → point diff → head-to-head → points scored — that ranking already exists for the league table).
-- **Every other rule**: the top player by the same ranking as the Player Leaderboard (win% → point diff → points scored), with **head-to-head added as a further tiebreak** via `computeHeadToHead` when players are still tied — the leaderboard itself doesn't use it, but there's no reason not to when only one winner can be declared. Still tied after that (most often: two players who always played as teammates and so share an identical record): falls back to games played, then name, so a winner is always named. `decidedBy` reports whichever criterion actually separated the winner from the runner-up, so the UI can say e.g. "Decided by head-to-head" -- or, honestly, "everything else was tied" when it comes down to name order.
+- **Fixed Pairs**: the top team from `computeStandings`.
+- **Every other rule**: the top player, ranked the same way (see below), with `computeHeadToHead` supplying the head-to-head step.
 
-Returns `null` when no matches have been played yet (nothing is shown).
+**Ranking, both for `computeStandings` and `computeOverallWinner`:**
+
+1. **Qualifying games played** -- a gate, not a tiebreak, checked before anything else. By default this is `MIN_GAMES_SHARE` (40%) of the session's most active player/team's game count, so someone who joined late and played one lucky game can't outrank a player who's gone 8-2 all night. A session can override the bar with an explicit absolute count instead, via `session.winnerConfig.minGames`. Below the bar, a player/team still gets ranked (by the same criteria, among the others below it), so the result is always decided -- they just can't outrank anyone who cleared it.
+2. **The configurable order** -- by default `win% → head-to-head → point differential → total wins → games played`, but any permutation of those same 5 criteria can be set via `session.winnerConfig.rankingOrder` (validated by `normalizeRankingOrder`; an invalid or missing order falls back to the default silently).
+3. **Name** -- always the final, deterministic tiebreak, never part of the configurable order.
+
+Both the ranking order and the qualifying-games bar are set once, at queue creation, in the same setup form as mode/rule (a reorderable priority list + an optional "min. games to qualify" number input). `decidedBy` reports whichever criterion actually separated the winner from the runner-up, so the UI can say e.g. "Decided by head-to-head" -- or, honestly, "everything else was tied" when it comes down to name order.
+
+### Downloading the final stats
+
+Both pages' winner screen offers a **"Download stats (PDF)"** link. `buildStatsReport(session)` captures a full, serializable snapshot (standings if Fixed Pairs, the player leaderboard, pairings, head-to-head, and full match history) -- captured in the same click handler that computes the winner, *before* the session's data is wiped, since both pages clear their stored session the instant a queue ends. The page then opens that snapshot as a print-friendly page in a new tab and calls `window.print()` -- the same "download as PDF" pattern already used by `superadmin.html`'s Print button (the browser's own print dialog, "Save as PDF"), no PDF library involved.
 
 ## Live score and resume-on-refresh
 
@@ -118,6 +141,8 @@ When the scoreboard finishes a match, `onFinish` fills the two score fields and 
 ## Tests
 
 - `tests/rotation-pick.test.js` — the partner-rotation pick, rest-priority counts, and a seven-player simulation.
-- `tests/queue-engine.test.js` — every rule's fill and rotation logic, rest priority, the Partner Rotation anti-repeat rule, validation, Fixed Pairs standings, name matching, and match stats.
+- `tests/queue-engine.test.js` — every rule's fill and rotation logic, rest priority, the Partner Rotation anti-repeat/pairing rules, admin-override functions (`setFirstServer`, `justPlayed`, `swapActivePlayer`, `swapActiveTeam`), validation, Fixed Pairs standings, name matching, match stats, the configurable winner ranking order and qualifying-games bar, and `buildStatsReport`.
+- `tests/queue-match-edit.test.js` — wiring check for the admin-override UI (editable on-court selects, the serves-first control, `CourtBoard.open`'s `firstServer`) in both pages.
+- `tests/queue-winner-pdf.test.js` — wiring check for the ranking-order/min-games setup fields, `winnerConfig` being built into the new session, and the "Download stats (PDF)" button, in both pages.
 - `tests/queue-standalone.test.js` — the standalone page: no PIN/Firestore/analytics, `sessionStorage`-only queue state, the `storageKey`/cleanup wiring for resume-on-refresh, and that both pages call the same `QueueEngine` functions.
 - Facility-module wiring is checked by the Find a Game tests (`tests/og-queue-link.test.js`, `tests/og-reserve.test.js`).

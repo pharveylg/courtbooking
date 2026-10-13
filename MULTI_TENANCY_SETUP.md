@@ -419,31 +419,9 @@ Add custom domain validation if needed.
 
 ---
 
-## Migration from Legacy Structure
+## History: migration from the legacy single-tenant structure
 
-If you have data in the old structure (top-level collections), migrate to tenant-scoped:
-
-### Old Structure:
-```
-bookings/state
-courts/state
-settings/state
-```
-
-### New Structure:
-```
-clients/{clientId}/bookings/state
-clients/{clientId}/courts/state
-clients/{clientId}/settings/state
-```
-
-**Migration Steps:**
-1. Create tenant config at `clients/{clientId}/config/state`
-2. Copy data from old collections to `clients/{clientId}/{collection}/state`
-3. Update all references to use `fbDocPath()` helper
-4. Deploy updated Firestore security rules
-5. Test tenant isolation
-6. Remove old top-level collections (after verification)
+This app started single-tenant, with data in top-level collections (`bookings/state`, `courts/state`, `settings/state`, ...) instead of today's tenant-scoped paths (`clients/{clientId}/bookings/state`, etc.). That migration is long complete — every current write goes through the `clients/{clientId}/...` path, and the old root-level Firestore rules block that existed only for backward compatibility during that migration has since been removed entirely (see `LEGACY_CANDIDATES.md` §1). Kept here only as historical context for why the data shape looks the way it does; there is nothing left to migrate.
 
 ---
 

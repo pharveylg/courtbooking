@@ -160,10 +160,13 @@ The **Queue** tab is public, self-serve, and not tied to reservations at all —
 
 - Multiple independent queue sessions can run at once.
 - Singles (2 players) or doubles (4 players) format.
-- Rotation styles: Winner Stays or Fixed Order.
-- Exact scores can be logged per match.
+- Six rotation styles to choose from at creation: Winner Stays, Four Off Four On, Fixed Rotation, Timed Rotation, Partner Rotation (doubles, rotates partners round to round while minimizing repeat teammates), and Fixed Pairs League (doubles, partners never change — runs as a standings table instead of a rotation).
+- Exact scores can be logged per match, with a live scoreboard.
+- **Whoever's running the session can always override the active match** — change who's on court, change who serves first, swap in anyone from the waiting line — directly from the active-match view. The rotation rule only decides who plays *next*; it never locks in who's playing *now*. Picking someone who just played shows a warning but is never blocked.
 - Mid-queue joining is allowed if the queue's creator enabled it.
 - Each queue has its own PIN (set by whoever created it), separate from your facility's Admin PIN — it's required just to **open** that queue's live scoreboard/management view at all, not only for reset/delete/remove-player. Anyone with the PIN can manage the session (record scores, reset, delete, remove a player) once they're in; without it, they can't get past the door.
+
+**Declaring a winner.** When a queue ends (reset, deleted, or "End this queue" on the standalone tool), an overall winner is declared automatically from everyone's record — ranked by win rate, head-to-head, point differential, total wins, and games played, in that order by default. Both the **order those criteria are checked in** and the **minimum games someone needs to have played to qualify** (so a player who joined late and got lucky in one game can't win on a thin sample) are configurable in the same setup form as mode/rotation style when the queue is created. The winner screen also offers a **"Download stats (PDF)"** link with the full standings/leaderboard/head-to-head/match-history for that session.
 
 Queue sessions automatically expire and get cleared out after midnight, on whichever page load first notices the day has changed — there's no separate cleanup step for you to run.
 

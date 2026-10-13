@@ -90,7 +90,7 @@ Every screen found has at least one confirmed entry point and at least one confi
 | `ogEffectiveStatus` family (status derivation) | Every render of a Find-a-Game game | Find a Game list/detail (`index.html`), My Account Matches tab (`account.html`, duplicated copy) | Pure client function, not persisted | `openGames` doc + linked `bookings` doc | Display label only ("Reservation Pending" vs "Confirmed", EXPIRED) |
 | `MyActive.hasAnyLocalTrace()` | Page load at root `/` | `index.html` (root redirect decision), `picker.html` (My Matches card + Continue-card home-facility), `account.html` (empty-state logic) | `my-active.js` | `localStorage` only | Decides picker.html vs account.html |
 | `generateBracket`/`advanceToKnockout`/`submitMatchScore`/`correctMatchScore` (Cloud Functions) | Organizer actions | `tournament-admin.html` only (writer); `tournament.html` (reader, live) | `functions/index.js` | `matches`, `divisions`, `registrations`, `standings` | Rules deny ALL client writes to these paths — Functions are the only writer |
-| `scheduleMatch` (legacy) vs `generateSchedule`/`moveMatch` (Cloud Functions) | Organizer scheduling actions | `tournament-admin.html` | `functions/index.js` | `matches.sched` / `matches.{court,scheduledDate,scheduledHour}`, `bookings/state` | Two parallel data shapes on the match doc (see `LEGACY_CANDIDATES.md` §2) |
+| `scheduleMatch` (legacy) vs `generateSchedule`/`moveMatch` (Cloud Functions) | Organizer scheduling actions | `tournament-admin.html` | `functions/index.js` | `matches.sched` / `matches.{court,scheduledDate,scheduledHour}`, `bookings/state` | Two parallel data shapes on the match doc (see `LEGACY_CANDIDATES.md` §1) |
 | `tournamentNotifier` (cron, every 1 min) | Cloud Scheduler | None directly — delivers to whichever device is subscribed | `functions/notifyRunner.js` | `platformLiveTournaments`, `pushSubs`, `notifyOutbox` | Browser push notification; `sw.js` also records it into device-local `PushInbox` |
 | `setEntitlement()` (single mutation path) | Superadmin Entitlements tab actions | `superadmin.html` (writer); `index.html`/`store.html`/`tournament-admin.html` (readers of the mirrored result) | Direct Firestore | `platformTenants/{slug}/entitlements/{product}` → mirrored to `clients/{slug}/status/state` | Gates Store/Tournaments access everywhere |
 | Three billing-formula paths (§3 in Legacy Candidates) | Superadmin Provisioning / Plans / Directory tabs | `superadmin.html` only | Direct Firestore | `platformTenants/{slug}.billing`/`.subscription` | No single canonical writer, unlike entitlements |
@@ -261,10 +261,12 @@ Region: all callables and the client's callable factory agree on `asia-southeast
 
 ## 11. Legacy candidates (summary — full table in `LEGACY_CANDIDATES.md`)
 
-- **`firestore.rules` bottom section** ("Legacy single-tenant structure... WARNING: should be removed") — self-labeled, confirmed zero client callers anywhere in the repo. ✅ Removed from the rules file (see `LEGACY_CANDIDATES.md` §1 for the deploy note).
-- **`billing.html`** — active, tested, PIN-gated, but no `<a href="billing.html">` found anywhere in the app. Either reached by a direct link given out-of-band, or a genuinely missing in-app entry point.
+- **`firestore.rules` bottom section** ("Legacy single-tenant structure... WARNING: should be removed") — self-labeled, confirmed zero client callers anywhere in the repo. ✅ Removed from the rules file; deploy status (`firebase deploy --only firestore:rules`) as of its own removal was "not yet deployed, repo edit only" and hasn't been independently re-verified since — see git history on `firestore.rules` for the actual commit if this matters.
+- **`billing.html`** — no `<a href="billing.html">` found anywhere in the app. ✅ Confirmed intentional (out-of-band distributed link), no action taken.
 - Two misplaced HTML section comments (`store.html`, `tournament-admin.html`) — cosmetic documentation drift from a past tab reordering, zero functional impact. ✅ Fixed.
 - A duplicate `platformAuditLog` write on one tenant-suspend button in `superadmin.html` — a small, likely-accidental bug, not a legacy artifact. ✅ Fixed.
+
+For what's still genuinely open, see `LEGACY_CANDIDATES.md` — it now tracks only the unresolved items.
 
 ---
 
@@ -272,6 +274,6 @@ Region: all callables and the client's callable factory agree on `asia-southeast
 
 - Whether a real (non-superadmin-claim) staff account with only `manage_entitlements`/`manage_organizations`/`diagnose_access` can actually perform those actions today, given the `firestore.rules` mismatch noted in §10.4.
 - Whether `billing.html` is actually reached by any current tenant, and how (out-of-band link? Never used?).
-- Whether the now-removed legacy `firestore.rules` block (§11) was truly unreferenced by anything outside this repo (e.g., an old mobile client, a partner integration) before removal — static analysis could only confirm nothing *in this repo* called it. See `LEGACY_CANDIDATES.md` §1 for the rules-file edit's deploy status.
+- Whether the now-removed legacy `firestore.rules` block (§11) was truly unreferenced by anything outside this repo (e.g., an old mobile client, a partner integration) before removal — static analysis could only confirm nothing *in this repo* called it.
 
 See `LEGACY_CANDIDATES.md` for the full evidence-based classification, dependency/blast-radius analysis, and a proposed verification + cleanup sequence.

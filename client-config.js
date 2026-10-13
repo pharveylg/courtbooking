@@ -1,13 +1,17 @@
 /* ============================================================================
-   CLIENT CONFIG — NEUTRAL MAIN (GREY DEMO)
+   CLIENT CONFIG — shared defaults for every tenant
    ----------------------------------------------------------------------------
-   The main branch ships a PLAIN, client-agnostic deployment:
-   grey color scheme, generic branding, no business-specific details.
+   One deployment (courts.dulahq.app, Firebase project courtbooking-85175)
+   serves every tenant — there are no per-client branches or separate
+   deployments (see CLIENTS.md). This file supplies the plain, grey,
+   client-agnostic DEFAULTS every tenant starts from.
 
-   Per-client deployments live on their own branches
-   (client/white-kitchen, client/ace-pickle, ...) where this file is
-   replaced. See NEW_CLIENT.md for the full runbook and
-   examples/client-config.white-kitchen.js for a worked example.
+   A tenant's real branding/theme/rates/hours lives in Firestore at
+   clients/{slug}/config/state (set from that tenant's own Admin →
+   Branding & Site Settings) and overrides these defaults at runtime for
+   anyone visiting with ?client=slug. This file is only what a
+   brand-new, not-yet-configured tenant — or the bare site with no
+   ?client= at all — sees before that.
 
    Every field below is optional — omit anything and the app falls back
    to its built-in defaults (the same grey scheme).

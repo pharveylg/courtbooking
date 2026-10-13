@@ -1,14 +1,22 @@
 // ============================================================
-// FIREBASE CONFIG — NEUTRAL MAIN (DEMO MODE)
+// FIREBASE CONFIG — the one shared project every tenant runs on
 // ============================================================
-// Main branch runs as a self-contained demo: no Firebase keys,
-// all data persists in the visitor's own browser (localStorage).
-// A "Demo mode" badge appears in the bottom-right corner.
+// All tenants share this single Firebase project and this one
+// config file — there is no per-client branch or separate project
+// (see CLIENTS.md). Tenant isolation is by Firestore path
+// (clients/{slug}/...) and security rules, not by separate
+// credentials.
 //
-// For a real client deployment, replace this file with that
-// client's Firebase web config (see examples/firebase-config
-// .white-kitchen.js for the shape). The app then syncs bookings,
-// queues, QR codes and settings across all devices live.
+// These are the standard Firebase WEB config values, meant to be
+// public — the browser needs them to talk to Firestore/Auth/
+// Storage at all. Access control is enforced by firestore.rules/
+// storage.rules, not by hiding this.
+//
+// If window.FIREBASE_CONFIG is ever missing or empty (e.g. a local
+// fork that hasn't set up its own Firebase project yet), index.html
+// falls back to a localStorage-only "Demo mode" automatically — the
+// #demoModeBanner near the bottom of the page is that fallback, not
+// something this file needs to turn on.
 // ============================================================
 
 window.FIREBASE_CONFIG = {

@@ -421,7 +421,7 @@ Add custom domain validation if needed.
 
 ## History: migration from the legacy single-tenant structure
 
-This app started single-tenant, with data in top-level collections (`bookings/state`, `courts/state`, `settings/state`, ...) instead of today's tenant-scoped paths (`clients/{clientId}/bookings/state`, etc.). That migration is long complete — every current write goes through the `clients/{clientId}/...` path, and the old root-level Firestore rules block that existed only for backward compatibility during that migration has since been removed entirely (see `CURRENT_ARCHITECTURE.md` §11). Kept here only as historical context for why the data shape looks the way it does; there is nothing left to migrate.
+This app started single-tenant, with data in top-level collections (`bookings/state`, `courts/state`, `settings/state`, ...) instead of today's tenant-scoped paths (`clients/{clientId}/bookings/state`, etc.). That migration is long complete — every current write goes through the `clients/{clientId}/...` path, and the old root-level Firestore rules block that existed only for backward compatibility during that migration has since been removed entirely (see `ARCHITECTURE.md` §11). Kept here only as historical context for why the data shape looks the way it does; there is nothing left to migrate.
 
 ---
 

@@ -1,4 +1,4 @@
-# CURRENT_ARCHITECTURE.md
+# ARCHITECTURE.md
 
 **Purpose:** an evidence-based baseline of how this application actually works today, so future work (including cleanup) can be checked against it. Produced by static analysis (grep/read across the repo) plus three background research passes; no code was modified to produce this document. Where evidence is thin, that is stated explicitly rather than guessed.
 

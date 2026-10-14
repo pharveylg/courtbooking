@@ -4,7 +4,7 @@ A multi-tenant pickleball/court-booking platform: a single Firebase project serv
 
 No bundler, no framework — plain static HTML files with inline `<script>` tags, Tailwind CSS (compiled, not CDN-loaded at runtime), and the Firebase compat SDKs. Each tenant's data lives under its own Firestore path (`clients/{slug}/...`); the same static files serve every tenant, selected via `?client=slug`.
 
-For how any of this actually works end-to-end — screens, data flow, journeys, known inconsistencies — **start with [`CURRENT_ARCHITECTURE.md`](CURRENT_ARCHITECTURE.md)**, not this file. This README is setup/workflow only.
+For how any of this actually works end-to-end — screens, data flow, journeys, known inconsistencies — **start with [`ARCHITECTURE.md`](ARCHITECTURE.md)**, not this file. This README is setup/workflow only.
 
 ---
 
@@ -71,13 +71,13 @@ Hosting, rules, and functions deploy independently — check `firebase.json`'s `
 
 ## Admin / staff access
 
-Each tenant has one shared 4-digit Admin PIN (Admin → Security to change it), gating the tenant Admin console and Tournament Admin. Store has its own, separate PIN. There is no per-staff login or role system by design — see [`ADMIN_GUIDE.md`](ADMIN_GUIDE.md) §13 and [`CURRENT_ARCHITECTURE.md`](CURRENT_ARCHITECTURE.md) §6 for the trust model this implies.
+Each tenant has one shared 4-digit Admin PIN (Admin → Security to change it), gating the tenant Admin console and Tournament Admin. Store has its own, separate PIN. There is no per-staff login or role system by design — see [`ADMIN_GUIDE.md`](ADMIN_GUIDE.md) §13 and [`ARCHITECTURE.md`](ARCHITECTURE.md) §6 for the trust model this implies.
 
 ## Documentation index
 
 | Doc | For |
 |---|---|
-| [`CURRENT_ARCHITECTURE.md`](CURRENT_ARCHITECTURE.md) | Evidence-based baseline of how the app actually works — start here |
+| [`ARCHITECTURE.md`](ARCHITECTURE.md) | Evidence-based baseline of how the app actually works — start here |
 | [`LEGACY_CANDIDATES.md`](LEGACY_CANDIDATES.md) | Tracked technical-debt/cleanup backlog, classified by confidence |
 | [`CLIENTS.md`](CLIENTS.md) | Real tenant registry, plan pricing, licensing/data-ownership terms |
 | [`MULTI_TENANCY_SETUP.md`](MULTI_TENANCY_SETUP.md) | How tenant isolation works; how to provision a new tenant by hand |

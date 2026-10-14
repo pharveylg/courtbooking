@@ -4,8 +4,15 @@ Written against `reverse flow.txt`'s "Club & Facility Self-Service Onboarding"
 spec, adapted to what this app actually has today. Where the reference spec
 assumes capabilities (owner accounts, connected payment processors) that
 don't exist here, this document says so explicitly and proposes a path —
-it does not pretend the gap away. **This is a proposal only; nothing has
-been built.**
+it does not pretend the gap away.
+
+**Status: Phase 1 is built and live** — `onboarding.html`, the
+`createFacility`/`publishFacility` Cloud Functions, owner sign-up via
+`MyAuth`, and the `picker.html` entry point all exist and are wired
+together (§4.1, §7, §8 below are marked accordingly). One piece of §4.2
+shipped differently than proposed — see that section. Phases 2–5 of §10
+(bulk-add-courts, pricing presets, staff invites via the allow-list,
+add-ons/payment-processor integration) remain proposed, not built.
 
 ## 0. Reality check: three gaps the reference spec assumes don't exist
 
@@ -59,67 +66,56 @@ setup steps, what exists today and what the onboarding step should literally
 
 ## 4. The two gaps this proposal actually recommends closing
 
-### 4.1 Self-service tenant creation
+### 4.1 Self-service tenant creation — ✅ Built
 
-**Today:** only `superadmin.html`'s Provision Tenant form (or the Firestore
-security rules) can create `platformTenants/{slug}` and register
+**Before:** only `superadmin.html`'s Provision Tenant form (or the Firestore
+security rules) could create `platformTenants/{slug}` and register
 `tenantDirectory/{slug}`.
 
-**Proposed:** a new Cloud Function (`createFacility`, onCall, following the
-pattern of every other mutating function in `functions/index.js`) that does
-exactly what Provision Tenant already does — write the config/courts/settings
-docs, hash the chosen PIN, register `platformTenants/{slug}` and
-`tenantDirectory/{slug}` — but is callable by a signed-in facility owner
-instead of a superadmin, with:
+**Shipped:** `createFacility` (`functions/index.js`), an `onCall` Cloud
+Function matching this proposal closely: it requires a signed-in caller
+(`request.auth`), validates the slug and uniqueness the same way
+`isValidTenantId()` does, writes the config/courts/settings docs and hashed
+PIN, and records `ownerUid`/`ownerEmail` on `platformTenants/{slug}` — a
+field that didn't exist before this proposal, exactly as recommended. One
+detail differs from the original proposal: the new tenant's lifecycle
+starts at `provisioning`, not `trial` directly (publishing is what advances
+it — see §7, also built). `onboarding.html` is the client that calls it.
 
-- Slug format validation and uniqueness check (same rule `isValidTenantId()`
-  already enforces — [MULTI_TENANCY_SETUP.md](MULTI_TENANCY_SETUP.md)).
-- The new tenant's lifecycle starting at `trial` (the state machine already
-  exists — [SUPERADMIN_GUIDE.md](SUPERADMIN_GUIDE.md) §3.3), not `active` —
-  so a self-provisioned facility is automatically on the same 7-day trial
-  clock a superadmin would otherwise set by hand, and the platform still
-  has a natural checkpoint before it's a paying tenant.
-- One facility per owner account at launch (simplest abuse guard; relax
-  later if an owner legitimately runs multiple clubs).
+**Not done:** `superadmin.html`'s Provision Tenant form still has its own,
+separate write path rather than calling `createFacility` — the
+"not two implementations of the same write" consolidation this section
+originally suggested hasn't happened. Low-risk, not a blocker; a refactor
+whenever it's prioritized.
 
-This function becomes the one place both the new "Create your facility"
-entry point (reference §4) and superadmin's existing Provision Tenant form
-could eventually call — not two implementations of the same write.
+### 4.2 An owner identity, reusing what's already half-built — ⚠️ Partially built, via a different mechanism than proposed
 
-### 4.2 An owner identity, reusing what's already half-built
-
-**Today:** `staff-auth.js` is a complete, tested, *disabled* scaffold for
+**Before:** `staff-auth.js` is a complete, tested, *disabled* scaffold for
 Google sign-in, gated by `STAFF_GOOGLE_ENABLED = false` and an allow-list at
 `clients/{slug}/settings/staffAuth`. Its own header comment already flags
 exactly what's missing for production use: the allow-list "sits under this
 app's open per-facility Firestore rule, so anyone could edit it" and needs
-"a staff custom claim" or a locked-down rule before go-live.
+"a staff custom claim" or a locked-down rule before go-live. **This part is
+still true today** — `staff-auth.js` remains dormant (`STAFF_GOOGLE_ENABLED
+= false`), unchanged by this work.
 
-**Proposed:** this scaffold supplies the *admin-access gate*; sign-up itself
-should reuse a different, already-**live** piece — `my-auth.js` (`MyAuth`),
-the Google + email/password sign-in already used for player accounts
-(`account.html`). Full detail in §11; summary:
+**Shipped (steps 1–2 of the original plan):** `onboarding.html` does sign-up
+with `MyAuth` exactly as proposed — the same Google/email+password flow
+`account.html` already used, no new sign-in UI — and does call
+`createFacility` (§4.1), which writes the signed-in UID as `ownerUid`.
 
-1. A facility owner signs up with `MyAuth` — the exact same Google/email
-   flow a player already uses, not new sign-in UI.
-2. Account creation calls `createFacility` (§4.1); the signed-in UID is
-   written as that tenant's owner — a new field, since nothing today
-   records who *made* a tenant, only its PIN.
-3. The owner's email (Google *or* password account — see §11.4 for why
-   `staff-auth.js` needs a small generalization here) is auto-added to that
-   tenant's `staffAuth.emails` allow-list, closing the loop: the same person
-   who just created the facility can immediately get into its Admin Console
-   without also needing to know the PIN they just set.
-4. The existing "invite staff" gap (reference §28) becomes: add more emails
-   to that same allow-list from Admin → Security. Small addition to an
-   existing screen, not a new feature.
-5. Before this goes live for real owners, do the hardening the scaffold's
-   own comment already calls for: move the allow-list behind a Firestore
-   rule or a callable that checks a staff custom claim, mirroring how
-   `superadmin.html` already works.
-
-This is deliberately **not** a proposal to build a new auth system — it's
-"turn on and harden the thing already sitting in the repo."
+**Not shipped (steps 3–5):** the proposed "auto-add the owner's email to
+`staffAuth.emails`" step was never built, and `staff-auth.js` was never
+turned on or hardened. **A different, simpler mechanism shipped instead**:
+`onboarding.html`'s "Open Admin Console" is an inline PIN-verification form
+that pre-unlocks the destination page's admin session (matching
+sessionStorage key) before navigating, using the PIN the owner already set
+during `createFacility` — not Google-auth-gated staff access. This closes
+the same practical gap this section cared about (an owner isn't forced to
+separately re-type their PIN right after creating their facility) without
+touching `staff-auth.js` at all. The "invite staff" gap (step 4) and the
+allow-list hardening (step 5) remain open — anyone with the Admin PIN is
+still the only access model, same as every other tenant.
 
 ## 5. Payments: recommend keeping the manual model, not building OAuth
 
@@ -161,9 +157,14 @@ underlying answers are already durable the moment each step is saved. A new,
 tiny `onboarding/state` doc per tenant (current step index, dismissed at
 publish) is the only new data this whole proposal actually needs.
 
-## 7. Draft → Published lifecycle
+## 7. Draft → Published lifecycle — ✅ Built
 
-Map directly onto the lifecycle state machine that already exists
+`publishFacility` (`functions/index.js`) matches this design closely:
+owner-only (checks `ownerUid` against the caller), and re-checks readiness
+server-side rather than trusting the client's checklist — business name, at
+least one active court, an admin PIN, and a real hourly rate on every
+active court, mirroring the table in §6. Maps directly onto the lifecycle
+state machine that already exists
 ([SUPERADMIN_GUIDE.md](SUPERADMIN_GUIDE.md) §3.3:
 `provisioning → trial → active → grace → restricted → suspended → cancelled → archived`):
 
@@ -183,13 +184,11 @@ Map directly onto the lifecycle state machine that already exists
   a checklist with "Fix" links back to the relevant step — no new validation
   logic, just reading the same docs the steps already wrote.
 
-## 8. Entry point
+## 8. Entry point — ✅ Built
 
-Reference §4. Today `picker.html` is purely a facility *directory* — nothing
-on it leads to creating one. Add a card there, same visual pattern as the
-existing "My Matches" / "Walk-in Queue" cards (see [QUEUE_MODULE.md](QUEUE_MODULE.md)
-for that pattern) — "Own a facility? List it here →" — leading to the new
-owner sign-up (§4.2) and then straight into the stepper.
+Reference §4. `picker.html` has a link — `Own a facility? Set it up
+yourself.` — straight to `/onboarding.html`, closing what was previously a
+gap (nothing on the directory page led to creating a facility).
 
 ## 9. What this proposal deliberately does not do
 
@@ -210,26 +209,34 @@ owner sign-up (§4.2) and then straight into the stepper.
 
 ## 10. Suggested phasing
 
-1. **`createFacility` Cloud Function** + minimal owner sign-up (Google, via
-   the existing scaffold) + the stepper shell wrapping steps 1–5 (facility
-   details, courts, schedule, pricing, payments) exactly as they exist in
-   Admin today, each just re-skinned with onboarding copy and a "Next" button.
+1. **`createFacility` Cloud Function** + minimal owner sign-up + the stepper
+   shell. **✅ Built — but lighter-weight than originally envisioned here.**
+   Instead of a stepper wrapping re-skinned copies of all 5 existing Admin
+   screens, `onboarding.html` shipped as: sign in (`MyAuth`, not the
+   `staff-auth.js` scaffold — see §4.2) → one quick-create form (business
+   name, color, PIN, court count, a single hourly rate — not all 5 of the
+   original steps) → a readiness checklist that points the owner at the
+   real, unskinned Admin Console to finish the rest (courts, schedule,
+   pricing, payment QR) and come back to refresh/publish. Simpler to build,
+   same end result: Admin's existing screens are genuinely reused, just not
+   wrapped inside the onboarding flow itself.
 2. **Readiness check + publish**, closing the provisioning→trial lifecycle
-   gap (§7).
+   gap. **✅ Built** (§7) — `publishFacility` matches this closely.
 3. **Bulk-add-courts** and **pricing presets** (§3) — small UX improvements,
-   not blockers to shipping phase 1.
+   not blockers to shipping phase 1. **Not built.**
 4. **Staff invites** via the allow-list (§4.2 step 4) and the allow-list
-   hardening its own code comment calls for.
+   hardening its own code comment calls for. **Not built** — see §4.2 for
+   the different, simpler mechanism (PIN-unlock) that shipped in its place.
 5. *(Only if separately requested)* Add-ons attached to booking checkout,
-   or a connected payment processor.
+   or a connected payment processor. **Not built, deliberately deferred**
+   (§5, §9).
 
-Phase 1 alone — reusing five already-built, already-documented admin
-screens behind a stepper, plus one new Cloud Function and the dormant
-Google-auth scaffold switched on — is enough to hit the reference spec's
-core promise: **a new owner can create and launch a facility without a
-platform operator touching `superadmin.html` on their behalf.** Everything
-after phase 1 makes that experience better; it doesn't change whether
-self-service is possible.
+Phase 1 and phase 2 together already hit the reference spec's core promise:
+**a new owner can create and launch a facility without a platform operator
+touching `superadmin.html` on their behalf.** That's live today, through a
+leaner flow than this section originally sketched. Phases 3–5 would make
+the experience better; none of them change whether self-service is
+possible — it already is.
 
 ---
 
@@ -241,6 +248,13 @@ design — exact functions, exact data, and why it needs **zero changes to
 carefully field-scoped (its own comments on `platformTenants` walk through
 exactly why a plain `allow write` there was wrong), and this design avoids
 reopening it.
+
+**Status:** §11.1 (owner sign-up via `MyAuth`) and §11.2 (`createFacility`)
+were followed closely and are live — see §4.1/§4.2 above for exactly what
+shipped vs. what didn't. §11.3 (`publishFacility`) is also live — see §7.
+§11.4 (generalizing `staff-auth.js`) was **not** done; that scaffold is
+still fully dormant, per §4.2's note on the different mechanism that
+shipped instead.
 
 ### 11.1 Owner sign-up: reuse `MyAuth`, not `StaffAuth`, for the sign-in itself
 

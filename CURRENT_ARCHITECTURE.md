@@ -10,14 +10,16 @@
 
 One Firebase project (Hosting + Firestore + Storage + Functions v2 + Auth), serving a family of static HTML pages (no bundler, no framework — plain `<script>` tags, Tailwind CDN, Firebase compat SDKs). Every tenant ("facility") is a slug-scoped subtree `clients/{slug}/...`; the same static files serve every tenant, selecting which one via `?client=slug`, a remembered slug, or (rarely) a path segment.
 
-**Runtime pages (18 top-level HTML files):**
+**Runtime pages (12 top-level HTML files):**
 
 | File | Role |
 |---|---|
 | `picker.html` | Facility directory / first landing page |
+| `onboarding.html` | Self-service facility signup — create and publish a new tenant without a platform operator (`createFacility`/`publishFacility` Cloud Functions; see `FACILITY_ONBOARDING_PROPOSAL.md`) |
 | `account.html` | Signed-in "My Account" (Matches / Profile / Notifications tabs) — the returning-visitor landing page |
 | `my-matches.html` | Redirect stub → `account.html` (kept for old links/bookmarks) |
 | `index.html` | The tenant app itself — booking, Find a Game, queue, stats, tenant Admin (537KB, by far the largest file) |
+| `queue.html` | Standalone walk-in queue tool — no facility, PIN, sign-in, or Firestore; `sessionStorage`-only, one queue at a time (see `QUEUE_MODULE.md`) |
 | `store.html` | Pickle Court Store (POS/inventory/reports add-on), own PIN |
 | `tournament-admin.html` | Tournament organizer/staff console, reuses the tenant's Booking Admin PIN |
 | `tournament.html` | Public tournament page — **no PIN, no entitlement check** (see §6) |
@@ -37,7 +39,7 @@ One Firebase project (Hosting + Firestore + Storage + Functions v2 + Auth), serv
 | `next-open.js` | Shared "next open hour" calculation, used by picker.html's Continue card |
 | `pickleball-scoring.js`, `court-scoreboard.js`, `motion.js` | Scoring engine, live scoreboard UI, small animation-observer helper |
 
-**Server side:** `functions/index.js` (22 `onCall`/`onSchedule` exports) plus three non-exported helper modules it imports (`notifyRunner.js`, `tournamentCharges.js`, `engines/*.js`).
+**Server side:** `functions/index.js` (24 `onCall`/`onSchedule` exports, including `createFacility`/`publishFacility` for `onboarding.html`'s self-service flow) plus three non-exported helper modules it imports (`notifyRunner.js`, `tournamentCharges.js`, `engines/*.js`).
 
 ---
 
@@ -210,7 +212,7 @@ There is no conventional REST API. Two access patterns coexist:
 1. **Direct Firestore** (the default): `clients/{slug}/**` is readable/writable by anyone who can format a valid-looking slug (`isValidTenantId()` in `firestore.rules` — no auth check at all). This is a deliberate trust model documented repeatedly in the rules file's own comments ("no user auth in this app to gate on further").
 2. **Cloud Functions callables** (the exception, used specifically where client trust isn't acceptable): tournament match/schedule/standings mutations, push-alert subscribe/unsubscribe, the two platform-billing recalculation callables, and the tenant billing-portal read (`getBillingPortalData`, which explicitly exists to close a prior data-exposure gap — see its own header comment in `functions/index.js`).
 
-All 22 callables were confirmed to have at least one real client caller (or be a scheduled cron with no caller by design) — **no orphaned Cloud Function was found.**
+All 24 callables were confirmed to have at least one real client caller (or be a scheduled cron with no caller by design) — **no orphaned Cloud Function was found.**
 
 Region: all callables and the client's callable factory agree on `asia-southeast1` (confirmed in both `functions/index.js` and every caller). `tournament.html` deliberately calls Functions via raw `fetch()` instead of the Functions SDK (it doesn't load `firebase-functions-compat.js`), unlike every other caller (`tournament-admin.html`, `billing.html`, `superadmin.html`), which do use the SDK's `httpsCallable`. This is a real (minor) inconsistency, not an error — both reach the same endpoints correctly.
 

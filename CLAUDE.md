@@ -10,8 +10,8 @@ Guidance for Claude Code working in this repository.
 
 ## Workflow rules
 
-- **Always use a subagent for every task.** Do not perform work directly in the main thread — delegate every action in this repository to a subagent (the Agent/Task tool), from here forward.
-  - **One practical exception:** interactive visual widgets (diagrams, charts, mockups rendered through the visualization tool) only render inline for the person in the conversation that calls them — a subagent's tool calls report back as text only and never reach the person directly. Draw those directly instead of through a subagent.
+- **Never do real work all by yourself — use a subagent for every task that is not trivial.** Investigation, code changes, code review, and documentation all get delegated to a subagent (the Agent/Task tool); reserve doing something directly for genuinely trivial actions (a quick status check, reading one file to confirm a fact).
+  - **One practical exception:** interactive visual widgets (diagrams, charts, mockups rendered through the visualization tool) only render inline for the person in the conversation that calls them — a subagent's tool calls report back as text only. Draw those directly instead of delegating.
 - **"push" means commit + push only.** "Deploy" (`firebase deploy --only hosting`, `--only firestore:rules`, `--only functions`) is a separate, explicit step — never bundle the two unless both are explicitly asked for in the same request.
 - **Propose a design before building a new feature.** Don't start writing code for a new feature straight from a one-line request — lay out the approach first, unless the request is already specific and detailed enough that a design step wouldn't add anything.
 - **Run the full test suite before any commit:**

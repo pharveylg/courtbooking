@@ -121,7 +121,9 @@ td{padding:7px 6px;border-bottom:1px solid var(--sand)}
 :root[data-theme="dark"] .name-edit{border-bottom-color:rgba(218,226,253,.5)}
 :root[data-theme="dark"] .name-edit:hover,:root[data-theme="dark"] .name-edit:focus{border-bottom-color:var(--ink)}
 /* low opacity text tiers fall under 4.5:1 in dark -- use the muted tone at full opacity */
-:root[data-theme="dark"] .brand-sub,:root[data-theme="dark"] .disclaimer,:root[data-theme="dark"] .hint,:root[data-theme="dark"] .rank-item .rank-num,:root[data-theme="dark"] .vs,:root[data-theme="dark"] .amp-static,:root[data-theme="dark"] .serve-label,:root[data-theme="dark"] .no-match,:root[data-theme="dark"] .wait-item .amp,:root[data-theme="dark"] .empty-note,:root[data-theme="dark"] th,:root[data-theme="dark"] .winner-label,:root[data-theme="dark"] .winner-note,:root[data-theme="dark"] [style*="opacity:0.5"]{opacity:1;color:var(--muted)}
+:root[data-theme="dark"] .brand-sub,:root[data-theme="dark"] .disclaimer,:root[data-theme="dark"] .hint,:root[data-theme="dark"] .rank-item .rank-num,:root[data-theme="dark"] .vs,:root[data-theme="dark"] .amp-static,:root[data-theme="dark"] .serve-label,:root[data-theme="dark"] .no-match,:root[data-theme="dark"] .wait-item .amp,:root[data-theme="dark"] .empty-note,:root[data-theme="dark"] th,:root[data-theme="dark"] .winner-label,:root[data-theme="dark"] .winner-note,{opacity:1;color:var(--muted)}
+/* inline style="opacity:0.5" beats a normal rule, hence !important */
+:root[data-theme="dark"] [style*="opacity:0.5"]{opacity:1!important;color:var(--muted)}
 }
 </style>
 <link rel="stylesheet" href="theme.css"/>

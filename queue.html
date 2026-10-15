@@ -616,25 +616,37 @@ td{padding:7px 6px;border-bottom:1px solid var(--sand)}
       </div>`;
     document.getElementById('submitScoreBtn').addEventListener('click', onSubmitScore);
     document.getElementById('liveScoreBtn').addEventListener('click', onLiveScore);
-    block.querySelectorAll('.serve-pill').forEach((btn) => btn.addEventListener('click', () => {
-      const s = load(); if (!s || !s.activeMatch) return;
-      QueueEngine.setFirstServer(s, btn.dataset.serve);
-      save(s); render();
-    }));
-    block.querySelectorAll('select[data-team]').forEach((sel) => sel.addEventListener('change', () => {
-      const s = load(); if (!s || !s.activeMatch) return;
-      const r = QueueEngine.swapActivePlayer(s, sel.dataset.team, Number(sel.dataset.index), sel.value);
-      if (r.error) { toast(r.error); return; }
-      save(s); render();
-      if (r.consecutiveWarning) toast(`${r.added} just played last match — added anyway.`);
-    }));
-    block.querySelectorAll('select[data-team-swap]').forEach((sel) => sel.addEventListener('change', () => {
-      const s = load(); if (!s || !s.activeMatch) return;
-      const r = QueueEngine.swapActiveTeam(s, sel.dataset.teamSwap, sel.value);
-      if (r.error) { toast(r.error); return; }
-      save(s); render();
-      if (r.consecutiveWarning) toast(`That team just played last match — added anyway.`);
-    }));
+    block.querySelectorAll('.serve-pill').forEach((btn) => btn.addEventListener('click', () => applyServeFirst(btn.dataset.serve)));
+    block.querySelectorAll('select[data-team]').forEach((sel) => sel.addEventListener('change', () => applySwapPlayer(sel.dataset.team, Number(sel.dataset.index), sel.value)));
+    block.querySelectorAll('select[data-team-swap]').forEach((sel) => sel.addEventListener('change', () => applySwapTeam(sel.dataset.teamSwap, sel.value)));
+  }
+
+  /* Admin override, pushed into the session the same way whether it comes
+     from the dashboard selects above or the live scoreboard's own pre-game
+     controls (see onLiveScore) -- one place to load, call the shared
+     engine, save, and re-render. */
+  function applyServeFirst(side){
+    const s = load(); if (!s || !s.activeMatch) return { error: 'No active match.' };
+    const r = QueueEngine.setFirstServer(s, side);
+    if (r.error) return r;
+    save(s); render();
+    return r;
+  }
+  function applySwapPlayer(team, index, newName){
+    const s = load(); if (!s || !s.activeMatch) return { error: 'No active match.' };
+    const r = QueueEngine.swapActivePlayer(s, team, index, newName);
+    if (r.error) { toast(r.error); return r; }
+    save(s); render();
+    if (r.consecutiveWarning) toast(`${r.added} just played last match — added anyway.`);
+    return r;
+  }
+  function applySwapTeam(side, newTeamId){
+    const s = load(); if (!s || !s.activeMatch) return { error: 'No active match.' };
+    const r = QueueEngine.swapActiveTeam(s, side, newTeamId);
+    if (r.error) { toast(r.error); return r; }
+    save(s); render();
+    if (r.consecutiveWarning) toast(`That team just played last match — added anyway.`);
+    return r;
   }
 
   function renderWaitingList(session){
@@ -748,11 +760,18 @@ td{padding:7px 6px;border-bottom:1px solid var(--sand)}
   function onLiveScore(){
     const session = load(); if (!session || !session.activeMatch || typeof CourtBoard === 'undefined') return;
     const m = session.activeMatch, f = session.gameFormat || { target: 11, winBy: 2, scoring: 'sideout' };
+    const fixedPairs = session.rule === 'fixed_pairs';
     cleanupBoardKeys(m.id);
     CourtBoard.open({
       title: 'Walk-in Queue — live score',
       names: { home: QueueEngine.teamLabel(m.teamA), away: QueueEngine.teamLabel(m.teamB) },
       firstServer: m.firstServer === 'teamB' ? 'away' : 'home',
+      roster: { home: m.teamA.slice(), away: m.teamB.slice() },
+      waitingNames: fixedPairs ? undefined : session.waiting.flatMap((g) => g.names),
+      waitingTeams: fixedPairs ? session.waiting.map((g) => ({ id: g.id, names: g.names.slice() })) : undefined,
+      onSetFirstServer: (side) => applyServeFirst(side === 'away' ? 'teamB' : 'teamA'),
+      onSwapPlayer: fixedPairs ? undefined : (side, index, newName) => applySwapPlayer(side === 'away' ? 'teamB' : 'teamA', index, newName),
+      onSwapTeam: fixedPairs ? (side, newTeamId) => applySwapTeam(side === 'away' ? 'teamB' : 'teamA', newTeamId) : undefined,
       config: { target: f.target, winBy: f.winBy, scoring: f.scoring, bestOf: 1, doubles: session.mode === 'doubles' },
       storageKey: boardKeyFor(m.id),
       finishLabel: 'Submit & rotate queue',

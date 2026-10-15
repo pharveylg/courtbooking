@@ -7,7 +7,19 @@
        finishLabel,                                 // e.g. "Submit result"
        onFinish(summary, state) -> Promise|void,    // called when the match is done and saved
        onLive(view),                                // every change (callers throttle)
-       onCancel()
+       onCancel(),
+
+       // Pre-rally admin overrides -- all optional; a caller that omits them
+       // gets no pre-game panel at all. Shown only while the CURRENT game is
+       // still at its very start (PickleScore.atGameStart) and gone for
+       // good the instant the first rally happens, in every game of the
+       // match, not just game 1:
+       roster: { home: [...names], away: [...names] },    // actual on-court roster (not just the joined display string)
+       waitingNames: [...names],                           // swap-in candidates, every rule but Fixed Pairs
+       waitingTeams: [{ id, names: [...] }],                // swap-in candidates, Fixed Pairs only (swaps the whole team)
+       onSetFirstServer(side) -> {ok}|{error},              // side: 'home'|'away'
+       onSwapPlayer(side, index, newName) -> {ok,...}|{error},
+       onSwapTeam(side, newTeamId) -> {ok,...}|{error}      // Fixed Pairs only
      })
 
    Tap the side that WON the rally. Undo reaches back through the whole match.
@@ -33,6 +45,10 @@
   .rb-btn:disabled{opacity:.4}
   .rb-banner{margin:0 12px;padding:8px 12px;border-radius:12px;background:#171F33;border:1px solid #8B947D;font-size:12px;color:#C1CAB0;display:flex;align-items:center;justify-content:space-between;gap:10px}
   .rb-banner button{background:none;border:0;color:var(--rb-accent,#9EE939);font:700 12px inherit;font-family:inherit;cursor:pointer;text-decoration:underline;padding:6px}
+  .rb-pregame{margin:0 12px 6px;padding:10px 12px;border-radius:12px;background:#171F33;border:1px solid #8B947D;display:flex;flex-direction:column;gap:8px}
+  .rb-pregame-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .rb-pregame-label{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#C1CAB0;min-width:84px}
+  .rb-pregame select{min-height:40px;border-radius:12px;border:1px solid #8B947D;background:#0B1326;color:#DAE2FD;padding:0 10px;font:600 13px inherit;font-family:inherit;flex:1;min-width:140px}
   .rb-mid{padding:6px 12px 0;text-align:center}
   .rb-call{font-size:clamp(22px,5.5vmin,40px);font-weight:800;letter-spacing:.04em;color:var(--rb-accent,#9EE939)}
   .rb-sub{font-size:12px;color:#C1CAB0;margin-top:2px;min-height:16px}
@@ -126,6 +142,7 @@
     top.append(cancelBtn, title, fsBtn);
 
     const bannerHost = el('div');
+    const pregameHost = el('div');
     const mid = el('div', 'rb-mid'); const call = el('div', 'rb-call rb-mono'); const sub = el('div', 'rb-sub'); mid.append(call, sub);
     const board = el('div', 'rb-board');
     const sides = {};
@@ -147,9 +164,22 @@
 
     const panel = el('div', 'rb-panel'); panel.style.display = 'none';
     const editor = el('div', 'rb-panel rb-editor'); editor.style.display = 'none';
-    root.append(top, bannerHost, mid, board, rail, panel, editor);
+    root.append(top, bannerHost, pregameHost, mid, board, rail, panel, editor);
     document.body.appendChild(root);
     const prevOverflow = document.body.style.overflow; document.body.style.overflow = 'hidden';
+
+    /* ---------- pre-rally admin overrides: change first server / swap a
+       player, or (Fixed Pairs) a whole team -- only while the CURRENT game
+       is still at its very start (see PickleScore.atGameStart). Local
+       mirrors of the roster and waiting line so the panel stays correct
+       across more than one swap without needing the caller to re-open the
+       board; pushed back into the real session via the opts callbacks,
+       same as the admin-override controls on the queue dashboards. */
+    const roster = { home: ((opts.roster && opts.roster.home) || []).slice(), away: ((opts.roster && opts.roster.away) || []).slice() };
+    let waitingNames = (opts.waitingNames || []).slice();
+    let waitingTeams = (opts.waitingTeams || []).map((t) => ({ id: t.id, names: (t.names || []).slice() }));
+    let pregameErrText = '';
+    const TEAM_SEP = ' & ';
 
     /* ---------- speech / haptics / wake lock ---------- */
     let voiceOk = typeof window.speechSynthesis !== 'undefined' && typeof window.SpeechSynthesisUtterance !== 'undefined';
@@ -202,7 +232,130 @@
         const so = el('button', '', 'Start over'); so.type = 'button'; so.addEventListener('click', startOver); b.appendChild(so); bannerHost.appendChild(b);
       }
       if (!voiceOk && audioOn) bannerHost.appendChild(el('div', 'rb-banner', 'This browser has no speech voice, so calls will be silent.'));
+      renderPreGame();
       renderPanel();
+    }
+
+    function renderPreGame() {
+      pregameHost.textContent = '';
+      if (!P.atGameStart(state)) { pregameErrText = ''; return; }
+      const hasFirstServer = typeof opts.onSetFirstServer === 'function';
+      const hasTeamSwap = typeof opts.onSwapTeam === 'function';
+      const hasPlayerSwap = !hasTeamSwap && typeof opts.onSwapPlayer === 'function';
+      if (!hasFirstServer && !hasTeamSwap && !hasPlayerSwap) return;
+      const box = el('div', 'rb-pregame');
+      if (hasFirstServer) {
+        const row = el('div', 'rb-pregame-row');
+        row.appendChild(el('span', 'rb-pregame-label', 'Serves first'));
+        ['home', 'away'].forEach((side) => {
+          const b = el('button', 'rb-pill' + (state.firstServer === side ? ' rb-won' : ''), state.names[side]);
+          b.type = 'button';
+          b.setAttribute('aria-pressed', String(state.firstServer === side));
+          b.addEventListener('click', (e) => { e.stopPropagation(); trySetFirstServer(side); });
+          row.appendChild(b);
+        });
+        box.appendChild(row);
+      }
+      if (hasTeamSwap) {
+        ['home', 'away'].forEach((side) => box.appendChild(teamSwapRow(side)));
+      } else if (hasPlayerSwap) {
+        ['home', 'away'].forEach((side) => {
+          roster[side].forEach((nm, i) => box.appendChild(playerSwapRow(side, i, nm)));
+        });
+      }
+      if (pregameErrText) box.appendChild(el('div', 'rb-err', pregameErrText));
+      pregameHost.appendChild(box);
+    }
+
+    function swapOption(value, label) { const o = document.createElement('option'); o.value = value; o.textContent = label; return o; }
+
+    function playerSwapRow(side, index, current) {
+      const row = el('div', 'rb-pregame-row');
+      row.appendChild(el('span', 'rb-pregame-label', roster[side].length > 1 ? `${state.names[side]} #${index + 1}` : state.names[side]));
+      const sel = document.createElement('select');
+      sel.setAttribute('aria-label', `Swap ${current}`);
+      const seen = new Set([current]);
+      sel.appendChild(swapOption(current, current));
+      ['home', 'away'].forEach((s) => {
+        roster[s].forEach((n, i) => {
+          if (s === side && i === index) return;
+          if (seen.has(n)) return;
+          seen.add(n);
+          sel.appendChild(swapOption(n, `${n} (on court)`));
+        });
+      });
+      waitingNames.forEach((n) => {
+        if (seen.has(n)) return;
+        seen.add(n);
+        sel.appendChild(swapOption(n, n));
+      });
+      sel.value = current;
+      sel.addEventListener('click', (e) => e.stopPropagation());
+      sel.addEventListener('change', (e) => { e.stopPropagation(); trySwapPlayer(side, index, sel.value); });
+      row.appendChild(sel);
+      return row;
+    }
+
+    function teamSwapRow(side) {
+      const row = el('div', 'rb-pregame-row');
+      row.appendChild(el('span', 'rb-pregame-label', side === 'home' ? 'Home team' : 'Away team'));
+      const sel = document.createElement('select');
+      sel.setAttribute('aria-label', `Swap ${state.names[side]}`);
+      sel.appendChild(swapOption('', roster[side].join(TEAM_SEP) || state.names[side]));
+      waitingTeams.forEach((t) => sel.appendChild(swapOption(t.id, t.names.join(TEAM_SEP))));
+      sel.value = '';
+      sel.addEventListener('click', (e) => e.stopPropagation());
+      sel.addEventListener('change', (e) => {
+        e.stopPropagation();
+        if (!sel.value) return;
+        trySwapTeam(side, sel.value);
+      });
+      row.appendChild(sel);
+      return row;
+    }
+
+    /* Push the choice back into the session (opts callback, same engine
+       call the queue dashboards' own admin override uses), then mirror it
+       into the live board's own state/roster -- no close/reopen needed. */
+    function trySetFirstServer(side) {
+      if (side === state.firstServer) return;
+      const r = opts.onSetFirstServer(side) || {};
+      pregameErrText = r.error || '';
+      if (r.error) { render(); return; }
+      change(P.setFirstServer(state, side));
+    }
+
+    function trySwapPlayer(side, index, newName) {
+      const oldName = roster[side][index];
+      if (newName === oldName) return;
+      const r = opts.onSwapPlayer(side, index, newName) || {};
+      if (r.error) { pregameErrText = r.error; render(); return; }
+      pregameErrText = r.consecutiveWarning ? `${newName} just played last match — added anyway.` : '';
+      if (r.swappedWithinMatch) {
+        ['home', 'away'].forEach((s) => {
+          const i = roster[s].indexOf(newName);
+          if (i !== -1 && !(s === side && i === index)) roster[s][i] = oldName;
+        });
+      } else {
+        waitingNames = waitingNames.filter((n) => n !== newName);
+        if (r.replaced) waitingNames.push(r.replaced);
+      }
+      roster[side][index] = newName;
+      change(P.renameSide(state, side, roster[side].join(TEAM_SEP)));
+    }
+
+    function trySwapTeam(side, newTeamId) {
+      const r = opts.onSwapTeam(side, newTeamId) || {};
+      if (r.error) { pregameErrText = r.error; render(); return; }
+      pregameErrText = r.consecutiveWarning ? 'That team just played last match — added anyway.' : '';
+      const incoming = waitingTeams.find((t) => t.id === newTeamId);
+      if (incoming) {
+        const oldNames = roster[side].slice();
+        waitingTeams = waitingTeams.filter((t) => t.id !== newTeamId);
+        waitingTeams.push({ id: r.replacedTeamId, names: oldNames });
+        roster[side] = incoming.names.slice();
+      }
+      change(P.renameSide(state, side, roster[side].join(TEAM_SEP)));
     }
 
     function renderPanel() {

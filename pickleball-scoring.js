@@ -160,6 +160,44 @@
     return { ...state, games: state.games.slice(), gamesWon: { ...state.gamesWon }, home: 0, away: 0, firstServer: first, serving: first, serverNumber: startsAtServerTwo(state.config) ? 2 : 1, gameOver: false };
   }
 
+  /* True while the CURRENT game is still at its very start: 0-0, nobody has
+     played a rally yet -- pickleball's "0-0-2" call (0-0, second server) for
+     doubles side-out scoring, or the equivalent starting point for singles
+     or rally scoring. This is the authoritative "nothing has happened in
+     this game yet" signal for admin overrides (changing who serves first,
+     swapping a player) that must lock the instant the first rally happens --
+     including a scoreless fault that only flips the server, which a plain
+     `home === 0 && away === 0` check would miss.
+
+     NOTE: `state.rallies` is a MATCH-wide counter -- startNextGame does not
+     reset it -- so it can't be used directly to detect "no rally in THIS
+     game" past game 1. Comparing the live serve state against what every
+     game starts at does the job instead, for every game in the match. */
+  function atGameStart(state) {
+    if (!state || state.complete || state.gameOver) return false;
+    const startServerNumber = startsAtServerTwo(state.config) ? 2 : 1;
+    return state.home === 0 && state.away === 0 &&
+      state.serving === state.firstServer && state.serverNumber === startServerNumber;
+  }
+
+  /* Change which side serves first in the CURRENT game -- only while it's
+     still at that pre-rally "0-0-2" start (see atGameStart). A no-op
+     (returns the SAME state) once a rally has happened, or for an invalid
+     side. Reuses `firstServer`/`serving` -- no parallel field. */
+  function setFirstServer(state, side) {
+    if ((side !== 'home' && side !== 'away') || side === state.firstServer || !atGameStart(state)) return state;
+    return { ...state, firstServer: side, serving: side };
+  }
+
+  /* Rename a side's display label mid-match -- e.g. swapping a player out
+     while the game is still at its start (see atGameStart). A no-op once a
+     rally has happened. Doesn't touch score, serve, or history. */
+  function renameSide(state, side, name) {
+    const label = String(name == null ? '' : name).slice(0, 60);
+    if ((side !== 'home' && side !== 'away') || !label || label === state.names[side] || !atGameStart(state)) return state;
+    return { ...state, names: { ...state.names, [side]: label } };
+  }
+
   /* The call a referee makes: server score, receiver score, server number. */
   function scoreCall(state) {
     const srv = state[state.serving], rec = state[other(state.serving)];
@@ -223,6 +261,7 @@
   return {
     TARGETS, BEST_OF, DEFAULT_CONFIG,
     normalizeConfig, gamesToWin, createMatch, applyRally, startNextGame, setPoints, editGame,
+    atGameStart, setFirstServer, renameSide,
     scoreCall, scoreCallText, scoreCallSpoken, announcement, summary, liveView, formatLabel,
   };
 }));

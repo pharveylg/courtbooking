@@ -8485,45 +8485,42 @@ function qTeamOptionsHtml(session, side, currentId){
   return opts;
 }
 function applyQueueSwap(team, index, newName){
-  if (!selectedQueueSessionId) return;
+  if (!selectedQueueSessionId) return { error: 'No active session.' };
   const sessions = loadQueues();
   const session = sessions.find(s => s.id === selectedQueueSessionId);
-  if (!session) return;
+  if (!session) return { error: 'No active session.' };
   const r = swapActivePlayer(session, team, index, newName);
-  if (r.error) { toast(r.error); renderActiveQueueDashboard(); return; }
+  if (r.error) { toast(r.error); renderActiveQueueDashboard(); return r; }
   saveQueues(sessions);
   renderActiveQueueDashboard();
   if (r.consecutiveWarning) toast(`${r.added} just played last match — added anyway.`);
+  return r;
 }
 function applyQueueTeamSwap(side, newTeamId){
-  if (!selectedQueueSessionId) return;
+  if (!selectedQueueSessionId) return { error: 'No active session.' };
   const sessions = loadQueues();
   const session = sessions.find(s => s.id === selectedQueueSessionId);
-  if (!session) return;
+  if (!session) return { error: 'No active session.' };
   const r = swapActiveTeam(session, side, newTeamId);
-  if (r.error) { toast(r.error); renderActiveQueueDashboard(); return; }
+  if (r.error) { toast(r.error); renderActiveQueueDashboard(); return r; }
   saveQueues(sessions);
   renderActiveQueueDashboard();
   if (r.consecutiveWarning) toast('That team just played last match — added anyway.');
+  return r;
 }
-document.getElementById('qServeFirstA')?.addEventListener('click', () => {
-  if (!selectedQueueSessionId) return;
+function applyQueueFirstServer(side){
+  if (!selectedQueueSessionId) return { error: 'No active session.' };
   const sessions = loadQueues();
   const session = sessions.find(s => s.id === selectedQueueSessionId);
-  if (!session) return;
-  setFirstServer(session, 'teamA');
+  if (!session) return { error: 'No active session.' };
+  const r = setFirstServer(session, side);
+  if (r.error) return r;
   saveQueues(sessions);
   renderActiveQueueDashboard();
-});
-document.getElementById('qServeFirstB')?.addEventListener('click', () => {
-  if (!selectedQueueSessionId) return;
-  const sessions = loadQueues();
-  const session = sessions.find(s => s.id === selectedQueueSessionId);
-  if (!session) return;
-  setFirstServer(session, 'teamB');
-  saveQueues(sessions);
-  renderActiveQueueDashboard();
-});
+  return r;
+}
+document.getElementById('qServeFirstA')?.addEventListener('click', () => applyQueueFirstServer('teamA'));
+document.getElementById('qServeFirstB')?.addEventListener('click', () => applyQueueFirstServer('teamB'));
 
 // SUBMIT Live scoreboard score & Rotate Queue
 /* ---------- Live scoreboard for the current queue match ----------
@@ -8555,11 +8552,18 @@ document.getElementById('liveScoreBtn')?.addEventListener('click', () => {
   const session = loadQueues().find(s => s.id === selectedQueueSessionId);
   if(!session || !session.activeMatch){ toast('Waiting for players to step up'); return; }
   const m = session.activeMatch, f = queueFormatOf(session);
+  const fixedPairs = session.rule === 'fixed_pairs';
   const accent = CLIENT && CLIENT.theme && /^#[0-9a-fA-F]{6}$/.test(CLIENT.theme.primary || '') ? CLIENT.theme.primary : null;
   CourtBoard.open({
     title: session.name || 'Live score',
     names: { home: m.teamA.join(' & '), away: m.teamB.join(' & ') },
     firstServer: m.firstServer === 'teamB' ? 'away' : 'home',
+    roster: { home: m.teamA.slice(), away: m.teamB.slice() },
+    waitingNames: fixedPairs ? undefined : session.waiting.flatMap((g) => g.names),
+    waitingTeams: fixedPairs ? session.waiting.map((g) => ({ id: g.id, names: g.names.slice() })) : undefined,
+    onSetFirstServer: (side) => applyQueueFirstServer(side === 'away' ? 'teamB' : 'teamA'),
+    onSwapPlayer: fixedPairs ? undefined : (side, index, newName) => applyQueueSwap(side === 'away' ? 'teamB' : 'teamA', index, newName),
+    onSwapTeam: fixedPairs ? (side, newTeamId) => applyQueueTeamSwap(side === 'away' ? 'teamB' : 'teamA', newTeamId) : undefined,
     config: { target: f.target, winBy: f.winBy, scoring: f.scoring, bestOf: 1, doubles: session.mode === 'doubles' },
     storageKey: lsKey('cb_board_' + session.id + '_' + m.id),
     finishLabel: 'Submit & rotate queue',

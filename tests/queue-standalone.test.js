@@ -41,6 +41,11 @@ check('neither page removes a waiting entry by splicing/filtering the whole grou
 check('both pages declare an overall winner from computeOverallWinner when a queue ends, not two separate implementations', /computeOverallWinner\(session\)/.test(indexHtml) && /QueueEngine\.computeOverallWinner\(session\)/.test(queueHtml));
 check('the facility module declares a winner on both Reset and Delete Session; the standalone tool on End Queue', /showQueueWinner\(winner\)/.test(indexHtml) && (indexHtml.match(/if \(winner\) showQueueWinner\(winner\);/g) || []).length === 2 && /showWinner\(winner\)/.test(queueHtml));
 
+section('dark-mode toggle (theme preference is the one persisted item) stays standalone');
+check('topbar has the theme toggle button (icon button, aria-label, aria-pressed, data hook)', /<button[^>]*class="cb-theme-btn"[^>]*data-cb-theme-toggle[^>]*aria-label="Dark mode"[^>]*aria-pressed="false"/.test(queueHtml));
+check('theme.css / theme.js are same-origin static files: still no Firebase, config or PIN', /href="theme\.css"/.test(queueHtml) && /src="\/theme\.js"/.test(queueHtml) && !/firebase|client-config/i.test(queueHtml.replace(/Walk-in/g, '')));
+check('the only extra localStorage key the page touches is cb_theme_v1 (owned by theme.js, not this page)', !/localStorage\.(get|set)Item\('cb_theme_v1'/.test(queueHtml.replace(/<script>try\{[^<]*<\/script>/, '')));
+
 section('setup and dashboard present');
 check('setup form: mode, rule, optional starting players', /id="setMode"/.test(queueHtml) && /id="setRule"/.test(queueHtml) && /id="setInitialPlayers"/.test(queueHtml));
 check('all six rotation rules are offered', ['winner_stays', 'four_off_four_on', 'fixed_rotation', 'timed_rotation', 'partner_rotation', 'fixed_pairs'].every((r) => queueHtml.includes(`value="${r}"`)));

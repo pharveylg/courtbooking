@@ -1,0 +1,74 @@
+/* theme.css -- shared opt-in dark mode tokens (see theme.js).
+   Light is the default and the light token values below are exactly the
+   literals the pages used before dark mode existed. Dark applies only when
+   <html data-theme="dark"> is set (by the inline bootstrap in <head> / by
+   CBTheme), and only on screen -- print always stays light.
+   NOTE on caching: firebase.json sends Cache-Control: no-cache for theme.*, but
+   that only affects HTTP revalidation. sw.js serves .css cache-first, so every
+   edit to this file needs a CACHE_NAME bump in sw.js (same as tailwind.css).
+   Do NOT put dark rules in motion.css or tailwind.css (immutable-cached). */
+
+:root { color-scheme: light; }
+
+/* New semantic tokens, LIGHT values (= the old literals). */
+:root {
+  --card: #FFFFFF;
+  --panel: #201C19;
+  --on-panel: #FFFBF5;
+  --pill-on-bg: #201C19;
+  --pill-on-border: #201C19;
+  --control-border: #EAE0D5;
+  --placeholder: rgba(32,28,25,.4);
+  --scrim: rgba(32,28,25,.6);
+  --danger-text: #8C2C10;
+  --ink-fixed: #201C19;
+  --lime-text: #D6FF5F;
+  --on-lime: #201C19;
+}
+
+/* DARK values: the Stitch "Court Kinetic" dark scheme, fixed for every tenant
+   (no tenant colour ever feeds page chrome in dark). Legacy shared names
+   (--cream/--ink/--sand/--line) flip too. --lime is the Stitch fill lime;
+   --lime-text is the brighter lime used for text/outlines on dark. */
+@media screen {
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --cream: #0B1326;          /* background / surface-dim */
+    --ink: #DAE2FD;            /* on-surface */
+    --sand: #222A3D;           /* surface-container-high */
+    --line: #2D3449;           /* surface-container-highest (decorative) */
+    --muted: #C1CAB0;          /* on-surface-variant */
+    --lime: #84CC16;           /* primary-container (fills) */
+    --lime-text: #9EE939;      /* primary (text / accent on dark) */
+    --on-lime: #0B1326;        /* text on --lime fills */
+    --card: #171F33;           /* surface-container */
+    --panel: #222A3D;
+    --on-panel: #DAE2FD;
+    --pill-on-bg: #222A3D;
+    --pill-on-border: #9EE939;
+    --control-border: #8B947D; /* outline */
+    --placeholder: #8B947D;
+    --scrim: rgba(6,14,32,.72);
+    --danger-text: #FFB4AB;    /* error */
+    --ink-fixed: #201C19;
+  }
+}
+
+/* Theme toggle: a single icon button (moon in light, sun in dark). */
+.cb-theme-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 44px; min-height: 44px; padding: 0;
+  border-radius: 999px; border: 1px solid var(--control-border);
+  background: transparent; color: var(--ink); cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.cb-theme-btn svg { width: 20px; height: 20px; display: block; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.cb-theme-btn .cb-ico-sun { display: none; }
+:root[data-theme="dark"] .cb-theme-btn .cb-ico-moon { display: none; }
+:root[data-theme="dark"] .cb-theme-btn .cb-ico-sun { display: block; }
+.cb-theme-btn[aria-pressed="true"] { background: var(--sand); border-color: var(--pill-on-border); }
+.cb-theme-btn:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+
+/* Content that must stay on a white tile in both themes (QR codes, payment
+   proofs, tenant logos). */
+.cb-force-light { background: #fff; color: var(--ink-fixed); color-scheme: light; }

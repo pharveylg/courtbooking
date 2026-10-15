@@ -143,6 +143,15 @@
         ]
       },
       {
+        "source": "theme.{css,js}",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache"
+          }
+        ]
+      },
+      {
         "source": "motion.{css,js}",
         "headers": [
           {

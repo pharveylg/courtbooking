@@ -22,52 +22,52 @@
 
   const AUDIO_KEY = 'cb_board_audio_v1';
   const CSS = `
-  .rb-root{position:fixed;inset:0;z-index:2147483000;background:#08111F;color:#F4E7D0;font-family:"Bricolage Grotesque",system-ui,sans-serif;display:flex;flex-direction:column;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+  .rb-root{--rb-accent:#9EE939;--rb-accent-fill:#84CC16;--rb-on-accent:#0B1326;position:fixed;inset:0;z-index:2147483000;background:#0B1326;color:#DAE2FD;font-family:"Bricolage Grotesque",system-ui,sans-serif;display:flex;flex-direction:column;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
   .rb-mono{font-family:"JetBrains Mono",ui-monospace,monospace}
   .rb-top{display:flex;align-items:center;gap:10px;padding:10px 12px;padding-top:max(10px,env(safe-area-inset-top));min-height:52px}
-  .rb-title{flex:1;min-width:0;text-align:center;font-size:13px;font-weight:700;letter-spacing:.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#91A4B8}
-  .rb-btn{min-height:48px;min-width:48px;padding:0 16px;border-radius:999px;border:1px solid #27405E;background:#101D30;color:#F4E7D0;font:700 14px/1 inherit;font-family:inherit;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:8px}
+  .rb-title{flex:1;min-width:0;text-align:center;font-size:13px;font-weight:700;letter-spacing:.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#C1CAB0}
+  .rb-btn{min-height:48px;min-width:48px;padding:0 16px;border-radius:999px;border:1px solid #8B947D;background:#171F33;color:#DAE2FD;font:700 14px/1 inherit;font-family:inherit;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:8px}
   .rb-btn:active{transform:scale(.97)}
-  .rb-btn[aria-pressed="true"]{border-color:var(--rb-accent,#D6FF5F);color:var(--rb-accent,#D6FF5F)}
-  .rb-btn.rb-primary{background:var(--rb-accent,#D6FF5F);border-color:var(--rb-accent,#D6FF5F);color:#08111F}
+  .rb-btn[aria-pressed="true"]{border-color:var(--rb-accent,#9EE939);color:var(--rb-accent,#9EE939)}
+  .rb-btn.rb-primary{background:var(--rb-accent-fill,var(--rb-accent,#84CC16));border-color:var(--rb-accent-fill,var(--rb-accent,#84CC16));color:var(--rb-on-accent,#0B1326)}
   .rb-btn:disabled{opacity:.4}
-  .rb-banner{margin:0 12px;padding:8px 12px;border-radius:12px;background:#101D30;border:1px solid #27405E;font-size:12px;color:#91A4B8;display:flex;align-items:center;justify-content:space-between;gap:10px}
-  .rb-banner button{background:none;border:0;color:var(--rb-accent,#D6FF5F);font:700 12px inherit;font-family:inherit;cursor:pointer;text-decoration:underline;padding:6px}
+  .rb-banner{margin:0 12px;padding:8px 12px;border-radius:12px;background:#171F33;border:1px solid #8B947D;font-size:12px;color:#C1CAB0;display:flex;align-items:center;justify-content:space-between;gap:10px}
+  .rb-banner button{background:none;border:0;color:var(--rb-accent,#9EE939);font:700 12px inherit;font-family:inherit;cursor:pointer;text-decoration:underline;padding:6px}
   .rb-mid{padding:6px 12px 0;text-align:center}
-  .rb-call{font-size:clamp(22px,5.5vmin,40px);font-weight:800;letter-spacing:.04em;color:var(--rb-accent,#D6FF5F)}
-  .rb-sub{font-size:12px;color:#91A4B8;margin-top:2px;min-height:16px}
+  .rb-call{font-size:clamp(22px,5.5vmin,40px);font-weight:800;letter-spacing:.04em;color:var(--rb-accent,#9EE939)}
+  .rb-sub{font-size:12px;color:#C1CAB0;margin-top:2px;min-height:16px}
   .rb-board{flex:1;min-height:0;display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:10px 12px}
   @media (orientation:portrait){.rb-board{grid-template-columns:1fr;grid-template-rows:1fr 1fr}}
-  .rb-side{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;border-radius:24px;background:#101D30;border:2px solid #27405E;cursor:pointer;padding:10px;min-height:0;font-family:inherit;color:inherit}
-  .rb-side:active{background:#152740}
-  .rb-side.rb-serving{border-color:var(--rb-accent,#D6FF5F)}
-  .rb-name{font-size:clamp(16px,4vmin,28px);font-weight:800;max-width:100%;text-align:center;overflow-wrap:anywhere;color:#F4E7D0;line-height:1.1}
+  .rb-side{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;border-radius:24px;background:#171F33;border:2px solid #8B947D;cursor:pointer;padding:10px;min-height:0;font-family:inherit;color:inherit}
+  .rb-side:active{background:#222A3D}
+  .rb-side.rb-serving{border-color:var(--rb-accent,#9EE939)}
+  .rb-name{font-size:clamp(16px,4vmin,28px);font-weight:800;max-width:100%;text-align:center;overflow-wrap:anywhere;color:#DAE2FD;line-height:1.1}
   .rb-pts{font-size:clamp(72px,24vmin,220px);font-weight:900;line-height:.95;letter-spacing:-.04em;color:#fff;font-variant-numeric:tabular-nums}
-  .rb-srv{min-height:20px;font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--rb-accent,#D6FF5F);display:flex;align-items:center;gap:6px}
-  .rb-dot{width:10px;height:10px;border-radius:50%;background:var(--rb-accent,#D6FF5F)}
+  .rb-srv{min-height:20px;font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--rb-accent,#9EE939);display:flex;align-items:center;gap:6px}
+  .rb-dot{width:10px;height:10px;border-radius:50%;background:var(--rb-accent,#9EE939)}
   .rb-pills{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;min-height:24px}
-  .rb-pill{font-size:12px;font-weight:700;padding:3px 10px;border-radius:999px;background:#08111F;border:1px solid #27405E;color:#91A4B8}
-  .rb-pill.rb-won{border-color:var(--rb-accent,#D6FF5F);color:var(--rb-accent,#D6FF5F)}
-  .rb-hint{position:absolute;bottom:8px;font-size:11px;color:#527089;letter-spacing:.05em;text-transform:uppercase}
+  .rb-pill{font-size:12px;font-weight:700;padding:3px 10px;border-radius:999px;background:#0B1326;border:1px solid #8B947D;color:#C1CAB0}
+  .rb-pill.rb-won{border-color:var(--rb-accent,#9EE939);color:var(--rb-accent,#9EE939)}
+  .rb-hint{position:absolute;bottom:8px;font-size:11px;color:#8B947D;letter-spacing:.05em;text-transform:uppercase}
   .rb-rail{display:flex;gap:10px;justify-content:space-between;padding:8px 12px;padding-bottom:max(12px,env(safe-area-inset-bottom))}
   .rb-rail .rb-btn{flex:1}
-  .rb-panel{position:absolute;inset:0;background:rgba(8,17,31,.94);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:24px;text-align:center;z-index:2}
+  .rb-panel{position:absolute;inset:0;background:rgba(11,19,38,.94);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:24px;text-align:center;z-index:2}
   .rb-panel h2{margin:0;font-size:clamp(26px,7vmin,48px);font-weight:900;letter-spacing:-.02em}
-  .rb-panel .rb-scoreline{font-size:clamp(18px,4.5vmin,28px);font-weight:700;color:var(--rb-accent,#D6FF5F)}
+  .rb-panel .rb-scoreline{font-size:clamp(18px,4.5vmin,28px);font-weight:700;color:var(--rb-accent,#9EE939)}
   .rb-panel .rb-actions{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-top:6px}
   .rb-err{color:#F3B562;font-size:13px;min-height:18px}
   .rb-editor{z-index:3;justify-content:flex-start;overflow:auto}
   .rb-edit{display:grid;gap:10px;width:min(480px,100%);text-align:left}
   .rb-erow{display:grid;grid-template-columns:1.2fr 1fr auto 1fr;align-items:center;gap:8px}
-  .rb-ehead{font-size:12px;font-weight:700;color:#91A4B8;text-transform:uppercase;letter-spacing:.06em}
+  .rb-ehead{font-size:12px;font-weight:700;color:#C1CAB0;text-transform:uppercase;letter-spacing:.06em}
   .rb-ehead > div{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .rb-elabel{font-size:13px;font-weight:700;color:#91A4B8}
-  .rb-edit input{width:100%;min-height:48px;border-radius:14px;border:1px solid #27405E;background:#101D30;color:#F4E7D0;text-align:center;font-family:inherit;font-size:22px;font-weight:800;padding:0 8px;-webkit-user-select:text;user-select:text}
-  .rb-edit input:focus{outline:none;border-color:var(--rb-accent,#D6FF5F)}
+  .rb-elabel{font-size:13px;font-weight:700;color:#C1CAB0}
+  .rb-edit input{width:100%;min-height:48px;border-radius:14px;border:1px solid #8B947D;background:#171F33;color:#DAE2FD;text-align:center;font-family:inherit;font-size:22px;font-weight:800;padding:0 8px;-webkit-user-select:text;user-select:text}
+  .rb-edit input:focus{outline:none;border-color:var(--rb-accent,#9EE939)}
   .rb-edit .rb-actions{justify-content:flex-end}
   .rb-setup{display:grid;gap:12px;width:min(420px,100%);text-align:left}
-  .rb-setup label{display:grid;gap:4px;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#91A4B8}
-  .rb-setup input,.rb-setup select{min-height:46px;border-radius:14px;border:1px solid #27405E;background:#101D30;color:#F4E7D0;padding:0 12px;font:600 15px inherit;font-family:inherit}
+  .rb-setup label{display:grid;gap:4px;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#C1CAB0}
+  .rb-setup input,.rb-setup select{min-height:46px;border-radius:14px;border:1px solid #8B947D;background:#171F33;color:#DAE2FD;padding:0 12px;font:600 15px inherit;font-family:inherit}
   .rb-row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
   @media (max-height:480px){
     .rb-top{min-height:0;padding:6px 10px}
@@ -117,7 +117,7 @@
     /* ---------- DOM ---------- */
     const root = el('div', 'rb-root');
     root.setAttribute('role', 'dialog'); root.setAttribute('aria-modal', 'true'); root.setAttribute('aria-label', 'Scoreboard');
-    if (opts.accent && /^#[0-9a-fA-F]{6}$/.test(opts.accent)) root.style.setProperty('--rb-accent', opts.accent);
+    // The accent is fixed (Stitch lime, see .rb-root) for every tenant; opts.accent is accepted but ignored.
 
     const top = el('div', 'rb-top');
     const cancelBtn = el('button', 'rb-btn', 'Close'); cancelBtn.type = 'button'; cancelBtn.setAttribute('aria-label', 'Close scoreboard');

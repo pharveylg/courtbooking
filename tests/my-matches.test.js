@@ -81,7 +81,7 @@ check('push-inbox.js is imported into the service worker', /importScripts\('\/pu
 check('both shared modules are precached (cache-first assets)', /'\/my-active\.js'/.test(swJs) && /'\/push-inbox\.js'/.test(swJs));
 check('my-matches.html is precached as a secondary page', /'\/my-matches\.html'/.test(swJs));
 check('the push handler shows the notification AND records it, and a recording failure never blocks the notification (Promise.all + .catch on the record call)', /Promise\.all\(\[\s*self\.registration\.showNotification\([^]*?PushInbox\.record\(d\) : Promise\.resolve\(\)\)\.catch\(\(\) => \{\}\),/.test(swJs));
-check('the cache version was bumped for this deploy (stale sw.js would keep serving the old push handler)', /const CACHE_NAME = 'courtbooking-v34';/.test(swJs));
+check('the cache version was bumped for this deploy (stale sw.js would keep serving the old push handler)', /const CACHE_NAME = 'courtbooking-v(3[5-9]|[4-9]\d)';/.test(swJs));
 
 section('wiring: picker.html has a persistent My Matches entry point');
 check('my-active.js is loaded on the picker too', /<script src="\/my-active\.js"><\/script>/.test(pickerHtml));

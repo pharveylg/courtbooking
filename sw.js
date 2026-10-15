@@ -6,7 +6,7 @@
 // Bump this whenever a deploy changes tailwind.css / motion.* / other
 // cache-first assets -- those are served from cache without revalidation, so
 // returning visitors keep the old copy until the cache name changes.
-const CACHE_NAME = 'courtbooking-v34';
+const CACHE_NAME = 'courtbooking-v35';
 
 importScripts('/push-inbox.js');
 
@@ -24,6 +24,8 @@ const APP_SHELL = [
   '/icons/icon-512.png',
   '/my-active.js',
   '/my-auth.js',
+  '/theme.css',
+  '/theme.js',
   '/staff-auth.js',
   '/push-inbox.js',
 ];

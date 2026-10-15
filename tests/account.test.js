@@ -36,7 +36,7 @@ check('the notification history moved to its own tab (device-local, not synced, 
 check('an empty inbox no longer makes the Matches tab look populated', /if \(!upcoming\.length && !tournamentCards\.length\) \{/.test(accountHtml));
 check('the old URL still works: my-matches.html forwards to the Account page, keeping query and hash', /location\.replace\('\/account\.html' \+ location\.search \+ location\.hash\)/.test(aliasHtml) && /url=\/account\.html/.test(aliasHtml));
 check('root redirect and the picker card now point at the Account page', /_isReturningVisitor\(\) \? '\/account\.html'/.test(indexHtml) && /href="\/account\.html" id="myMatchesCard"/.test(pickerHtml));
-check('account.html is precached and the cache version moved on', /'\/account\.html'/.test(swJs) && /courtbooking-v34/.test(swJs));
+check('account.html is precached and the cache version moved on', /'\/account\.html'/.test(swJs) && /courtbooking-v(3[5-9]|[4-9]\d)/.test(swJs));
 check("'account' can never be misread as a facility slug", /'my-matches', 'account'\]/.test(indexHtml));
 
 section('service worker: scripts are network-first so a fresh page never runs an old script');

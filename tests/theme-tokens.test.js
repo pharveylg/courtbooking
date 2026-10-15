@@ -125,8 +125,124 @@ section('Phase 0: theme-color and manifest');
 ['index.html', 'queue.html', 'picker.html', 'account.html', 'onboarding.html'].forEach((f) => check(`${f}: single theme-color #FFFBF5`, (read(f).match(/<meta name="theme-color"/g) || []).length === 1 && /<meta name="theme-color" content="#FFFBF5"\s*\/?>/.test(read(f))));
 check('manifest theme_color #FFFBF5, background_color kept #201C19', manifest.theme_color === '#FFFBF5' && manifest.background_color === '#201C19');
 
+check('queue.html: the dark inline-opacity override uses !important (inline style="opacity:0.5" beats a normal rule)', /\[data-theme="dark"\] \[style\*="opacity:0\.5"\]\{opacity:1!important;color:var\(--muted\)\}/.test(queueHtml));
+section('Phase 2: picker / account / onboarding wiring (same bootstrap, one theme-color, theme.css after the page style block)');
+const P2 = ['picker.html', 'account.html', 'onboarding.html'];
+const ALL4 = ['queue.html'].concat(P2);
+const BOOT_TAG = '<script>' + T.BOOTSTRAP + '</script>';
+ALL4.forEach((f) => {
+  const h = read(f), headEnd = h.indexOf('</head>');
+  check(f + ': exactly one theme-color meta (#FFFBF5) for the bootstrap to rewrite', (h.match(/<meta name="theme-color"/g) || []).length === 1 && /<meta name="theme-color" content="#FFFBF5"\s*\/?>/.test(h));
+  check(f + ': bootstrap snippet is byte-identical to theme.js BOOTSTRAP, once, in <head>, after the meta', h.split(BOOT_TAG).length === 2 && h.indexOf(BOOT_TAG) > h.indexOf('<meta name="theme-color"') && h.indexOf(BOOT_TAG) < headEnd);
+  check(f + ': theme.css is linked in <head> after the page style block (so tokens win nothing they should not)', h.indexOf('<link rel="stylesheet" href="theme.css"') > h.indexOf('</style>') && h.indexOf('<link rel="stylesheet" href="theme.css"') < headEnd);
+  check(f + ': the bootstrap runs before the stylesheet (no flash)', h.indexOf(BOOT_TAG) < h.indexOf('href="theme.css"'));
+});
+P2.forEach((f) => {
+  const h = read(f);
+  const tIdx = h.indexOf('<script src="/theme.js"></script>'), aIdx = h.indexOf('<script src="/my-auth.js"></script>'), initIdx = h.indexOf('<script>CBTheme.init();</script>');
+  check(f + ': loads theme.js right after my-auth.js and calls CBTheme.init() before the page script runs MyAuth.init()', aIdx > -1 && tIdx > aIdx && initIdx > tIdx && initIdx < h.indexOf('MyAuth.init()'));
+  check(f + ': my-auth.js has no hard dependency on theme.js (and theme.js is feature-detecting MyAuth)', !/CBTheme/.test(read('my-auth.js')) && !/require\(/.test(read('my-auth.js').replace(/module\.exports/g, '')) && /typeof MyAuth !== 'undefined'/.test(read('theme.js')));
+});
+check('queue.html stays Firebase-free: no my-auth.js, no firebase scripts, no MyAuth reference', !/my-auth\.js|firebasejs|MyAuth/.test(queueHtml));
+
+section('Phase 2: light :root values equal the literals at HEAD (light mode is visually identical)');
+const LIGHT_ROOT = {
+  'picker.html': ':root{--cream:#FFFBF5;--ink:#201C19;--lime:#D6FF5F;--line:#EAE0D5;--sand:#F1E9DF}',
+  'account.html': ':root{--cream:#FFFBF5;--ink:#201C19;--lime:#D6FF5F;--line:#EAE0D5;--sand:#F1E9DF;--amber:#FFF0D6;--amber-ink:#92400E;--green:#E8F5D8;--green-ink:#3F7019}',
+  'onboarding.html': ':root{--cream:#FFFBF5;--ink:#201C19;--lime:#D6FF5F;--line:#EAE0D5;--sand:#F1E9DF;--amber:#FFF0D6;--amber-ink:#92400E;--green:#E8F5D8;--green-ink:#3F7019;--red:#FFE9E0;--red-ink:#8C2C10}',
+};
+P2.forEach((f) => check(f + ': light :root unchanged', read(f).replace(/\r\n/g, '\n').includes('\n' + LIGHT_ROOT[f] + '\n')));
+check('the light token values the pages now read (--panel / --on-panel / --lime-text / --on-lime / --control-border / --placeholder / --danger-text / --card) equal the old literals', light['--panel'] === '#201C19' && light['--on-panel'] === '#FFFBF5' && light['--lime-text'] === '#D6FF5F' && light['--on-lime'] === '#201C19' && light['--control-border'] === '#EAE0D5' && light['--placeholder'] === 'rgba(32,28,25,.4)' && light['--danger-text'] === '#8C2C10' && light['--card'] === '#FFFFFF');
+
+section('Phase 2: page CSS is tokenized (no flip-unsafe fills left)');
+function pageCss(f) { return /<style>([\s\S]*?)<\/style>/.exec(read(f).replace(/\r\n/g, '\n'))[1]; }
+function lightRules(css) { // rules outside @media blocks and comments
+  const c = css.replace(/\/\*[\s\S]*?\*\//g, '').replace(/@media[^{]*\{(?:[^{}]*\{[^{}]*\})*[^{}]*\}/g, '');
+  const out = []; c.replace(/([^{}]+)\{([^{}]*)\}/g, (_, sel, body) => { out.push([sel.trim(), body]); });
+  return out;
+}
+const ALLOW_FILL = { // selector -> why a literal white / ink-alpha background is still right
+  'picker.html': { '.continue-action:hover': 'white hover on the fixed lime card', '.continue-action': 'translucent white on the fixed lime card', '.mymatches-dot': 'status dot (dark override exists)', '.hero-badge': 'translucent white on the panel', '.feature-pill': 'translucent white on the panel', '.install-dismiss': 'translucent white on the panel', '.install-dismiss:hover': 'translucent white on the panel' },
+  'account.html': {}, 'onboarding.html': {},
+};
+P2.forEach((f) => {
+  const rules = lightRules(pageCss(f));
+  const bad = rules.filter(([sel, body]) => /background(?:-color)?:\s*(#fff\b|#FFF\b|#ffffff|rgba\(32,28,25|rgba\(255,255,255)/i.test(body) && !(sel in ALLOW_FILL[f])).map((r) => r[0]);
+  check(f + ': no bare #fff / ink-alpha background left outside the allow-list', bad.length === 0, bad.join(' | '));
+  const inkFill = rules.filter(([, body]) => /background:\s*var\(--ink\)/.test(body)).map((r) => r[0]);
+  check(f + ': no fill still uses var(--ink) (it flips to light text colour in dark)', inkFill.length === 0, inkFill.join(' | '));
+  const bareLime = rules.filter(([, body]) => /(^|;)\s*color:\s*var\(--lime\)/.test(body)).map((r) => r[0]);
+  check(f + ': lime text uses --lime-text (the fill lime is darker in dark)', bareLime.length === 0, bareLime.join(' | '));
+});
+check('picker: continue card/actions use fixed lime fill with --on-lime text; install button too', /\.continue\{[^}]*background:var\(--lime\);color:var\(--on-lime\)/.test(pageCss('picker.html')) && /\.continue-action\{[^}]*color:var\(--on-lime\)/.test(pageCss('picker.html')) && /\.install-btn\{[^}]*background:var\(--lime\);color:var\(--on-lime\)/.test(pageCss('picker.html')));
+check('picker: hero/footer/install/retry/mark/avatar use --panel + --on-panel / --lime-text', /\.hero\{[^}]*background:var\(--panel\);color:var\(--on-panel\)/.test(pageCss('picker.html')) && /\.foot\{background:var\(--panel\);color:var\(--on-panel\)/.test(pageCss('picker.html')) && /\.install-bar\{[^}]*background:var\(--panel\);color:var\(--on-panel\)/.test(pageCss('picker.html')) && /\.retry-btn\{[^}]*background:var\(--panel\);color:var\(--on-panel\)/.test(pageCss('picker.html')) && /\.mark\{[^}]*background:var\(--panel\);color:var\(--lime-text\)/.test(pageCss('picker.html')) && /\.acct-avatar\{[^}]*background:var\(--panel\);color:var\(--lime-text\)/.test(pageCss('picker.html')));
+check('picker: inputs/chip borders use --control-border; placeholders use --placeholder', /\.search-input\{[^}]*border:1px solid var\(--control-border\)/.test(pageCss('picker.html')) && /\.acct-chip\{[^}]*border:1px solid var\(--control-border\)/.test(pageCss('picker.html')) && /\.search-input::placeholder\{color:var\(--placeholder\)\}/.test(pageCss('picker.html')) && /\.search-icon\{[^}]*color:var\(--placeholder\)/.test(pageCss('picker.html')));
+check('picker: the mymatches-note light colour is untouched (tests/my-matches.test.js pins it); dark overrides it separately', /\.mymatches-note\{[^}]*color:rgba\(32,28,25,0\.4\)/.test(pageCss('picker.html')) && /\[data-theme="dark"\][^{]*\.mymatches-note[^{]*\{opacity:1;color:var\(--muted\)\}/.test(pageCss('picker.html')));
+check('account: danger text + button use --danger-text; dark button is error-container with #FFB4AB text', /\.delete-title\{[^}]*color:var\(--danger-text\)/.test(pageCss('account.html')) && /\.btn-danger\{[^}]*background:var\(--danger-text\);color:#fff/.test(pageCss('account.html')) && /\[data-theme="dark"\] \.btn-danger\{background:#93000A;color:var\(--danger-text\)/.test(pageCss('account.html')));
+check('account/onboarding: .btn-dark uses --panel/--on-panel; .card/.btn-google/inputs use --card + --control-border', P2.slice(1).every((f) => /\.btn-dark\{[^}]*background:var\(--panel\);color:var\(--on-panel\)/.test(pageCss(f)) && /\.card\{background:var\(--card\)/.test(pageCss(f)) && /\.btn-google\{[^}]*background:var\(--card\);border:1px solid var\(--control-border\)/.test(pageCss(f))));
+check('account: tabs, Appearance control and badges are tokenized', /\.badge-dark\{background:var\(--panel\);color:#fff\}/.test(pageCss('account.html')) && /\.seg-opt\[aria-checked="true"\]\{[^}]*background:var\(--pill-on-bg\);color:var\(--lime-text\)/.test(pageCss('account.html')));
+
+section('Phase 2: page-local dark values and every new pair they create');
+function darkVars(f) { const m = /@media screen\{\s*:root\[data-theme="dark"\]\{([^}]*)\}/.exec(pageCss(f)); return decls(m ? m[1] + ';' : ''); }
+const dAcc = darkVars('account.html'), dOnb = darkVars('onboarding.html');
+check('account dark chip vars defined (--amber/-ink, --green/-ink)', ['--amber', '--amber-ink', '--green', '--green-ink'].every((k) => dAcc[k]));
+check('onboarding dark chip vars defined (--amber, --green, --red and their inks)', ['--amber', '--amber-ink', '--green', '--green-ink', '--red', '--red-ink'].every((k) => dOnb[k]));
+check('picker needs no page-local dark values (its only vars are the shared names)', !/\[data-theme="dark"\]\{--/.test(pageCss('picker.html')));
+[['account', dAcc], ['onboarding', dOnb]].forEach(([n, v]) => {
+  [['green', '--green', '--green-ink'], ['amber', '--amber', '--amber-ink']].concat(n === 'onboarding' ? [['red', '--red', '--red-ink']] : []).forEach(([c, bgk, fgk]) => {
+    check(n + ' ' + c + ' chip text on its fill >= 4.5', T.contrast(v[fgk], v[bgk]) >= 4.5, T.contrast(v[fgk], v[bgk]).toFixed(2));
+    check(n + ' ' + c + ' text on the card and on the page bg >= 4.5 (messages sit on either)', T.contrast(v[fgk], dark['--card']) >= 4.5 && T.contrast(v[fgk], dark['--cream']) >= 4.5);
+    check(n + ' ' + c + ' fill is the Stitch tint over the card (15%)', v[bgk].toUpperCase() === T.mix(dark['--card'], { green: '#22C55E', amber: '#F59E0B', red: '#FFB4AB' }[c], 0.15), v[bgk]);
+  });
+});
+check('account/onboarding green + amber inks are the Stitch badge colours (#22C55E / #F59E0B); red ink is the error colour', dAcc['--green-ink'] === '#22C55E' && dAcc['--amber-ink'] === '#F59E0B' && dOnb['--red-ink'] === '#FFB4AB' && dOnb['--green-ink'] === dAcc['--green-ink']);
+const P = (n, a, b, min) => check(n + ' >= ' + (min || 4.5), T.contrast(a, b) >= (min || 4.5), T.contrast(a, b).toFixed(2));
+const D = dark, panel = D['--panel'], lime = D['--lime'], onLime = D['--on-lime'];
+const comp = (fg, a, under) => T.mix(under, fg, a);
+P('mark / avatar / hero accent: --lime-text on --panel', D['--lime-text'], panel);
+P('footer/hero/install text: --on-panel on --panel', D['--on-panel'], panel);
+P('muted on panel (footer small print, install sub-line)', D['--muted'], panel);
+P('continue card / install button / letter logo: --on-lime on --lime', onLime, lime);
+P('continue-meta (opacity .72) on lime', comp(onLime, 0.72, lime), lime);
+P('continue-next.wait (dark opacity .8) on lime', comp(onLime, 0.8, lime), lime);
+P('continue-action text on its white .55 tint over lime', onLime, comp('#FFFFFF', 0.55, lime));
+P('hero-badge text on its translucent tint', D['--on-panel'], comp('#FFFFFF', 0.09, panel));
+P('feature-pill text (rgba(255,251,245,.78)) on its tint', comp('#FFFBF5', 0.78, comp('#FFFFFF', 0.07, panel)), comp('#FFFFFF', 0.07, panel));
+P('install-dismiss text (.6) on its tint, and its hover on-panel text', comp('#FFFBF5', 0.6, comp('#FFFFFF', 0.1, panel)), comp('#FFFFFF', 0.1, panel));
+P('install-dismiss:hover --on-panel on its brighter tint', D['--on-panel'], comp('#FFFFFF', 0.2, panel));
+P('footer credit link #D6FF5F on panel', '#D6FF5F', panel);
+P('footer credit text #FFFBF5 on its tint', '#FFFBF5', comp('#FFFFFF', 0.07, panel));
+P('badge-dark #fff on panel; badge-muted --muted on --sand', '#FFFFFF', panel); P('badge-muted --muted on --sand', D['--muted'], D['--sand']);
+P('btn-danger: #FFB4AB on error-container #93000A', '#FFB4AB', '#93000A');
+P('delete-title: --danger-text on the card', D['--danger-text'], D['--card']);
+P('Appearance: selected --lime-text on --pill-on-bg', D['--lime-text'], D['--pill-on-bg']); P('Appearance: unselected --ink on --card', D['--ink'], D['--card']);
+P('Appearance: selected ring (--pill-on-border) on the card, non-text', D['--pill-on-border'], D['--card'], 3);
+P('tabs: muted on the page bg; active ink on the page bg', D['--muted'], D['--cream']);
+P('chk.pending: --muted on --sand', D['--muted'], D['--sand']);
+P('search/inputs/chip border --control-border on the card (non-text)', D['--control-border'], D['--card'], 3);
+P('btn inset ring --control-border on the page bg (non-text)', D['--control-border'], D['--cream'], 3);
+P('placeholder on the card', D['--placeholder'], D['--card']);
+P('mymatches-dot (--control-border) on the card (non-text)', D['--control-border'], D['--card'], 3);
+check('dark overrides for low-opacity text tiers exist on all three pages (full opacity, --muted)', P2.every((f) => /\[data-theme="dark"\][^{}]*\{opacity:1;color:var\(--muted\)\}/.test(pageCss(f))));
+check('no tenant colour ever feeds these pages: no tenant/branding colour variables in picker/account/onboarding CSS', P2.every((f) => !/--(primary|brand|tenant|accent)/i.test(pageCss(f))));
+check('every page dark rule is inside @media screen (print stays light)', P2.every((f) => { const c = pageCss(f); const i = c.indexOf('@media screen{'); return i > -1 && !/\[data-theme="dark"\]/.test(c.slice(0, i).replace(/\/\*[\s\S]*?\*\//g, '')); }));
+
+section('Phase 2: forced-white wells for logos');
+check('picker: image logos get cb-force-light; white in dark, today\'s lime/panel backdrop in light', /logo\$\{t\.logoUrl \? ' cb-force-light' : ''\}/.test(read('picker.html')) && /\.logo\.cb-force-light\{background:var\(--lime\)\}/.test(pageCss('picker.html')) && /\.continue \.logo\.cb-force-light\{background:var\(--panel\)\}/.test(pageCss('picker.html')) && /\[data-theme="dark"\] \.logo\.cb-force-light,:root\[data-theme="dark"\] \.continue \.logo\.cb-force-light\{background:#fff\}/.test(pageCss('picker.html')));
+check('account: image logos get cb-force-light; white in dark, --sand in light', /logo\$\{facility\.logoUrl \? ' cb-force-light' : ''\}/.test(read('account.html')) && /\.logo\.cb-force-light\{background:var\(--sand\)\}/.test(pageCss('account.html')) && /\[data-theme="dark"\] \.logo\.cb-force-light\{background:#fff\}/.test(pageCss('account.html')));
+check('letter-fallback logos stay lime with --on-lime text (no cb-force-light on them)', /\.logo\{[^}]*background:var\(--lime\);color:var\(--on-lime\)/.test(pageCss('picker.html')) && !/'\+? ?esc\(\(facility\.name[^]*cb-force-light/.test(read('account.html')));
+
+section('Phase 2: theme toggle on picker and onboarding (no extra height, 44px hit area, same markup as queue.html)');
+['picker.html', 'onboarding.html'].forEach((f) => {
+  const h = read(f), css = pageCss(f);
+  check(f + ': icon toggle with data-cb-theme-toggle, aria-label, aria-pressed, moon + sun svgs', /<button type="button" class="cb-theme-btn" data-cb-theme-toggle aria-label="Dark mode" aria-pressed="false" title="Dark mode">/.test(h) && h.includes('cb-ico-moon') && h.includes('cb-ico-sun'));
+  check(f + ': adds no topbar height (negative vertical margins) and keeps a 44px target (36px + 4px each side)', /\.topbar \.cb-theme-btn\{[^}]*margin-top:-7px[^}]*margin-bottom:-7px[^}]*width:36px/.test(css) && /\.topbar \.cb-theme-btn::after\{[^}]*left:-4px[^}]*right:-4px/.test(css));
+});
+check('picker: toggle sits before the account chip and the chip no longer pushes right (margin-left:0 after the toggle)', read('picker.html').indexOf('data-cb-theme-toggle') < read('picker.html').indexOf('id="acctChip"') && /\.cb-theme-btn \+ \.acct-chip\{margin-left:0\}/.test(pageCss('picker.html')));
+check('account: NO topbar toggle (it makes the brand sub-line wrap at 390px); the Appearance control is the canonical control', !/data-cb-theme-toggle/.test(read('account.html')) && /id="appearance"/.test(read('account.html')));
+
 section('service worker and hosting');
-check('CACHE_NAME bumped to v35 or later', /const CACHE_NAME = 'courtbooking-v(3[5-9]|[4-9]\d)';/.test(sw));
+check('CACHE_NAME bumped to v36 or later (theme.js / pages changed in Phase 2)', /const CACHE_NAME = 'courtbooking-v(3[6-9]|[4-9]\d)';/.test(sw));
 check('APP_SHELL precaches theme.css and theme.js', /APP_SHELL = \[[^\]]*'\/theme\.css'[^\]]*\]/.test(sw) && /APP_SHELL = \[[^\]]*'\/theme\.js'[^\]]*\]/.test(sw));
 const hdrs = fb.hosting.headers;
 const themeHdr = hdrs.find((h) => /theme/.test(h.source));

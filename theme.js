@@ -6,8 +6,13 @@
    browser runtime hangs off window.CBTheme. Nothing happens on load --
    CBTheme.init() must be called (pages that only want the colour helpers can
    load it without init(); they stay light until a page opts in).
-   Cross-device sync of the preference is a later phase: reconcileTheme() is the
-   pure merge rule for it, and onChange() is the hook it will use.
+   Cross-device sync: pages that load my-auth.js (picker, account, onboarding)
+   get it automatically at init() -- on MyAuth's 'synced' event the device and
+   account preferences are merged with reconcileTheme() (newest `at` wins), and
+   every toggle is written to localStorage first, then (fire-and-forget) to
+   users/{uid}.theme / .themeAt via MyAuth.writeTheme. theme.js feature-detects
+   MyAuth; my-auth.js has no dependency on this file, and queue.html (which
+   never loads my-auth.js) stays Firebase-free.
    ================================================================ */
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) module.exports = factory();
@@ -91,7 +96,9 @@
     return p === 'dark' || (p === 'system' && !!osDark) ? 'dark' : 'light';
   }
   function validRec(r) { return !!r && typeof r === 'object' && (r.pref === 'light' || r.pref === 'dark' || r.pref === 'system'); }
-  function atOf(r) { return typeof r.at === 'number' && isFinite(r.at) ? r.at : 0; }
+  /* A timestamp more than 24h in the future (wrong device clock) counts as 0 (invalid), so it can never
+     out-vote a legitimate later choice. Same rule as normalizeThemeRecord() in my-auth.js. */
+  function atOf(r) { return typeof r.at === 'number' && isFinite(r.at) && r.at <= Date.now() + 86400000 ? r.at : 0; }
   /* Merge a device record with an account record. Newest `at` wins, a tie goes
      to the remote copy. action says what the caller should do about it:
      'adopt' = take remote, 'push' = send local, 'none' = already agree/empty. */
@@ -126,6 +133,7 @@
   let env = null;
   let initedDoc = null;
   let state = { pref: 'light', theme: 'light' };
+  let auth = null; // MyAuth, when the page loads it (account sync)
 
   function osDark() {
     try { return !!(env.matchMedia && env.matchMedia('(prefers-color-scheme: dark)').matches); } catch (e) { return false; }
@@ -144,10 +152,42 @@
     for (let i = 0; i < btns.length; i++) btns[i].setAttribute('aria-pressed', theme === 'dark' ? 'true' : 'false');
     if (notify && changed) listeners.slice().forEach((cb) => { try { cb({ pref, theme }); } catch (e) { /* listener error */ } });
   }
+  /* Fire-and-forget upload of a just-saved choice. Never throws, never blocks. */
+  function pushNow(rec) {
+    try {
+      if (!auth || typeof auth.writeTheme !== 'function') return;
+      Promise.resolve(auth.writeTheme(rec.pref, rec.at)).catch(function () { /* offline / denied: the device copy stands */ });
+    } catch (e) { /* ignore */ }
+  }
+  /* Trailing debounce (last value wins) so arrowing through the Appearance radios sends one account write.
+     The device write and the page switch stay immediate; only the account upload waits. */
+  const PUSH_DELAY = 500;
+  let pushTimer = null;
+  function pushSoon(rec) {
+    const st = (env && env.setTimeout) || (typeof setTimeout === 'function' ? setTimeout : null);
+    const ct = (env && env.clearTimeout) || (typeof clearTimeout === 'function' ? clearTimeout : null);
+    if (!st || !ct) { pushNow(rec); return; }
+    if (pushTimer !== null) ct(pushTimer);
+    pushTimer = st(function () { pushTimer = null; pushNow(rec); }, PUSH_DELAY);
+  }
   function setPref(pref) {
-    const rec = writeTheme(pref, env && env.localStorage);
+    const rec = writeTheme(pref, env && env.localStorage); // device first: instant
     if (env && env.document) apply(rec.pref, true); // before init(): just persist
+    pushSoon(rec);
     return rec;
+  }
+  /* MyAuth emits 'synced' after it has pulled users/{uid}: merge the two copies. */
+  function onSynced() {
+    let remote = null;
+    try { remote = typeof auth.readTheme === 'function' ? auth.readTheme() : null; } catch (e) { remote = null; }
+    const res = reconcileTheme(readTheme(env.localStorage), remote);
+    if (res.action === 'adopt') {
+      writeTheme(res.pref, env.localStorage, res.at); // keep the account's timestamp, not "now"
+      apply(res.pref, true);
+    } else if (res.action === 'push') {
+      pushNow({ pref: res.pref, at: res.at });
+    }
+    return res;
   }
   function init(opts) {
     const next = Object.assign({
@@ -155,6 +195,7 @@
       localStorage: defaultStorage(),
       matchMedia: typeof matchMedia === 'function' ? matchMedia.bind(typeof window !== 'undefined' ? window : undefined) : null,
       window: typeof window !== 'undefined' ? window : null,
+      myAuth: typeof MyAuth !== 'undefined' ? MyAuth : null,
     }, opts || {});
     if (next.document && next.document === initedDoc) return state; // idempotent per document: never double-registers listeners
     env = next;
@@ -174,6 +215,8 @@
         apply(r ? r.pref : 'light', true);
       });
     }
+    auth = env.myAuth && typeof env.myAuth.onChange === 'function' ? env.myAuth : null;
+    if (auth) auth.onChange(function (evt) { if (evt === 'synced') { try { onSynced(); } catch (e) { /* never break the page */ } } });
     try {
       const mq = env.matchMedia && env.matchMedia('(prefers-color-scheme: dark)');
       const onOs = () => { if (state.pref === 'system') apply('system', true); };

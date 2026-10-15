@@ -5,7 +5,8 @@
    in, the same data is also kept in Firestore at users/{uid}, readable/
    writable only by that user (see firestore.rules).
    What syncs: the tracked bookings/games list (MyActive) and the phone
-   used for tournament lookup. The push-notification inbox stays on the
+   used for tournament lookup, plus the dark-mode preference (theme.js).
+   The push-notification inbox stays on the
    device -- a push subscription belongs to one device.
    Staff/superadmin accounts live in the same email/password pool and
    share this origin's sign-in session, so accounts carrying a staff
@@ -100,12 +101,23 @@
     }
   }
 
-  const api = { MAX_ITEMS, MIN_PASSWORD, PROFILE_LS_KEY, normalizePhone, normalizeProfile, validPhone, mergeActive, mergePhone, isPlayerUser, hasStaffClaim, canShowAccountUi, validEmail, friendlyError };
+  // Dark-mode preference (theme.js). Stored as TOP-LEVEL users/{uid}.theme + .themeAt,
+  // not inside .profile: normalizeProfile whitelists keys and saveProfile rebuilds the
+  // whole profile, so a nested copy could be wiped by a profile save.
+  function normalizeThemeRecord(pref, at) {
+    if (pref !== 'light' && pref !== 'dark' && pref !== 'system') return null;
+    // A timestamp more than 24h in the future (a wrong device clock) is treated as 0, so it can never
+    // out-vote a legitimate later choice. Same rule as atOf() in theme.js.
+    return { pref, at: typeof at === 'number' && isFinite(at) && at <= Date.now() + 86400000 ? at : 0 };
+  }
+
+  const api = { MAX_ITEMS, MIN_PASSWORD, PROFILE_LS_KEY, normalizeThemeRecord, normalizePhone, normalizeProfile, validPhone, mergeActive, mergePhone, isPlayerUser, hasStaffClaim, canShowAccountUi, validEmail, friendlyError };
 
   if (typeof document !== 'undefined') {
     let user = null;
     let isStaff = false;
     let pushTimer = null;
+    let remoteTheme = null; // account's {pref, at} as of the last sync (kept in memory only)
     const listeners = [];
     const emit = (evt) => listeners.forEach((fn) => { try { fn(evt, user); } catch (e) {} });
     const userRef = () => firebase.firestore().doc('users/' + user.uid);
@@ -121,6 +133,18 @@
     };
 
     api.onChange = (fn) => { listeners.push(fn); };
+    // The account's saved theme as of the last sync ({pref, at} or null).
+    api.readTheme = () => remoteTheme;
+    // Saves the theme choice to the account (player accounts only; a no-op for
+    // staff and signed-out visitors, who keep it on the device only). Never touches .profile.
+    api.writeTheme = async function (pref, at) {
+      const rec = normalizeThemeRecord(pref, at);
+      if (!rec || !isPlayer()) return false;
+      const uid = user.uid; // a slow write must not land in a different account's in-memory copy
+      await userRef().set({ theme: rec.pref, themeAt: rec.at }, { merge: true });
+      if (user && user.uid === uid) remoteTheme = rec;
+      return true;
+    };
     api.currentUser = () => (isPlayer() ? user : null);
     api.canShowAccountUi = () => canShowAccountUi(user, isStaff);
 
@@ -129,6 +153,7 @@
     async function syncFromAccount() {
       const snap = await userRef().get();
       const remote = snap.exists ? snap.data() : {};
+      remoteTheme = normalizeThemeRecord(remote.theme, remote.themeAt); // read by theme.js after 'synced'
       const active = mergeActive(MyActive.load(), remote.active);
       const remoteProfile = normalizeProfile(remote.profile);
       const phone = mergePhone(readPhone(), remote.phone || remoteProfile.phone);
@@ -173,6 +198,7 @@
       firebase.auth().onAuthStateChanged(async (u) => {
         user = u;
         isStaff = false;
+        remoteTheme = null; // another account's preference must never linger
         if (!u) clearProfileCache();
         else api.clearTrace(); // signed in: the attempt worked, drop its trail
         if (u) {

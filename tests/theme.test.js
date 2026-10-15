@@ -175,5 +175,102 @@ check('a toggle after a double init flips to dark exactly once', (() => {
   return handlers.length === 1 && attrs['data-theme'] === 'dark';
 })());
 
+section('account sync (mock MyAuth): adopt / push / none');
+function syncRig(local, remote, authOpts) {
+  authOpts = authOpts || {};
+  const log = [], listeners = [], attrs = {}, winL = {}, timers = [];
+  const store = (() => { const m = {}; return { getItem: (k) => (k in m ? m[k] : null), setItem: (k, v) => { m[k] = String(v); log.push('local:' + v); }, _m: m }; })();
+  if (local) { store._m.cb_theme_v1 = JSON.stringify(local); }
+  const btnL = {};
+  const btn = { setAttribute() {}, addEventListener: (e, fn) => { btnL.click = fn; } };
+  const calls = [];
+  const auth = {
+    onChange: (fn) => listeners.push(fn),
+    readTheme: () => remote,
+    writeTheme: (p, a) => { log.push('remote:' + p + ':' + a); calls.push([p, a]); if (authOpts.throwSync) throw new Error('sync boom'); return authOpts.reject ? Promise.reject(new Error('offline')) : Promise.resolve(true); },
+  };
+  const T2 = fresh();
+  const seenT = [];
+  T2.onChange((s) => seenT.push(s.theme));
+  const env = {
+    document: { documentElement: { setAttribute: (k, v) => { attrs[k] = v; } }, querySelector: () => ({ content: '' }), querySelectorAll: (q) => (q === '[data-cb-theme-toggle]' ? [btn] : []) },
+    localStorage: store, matchMedia: () => ({ matches: false, addEventListener() {} }), window: { addEventListener: (e, fn) => { winL[e] = fn; } }, myAuth: authOpts.noAuth ? null : auth,
+    setTimeout: (fn, ms) => { timers.push({ fn, ms }); return timers.length; }, clearTimeout: (id) => { if (timers[id - 1]) timers[id - 1].fn = null; },
+  };
+  T2.init(env);
+  const flush = () => { timers.forEach((t) => { if (t.fn) { const f = t.fn; t.fn = null; f(); } }); };
+  return { T2, log, calls, attrs, store, btnL, seenT, winL, timers, flush, emit: (e) => listeners.forEach((f) => f(e, null)), listeners };
+}
+let r = syncRig(null, { pref: 'dark', at: 500 });
+r.emit('synced');
+check('adopt (nothing on the device): applies the account theme, stores it locally with the ACCOUNT timestamp, does not write back', r.attrs['data-theme'] === 'dark' && r.store._m.cb_theme_v1 === '{"pref":"dark","at":500}' && r.calls.length === 0 && r.seenT[r.seenT.length - 1] === 'dark');
+r = syncRig({ pref: 'light', at: 100 }, { pref: 'dark', at: 500 });
+r.emit('synced');
+check('adopt (account newer): device is overwritten, no write', r.attrs['data-theme'] === 'dark' && JSON.parse(r.store._m.cb_theme_v1).at === 500 && r.calls.length === 0);
+r = syncRig({ pref: 'dark', at: 900 }, { pref: 'light', at: 100 });
+r.emit('synced');
+check('push (device newer): the device choice stays and is sent to the account with its own timestamp; localStorage not rewritten', r.attrs['data-theme'] === 'dark' && r.calls.length === 1 && r.calls[0][0] === 'dark' && r.calls[0][1] === 900 && r.store._m.cb_theme_v1 === '{"pref":"dark","at":900}' && !r.log.some((l) => l.indexOf('local:') === 0));
+r = syncRig({ pref: 'system', at: 5 }, null);
+r.emit('synced');
+check('push (account has none): an anonymous-era choice is uploaded at first sign-in', r.calls.length === 1 && r.calls[0][0] === 'system' && r.calls[0][1] === 5);
+r = syncRig({ pref: 'dark', at: 900 }, { pref: 'dark', at: 100 });
+r.emit('synced');
+check('none (same pref): nothing written either way', r.calls.length === 0 && r.log.length === 0 && r.attrs['data-theme'] === 'dark');
+r = syncRig(null, null);
+r.emit('synced');
+check('none (neither has one): stays light, nothing written', r.calls.length === 0 && r.log.length === 0 && r.attrs['data-theme'] === 'light');
+r = syncRig(null, { pref: 'dark', at: 5 });
+r.emit('auth'); r.emit('sync-failed'); r.emit('signin-problem');
+check("only the 'synced' event triggers a merge (auth / sync-failed / signin-problem are ignored)", r.attrs['data-theme'] === 'light' && r.calls.length === 0);
+r = syncRig({ pref: 'dark', at: 7 }, { pref: 'light', at: 7 });
+r.emit('synced');
+check('tie with different prefs: the account wins (adopt)', r.attrs['data-theme'] === 'light' && r.calls.length === 0);
+r = syncRig(null, { pref: 'system', at: 5 });
+r.emit('synced'); r.emit('synced');
+check("a repeated 'synced' (re-sign-in) is harmless", r.attrs['data-theme'] === 'light' && r.attrs['data-theme-pref'] === 'system' && r.calls.length === 0);
+
+section('toggle writes the device first, then the account (fire-and-forget)');
+r = syncRig({ pref: 'light', at: 1 }, null);
+r.log.length = 0; r.btnL.click();
+const pendingBeforeFlush = r.calls.length; r.flush();
+const at = JSON.parse(r.store._m.cb_theme_v1).at;
+check('order: localStorage write immediately; the account write waits for the debounce, then MyAuth.writeTheme(pref, at) with the same timestamp', pendingBeforeFlush === 0 && r.log.length === 2 && r.log[0].indexOf('local:') === 0 && r.log[1] === 'remote:dark:' + at && at > 1);
+check('the page has already switched when the account write is still pending', r.attrs['data-theme'] === 'dark');
+r = syncRig({ pref: 'light', at: 1 }, null, { reject: true });
+let threw = false; try { r.btnL.click(); r.flush(); } catch (e) { threw = true; }
+check('a rejected account write does not throw (and no unhandled rejection) -- the device copy stands', !threw && r.attrs['data-theme'] === 'dark' && JSON.parse(r.store._m.cb_theme_v1).pref === 'dark');
+r = syncRig({ pref: 'light', at: 1 }, null, { throwSync: true });
+threw = false; try { r.btnL.click(); r.flush(); } catch (e) { threw = true; }
+check('a writeTheme that throws synchronously is swallowed too; UI never blocks', !threw && r.attrs['data-theme'] === 'dark');
+r = syncRig({ pref: 'light', at: 1 }, null, { noAuth: true });
+threw = false; try { r.btnL.click(); } catch (e) { threw = true; }
+check('pages without MyAuth (queue.html) still toggle, with no sync attempt', !threw && r.attrs['data-theme'] === 'dark' && r.calls.length === 0);
+{
+  const T3 = fresh(); const seenA = []; const env = { document: { documentElement: { setAttribute() {} }, querySelector: () => ({ content: '' }), querySelectorAll: () => [] }, localStorage: mem(), matchMedia: () => ({ matches: false, addEventListener() {} }), window: { addEventListener() {} }, myAuth: { /* no onChange */ } };
+  check('a MyAuth-shaped object without onChange/writeTheme is tolerated (feature detection)', (() => { try { T3.init(env); T3.setPref('dark'); return true; } catch (e) { return false; } })());
+}
+r = syncRig({ pref: 'light', at: 1 }, null);
+r.T2.setPref('system'); r.flush();
+check('setPref (used by the Account page Appearance control) also writes device then account', r.calls.length === 1 && r.calls[0][0] === 'system' && r.attrs['data-theme-pref'] === 'system');
+r = syncRig({ pref: 'light', at: 1 }, null);
+r.store._m.cb_theme_v1 = '{"pref":"dark","at":99}'; r.winL.storage({ key: 'cb_theme_v1' });
+check('a storage event from another tab applies the theme but does not write to the account (that tab already did)', r.attrs['data-theme'] === 'dark' && r.calls.length === 0);
+check('payload shape: MyAuth.writeTheme receives (pref, at:number) -- my-auth stores them as top-level theme/themeAt', (() => { const x = syncRig(null, null); x.btnL.click(); x.flush(); return x.calls.length === 1 && typeof x.calls[0][0] === 'string' && typeof x.calls[0][1] === 'number'; })());
+
+section('debounce, future timestamps');
+r = syncRig({ pref: 'light', at: 1 }, null);
+r.T2.setPref('dark'); r.T2.setPref('system'); r.T2.setPref('light');
+check('arrowing through the radios: local + page update every time, but the account write is debounced to ONE call with the last value', r.attrs['data-theme-pref'] === 'light' && JSON.parse(r.store._m.cb_theme_v1).pref === 'light' && r.calls.length === 0 && (r.flush(), r.calls.length === 1 && r.calls[0][0] === 'light') && r.timers.every((t) => t.ms === 500));
+r = syncRig({ pref: 'dark', at: 900 }, { pref: 'light', at: 100 });
+r.emit('synced');
+check('the sync-time push is not debounced (nothing to coalesce)', r.calls.length === 1 && r.timers.length === 0);
+const FUT = Date.now() + 3 * 86400000;
+r = syncRig({ pref: 'dark', at: FUT }, { pref: 'light', at: 100 });
+r.emit('synced');
+check('a far-future LOCAL timestamp does not beat a legitimate remote choice (account adopted)', r.attrs['data-theme'] === 'light' && r.calls.length === 0);
+check('a far-future REMOTE timestamp is ignored (counts as 0): a real local choice wins and is pushed', (() => { const x = syncRig({ pref: 'dark', at: 50 }, { pref: 'light', at: FUT }); x.emit('synced'); return x.attrs['data-theme'] === 'dark' && x.calls.length === 1 && x.calls[0][0] === 'dark'; })());
+check('reconcileTheme: future (>24h) = 0, normal and just-under-24h values unchanged', T.reconcileTheme({ pref: 'dark', at: FUT }, { pref: 'light', at: 1 }).action === 'adopt' && T.reconcileTheme({ pref: 'dark', at: Date.now() + 3600000 }, { pref: 'light', at: 1 }).action === 'push' && T.reconcileTheme({ pref: 'dark', at: 7 }, { pref: 'light', at: 5 }).at === 7);
+check('readTheme on a device record with a far-future at reports at 0', T.readTheme({ getItem: () => JSON.stringify({ pref: 'dark', at: FUT }) }).at === 0);
+
 console.log(`\n=== THEME: ${passed}/${passed + failed} passed ===`);
 process.exit(failed === 0 ? 0 : 1);

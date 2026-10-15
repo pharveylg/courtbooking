@@ -87,5 +87,102 @@ check('Create a Game / join flows prefill through ogIdentity, and a remembered d
 check('the booking form falls back to the profile after the last-used contact', /\)\(\) \|\| profilePrefill\(\);/.test(indexHtml));
 check('booking and game submissions still validate exactly as before (prefill fills fields, it never skips them)', /Name and email required\./.test(indexHtml) && /Your name and email are required\./.test(indexHtml));
 
+(async () => {
+section('Appearance control (Profile tab) -- dark mode preference');
+{
+  const prof = grab(accountHtml, '<section id="pane-profile"', '<section id="pane-notifications"');
+  const app = grab(prof, '<div class="appearance" id="appearance">', 'id="profileSignedOut"');
+  check('the Appearance block sits between the <h1> and #profileSignedOut, in the Profile tab', prof.indexOf('<h1>Your profile</h1>') > -1 && prof.indexOf('<h1>Your profile</h1>') < prof.indexOf('id="appearance"') && prof.indexOf('id="appearance"') < prof.indexOf('id="profileSignedOut"'));
+  check('it is visible to signed-out visitors too: not inside #profileSignedIn / #profileSignedOut / #profileForm', prof.indexOf('id="appearance"') < prof.indexOf('id="profileSignedIn"') && !/<div id="profileSignedOut"[^>]*>[^]*id="appearance"/.test(prof) && !/<form id="profileForm"[^]*?<\/form>/.exec(prof)[0].includes('appearance'));
+  check('it is a radiogroup labelled "Appearance" with exactly three radios: Light | Dark | System', /role="radiogroup" aria-labelledby="appearanceTitle"/.test(app) && /id="appearanceTitle">Appearance</.test(app) && (app.match(/role="radio"/g) || []).length === 3 && /data-pref="light"[^>]*>Light</.test(app) && /data-pref="dark"[^>]*>Dark</.test(app) && /data-pref="system"[^>]*>System</.test(app));
+  check('each radio is a real <button type="button"> with aria-checked; roving tabindex (one 0, two -1)', (app.match(/<button type="button" class="seg-opt" role="radio" aria-checked="(true|false)" tabindex="(0|-1)"/g) || []).length === 3 && (app.match(/tabindex="0"/g) || []).length === 1 && (app.match(/tabindex="-1"/g) || []).length === 2);
+  check('the 44px target and the helper text', /\.seg-opt\{[^}]*min-height:44px/.test(accountHtml) && /Applies on this device; syncs to your account when signed in\./.test(app));
+  check('arrow keys / Home / End move + select (radio-group keyboard pattern); Space and Enter select', /'ArrowRight'/.test(accountHtml) && /'ArrowLeft'/.test(accountHtml) && /'Home'/.test(accountHtml) && /'End'/.test(accountHtml) && /e\.key === ' ' \|\| e\.key === 'Enter'/.test(accountHtml));
+  check('a pick saves immediately through CBTheme.setPref (device first, then the account) and keeps aria-checked in step', /CBTheme\.setPref\(b\.dataset\.pref\)/.test(accountHtml) && /setAttribute\('aria-checked'/.test(accountHtml) && /CBTheme\.onChange\(syncAppearance\)/.test(accountHtml));
+  check('the control reflects the current pref on load, in showTab and in renderProfile', /showTab[^]*?syncAppearance\(\); renderProfile\(\)/.test(accountHtml) && /async function renderProfile\(\) \{\s*syncAppearance\(\);/.test(accountHtml) && /\r?\n  syncAppearance\(\);\r?\n/.test(accountHtml));
+  check('the profile form logic is untouched: submit handler does not mention the theme, Save button stays in #profileForm', !/profileForm'\)\.addEventListener\('submit'[^]*?btn\.disabled = false;\s*\}\);/.exec(accountHtml)[0].includes('Theme') && /id="pfSave"/.test(accountHtml));
+  check('saveProfile never carries a theme (theme is a top-level users/{uid} field, so a profile save cannot wipe it)', !/theme/i.test(grab(authJs, 'api.saveProfile = async function', 'api.reauthenticate')));
+}
+
+section('my-auth.js theme sync (in-memory Firebase mock)');
+{
+  const vm = require('vm');
+  const mem = () => { const m = {}; return { getItem: (k) => (k in m ? m[k] : null), setItem: (k, v) => { m[k] = String(v); }, removeItem: (k) => { delete m[k]; }, _m: m }; };
+  function boot(docs, opts) {
+    opts = opts || {};
+    const writes = [], deletes = [];
+    let authCb = null;
+    const ls = mem();
+    const db = {
+      doc: (p) => ({
+        get: async () => ({ exists: p in docs, data: () => docs[p] }),
+        set: async (d, o) => { if (opts.gateSet && 'theme' in d && d.themeAt === 77) await opts.gateSet; if (opts.rejectSet && opts.rejectSet(d)) throw new Error('offline'); writes.push({ p, d: JSON.parse(JSON.stringify(d)), o }); docs[p] = o && o.merge ? Object.assign({}, docs[p] || {}, d) : d; },
+        delete: async () => { deletes.push(p); delete docs[p]; },
+      }),
+    };
+    const firebase = { auth: Object.assign(() => ({ onAuthStateChanged: (cb) => { authCb = cb; }, signOut: async () => {} }), { GoogleAuthProvider: function () {} }), firestore: Object.assign(() => db, { FieldValue: { serverTimestamp: () => 'TS' } }), app: () => ({ options: {} }) };
+    const ctx = { document: {}, firebase, localStorage: ls, sessionStorage: mem(), MyActive: { load: () => [], save() {} }, setTimeout, clearTimeout, console, Date };
+    ctx.self = ctx;
+    vm.runInNewContext(fs.readFileSync(path.join(__dirname, '..', 'my-auth.js'), 'utf8'), ctx);
+    const A = ctx.MyAuth, events = [];
+    A.onChange((e) => events.push([e, A.readTheme && A.readTheme()]));
+    A.init();
+    const player = (uid) => ({ uid: uid || 'u1', providerData: [{ providerId: 'google.com' }], displayName: 'Ana', email: 'a@b.co', getIdTokenResult: async () => ({ claims: {} }) });
+    const staff = { uid: 's1', providerData: [{ providerId: 'password' }], email: 's@x.co', getIdTokenResult: async () => ({ claims: { superadmin: true } }) };
+    return { A, docs, writes, deletes, events, ls, signIn: (u) => authCb(u), player, staff };
+  }
+  const base = () => ({ 'users/u1': { phone: null, profile: { name: 'Ana', phone: '', homeClientId: '', prefill: true }, active: [] } });
+  check('normalizeThemeRecord: only light|dark|system, at defaults to 0', MyAuth.normalizeThemeRecord('dark', 5).pref === 'dark' && MyAuth.normalizeThemeRecord('dark').at === 0 && MyAuth.normalizeThemeRecord('purple', 5) === null && MyAuth.normalizeThemeRecord(undefined, 5) === null && MyAuth.normalizeThemeRecord('system', 'x').at === 0 && MyAuth.normalizeThemeRecord('dark', Date.now() + 3 * 86400000).at === 0 && MyAuth.normalizeThemeRecord('dark', Date.now() + 3600000).at > 0);
+
+  await (async () => {
+    let t = boot({ 'users/u1': Object.assign(base()['users/u1'], { theme: 'dark', themeAt: 500 }) });
+    check('readTheme is null before any sync', t.A.readTheme() === null);
+    await t.signIn(t.player());
+    check("sync stashes the account's theme BEFORE 'synced' is emitted, so a listener can read it", JSON.stringify(t.events.find((e) => e[0] === 'synced')[1]) === '{"pref":"dark","at":500}' && JSON.stringify(t.A.readTheme()) === '{"pref":"dark","at":500}');
+    check("the sync write does not carry theme/themeAt (merge keeps the stored values), and the profile cache is unchanged in shape", !('theme' in t.writes[0].d) && !('themeAt' in t.writes[0].d) && t.docs['users/u1'].theme === 'dark' && t.docs['users/u1'].themeAt === 500 && !('theme' in t.writes[0].d.profile));
+
+    t = boot(base()); await t.signIn(t.player());
+    check('no theme on the account -> readTheme() null (device keeps its own)', t.A.readTheme() === null);
+    t = boot({ 'users/u1': Object.assign(base()['users/u1'], { theme: 'purple', themeAt: 5 }) }); await t.signIn(t.player());
+    check('a junk theme value on the account is ignored (null)', t.A.readTheme() === null);
+
+    t = boot(base()); await t.signIn(t.player()); t.writes.length = 0;
+    const ok = await t.A.writeTheme('dark', 777);
+    check('writeTheme writes TOP-LEVEL {theme, themeAt} with merge:true to users/{uid} -- nothing else', ok === true && t.writes.length === 1 && t.writes[0].p === 'users/u1' && JSON.stringify(t.writes[0].d) === '{"theme":"dark","themeAt":777}' && t.writes[0].o.merge === true);
+    check('after writeTheme the in-memory copy follows', JSON.stringify(t.A.readTheme()) === '{"pref":"dark","at":777}');
+    check('an invalid pref is a no-op (false, nothing written)', (await t.A.writeTheme('purple', 1)) === false && t.writes.length === 1);
+
+    await t.A.saveProfile({ name: 'Bea' });
+    check('a later profile save does not touch or wipe the theme fields', !('theme' in t.writes[t.writes.length - 1].d) && !('themeAt' in t.writes[t.writes.length - 1].d) && t.docs['users/u1'].theme === 'dark' && t.docs['users/u1'].themeAt === 777);
+
+    t.ls.setItem('cb_theme_v1', '{"pref":"dark","at":777}');
+    await t.signIn(null);
+    check('sign-out clears the in-memory account copy but keeps the device preference', t.A.readTheme() === null && t.ls._m.cb_theme_v1 === '{"pref":"dark","at":777}');
+    check('signed out: writeTheme is a no-op (false, nothing written)', (await t.A.writeTheme('light', 9)) === false && t.writes.filter((w) => 'theme' in w.d && w.d.themeAt === 9).length === 0);
+
+    t = boot(base()); await t.signIn(t.staff);
+    check("staff sessions never sync: no 'synced', no write, readTheme null, writeTheme false", !t.events.some((e) => e[0] === 'synced') && t.writes.length === 0 && t.A.readTheme() === null && (await t.A.writeTheme('dark', 5)) === false && t.writes.length === 0);
+
+    t = boot(base(), { rejectSet: (d) => 'theme' in d }); await t.signIn(t.player());
+    let rejected = false; try { await t.A.writeTheme('dark', 3); } catch (e) { rejected = true; }
+    check('a failed account write rejects (theme.js catches it) and leaves the in-memory copy alone', rejected && t.A.readTheme() === null);
+
+    {
+      let release; const gate = new Promise((res) => { release = res; });
+      t = boot({ 'users/u1': base()['users/u1'], 'users/u2': { theme: 'light', themeAt: 40, active: [], profile: {} } }, { gateSet: gate });
+      await t.signIn(t.player());
+      const slow = t.A.writeTheme('dark', 77); // account A's write is still in flight
+      await t.signIn(t.player('u2'));
+      const before = JSON.stringify(t.A.readTheme());
+      release(); await slow;
+      check("a slow write from account A that resolves after B signed in does not change B's in-memory theme", before === '{"pref":"light","at":40}' && JSON.stringify(t.A.readTheme()) === before);
+    }
+    t = boot(base()); await t.signIn(t.player()); await t.signIn(t.player('u2'));
+    check("another account signing in on the same page never inherits the previous account's theme", t.A.readTheme() === null);
+  })();
+}
+
+
 console.log(`\n=== ACCOUNT PAGE: ${passed}/${passed + failed} passed ===`);
 process.exit(failed === 0 ? 0 : 1);
+})().catch((e) => { console.log('  FAIL: test crashed -- ' + (e && e.stack || e)); process.exit(1); });

@@ -405,6 +405,65 @@
     "index.html|border-bottom:#EEE": "winner-PDF print window document (its own light document, never themed)",
     "index.html|#FFFBF5": "generateFallbackSVG() default `light` swatch (unused fill in the theme-independent QR SVG)"
   },
+  "opacityFloor": {
+    "floor": 0.6,
+    "floorWhy": "ink #DAE2FD needs >=0.555 over --sand (#222A3D, the worst page surface), >=0.595 over --line; 0.6 gives 5.74 / 5.43 / 4.98 on cream / card / sand and 4.53 on --line. Equals the existing opacity-60 tier, so the dark hierarchy collapses 30..55 into 60.",
+    "tiers": [
+      "30",
+      "40",
+      "45",
+      "50",
+      "55"
+    ],
+    "exemptTags": [
+      "svg",
+      "img",
+      "canvas",
+      "i"
+    ],
+    "exemptClasses": [
+      "animate-pulse"
+    ],
+    "exemptStates": [
+      ":disabled",
+      "[aria-disabled=\"true\"]"
+    ],
+    "pass": [
+      "60",
+      "65",
+      "70",
+      "75",
+      "80",
+      "90",
+      "100"
+    ],
+    "variantAllow": {
+      "hover:opacity-100": "interactive fade-in on hover (base tier is opacity-70, which already passes)",
+      "hover:opacity-90": "hover dim of an already fully opaque button",
+      "disabled:opacity-25": "disabled control: inactive components are exempt from contrast (WCAG 1.4.3)",
+      "disabled:opacity-30": "disabled control: inactive components are exempt from contrast",
+      "disabled:opacity-40": "disabled control: inactive components are exempt from contrast"
+    },
+    "exemptArbitrary": {
+      "opacity-[0.14]": "hero watermark image, decorative, pointer-events-none",
+      "opacity-[0.16]": "decorative lime glow circle (no text)",
+      "opacity-[0.18]": "decorative lime glow circle (no text)"
+    },
+    "inline": {
+      "opacity:0.5": 0.6,
+      "opacity:0.4": 0.6
+    },
+    "exemptInline": {},
+    "classification": {
+      "text-only": "floor applies: opacity-30/40/45/50/55 on spans/divs/p/li/td/tr/button text (the vast majority)",
+      "decorative": "exempt: svg, img, canvas, i (dots), .animate-pulse, opacity-[0.14|0.16|0.18] glows/watermark",
+      "disabled": "exempt: :disabled / [aria-disabled=true] / a conditional 'disabled' attribute branch (the 2 mixed-looking buttons above; the past calendar days: btn.disabled + opacity-30, .cal-day:disabled{opacity:.28}); disabled:opacity-* variants",
+      "interactive-fade": "exempt: hover:opacity-100 / hover:opacity-90 (state variants, never raised)",
+      "mixed": "text element that also paints its own fill/border. Exactly ONE is floored: the 'No poster' placeholder div (index.html #posterPreview, bg-[#F1E9DF] opacity-50). Two others only LOOK mixed but are <button disabled> and therefore EXEMPT via :disabled: index.html ~7017 (og link picker, 'different time from your game', bg-[#F7F1EA] opacity-55) and store.html ~595 (out-of-stock product, bg-[#F1E9DF] opacity-50). With a --sand fill the group contrast of the floored one at 0.6 is 4.98 over cream/card (>=4.5). tests/theme-tw-opacity.test.js derives these counts from the markup.",
+      "inline-style": "tournament standings td style=opacity:0.5 and the % span style=opacity:0.4 are covered by [style*=] attribute rules; index loading text opacity:0.6 already passes; page <style> blocks (.cal-day:disabled, pulse keyframes) and the winner-PDF print window are exempt"
+    },
+    "inlineNote": "[style*=\"opacity:0.5\"] also lifts opacity:0.55 / 0.50 and [style*=\"opacity:0.4\"] also lifts opacity:0.45 / 0.40 (substring match; intentional, both are below the floor). The generator rejects every inline form the selectors cannot match (space after the colon, no leading zero, percentages) and any fill-/stroke-/stop-/flood-opacity below the floor, and fails on a floored tier combined with a hover:/focus:/active:/group-hover: opacity variant on one element (the !important floor would silently kill the variant)."
+  },
   "notes": {
     "hover:text-[#201C19]": "maps to on-lime and is only safe on an element whose hover fill is lime (hover:bg-[#D6FF5F]); tests/theme-tw-generator.test.js asserts every occurrence has one (index.html only today).",
     "divide-[#F5EDE4]": "the dark divide rule (0,5,0)!important recolours the border of every child it matches; tests/theme-tw-generator.test.js asserts no divide child carries its own border-[hex]."

@@ -331,6 +331,15 @@ function buildRules(map) {
     tags.forEach((t) => d.target.forEach((tg) => sels.push(SCOPE + ' ' + t + anc + ' .' + esc(tg))));
     add({ token: d.id, descendant: true, state: 'descendant', req: d.target, within: d.within, tags: null, media: null, sel: sels.join(','), decls: Object.entries(d.decls) });
   });
+  /* Phase 3c: dark-only opacity FLOOR for low-opacity text tiers (opacity-30/40/45/50/55 -> floor).
+     Exempt kinds are excluded in the selector itself (tags, classes, disabled controls). */
+  const of = map.opacityFloor;
+  if (of) {
+    const val = String(of.floor).replace(/^0\./, '.');
+    const notSel = (of.exemptTags || []).map((t) => ':not(' + t + ')').concat((of.exemptClasses || []).map((c) => ':not(.' + esc(c) + ')'), (of.exemptStates || []).map((s) => ':not(' + s + ')')).join('');
+    (of.tiers || []).forEach((t) => add({ token: 'opacity-' + t, opacity: true, state: 'opacity', req: ['opacity-' + t], tags: null, media: null, sel: SCOPE + ' .opacity-' + t + notSel, decls: [['opacity', val]] }));
+    Object.keys(of.inline || {}).sort().forEach((k) => add({ token: 'inline:' + k, opacity: true, state: 'opacity-inline', req: [], tags: null, media: null, sel: SCOPE + ' :where([style*="' + k + '"])', decls: [['opacity', val]] }));
+  }
   return { rules, errors };
 }
 
@@ -351,6 +360,75 @@ function render(rules) {
 }
 
 /* ---------------- validation of map vs scan ---------------- */
+/* ---------------- opacity classification (Phase 3c) ---------------- */
+const OPACITY_TOKEN_RE = /(?:^|[\s"'`.(])((?:[a-z0-9-]+:)*)opacity-(\d+|\[[^\]\s]+\])(?=$|[\s"'`,;:)])/g;
+const stripStyleBlocks = (t) => t.replace(/<style>[\s\S]*?<\/style>/g, ' ');
+/* a hover/focus/active-style variant of opacity: the dark floor is !important and would silently beat it */
+const TRAP_VARIANT_RE = /^(?:[a-z0-9-]+:)*(?:hover|focus|active|group-hover|group-focus|focus-within|focus-visible|peer-hover|peer-focus)(?::[a-z0-9-]+)*:opacity-/;
+function floorTrapSets(text, tiers) {
+  const out = [];
+  const tierRe = new RegExp('^opacity-(' + (tiers || []).join('|') + ')$');
+  const test = (toks, line) => { if (toks.some((c) => tierRe.test(c)) && toks.some((c) => TRAP_VARIANT_RE.test(c))) out.push({ line, classes: toks.filter((c) => tierRe.test(c) || TRAP_VARIANT_RE.test(c)) }); };
+  let m;
+  const re = /\bclass=(?:"([^"]*)"|'([^']*)')/g;
+  while ((m = re.exec(text))) altSets(m[1] || m[2] || '').forEach((cs) => test(cs, text.slice(0, m.index).split('\n').length));
+  const lre = /(`[^`]*`|'[^'\n]*'|"[^"\n]*")/g;
+  while ((m = lre.exec(text))) {
+    if (m[1].indexOf('<') >= 0) continue; // HTML templates are covered, attribute by attribute, above
+    if (/class=$/.test(text.slice(Math.max(0, m.index - 6), m.index))) continue; // the attribute pass already handled it
+    test(m[1].slice(1, -1).replace(/\$\{[^}]*\}/g, ' ').split(/\s+/).filter(Boolean), text.slice(0, m.index).split('\n').length);
+  }
+  return out;
+}
+/* Every inline opacity literal (outside page <style> blocks). `covered` = a dark attribute rule matches it:
+   the rules are [style*="opacity:0.5"] / [style*="opacity:0.4"], so only the exact form `opacity:` + a value that
+   starts with one of the keys is covered (supersets such as opacity:0.55 / 0.45 / 0.50 are intentionally lifted too).
+   Forms the selectors cannot match (space after the colon, no leading zero, percentages) are reported as uncovered. */
+function inlineOpacityLiterals(text, of) {
+  const body = stripStyleBlocks(text), floor = (of && of.floor) || 0.6, keys = Object.keys((of && of.inline) || {});
+  const out = [];
+  const re = /(?<![\w-])opacity(\s*:\s*)([^;"'`}<>\s]+)/g;
+  let m;
+  while ((m = re.exec(body))) {
+    const raw = m[2], pct = /%$/.test(raw), v = pct ? parseFloat(raw) / 100 : parseFloat(raw);
+    if (!(v < floor)) continue;
+    const key = 'opacity:' + raw;
+    const form = m[1] !== ':' ? 'whitespace' : pct ? 'percent' : /^\./.test(raw) ? 'no-leading-zero' : 'ok';
+    out.push({ raw: 'opacity' + m[1] + raw, key, value: v, form, covered: (form === 'ok' && keys.some((k) => key.startsWith(k))) || !!(of.exemptInline || {})[key] });
+  }
+  return out;
+}
+/* every opacity utility / inline opacity literal on the pages, with its classification state */
+function opacityScan(pages) {
+  const map = loadMap(), of = map.opacityFloor || {}, found = new Map(), issues = [];
+  const tiers = new Set(of.tiers || []), pass = new Set(of.pass || []);
+  (pages || PAGES).forEach((p) => {
+    const text = read(p);
+    let m;
+    OPACITY_TOKEN_RE.lastIndex = 0;
+    while ((m = OPACITY_TOKEN_RE.exec(text))) {
+      const variant = m[1].replace(/:$/, ''), n = m[2], tok = (m[1] || '') + 'opacity-' + n;
+      const e = found.get(tok) || {}; e[p] = (e[p] || 0) + 1; found.set(tok, e);
+      let kind = null;
+      if (variant) kind = (of.variantAllow || {})[tok] ? 'variant' : null;
+      else if (tiers.has(n)) kind = 'tier';
+      else if (pass.has(n)) kind = 'pass';
+      else if ((of.exemptArbitrary || {})[tok]) kind = 'exempt-arbitrary';
+      if (!kind) issues.push(p + ': unclassified opacity utility ' + tok + ' (add it to opacityFloor tiers / pass / variantAllow / exemptArbitrary in theme-tw-map.json)');
+    }
+    floorTrapSets(text, of.tiers).forEach((s) => issues.push(p + ':' + s.line + ': floored tier + hover/focus/active opacity variant on one element (' + s.classes.join(' ') + '): the !important dark floor would silently kill the variant'));
+    inlineOpacityLiterals(text, of).forEach((l) => { if (!l.covered) issues.push(p + ': inline opacity below the floor not covered by a dark rule (' + l.raw + ', form: ' + l.form + '; rules only match "opacity:" + a value starting 0.5 / 0.4)'); });
+    const body = stripStyleBlocks(text);
+    (body.match(/(?<![\w])(?:fill|stroke|stop|flood|lighting)-opacity\s*[:=]\s*["']?[^;"'\s>]+/g) || []).forEach((x) => {
+      const v = parseFloat(/[:=]\s*["']?([^;"'\s>]+)/.exec(x)[1]);
+      if (v < (of.floor || 0.6)) issues.push(p + ': ' + x + ' is below the floor and contains the substring "opacity:" that the inline dark rules match -- unsupported form');
+    });
+    if (/\.style\.opacity\s*=|setProperty\(\s*['"]opacity['"]/.test(body)) issues.push(p + ': JS sets element.style.opacity (unclassified)');
+  });
+  return { found, issues };
+}
+
+
 function analyse(pages) {
   const map = loadMap();
   const scan = scanAll(pages);
@@ -363,9 +441,11 @@ function analyse(pages) {
   both.forEach((t) => errors.push('both mapped and allow-listed: ' + t));
   (map.compounds || []).forEach((c) => c.when.forEach((w) => { /* plain classes are allowed; colour tokens must be real */ }));
   scan.bad.forEach((b) => errors.push('unsupported colour utility: ' + b));
+  const opa = opacityScan(pages);
+  opa.issues.forEach((x) => errors.push(x));
   const dynamic = [];
   (pages || PAGES).forEach((p) => dynamicClassSites(read(p)).forEach((d) => dynamic.push(p + ':' + d.line + ' ' + d.text)));
-  return { map, scan, unmapped, stale, errors, dynamic, rules: built.rules, block: render(built.rules) };
+  return { map, scan, unmapped, stale, errors, dynamic, opacity: opa, rules: built.rules, block: render(built.rules) };
 }
 
 /* ---------------- static resolver (used by the contrast test) ---------------- */
@@ -423,5 +503,5 @@ function main(argv) {
   return 0;
 }
 
-module.exports = { applyThemeHoverTokens, dynamicClassSites, classTokens, missingFromTailwind, PAGES, BEGIN, END, SCOPE, parseToken, kindProp, scanAll, scanPage, scanSets, tokensIn, twSelectors, specificity, buildRules, render, order, analyse, resolveDark, currentBlock, spliceBlock, loadMap, esc, TOKEN_RE };
+module.exports = { floorTrapSets, inlineOpacityLiterals, altSets, opacityScan, applyThemeHoverTokens, dynamicClassSites, classTokens, missingFromTailwind, PAGES, BEGIN, END, SCOPE, parseToken, kindProp, scanAll, scanPage, scanSets, tokensIn, twSelectors, specificity, buildRules, render, order, analyse, resolveDark, currentBlock, spliceBlock, loadMap, esc, TOKEN_RE };
 if (require.main === module) process.exit(main(process.argv.slice(2)));

@@ -60,6 +60,8 @@
 /* BEGIN GENERATED theme-tw */
 /* Generated from theme-tw-map.json by scripts/gen-theme-tw.js -- do not edit by hand; run: node scripts/gen-theme-tw.js */
 @media screen{
+:root[data-theme="dark"] :where([style*="opacity:0.4"]){opacity:.6!important}
+:root[data-theme="dark"] :where([style*="opacity:0.5"]){opacity:.6!important}
 :root[data-theme="dark"] .accent-\[\#201C19\]{accent-color:var(--lime)!important}
 :root[data-theme="dark"] .bg-\[\#0055FE\]{background-color:#93C5FD!important}
 :root[data-theme="dark"] .bg-\[\#00BE6A\]{background-color:#5AEF82!important}
@@ -183,6 +185,11 @@
 :root[data-theme="dark"] .bg-\[\#201C19\].text-white.shadow-\[0_8px_32px_rgba\(0\,0\,0\,0\.3\)\]{box-shadow:0 0 0 1px var(--line),0 8px 32px rgba(0,0,0,.5)!important}
 :root[data-theme="dark"] .bg-\[\#201C19\].w-2.h-2{background-color:var(--ink)!important}
 :root[data-theme="dark"] .divide-\[\#F5EDE4\] > :not([hidden]) ~ :not([hidden]){border-color:var(--line)!important}
+:root[data-theme="dark"] .opacity-30:not(svg):not(img):not(canvas):not(i):not(.animate-pulse):not(:disabled):not([aria-disabled="true"]){opacity:.6!important}
+:root[data-theme="dark"] .opacity-40:not(svg):not(img):not(canvas):not(i):not(.animate-pulse):not(:disabled):not([aria-disabled="true"]){opacity:.6!important}
+:root[data-theme="dark"] .opacity-45:not(svg):not(img):not(canvas):not(i):not(.animate-pulse):not(:disabled):not([aria-disabled="true"]){opacity:.6!important}
+:root[data-theme="dark"] .opacity-50:not(svg):not(img):not(canvas):not(i):not(.animate-pulse):not(:disabled):not([aria-disabled="true"]){opacity:.6!important}
+:root[data-theme="dark"] .opacity-55:not(svg):not(img):not(canvas):not(i):not(.animate-pulse):not(:disabled):not([aria-disabled="true"]){opacity:.6!important}
 @media (hover:hover){
 :root[data-theme="dark"] .hover\:bg-\[\#D6FF5F\]:hover{background-color:var(--lime)!important;color:var(--on-lime)!important}
 :root[data-theme="dark"] .hover\:bg-\[\#E5DDD4\]:hover{background-color:var(--line)!important}

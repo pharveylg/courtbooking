@@ -4,7 +4,7 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <meta name="theme-color" content="#FFFBF5"/>
-<script>try{var r=JSON.parse(localStorage.getItem('cb_theme_v1')||'null'),p=r&&r.pref,d=p==='dark'||(p==='system'&&matchMedia('(prefers-color-scheme: dark)').matches),e=document.documentElement;e.setAttribute('data-theme',d?'dark':'light');e.setAttribute('data-theme-pref',p||'light');document.querySelector('meta[name=theme-color]').content=d?'#0B1326':'#FFFBF5'}catch(x){}</script>
+<script>try{var r=JSON.parse(localStorage.getItem('cb_theme_v1')||'null'),p=r&&r.pref,d=p==='light'?false:(p==='system'?matchMedia('(prefers-color-scheme: dark)').matches:true),e=document.documentElement;e.setAttribute('data-theme',d?'dark':'light');e.setAttribute('data-theme-pref',p||'dark');document.querySelector('meta[name=theme-color]').content=d?'#0B1326':'#FFFBF5'}catch(x){}</script>
 <meta name="robots" content="noindex"/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
@@ -89,7 +89,7 @@ input[type=color]{width:44px;height:44px;border-radius:50%;border:1px solid var(
 .badge-green{background:var(--green);color:var(--green-ink)}
 .resume-row{margin-top:18px;padding-top:16px;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:8px}
 
-/* ── Theme toggle + dark mode (opt-in; tokens live in theme.css). Dark is screen only: print stays light. ── */
+/* ── Theme toggle + dark mode (dark by default, opt out to light; tokens live in theme.css). Dark is screen only: print stays light. ── */
 .topbar .cb-theme-btn{margin-left:auto;margin-top:-7px;margin-bottom:-7px;min-width:36px;width:36px;position:relative;flex-shrink:0}
 .topbar .cb-theme-btn::after{content:"";position:absolute;top:0;bottom:0;left:-4px;right:-4px}
 @media screen{

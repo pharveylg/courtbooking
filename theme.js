@@ -1,6 +1,7 @@
 /* ================================================================
-   CBTheme -- opt-in dark mode (light is the default; never auto-follows the
-   OS unless the person explicitly picks "system").
+   CBTheme -- dark mode by default (opt OUT to light; the OS is only
+   followed when the person explicitly picks "system" -- no saved
+   preference goes straight to dark, it never consults the OS).
    Preference: localStorage key cb_theme_v1 = {"pref":"light|dark|system","at":<ms>}.
    UMD like my-auth.js: pure helpers are tested under Node (require), the
    browser runtime hangs off window.CBTheme. Nothing happens on load --
@@ -26,7 +27,7 @@
 
   /* Canonical pre-paint snippet. Pages inline this text, byte for byte, in
      <head> right after the theme-color meta (tests enforce it). */
-  const BOOTSTRAP = "try{var r=JSON.parse(localStorage.getItem('cb_theme_v1')||'null'),p=r&&r.pref,d=p==='dark'||(p==='system'&&matchMedia('(prefers-color-scheme: dark)').matches),e=document.documentElement;e.setAttribute('data-theme',d?'dark':'light');e.setAttribute('data-theme-pref',p||'light');document.querySelector('meta[name=theme-color]').content=d?'#0B1326':'#FFFBF5'}catch(x){}";
+  const BOOTSTRAP = "try{var r=JSON.parse(localStorage.getItem('cb_theme_v1')||'null'),p=r&&r.pref,d=p==='light'?false:(p==='system'?matchMedia('(prefers-color-scheme: dark)').matches:true),e=document.documentElement;e.setAttribute('data-theme',d?'dark':'light');e.setAttribute('data-theme-pref',p||'dark');document.querySelector('meta[name=theme-color]').content=d?'#0B1326':'#FFFBF5'}catch(x){}";
 
   /* ---------- colour helpers (pure) ---------- */
   function parseHex(s) {
@@ -90,7 +91,7 @@
   }
 
   /* ---------- preference logic (pure) ---------- */
-  function normalizePref(p) { return p === 'dark' || p === 'system' ? p : 'light'; }
+  function normalizePref(p) { return p === 'light' || p === 'dark' || p === 'system' ? p : 'dark'; }
   function resolveTheme(pref, osDark) {
     const p = normalizePref(pref);
     return p === 'dark' || (p === 'system' && !!osDark) ? 'dark' : 'light';
@@ -110,7 +111,7 @@
     }
     if (r) return { pref: r.pref, at: atOf(r), action: 'adopt' };
     if (l) return { pref: l.pref, at: atOf(l), action: 'push' };
-    return { pref: 'light', at: 0, action: 'none' };
+    return { pref: 'dark', at: 0, action: 'none' };
   }
 
   /* ---------- storage helpers ---------- */
@@ -132,7 +133,7 @@
   const listeners = [];
   let env = null;
   let initedDoc = null;
-  let state = { pref: 'light', theme: 'light' };
+  let state = { pref: 'dark', theme: 'dark' };
   let auth = null; // MyAuth, when the page loads it (account sync)
 
   function osDark() {
@@ -203,7 +204,7 @@
     initedDoc = env.document;
     const rec = readTheme(env.localStorage);
     state = { pref: null, theme: null };
-    apply(rec ? rec.pref : 'light', false);
+    apply(rec ? rec.pref : 'dark', false);
     const btns = env.document.querySelectorAll('[data-cb-theme-toggle]');
     for (let i = 0; i < btns.length; i++) {
       btns[i].addEventListener('click', () => setPref(state.theme === 'dark' ? 'light' : 'dark'));
@@ -212,7 +213,7 @@
       env.window.addEventListener('storage', (e) => {
         if (e && e.key && e.key !== KEY) return;
         const r = readTheme(env.localStorage);
-        apply(r ? r.pref : 'light', true);
+        apply(r ? r.pref : 'dark', true);
       });
     }
     auth = env.myAuth && typeof env.myAuth.onChange === 'function' ? env.myAuth : null;

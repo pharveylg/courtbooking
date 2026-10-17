@@ -4,7 +4,7 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <meta name="theme-color" content="#FFFBF5"/>
-<script>try{var r=JSON.parse(localStorage.getItem('cb_theme_v1')||'null'),p=r&&r.pref,d=p==='dark'||(p==='system'&&matchMedia('(prefers-color-scheme: dark)').matches),e=document.documentElement;e.setAttribute('data-theme',d?'dark':'light');e.setAttribute('data-theme-pref',p||'light');document.querySelector('meta[name=theme-color]').content=d?'#0B1326':'#FFFBF5'}catch(x){}</script>
+<script>try{var r=JSON.parse(localStorage.getItem('cb_theme_v1')||'null'),p=r&&r.pref,d=p==='light'?false:(p==='system'?matchMedia('(prefers-color-scheme: dark)').matches:true),e=document.documentElement;e.setAttribute('data-theme',d?'dark':'light');e.setAttribute('data-theme-pref',p||'dark');document.querySelector('meta[name=theme-color]').content=d?'#0B1326':'#FFFBF5'}catch(x){}</script>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-status-bar-style" content="default"/>
 <meta name="apple-mobile-web-app-title" content="CourtBook"/>
@@ -103,7 +103,7 @@ a.card:hover{transform:translateY(-1px);box-shadow:0 8px 22px rgba(32,28,25,0.08
 .spinner{width:26px;height:26px;border-radius:50%;border:3px solid var(--line);border-top-color:var(--ink);animation:spin 0.8s linear infinite;margin:40px auto}
 @keyframes spin{to{transform:rotate(360deg)}}
 
-/* ── Appearance control, dark mode (opt-in; tokens live in theme.css). Dark is screen only: print stays light. ── */
+/* ── Appearance control, dark mode (dark by default, opt out to light; tokens live in theme.css). Dark is screen only: print stays light. ── */
 .appearance{max-width:420px;margin:6px 0 22px}
 .appearance-title{font-size:11px;letter-spacing:.1em;text-transform:uppercase;opacity:.55;margin:0 2px 8px}
 .seg{display:flex;gap:3px;padding:3px;border:1px solid var(--control-border);border-radius:999px;background:var(--card)}
@@ -569,7 +569,7 @@ a.card:hover{transform:translateY(-1px);box-shadow:0 8px 22px rgba(32,28,25,0.08
   // (device first, then the account when signed in). Not part of #profileForm.
   const APPEAR_OPTS = Array.prototype.slice.call(document.querySelectorAll('#appearanceSeg [role="radio"]'));
   function syncAppearance() {
-    const pref = (window.CBTheme && CBTheme.current().pref) || 'light';
+    const pref = (window.CBTheme && CBTheme.current().pref) || 'dark';
     APPEAR_OPTS.forEach((b) => { const on = b.dataset.pref === pref; b.setAttribute('aria-checked', on ? 'true' : 'false'); b.tabIndex = on ? 0 : -1; });
   }
   function pickAppearance(b, focus) { if (focus) b.focus(); if (window.CBTheme) CBTheme.setPref(b.dataset.pref); syncAppearance(); }

@@ -123,7 +123,7 @@ section('index.html light parity: pinned by an ALLOWED DELTA (recorded additions
   check('toggle light look = neighbouring circle buttons: 1px var(--control-border) #EAE0D5 border, --card #FFF fill', /--control-border: #EAE0D5/.test(css) && /\.cb-theme-btn--32 \{[^}]*background: var\(--card\)/.test(css) && /--card: #FFFFFF/.test(css));
 })();
 
-section('bootstrap vs hostile localStorage values (never throws, always resolves to light unless pref is exactly dark/system+OS dark)');
+section('bootstrap vs hostile localStorage values (never throws; anything other than the exact string "light" falls back to the dark default -- unparseable JSON leaves no attribute at all)');
 (() => {
   const vm = require('vm');
   function run(stored, os) {
@@ -137,13 +137,18 @@ section('bootstrap vs hostile localStorage values (never throws, always resolves
     return { threw, theme: attrs['data-theme'], meta: meta.content };
   }
   const big = '{"pref":"' + 'x'.repeat(200000) + '"}';
-  const hostile = ['not json', '{', 'null', '[]', '"dark"', '42', '{"pref":{"a":1}}', '{"pref":["dark"]}', '{"pref":"__proto__"}', '{"pref":"constructor"}', '{"__proto__":{"pref":"dark"}}', '{"pref":"DARK"}', '{"pref":null}', '{}', big, '{"pref":"dark\\u0000"}', ''];
-  hostile.forEach((v) => {
+  const unparseable = ['not json', '{'];
+  unparseable.forEach((v) => {
     const r = run(v, true);
-    check('hostile cb_theme_v1 ' + JSON.stringify(v.length > 40 ? v.slice(0, 30) + '...(' + v.length + ' chars)' : v) + ': no throw, never dark (light, or no attribute at all when the JSON is unparseable: the CSS default is light), meta stays cream even with an OS that prefers dark', !r.threw && (r.theme === 'light' || r.theme === undefined) && r.meta === '#FFFBF5', JSON.stringify(r));
+    check('unparseable cb_theme_v1 ' + JSON.stringify(v) + ': JSON.parse throws, caught before any attribute is set (no data-theme at all -- the CSS default, light, applies), meta untouched even with an OS that prefers dark', !r.threw && r.theme === undefined && r.meta === '#FFFBF5', JSON.stringify(r));
+  });
+  const parseableButInvalid = ['null', '[]', '"dark"', '42', '{"pref":{"a":1}}', '{"pref":["dark"]}', '{"pref":"__proto__"}', '{"pref":"constructor"}', '{"__proto__":{"pref":"dark"}}', '{"pref":"DARK"}', '{"pref":null}', '{}', big, '{"pref":"dark\\u0000"}', ''];
+  parseableButInvalid.forEach((v) => {
+    const r = run(v, true);
+    check('parseable-but-invalid cb_theme_v1 ' + JSON.stringify(v.length > 40 ? v.slice(0, 30) + '...(' + v.length + ' chars)' : v) + ': no throw, falls back to the DARK default (anything other than the exact string "light" does), regardless of OS', !r.threw && r.theme === 'dark' && r.meta === '#0B1326', JSON.stringify(r));
   });
   check('a getItem that throws (blocked storage) is swallowed: no throw, no data-theme change', (() => { const attrs = {}; const ctx = vm.createContext({ localStorage: { getItem() { throw new Error('denied'); } }, matchMedia: () => ({ matches: true }), document: { documentElement: { setAttribute: (k, v) => { attrs[k] = v; } }, querySelector: () => ({}) } }); try { vm.runInContext(T.BOOTSTRAP, ctx); } catch (e) { return false; } return Object.keys(attrs).length === 0; })());
-  check('sanity: the exact values dark / system(+OS dark) still resolve to dark', run('{"pref":"dark"}', false).theme === 'dark' && run('{"pref":"system"}', true).theme === 'dark' && run('{"pref":"system"}', false).theme === 'light');
+  check('sanity: dark / system(+OS dark) still resolve to dark; explicit light and system+OS light still resolve to light', run('{"pref":"dark"}', false).theme === 'dark' && run('{"pref":"system"}', true).theme === 'dark' && run('{"pref":"system"}', false).theme === 'light' && run('{"pref":"light"}', true).theme === 'light');
 })();
 
 console.log(`\ntheme-tw-wiring: ${passed} passed, ${failed} failed`);

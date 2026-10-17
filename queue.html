@@ -4,7 +4,7 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <meta name="theme-color" content="#FFFBF5"/>
-<script>try{var r=JSON.parse(localStorage.getItem('cb_theme_v1')||'null'),p=r&&r.pref,d=p==='dark'||(p==='system'&&matchMedia('(prefers-color-scheme: dark)').matches),e=document.documentElement;e.setAttribute('data-theme',d?'dark':'light');e.setAttribute('data-theme-pref',p||'light');document.querySelector('meta[name=theme-color]').content=d?'#0B1326':'#FFFBF5'}catch(x){}</script>
+<script>try{var r=JSON.parse(localStorage.getItem('cb_theme_v1')||'null'),p=r&&r.pref,d=p==='light'?false:(p==='system'?matchMedia('(prefers-color-scheme: dark)').matches:true),e=document.documentElement;e.setAttribute('data-theme',d?'dark':'light');e.setAttribute('data-theme-pref',p||'dark');document.querySelector('meta[name=theme-color]').content=d?'#0B1326':'#FFFBF5'}catch(x){}</script>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-status-bar-style" content="default"/>
 <meta name="apple-mobile-web-app-title" content="Queue"/>
@@ -111,7 +111,7 @@ td{padding:7px 6px;border-bottom:1px solid var(--sand)}
 .winner-stats{font-size:13px;opacity:0.7;margin-bottom:8px;line-height:1.5}
 .winner-note{font-size:11px;opacity:0.5;margin-bottom:20px;min-height:14px}
 .winner-card .btn{width:100%}
-/* ---- Dark mode (opt-in; tokens live in theme.css). Screen only: print stays light. ---- */
+/* ---- Dark mode (dark by default, opt out to light; tokens live in theme.css). Screen only: print stays light. ---- */
 @media screen{
 :root[data-theme="dark"]{--red:#FFB4AB;--green:#5AEF82}
 :root[data-theme="dark"] .btn:not(.lime):not(.ghost):not(.outline-red),:root[data-theme="dark"] .toast{color:var(--on-panel)}

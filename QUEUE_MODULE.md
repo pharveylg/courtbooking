@@ -27,7 +27,7 @@ A session has:
 
 The facility module stores sessions in `localStorage` under `LS.queues` (`loadQueues` / `saveQueues`), with a cloud copy via `fbSave('queues', ...)`. Sessions created from a Find a Game are linked to the game with the id `q_og_<gameId>` (`ogLinkedQueueId`); their rule is always `winner_stays`. The standalone page stores its one session in `sessionStorage` under `cb_standalone_queue_v1` — never `localStorage`, and never sent anywhere.
 
-The standalone page also supports an opt-in **dark mode** (topbar moon/sun button, shared `theme.css` / `theme.js`). The theme preference (`localStorage.cb_theme_v1`) is the one thing the page persists beyond the tab besides the live-scoreboard resume key; the queue itself is still `sessionStorage`-only, and the page still loads no Firebase, client config, or PIN. Light is the default; dark uses the fixed Stitch "Court Kinetic" dark palette (see `theme.css`); the winner-PDF print window stays light. The live scoreboard is always dark with a fixed Stitch lime accent.
+The standalone page also supports **dark mode** (topbar moon/sun button, shared `theme.css` / `theme.js`), dark by default with an opt-out to light. The theme preference (`localStorage.cb_theme_v1`) is the one thing the page persists beyond the tab besides the live-scoreboard resume key; the queue itself is still `sessionStorage`-only, and the page still loads no Firebase, client config, or PIN. Dark is the default (no saved preference goes straight to dark, never consulting the OS) and uses the fixed Stitch "Court Kinetic" dark palette (see `theme.css`); the winner-PDF print window stays light regardless. The live scoreboard is always dark with a fixed Stitch lime accent.
 
 ## Rotation rules
 

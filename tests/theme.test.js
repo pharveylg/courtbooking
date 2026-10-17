@@ -52,16 +52,22 @@ check('chip bg is a faint tint of the primary over the surface', T.contrast(ch.b
 check('invalid primary falls back to lime', T.fillWithText('x', '#0B1326').fill === '#D6FF5F');
 
 section('normalizePref / resolveTheme');
-check('invalid/absent -> light', [undefined, null, '', 'LIGHT', 'auto', 7, {}].every((p) => T.normalizePref(p) === 'light'));
+check('invalid/absent -> dark (the new default)', [undefined, null, '', 'LIGHT', 'auto', 7, {}].every((p) => T.normalizePref(p) === 'dark'));
 check('valid values pass through', ['light', 'dark', 'system'].every((p) => T.normalizePref(p) === p));
-check('default is light even if the OS is dark', T.resolveTheme(undefined, true) === 'light' && T.resolveTheme('light', true) === 'light');
+check('default is dark even if the OS is light', T.resolveTheme(undefined, false) === 'dark' && T.resolveTheme('light', true) === 'light');
 check('dark is dark regardless of OS', T.resolveTheme('dark', false) === 'dark' && T.resolveTheme('dark', true) === 'dark');
 check("'system' follows the OS only when asked", T.resolveTheme('system', true) === 'dark' && T.resolveTheme('system', false) === 'light');
+
+section('DEFAULT-IS-DARK contract: no saved preference -> dark; explicit light/dark are both still respected');
+check('no saved preference (readTheme -> null) resolves to dark, regardless of OS', T.resolveTheme(T.normalizePref(undefined), true) === 'dark' && T.resolveTheme(T.normalizePref(undefined), false) === 'dark');
+check('an explicit saved LIGHT preference is still respected (even with the OS set to dark)', T.resolveTheme(T.normalizePref('light'), true) === 'light' && T.resolveTheme(T.normalizePref('light'), false) === 'light');
+check('an explicit saved DARK preference is still respected (even with the OS set to light)', T.resolveTheme(T.normalizePref('dark'), true) === 'dark' && T.resolveTheme(T.normalizePref('dark'), false) === 'dark');
+check('readTheme returns null for an empty store, and null is exactly the "nothing saved" signal init() maps to the dark default', T.readTheme({ getItem: () => null }) === null);
 
 section('reconcileTheme truth table');
 const R = T.reconcileTheme;
 const eq = (a, b) => a.pref === b.pref && a.at === b.at && a.action === b.action;
-check('neither -> light / none', eq(R(null, null), { pref: 'light', at: 0, action: 'none' }));
+check('neither -> dark (the new default) / none', eq(R(null, null), { pref: 'dark', at: 0, action: 'none' }));
 check('remote only -> adopt', eq(R(null, { pref: 'dark', at: 5 }), { pref: 'dark', at: 5, action: 'adopt' }));
 check('local only -> push', eq(R({ pref: 'system', at: 5 }, undefined), { pref: 'system', at: 5, action: 'push' }));
 check('both, local newer -> local wins, push', eq(R({ pref: 'dark', at: 9 }, { pref: 'light', at: 5 }), { pref: 'dark', at: 9, action: 'push' }));
@@ -78,7 +84,7 @@ const st = mem();
 const rec = T.writeTheme('dark', st, 1234);
 check('writes {pref, at} under cb_theme_v1', T.KEY === 'cb_theme_v1' && JSON.stringify(rec) === '{"pref":"dark","at":1234}' && st._m.cb_theme_v1 === '{"pref":"dark","at":1234}');
 check('reads it back', JSON.stringify(T.readTheme(st)) === '{"pref":"dark","at":1234}');
-check('invalid pref is normalised to light on write', T.writeTheme('purple', mem(), 1).pref === 'light');
+check('invalid pref is normalised to dark on write (the new default)', T.writeTheme('purple', mem(), 1).pref === 'dark');
 const badSt = mem(); badSt.setItem('cb_theme_v1', '{oops');
 check('malformed JSON reads as null, never throws', T.readTheme(badSt) === null);
 check('throwing storage is tolerated', T.readTheme({ getItem() { throw new Error('x'); } }) === null && T.writeTheme('dark', { setItem() { throw new Error('x'); } }, 1).pref === 'dark');
@@ -96,8 +102,10 @@ function boot(stored, osDark, opts) {
   try { vm.runInNewContext(T.BOOTSTRAP, ctx); } catch (e) { threw = true; }
   return { attrs, meta, threw };
 }
-let b = boot(null, true);
-check('nothing stored -> light, even when the OS is dark', b.attrs['data-theme'] === 'light' && b.attrs['data-theme-pref'] === 'light' && b.meta.content === '#FFFBF5');
+let b = boot(null, false);
+check('nothing stored -> dark (the new default), even when the OS is light', b.attrs['data-theme'] === 'dark' && b.attrs['data-theme-pref'] === 'dark' && b.meta.content === '#0B1326');
+b = boot(null, true);
+check('nothing stored -> dark regardless of OS either way', b.attrs['data-theme'] === 'dark' && b.attrs['data-theme-pref'] === 'dark' && b.meta.content === '#0B1326');
 b = boot('{"pref":"dark","at":1}', false);
 check('stored dark -> dark + dark theme-color', b.attrs['data-theme'] === 'dark' && b.attrs['data-theme-pref'] === 'dark' && b.meta.content === '#0B1326');
 b = boot('{"pref":"system","at":1}', true);
@@ -109,7 +117,7 @@ check('stored light + OS dark -> light', b.attrs['data-theme'] === 'light');
 b = boot('{oops', true);
 check('malformed JSON does not throw and never goes dark', !b.threw && b.attrs['data-theme'] !== 'dark');
 b = boot('{"pref":"banana"}', true);
-check('unknown pref -> light theme', !b.threw && b.attrs['data-theme'] === 'light');
+check('unknown pref -> dark theme (anything other than the exact string "light" falls back to the default)', !b.threw && b.attrs['data-theme'] === 'dark');
 b = boot(null, false, { throwStorage: true });
 check('blocked storage does not throw', !b.threw);
 b = boot('{"pref":"dark"}', false, { noMeta: true });
@@ -130,19 +138,19 @@ function fakeDom(stored, osDark) {
   };
   return { env, attrs, meta, btnAttrs, listeners, mqL, winL, store };
 }
-let d = fakeDom(null, { v: true });
+let d = fakeDom(null, { v: false });
 const seen = [];
 T.onChange((s) => seen.push(s.theme));
 T.init(d.env);
-check('init with nothing stored -> light and aria-pressed=false', d.attrs['data-theme'] === 'light' && d.btnAttrs['aria-pressed'] === 'false' && d.meta.content === '#FFFBF5');
+check('init with nothing stored -> dark (the new default) even though the OS is light, aria-pressed=true', d.attrs['data-theme'] === 'dark' && d.btnAttrs['aria-pressed'] === 'true' && d.meta.content === '#0B1326');
 d.listeners.click();
-check('toggle -> dark, persisted with a timestamp, meta + aria updated, onChange fired', d.attrs['data-theme'] === 'dark' && d.meta.content === '#0B1326' && d.btnAttrs['aria-pressed'] === 'true' && JSON.parse(d.store._m.cb_theme_v1).pref === 'dark' && JSON.parse(d.store._m.cb_theme_v1).at > 0 && seen[seen.length - 1] === 'dark');
+check('toggle -> light, persisted with a timestamp, meta + aria updated, onChange fired', d.attrs['data-theme'] === 'light' && d.meta.content === '#FFFBF5' && d.btnAttrs['aria-pressed'] === 'false' && JSON.parse(d.store._m.cb_theme_v1).pref === 'light' && JSON.parse(d.store._m.cb_theme_v1).at > 0 && seen[seen.length - 1] === 'light');
 d.listeners.click();
-check('toggle again -> light', d.attrs['data-theme'] === 'light' && JSON.parse(d.store._m.cb_theme_v1).pref === 'light');
-d.store.setItem('cb_theme_v1', '{"pref":"dark","at":99}'); d.winL.storage({ key: 'cb_theme_v1' });
-check('storage event from another tab applies the new theme', d.attrs['data-theme'] === 'dark');
+check('toggle again -> dark', d.attrs['data-theme'] === 'dark' && JSON.parse(d.store._m.cb_theme_v1).pref === 'dark');
+d.store.setItem('cb_theme_v1', '{"pref":"light","at":99}'); d.winL.storage({ key: 'cb_theme_v1' });
+check('storage event from another tab applies the new theme', d.attrs['data-theme'] === 'light');
 d.winL.storage({ key: 'something_else' });
-check('unrelated storage keys are ignored', d.attrs['data-theme'] === 'dark');
+check('unrelated storage keys are ignored', d.attrs['data-theme'] === 'light');
 const os = { v: false }; d = fakeDom('{"pref":"system","at":1}', os);
 T.init(d.env);
 check('system + OS light starts light', d.attrs['data-theme'] === 'light' && d.attrs['data-theme-pref'] === 'system');
@@ -165,14 +173,14 @@ check('init() twice on the same document registers listeners once', (() => {
   T2.init(env); T2.init(env); T2.init(env);
   return clicks === 1 && wins === 1 && mqs === 1;
 })());
-check('a toggle after a double init flips to dark exactly once', (() => {
+check('a toggle after a double init flips to light exactly once (nothing stored, so init already resolved to the dark default)', (() => {
   const T2 = fresh();
   const handlers = [], attrs = {};
   const btn = { setAttribute() {}, addEventListener(e, fn) { handlers.push(fn); } };
   const doc = { documentElement: { setAttribute: (k, v) => { attrs[k] = v; } }, querySelector: () => ({ content: '' }), querySelectorAll: () => [btn] };
   const env = { document: doc, localStorage: mem(), matchMedia: () => ({ matches: false, addEventListener() {} }), window: { addEventListener() {} } };
   T2.init(env); T2.init(env); handlers.forEach((h) => h());
-  return handlers.length === 1 && attrs['data-theme'] === 'dark';
+  return handlers.length === 1 && attrs['data-theme'] === 'light';
 })());
 
 section('account sync (mock MyAuth): adopt / push / none');
@@ -201,9 +209,9 @@ function syncRig(local, remote, authOpts) {
   const flush = () => { timers.forEach((t) => { if (t.fn) { const f = t.fn; t.fn = null; f(); } }); };
   return { T2, log, calls, attrs, store, btnL, seenT, winL, timers, flush, emit: (e) => listeners.forEach((f) => f(e, null)), listeners };
 }
-let r = syncRig(null, { pref: 'dark', at: 500 });
+let r = syncRig(null, { pref: 'light', at: 500 });
 r.emit('synced');
-check('adopt (nothing on the device): applies the account theme, stores it locally with the ACCOUNT timestamp, does not write back', r.attrs['data-theme'] === 'dark' && r.store._m.cb_theme_v1 === '{"pref":"dark","at":500}' && r.calls.length === 0 && r.seenT[r.seenT.length - 1] === 'dark');
+check('adopt (nothing on the device): applies the account theme, stores it locally with the ACCOUNT timestamp, does not write back', r.attrs['data-theme'] === 'light' && r.store._m.cb_theme_v1 === '{"pref":"light","at":500}' && r.calls.length === 0 && r.seenT[r.seenT.length - 1] === 'light');
 r = syncRig({ pref: 'light', at: 100 }, { pref: 'dark', at: 500 });
 r.emit('synced');
 check('adopt (account newer): device is overwritten, no write', r.attrs['data-theme'] === 'dark' && JSON.parse(r.store._m.cb_theme_v1).at === 500 && r.calls.length === 0);
@@ -218,10 +226,10 @@ r.emit('synced');
 check('none (same pref): nothing written either way', r.calls.length === 0 && r.log.length === 0 && r.attrs['data-theme'] === 'dark');
 r = syncRig(null, null);
 r.emit('synced');
-check('none (neither has one): stays light, nothing written', r.calls.length === 0 && r.log.length === 0 && r.attrs['data-theme'] === 'light');
+check('none (neither has one): stays dark (the new default), nothing written', r.calls.length === 0 && r.log.length === 0 && r.attrs['data-theme'] === 'dark');
 r = syncRig(null, { pref: 'dark', at: 5 });
 r.emit('auth'); r.emit('sync-failed'); r.emit('signin-problem');
-check("only the 'synced' event triggers a merge (auth / sync-failed / signin-problem are ignored)", r.attrs['data-theme'] === 'light' && r.calls.length === 0);
+check("only the 'synced' event triggers a merge (auth / sync-failed / signin-problem are ignored): stays at the dark default from init", r.attrs['data-theme'] === 'dark' && r.calls.length === 0);
 r = syncRig({ pref: 'dark', at: 7 }, { pref: 'light', at: 7 });
 r.emit('synced');
 check('tie with different prefs: the account wins (adopt)', r.attrs['data-theme'] === 'light' && r.calls.length === 0);

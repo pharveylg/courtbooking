@@ -4,7 +4,7 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <meta name="theme-color" content="#FFFBF5"/>
-<script>try{var r=JSON.parse(localStorage.getItem('cb_theme_v1')||'null'),p=r&&r.pref,d=p==='dark'||(p==='system'&&matchMedia('(prefers-color-scheme: dark)').matches),e=document.documentElement;e.setAttribute('data-theme',d?'dark':'light');e.setAttribute('data-theme-pref',p||'light');document.querySelector('meta[name=theme-color]').content=d?'#0B1326':'#FFFBF5'}catch(x){}</script>
+<script>try{var r=JSON.parse(localStorage.getItem('cb_theme_v1')||'null'),p=r&&r.pref,d=p==='light'?false:(p==='system'?matchMedia('(prefers-color-scheme: dark)').matches:true),e=document.documentElement;e.setAttribute('data-theme',d?'dark':'light');e.setAttribute('data-theme-pref',p||'dark');document.querySelector('meta[name=theme-color]').content=d?'#0B1326':'#FFFBF5'}catch(x){}</script>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-status-bar-style" content="default"/>
 <meta name="apple-mobile-web-app-title" content="CourtBook"/>
@@ -281,7 +281,7 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(-
 }
 .install-dismiss:hover{background:rgba(255,255,255,0.2);color:var(--on-panel)}
 
-/* ── Theme toggle + dark mode (opt-in; tokens live in theme.css). Dark is screen only: print stays light. ── */
+/* ── Theme toggle + dark mode (dark by default, opt out to light; tokens live in theme.css). Dark is screen only: print stays light. ── */
 .topbar .cb-theme-btn{margin-left:auto;margin-top:-7px;margin-bottom:-7px;min-width:36px;width:36px;position:relative;flex-shrink:0}
 .topbar .cb-theme-btn::after{content:"";position:absolute;top:0;bottom:0;left:-4px;right:-4px}
 .cb-theme-btn + .acct-chip{margin-left:0}

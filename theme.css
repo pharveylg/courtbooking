@@ -1,6 +1,8 @@
-/* theme.css -- shared opt-in dark mode tokens (see theme.js).
-   Light is the default and the light token values below are exactly the
-   literals the pages used before dark mode existed. Dark applies only when
+/* theme.css -- shared dark-mode-by-default tokens (see theme.js).
+   Dark is the default; a person opts OUT to light (or picks "system", which
+   is only followed when explicitly chosen). The light token values below are
+   exactly the literals the pages used before dark mode existed, for visitors
+   who have explicitly chosen light. Dark applies only when
    <html data-theme="dark"> is set (by the inline bootstrap in <head> / by
    CBTheme), and only on screen -- print always stays light.
    NOTE on caching: firebase.json sends Cache-Control: no-cache for theme.*, but

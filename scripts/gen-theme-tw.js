@@ -43,9 +43,8 @@ const path = require('path');
 /* THEME_TW_ROOT lets the tests run the script against a scratch copy of the repo files. */
 const ROOT = process.env.THEME_TW_ROOT || path.join(__dirname, '..');
 /* The customer-facing union. superadmin.html is OUT of scope for dark mode;
-   tournament-admin.html is deliberately not listed (it would add map entries;
-   it is Phase 3d). */
-const PAGES = ['index.html', 'store.html', 'tournament.html', 'gallery.html', 'billing.html'];
+   tournament-admin.html (the organizer console, Phase 3d) is listed too. */
+const PAGES = ['index.html', 'store.html', 'tournament.html', 'gallery.html', 'billing.html', 'tournament-admin.html'];
 const BEGIN = '/* BEGIN GENERATED theme-tw */';
 const NOTE = '/* Generated from theme-tw-map.json by scripts/gen-theme-tw.js -- do not edit by hand; run: node scripts/gen-theme-tw.js */';
 const END = '/* END GENERATED theme-tw */';
@@ -289,6 +288,7 @@ function stateOf(variants) {
 }
 
 /* Structured rules; each carries enough info for the static resolver (resolveDark). */
+const tiers_ = (of) => (of.tiers || []).map(String);
 function buildRules(map) {
   const UNGATED_HOVER = applyThemeHoverTokens();
   const rules = [];
@@ -339,6 +339,20 @@ function buildRules(map) {
     const notSel = (of.exemptTags || []).map((t) => ':not(' + t + ')').concat((of.exemptClasses || []).map((c) => ':not(.' + esc(c) + ')'), (of.exemptStates || []).map((s) => ':not(' + s + ')')).join('');
     (of.tiers || []).forEach((t) => add({ token: 'opacity-' + t, opacity: true, state: 'opacity', req: ['opacity-' + t], tags: null, media: null, sel: SCOPE + ' .opacity-' + t + notSel, decls: [['opacity', val]] }));
     Object.keys(of.inline || {}).sort().forEach((k) => add({ token: 'inline:' + k, opacity: true, state: 'opacity-inline', req: [], tags: null, media: null, sel: SCOPE + ' :where([style*="' + k + '"])', decls: [['opacity', val]] }));
+    /* Nested opacity multiplies: a floored (or passing) opacity utility INSIDE another opacity utility dims twice (.6 x .6 = .36).
+       In dark the ancestor already sits at >= its tier (floored to .6 or a passing 0.6-0.9), so the descendant is set to 1. */
+    if (of.nested) {
+      const all = (of.tiers || []).concat((of.pass || []).filter((n) => +n < 100)).map(String);
+      const anc = ':is(' + all.map((n) => '.opacity-' + n).join(',') + ')';
+      all.forEach((n) => add({ token: 'nested-opacity-' + n, opacity: true, state: 'opacity-nested', req: ['opacity-' + n], tags: null, media: null, sel: SCOPE + ' ' + anc + ' .opacity-' + n + notSel, decls: [['opacity', '1']] }));
+    }
+    /* tier + hover:opacity-NN pairs that really occur: restore the hover value above the floor (same selector + the variant, so it out-ranks it) */
+    Object.keys(of.hoverRestore || {}).sort().forEach((pair) => {
+      const [tier, variant] = pair.split('+'), vm = /opacity-(\d+)$/.exec(variant), sels = twSelectors(variant);
+      if (!/^hover:opacity-\d+$/.test(variant) || !vm || !tiers_(of).includes(tier.replace('opacity-', ''))) { errors.push('bad hoverRestore pair: ' + pair); return; }
+      if (!sels.length) { errors.push('hoverRestore variant not compiled in tailwind.css: ' + variant); return; }
+      sels.forEach((s) => add({ token: pair, opacity: true, state: 'opacity-hover', req: [tier, variant], tags: null, media: s.media, sel: SCOPE + ' .' + esc(tier) + notSel + s.sel, decls: [['opacity', String(+vm[1] / 100).replace(/^0\./, '.')]] }));
+    });
   }
   return { rules, errors };
 }
@@ -368,7 +382,7 @@ const TRAP_VARIANT_RE = /^(?:[a-z0-9-]+:)*(?:hover|focus|active|group-hover|grou
 function floorTrapSets(text, tiers) {
   const out = [];
   const tierRe = new RegExp('^opacity-(' + (tiers || []).join('|') + ')$');
-  const test = (toks, line) => { if (toks.some((c) => tierRe.test(c)) && toks.some((c) => TRAP_VARIANT_RE.test(c))) out.push({ line, classes: toks.filter((c) => tierRe.test(c) || TRAP_VARIANT_RE.test(c)) }); };
+  const test = (toks, line) => { const ts = toks.filter((c) => tierRe.test(c)), vs = toks.filter((c) => TRAP_VARIANT_RE.test(c)); if (ts.length && vs.length) out.push({ line, classes: ts.concat(vs), pairs: [].concat.apply([], ts.map((t) => vs.map((v) => t + '+' + v))) }); };
   let m;
   const re = /\bclass=(?:"([^"]*)"|'([^']*)')/g;
   while ((m = re.exec(text))) altSets(m[1] || m[2] || '').forEach((cs) => test(cs, text.slice(0, m.index).split('\n').length));
@@ -416,7 +430,7 @@ function opacityScan(pages) {
       else if ((of.exemptArbitrary || {})[tok]) kind = 'exempt-arbitrary';
       if (!kind) issues.push(p + ': unclassified opacity utility ' + tok + ' (add it to opacityFloor tiers / pass / variantAllow / exemptArbitrary in theme-tw-map.json)');
     }
-    floorTrapSets(text, of.tiers).forEach((s) => issues.push(p + ':' + s.line + ': floored tier + hover/focus/active opacity variant on one element (' + s.classes.join(' ') + '): the !important dark floor would silently kill the variant'));
+    floorTrapSets(text, of.tiers).filter((s) => s.pairs.some((pr) => !(of.hoverRestore || {})[pr])).forEach((s) => issues.push(p + ':' + s.line + ': floored tier + hover/focus/active opacity variant on one element (' + s.classes.join(' ') + '): the !important dark floor would silently kill the variant (list the pair in opacityFloor.hoverRestore to emit a restoring rule)'));
     inlineOpacityLiterals(text, of).forEach((l) => { if (!l.covered) issues.push(p + ': inline opacity below the floor not covered by a dark rule (' + l.raw + ', form: ' + l.form + '; rules only match "opacity:" + a value starting 0.5 / 0.4)'); });
     const body = stripStyleBlocks(text);
     (body.match(/(?<![\w])(?:fill|stroke|stop|flood|lighting)-opacity\s*[:=]\s*["']?[^;"'\s>]+/g) || []).forEach((x) => {

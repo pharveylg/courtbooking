@@ -53,6 +53,7 @@
     "bg-[#FFE9E0]": "rgba(255,180,171,.14)",
     "bg-[#FFF0D6]": "rgba(251,191,36,.14)",
     "bg-[#FFF3D6]": "rgba(251,191,36,.14)",
+    "bg-[#FFF7EA]": "rgba(251,191,36,.08)",
     "bg-[#FFF8F0]": "rgba(251,191,36,.08)",
     "bg-[#FFFBF5]": "var(--cream)",
     "bg-[#FFFBF5]/90": "rgba(11,19,38,.9)",
@@ -85,6 +86,7 @@
     "border-[#FF8A5B]": "#FFB4AB",
     "border-[#FF8A5B]/30": "rgba(255,180,171,.3)",
     "border-[#FFC9B6]": "rgba(255,180,171,.35)",
+    "border-[#FFD9A8]": "rgba(251,191,36,.35)",
     "border-[#FFE0A3]": "rgba(251,191,36,.35)",
     "divide-[#F5EDE4]": "var(--line)",
     "file:bg-[#201C19]": "var(--lime)",
@@ -131,6 +133,7 @@
     "text-[#15803D]": "#5AEF82",
     "text-[#166534]": "#5AEF82",
     "text-[#201C19]": "var(--ink)",
+    "text-[#201C19]/40": "var(--muted)",
     "text-[#201C19]/50": "var(--muted)",
     "text-[#201C19]/60": "var(--muted)",
     "text-[#201C19]/70": "var(--muted)",
@@ -460,9 +463,15 @@
       "disabled": "exempt: :disabled / [aria-disabled=true] / a conditional 'disabled' attribute branch (the 2 mixed-looking buttons above; the past calendar days: btn.disabled + opacity-30, .cal-day:disabled{opacity:.28}); disabled:opacity-* variants",
       "interactive-fade": "exempt: hover:opacity-100 / hover:opacity-90 (state variants, never raised)",
       "mixed": "text element that also paints its own fill/border. Exactly ONE is floored: the 'No poster' placeholder div (index.html #posterPreview, bg-[#F1E9DF] opacity-50). Two others only LOOK mixed but are <button disabled> and therefore EXEMPT via :disabled: index.html ~7017 (og link picker, 'different time from your game', bg-[#F7F1EA] opacity-55) and store.html ~595 (out-of-stock product, bg-[#F1E9DF] opacity-50). With a --sand fill the group contrast of the floored one at 0.6 is 4.98 over cream/card (>=4.5). tests/theme-tw-opacity.test.js derives these counts from the markup.",
-      "inline-style": "tournament standings td style=opacity:0.5 and the % span style=opacity:0.4 are covered by [style*=] attribute rules; index loading text opacity:0.6 already passes; page <style> blocks (.cal-day:disabled, pulse keyframes) and the winner-PDF print window are exempt"
+      "inline-style": "tournament standings td style=opacity:0.5 and the % span style=opacity:0.4 are covered by [style*=] attribute rules; index loading text opacity:0.6 already passes; page <style> blocks (.cal-day:disabled, pulse keyframes) and the winner-PDF print window are exempt",
+      "nested": "an opacity utility inside another opacity utility (e.g. tournament-admin <div class='opacity-60'>Mens Doubles <span class='opacity-50'>(1 + 1 waitlisted)</span></div>) multiplies: dark rule sets the DESCENDANT to opacity 1 (the ancestor already sits at >= 0.6), so the effective opacity is the ancestor's, never a product (.36)"
     },
-    "inlineNote": "[style*=\"opacity:0.5\"] also lifts opacity:0.55 / 0.50 and [style*=\"opacity:0.4\"] also lifts opacity:0.45 / 0.40 (substring match; intentional, both are below the floor). The generator rejects every inline form the selectors cannot match (space after the colon, no leading zero, percentages) and any fill-/stroke-/stop-/flood-opacity below the floor, and fails on a floored tier combined with a hover:/focus:/active:/group-hover: opacity variant on one element (the !important floor would silently kill the variant)."
+    "inlineNote": "[style*=\"opacity:0.5\"] also lifts opacity:0.55 / 0.50 and [style*=\"opacity:0.4\"] also lifts opacity:0.45 / 0.40 (substring match; intentional, both are below the floor). The generator rejects every inline form the selectors cannot match (space after the colon, no leading zero, percentages) and any fill-/stroke-/stop-/flood-opacity below the floor, and fails on a floored tier combined with a hover:/focus:/active:/group-hover: opacity variant on one element (the !important floor would silently kill the variant).",
+    "hoverRestore": {
+      "opacity-50+hover:opacity-100": "tournament-admin 'Remove venue' / 'Remove' text buttons: dim at rest, full on hover; the dark floor is !important so the hover value is restored by a higher-specificity rule",
+      "opacity-40+hover:opacity-100": "tournament-admin announcement 'Remove' button: dim at rest, full on hover (restored above the dark floor)"
+    },
+    "nested": true
   },
   "notes": {
     "hover:text-[#201C19]": "maps to on-lime and is only safe on an element whose hover fill is lime (hover:bg-[#D6FF5F]); tests/theme-tw-generator.test.js asserts every occurrence has one (index.html only today).",

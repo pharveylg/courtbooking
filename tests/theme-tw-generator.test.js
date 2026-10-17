@@ -36,9 +36,9 @@ check('rules are emitted in specificity order within each media group', (() => {
 section('page list');
 check('index, store, tournament, gallery, billing are scanned', ['index.html', 'store.html', 'tournament.html', 'gallery.html', 'billing.html'].every((p) => G.PAGES.includes(p)));
 check('superadmin.html is NOT in the generator page list (out of scope for dark mode)', !G.PAGES.includes('superadmin.html'));
-check('tournament-admin.html is not scanned (it would add map entries; Phase 3d)', !G.PAGES.includes('tournament-admin.html'));
-const adminOnly = [...G.scanPage('tournament-admin.html').tokens.keys()].filter((t) => !a.scan.tokens.has(t));
-check('...and the reason is real: it carries colour utilities the map does not know yet (' + adminOnly.join(', ') + ')', adminOnly.length > 0);
+check('tournament-admin.html IS scanned (Phase 3d)', G.PAGES.includes('tournament-admin.html'));
+const adminTokens = [...G.scanPage('tournament-admin.html').tokens.keys()];
+check('its 3 page-specific utilities are mapped (bg-[#FFF7EA], border-[#FFD9A8], text-[#201C19]/40)', ['bg-[#FFF7EA]', 'border-[#FFD9A8]', 'text-[#201C19]/40'].every((t) => adminTokens.includes(t) && t in a.map.map));
 
 section('every scanned colour utility is mapped or allow-listed');
 G.PAGES.forEach((p) => {

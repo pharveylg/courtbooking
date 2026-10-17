@@ -17,7 +17,7 @@ const section = (t) => console.log(`\n${t}`);
 const ROOT = path.join(__dirname, '..');
 const read = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8');
 const norm = (s) => s.replace(/\r\n/g, '\n');
-const PAGES = ['store.html', 'tournament.html', 'gallery.html', 'billing.html'];
+const PAGES = ['store.html', 'tournament.html', 'gallery.html', 'billing.html', 'tournament-admin.html'];
 const BOOT_TAG = '<script>' + T.BOOTSTRAP + '</script>';
 
 section('wiring (same recipe as queue/picker/account/onboarding)');
@@ -33,7 +33,7 @@ const ts = h.indexOf('<script src="/theme.js"></script>'), ti = h.indexOf('<scri
   check(f + ': no theme toggle on the page (it honours the stored preference)', !/data-cb-theme-toggle|cb-theme-btn/.test(h));
   check(f + ': theme.js is loaded after firebase-config.js (page scripts unchanged in order)', h.indexOf('firebase-config.js') < ts);
 });
-check('tournament-admin.html is still NOT wired (3d); superadmin is out of scope', ['tournament-admin.html', 'superadmin.html'].every((f) => !/theme\.js|CBTheme|theme\.css/.test(read(f))));
+check('superadmin.html stays OUT of scope: not wired, no theme.js / CBTheme / theme.css', ['superadmin.html'].every((f) => !/theme\.js|CBTheme|theme\.css/.test(read(f))));
 check('tailwind.css / motion.css carry no dark rules (immutable-cached files)', !/data-theme/.test(read('tailwind.css')) && !/data-theme/.test(read('motion.css')));
 check('billing.html is not an @source of tailwind-input.css and tailwind.css was not rebuilt for it', !/billing\.html/.test(read('tailwind-input.css')));
 
@@ -54,7 +54,7 @@ PAGES.forEach((f) => {
   const h = norm(read(f)), head = h.slice(0, h.indexOf('<body')).split('\n');
   check(f + ': the 5 wiring lines are present exactly once each, in this order', JSON.stringify(P.WIRING.map((w) => head.indexOf(w)).sort((a, b) => a - b)) === JSON.stringify(P.WIRING.map((w) => head.indexOf(w))) && P.WIRING.every((w) => head.filter((l) => l === w).length === 1));
 });
-check('the fixture covers exactly the four wired pages', Object.keys(fixture.pages).sort().join() === PAGES.slice().sort().join());
+check('the fixture covers exactly the wired pages', Object.keys(fixture.pages).sort().join() === PAGES.slice().sort().join());
 check('mutation: a one-class edit changes the body hash and the class multiset (the guard would fail)', (() => {
   const t = read('store.html'), i = t.indexOf('<body'), mut = t.slice(0, i) + t.slice(i).replace('bg-[#FFFBF5]', 'bg-[#FFFBF6]');
   const d = P.describe(mut), fx = fixture.pages['store.html'];

@@ -22,7 +22,7 @@ const crypto = require('crypto');
 const T = require('../theme.js');
 
 const ROOT = path.join(__dirname, '..');
-const PAGES = ['store.html', 'tournament.html', 'gallery.html', 'billing.html'];
+const PAGES = ['store.html', 'tournament.html', 'gallery.html', 'billing.html', 'tournament-admin.html'];
 const WIRING = ['<meta name="theme-color" content="#FFFBF5"/>', '<script>' + T.BOOTSTRAP + '</script>', '<link rel="stylesheet" href="theme.css"/>', '<script src="/theme.js"></script>', '<script>CBTheme.init();</script>'];
 const sha = (s) => crypto.createHash('sha256').update(s).digest('hex');
 const norm = (s) => s.replace(/\r\n/g, '\n');

@@ -99,6 +99,7 @@
 :root[data-theme="dark"] .bg-\[\#FFE9E0\]{background-color:rgba(255,180,171,.14)!important}
 :root[data-theme="dark"] .bg-\[\#FFF0D6\]{background-color:rgba(251,191,36,.14)!important}
 :root[data-theme="dark"] .bg-\[\#FFF3D6\]{background-color:rgba(251,191,36,.14)!important}
+:root[data-theme="dark"] .bg-\[\#FFF7EA\]{background-color:rgba(251,191,36,.08)!important}
 :root[data-theme="dark"] .bg-\[\#FFF8F0\]{background-color:rgba(251,191,36,.08)!important}
 :root[data-theme="dark"] .bg-\[\#FFFBF5\]{background-color:var(--cream)!important}
 :root[data-theme="dark"] .bg-\[\#FFFBF5\]\/90{background-color:rgba(11,19,38,.9)!important}
@@ -121,12 +122,14 @@
 :root[data-theme="dark"] .border-\[\#FF8A5B\]{border-color:#FFB4AB!important}
 :root[data-theme="dark"] .border-\[\#FF8A5B\]\/30{border-color:rgba(255,180,171,.3)!important}
 :root[data-theme="dark"] .border-\[\#FFC9B6\]{border-color:rgba(255,180,171,.35)!important}
+:root[data-theme="dark"] .border-\[\#FFD9A8\]{border-color:rgba(251,191,36,.35)!important}
 :root[data-theme="dark"] .border-\[\#FFE0A3\]{border-color:rgba(251,191,36,.35)!important}
 :root[data-theme="dark"] .ring-\[\#201C19\]{--tw-ring-color:var(--lime-text)!important}
 :root[data-theme="dark"] .ring-\[\#D6FF5F\]{--tw-ring-color:var(--lime-text)!important}
 :root[data-theme="dark"] .text-\[\#15803D\]{color:#5AEF82!important}
 :root[data-theme="dark"] .text-\[\#166534\]{color:#5AEF82!important}
 :root[data-theme="dark"] .text-\[\#201C19\]{color:var(--ink)!important}
+:root[data-theme="dark"] .text-\[\#201C19\]\/40{color:var(--muted)!important}
 :root[data-theme="dark"] .text-\[\#201C19\]\/50{color:var(--muted)!important}
 :root[data-theme="dark"] .text-\[\#201C19\]\/60{color:var(--muted)!important}
 :root[data-theme="dark"] .text-\[\#201C19\]\/70{color:var(--muted)!important}
@@ -190,6 +193,17 @@
 :root[data-theme="dark"] .opacity-45:not(svg):not(img):not(canvas):not(i):not(.animate-pulse):not(:disabled):not([aria-disabled="true"]){opacity:.6!important}
 :root[data-theme="dark"] .opacity-50:not(svg):not(img):not(canvas):not(i):not(.animate-pulse):not(:disabled):not([aria-disabled="true"]){opacity:.6!important}
 :root[data-theme="dark"] .opacity-55:not(svg):not(img):not(canvas):not(i):not(.animate-pulse):not(:disabled):not([aria-disabled="true"]){opacity:.6!important}
+:root[data-theme="dark"] :is(.opacity-30,.opacity-40,.opacity-45,.opacity-50,.opacity-55,.opacity-60,.opacity-65,.opacity-70,.opacity-75,.opacity-80,.opacity-90) .opacity-30:not(svg):not(img):not(canvas):not(i):not(.animate-pulse):not(:disabled):not([aria-disabled="true"]){opacity:1!important}
+:root[data-theme="dark"] :is(.opacity-30,.opacity-40,.opacity-45,.opacity-50,.opacity-55,.opacity-60,.opacity-65,.opacity-70,.opacity-75,.opacity-80,.opacity-90) .opacity-40:not(svg):not(img):not(canvas):not(i):not(.animate-pulse):not(:disabled):not([aria-disabled="true"]){opacity:1!important}
+:root[data-theme="dark"] :is(.opacity-30,.opacity-40,.opacity-45,.opacity-50,.opacity-55,.opacity-60,.opacity-65,.opacity-70,.opacity-75,.opacity-80,.opacity-90) .opacity-45:not(svg):not(img):not(canvas):not(i):not(.animate-pulse):not(:disabled):not([aria-disabled="true"]){opacity:1!important}
+:root[data-theme="dark"] :is(.opacity-30,.opacity-40,.opacity-45,.opacity-50,.opacity-55,.opacity-60,.opacity-65,.opacity-70,.opacity-75,.opacity-80,.opacity-90) .opacity-50:not(svg):not(img):not(canvas):not(i):not(.animate-pulse):not(:disabled):not([aria-disabled="true"]){opacity:1!important}
+:root[data-theme="dark"] :is(.opacity-30,.opacity-40,.opacity-45,.opacity-50,.opacity-55,.opacity-60,.opacity-65,.opacity-70,.opacity-75,.opacity-80,.opacity-90) .opacity-55:not(svg):not(img):not(canvas):not(i):not(.animate-pulse):not(:disabled):not([aria-disabled="true"]){opacity:1!important}
+:root[data-theme="dark"] :is(.opacity-30,.opacity-40,.opacity-45,.opacity-50,.opacity-55,.opacity-60,.opacity-65,.opacity-70,.opacity-75,.opacity-80,.opacity-90) .opacity-60:not(svg):not(img):not(canvas):not(i):not(.animate-pulse):not(:disabled):not([aria-disabled="true"]){opacity:1!important}
+:root[data-theme="dark"] :is(.opacity-30,.opacity-40,.opacity-45,.opacity-50,.opacity-55,.opacity-60,.opacity-65,.opacity-70,.opacity-75,.opacity-80,.opacity-90) .opacity-65:not(svg):not(img):not(canvas):not(i):not(.animate-pulse):not(:disabled):not([aria-disabled="true"]){opacity:1!important}
+:root[data-theme="dark"] :is(.opacity-30,.opacity-40,.opacity-45,.opacity-50,.opacity-55,.opacity-60,.opacity-65,.opacity-70,.opacity-75,.opacity-80,.opacity-90) .opacity-70:not(svg):not(img):not(canvas):not(i):not(.animate-pulse):not(:disabled):not([aria-disabled="true"]){opacity:1!important}
+:root[data-theme="dark"] :is(.opacity-30,.opacity-40,.opacity-45,.opacity-50,.opacity-55,.opacity-60,.opacity-65,.opacity-70,.opacity-75,.opacity-80,.opacity-90) .opacity-75:not(svg):not(img):not(canvas):not(i):not(.animate-pulse):not(:disabled):not([aria-disabled="true"]){opacity:1!important}
+:root[data-theme="dark"] :is(.opacity-30,.opacity-40,.opacity-45,.opacity-50,.opacity-55,.opacity-60,.opacity-65,.opacity-70,.opacity-75,.opacity-80,.opacity-90) .opacity-80:not(svg):not(img):not(canvas):not(i):not(.animate-pulse):not(:disabled):not([aria-disabled="true"]){opacity:1!important}
+:root[data-theme="dark"] :is(.opacity-30,.opacity-40,.opacity-45,.opacity-50,.opacity-55,.opacity-60,.opacity-65,.opacity-70,.opacity-75,.opacity-80,.opacity-90) .opacity-90:not(svg):not(img):not(canvas):not(i):not(.animate-pulse):not(:disabled):not([aria-disabled="true"]){opacity:1!important}
 @media (hover:hover){
 :root[data-theme="dark"] .hover\:bg-\[\#D6FF5F\]:hover{background-color:var(--lime)!important;color:var(--on-lime)!important}
 :root[data-theme="dark"] .hover\:bg-\[\#E5DDD4\]:hover{background-color:var(--line)!important}
@@ -199,6 +213,8 @@
 :root[data-theme="dark"] .hover\:border-\[\#201C19\]\/20:hover{border-color:rgba(158,233,57,.4)!important}
 :root[data-theme="dark"] .hover\:border-\[\#FFC9B6\]:hover{border-color:rgba(255,180,171,.5)!important}
 :root[data-theme="dark"] .hover\:text-\[\#8C2C10\]:hover{color:var(--danger-text)!important}
+:root[data-theme="dark"] .opacity-40:not(svg):not(img):not(canvas):not(i):not(.animate-pulse):not(:disabled):not([aria-disabled="true"]).hover\:opacity-100:hover{opacity:1!important}
+:root[data-theme="dark"] .opacity-50:not(svg):not(img):not(canvas):not(i):not(.animate-pulse):not(:disabled):not([aria-disabled="true"]).hover\:opacity-100:hover{opacity:1!important}
 }
 }
 /* END GENERATED theme-tw */

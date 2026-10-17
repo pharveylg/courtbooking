@@ -45,12 +45,17 @@ Object.entries(SURF).forEach(([n, s]) => check(`ink at 0.6 over ${n} >= 4.5 (min
 check('...and over --line (chips/track surfaces) too', T.contrast(T.mix(dark['--line'], INK, OF.floor), dark['--line']) >= 4.5);
 
 section('generated rules (dark-scoped, !important, exemptions in the selector)');
+const nestedCount = OF.nested ? OF.tiers.length + OF.pass.filter((n) => +n < 100).length : 0;
 const rules = block.split(/\r?\n/).filter((l) => /\.opacity-\d+/.test(l) || /:where\(\[style\*="opacity/.test(l));
-check('one rule per tier (' + OF.tiers.length + ') plus one per inline key (' + Object.keys(OF.inline).length + ')', rules.length === OF.tiers.length + Object.keys(OF.inline).length, String(rules.length));
-check('every opacity rule starts with :root[data-theme="dark"], is !important and sets opacity:.6', rules.every((l) => l.startsWith(':root[data-theme="dark"] ') && /\{opacity:\.6!important\}$/.test(l)));
-const tierRules = rules.filter((l) => /\.opacity-\d+/.test(l));
+check('one rule per tier (' + OF.tiers.length + ') plus one per inline key (' + Object.keys(OF.inline).length + ')', rules.length === OF.tiers.length + Object.keys(OF.inline).length + Object.keys(OF.hoverRestore || {}).length + nestedCount, String(rules.length) + ' (+ ' + Object.keys(OF.hoverRestore || {}).length + ' hover-restore rules)');
+const restoreRules = rules.filter((l) => /\.hover\\:opacity-/.test(l));
+const nestedRules = rules.filter((l) => l.includes(' :is(.opacity-'));
+check('every opacity rule starts with :root[data-theme="dark"], is !important; floor rules set opacity:.6, hover-restore rules set the variant\'s own value (1)', rules.every((l) => l.startsWith(':root[data-theme="dark"] ') && (/\{opacity:\.6!important\}$/.test(l) || ((restoreRules.includes(l) || nestedRules.includes(l)) && /\{opacity:1!important\}$/.test(l)))));
+const tierRules = rules.filter((l) => /\.opacity-\d+/.test(l) && !restoreRules.includes(l) && !nestedRules.includes(l));
+check('nested-opacity rules (' + nestedRules.length + '): one per tier and passing tier < 100, each sets the DESCENDANT to 1 (ancestor already >= 0.6) and out-ranks the floor rule (so .6 x .6 never happens)', nestedRules.length === nestedCount && nestedRules.every((l) => { const m = / \.(opacity-\d+):not/.exec(l), base = tierRules.find((t) => t.includes(' .' + m[1] + ':not(')); return !base /* a passing tier has no floor rule to out-rank */ || G.specificity(l.slice(0, l.indexOf('{')))[1] >G.specificity(base.slice(0, base.indexOf('{')))[1]; }));
 check('every tier rule carries the exemptions: svg, img, canvas, i, .animate-pulse, :disabled, [aria-disabled="true"]', tierRules.every((l) => ['svg', 'img', 'canvas', 'i', '.animate-pulse', ':disabled', '[aria-disabled="true"]'].every((x) => l.includes(':not(' + x + ')'))));
-check('no rule touches the passing tiers (60..100), hover:/disabled: variants or the arbitrary decorative opacities', !rules.some((l) => /opacity-(60|65|70|75|80|90|100)\b|hover\\:|disabled\\:|\\\[0/.test(l)));
+check('no rule touches the passing tiers (60..100), hover:/disabled: variants or the arbitrary decorative opacities', !rules.filter((l) => !restoreRules.includes(l) && !nestedRules.includes(l)).some((l) => /opacity-(60|65|70|75|80|90|100)\b|hover\\:|disabled\\:|\\\[0/.test(l)));
+check('hover-restore rules (' + restoreRules.length + '): one per hoverRestore pair, inside @media (hover:hover), and each out-ranks its floor rule (specificity)', restoreRules.length === Object.keys(OF.hoverRestore || {}).length && restoreRules.every((l) => { const base = tierRules.find((t) => l.startsWith(t.slice(0, t.indexOf('{')))); const sp = G.specificity(l.slice(0, l.indexOf('{'))), bp = G.specificity(base.slice(0, base.indexOf('{'))); return sp[1] > bp[1] && block.indexOf('@media (hover:hover){') < block.indexOf(l); }));
 check('inline rules use :where() so picker/queue/account\'s own (0,3,0) [style*="opacity:0.5"] rules still win on those pages', rules.filter((l) => /\[style\*=/.test(l)).every((l) => l.includes(':where(')));
 check('all opacity rules are inside the single @media screen group of the generated block', block.indexOf('@media screen{') < block.indexOf(rules[0]) && !/@media print/.test(block));
 
@@ -123,12 +128,25 @@ const scratch = (extra, file) => {
     return r;
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 };
-check('no customer page has a floored tier + hover/focus/active opacity variant on one element', G.PAGES.every((p) => G.floorTrapSets(read(p), OF.tiers).length === 0), G.PAGES.map((p) => G.floorTrapSets(read(p), OF.tiers).map((s) => p + ':' + s.line)).flat().join(' '));
+const trapOK = (s) => s.pairs.every((pr) => (OF.hoverRestore || {})[pr]);
+check('no customer page has an UNLISTED floored tier + hover/focus/active opacity variant on one element (the listed pairs, all in tournament-admin, get a restoring dark rule)', G.PAGES.every((p) => G.floorTrapSets(read(p), OF.tiers).every(trapOK)), G.PAGES.map((p) => G.floorTrapSets(read(p), OF.tiers).filter((s) => !trapOK(s)).map((s) => p + ':' + s.line)).flat().join(' '));
+check('the listed pairs really occur (' + Object.keys(OF.hoverRestore || {}).join(', ') + ') and nowhere but tournament-admin.html', Object.keys(OF.hoverRestore || {}).every((pr) => G.floorTrapSets(read('tournament-admin.html'), OF.tiers).some((s) => s.pairs.includes(pr))) && G.PAGES.filter((p) => p !== 'tournament-admin.html').every((p) => G.floorTrapSets(read(p), OF.tiers).length === 0));
 const negSets = G.PAGES.reduce((n, p) => n + (read(p).match(/class="[^"]*\bopacity-(?:60|65|70|75|80)\b[^"]*\bhover:opacity-(?:100|90)\b[^"]*"/g) || []).length, 0);
 check('negative case is real: ' + negSets + ' elements today combine a PASSING tier (opacity-60..80) with hover:opacity-100/90 and are allowed', negSets > 0);
 check('unit: opacity-50 + hover:opacity-100 flagged; opacity-70 + hover:opacity-100 allowed; opacity-40 + group-hover: flagged; opacity-50 + disabled:opacity-40 allowed (disabled is exempt from the floor)', [G.floorTrapSets('<div class="opacity-50 hover:opacity-100">', OF.tiers).length > 0, G.floorTrapSets('<div class="opacity-70 hover:opacity-100">', OF.tiers).length === 0, G.floorTrapSets("c='opacity-40 group-hover:opacity-100'", OF.tiers).length > 0, G.floorTrapSets('<div class="opacity-50 disabled:opacity-40">', OF.tiers).length === 0, G.floorTrapSets('<div class="opacity-45 focus:opacity-100 md:hover:opacity-90">', OF.tiers).length > 0].every(Boolean));
-let r1 = scratch('<div class="opacity-50 hover:opacity-100">x</div>');
-check('scratch copy: class="opacity-50 hover:opacity-100" makes --check exit 2 and names the element', r1.status === 2 && /floored tier \+ hover/.test(r1.stdout), 'status ' + r1.status + ' ' + r1.stdout.slice(0, 160));
+let r1 = scratch('<div class="opacity-45 hover:opacity-100">x</div>');
+check('scratch copy: an UNLISTED pair class="opacity-45 hover:opacity-100" makes --check exit 2 and names the element', r1.status === 2 && /floored tier \+ hover/.test(r1.stdout), 'status ' + r1.status + ' ' + r1.stdout.slice(0, 160));
+r1 = scratch('<div class="opacity-50 hover:opacity-100">x</div>');
+check('scratch copy: the LISTED pair opacity-50 + hover:opacity-100 (restored by a dark rule) is accepted (exit 0)', r1.status === 0, 'status ' + r1.status + ' ' + r1.stdout.slice(0, 160));
+check('scratch copy: dropping a hoverRestore entry from the map makes the generator fail for tournament-admin (exit 2)', (() => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'thtw7-'));
+  try {
+    ['theme.css', 'theme-tw-map.json', 'tailwind.css'].concat(G.PAGES).forEach((f) => fs.copyFileSync(path.join(ROOT, f), path.join(dir, f)));
+    const mj = JSON.parse(fs.readFileSync(path.join(dir, 'theme-tw-map.json'), 'utf8')); delete mj.opacityFloor.hoverRestore['opacity-50+hover:opacity-100']; fs.writeFileSync(path.join(dir, 'theme-tw-map.json'), JSON.stringify(mj));
+    const r = cp.spawnSync(process.execPath, [path.join(ROOT, 'scripts', 'gen-theme-tw.js'), '--check'], { env: Object.assign({}, process.env, { THEME_TW_ROOT: dir }), encoding: 'utf8' });
+    return r.status === 2 && /tournament-admin/.test(r.stdout);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+})());
 r1 = scratch('<div class="opacity-70 hover:opacity-100">x</div>');
 check('scratch copy: class="opacity-70 hover:opacity-100" is fine (exit 0)', r1.status === 0, 'status ' + r1.status + ' ' + r1.stdout.slice(0, 160));
 r1 = scratch("<script>const c = 'opacity-30 hover:opacity-100';</script>");

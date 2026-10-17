@@ -14,7 +14,7 @@ function check(name, ok, detail) { if (ok) passed++; else { failed++; console.lo
 const section = (t) => console.log(`\n${t}`);
 const ROOT = path.join(__dirname, '..');
 const read = (f) => fs.readFileSync(path.join(ROOT, f), 'utf8');
-const WIRED = ['index.html', 'store.html', 'tournament.html', 'gallery.html', 'billing.html'];
+const WIRED = ['index.html', 'store.html', 'tournament.html', 'gallery.html', 'billing.html', 'tournament-admin.html'];
 
 const norm = (s) => s.toLowerCase().replace(/\s+/g, '');
 const kebab = (s) => s.replace(/[A-Z]/g, (c) => '-' + c.toLowerCase());

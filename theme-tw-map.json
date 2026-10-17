@@ -1,0 +1,412 @@
+{
+  "_doc": "Dark-mode map for Tailwind colour utilities. Edit this file, then: node scripts/gen-theme-tw.js (see the header of that script). map: token -> dark value (string, or {value, also, tags}); compounds / descendants: same-element and in-element rules; allow: token -> why it is left alone.",
+  "map": {
+    "accent-[#201C19]": "var(--lime)",
+    "bg-[#0055FE]": "#93C5FD",
+    "bg-[#00BE6A]": "#5AEF82",
+    "bg-[#1D4ED8]": "rgba(147,197,253,.14)",
+    "bg-[#201C19]": {
+      "value": "var(--panel)",
+      "tags": {
+        "a,button": "var(--lime)"
+      },
+      "tagAlso": {
+        "a,button": {
+          "color": "var(--on-lime)"
+        }
+      }
+    },
+    "bg-[#201C19]/10": "rgba(218,226,253,.1)",
+    "bg-[#201C19]/40": "var(--scrim)",
+    "bg-[#201C19]/5": "rgba(218,226,253,.05)",
+    "bg-[#201C19]/60": "var(--scrim)",
+    "bg-[#4ADE80]": "#5AEF82",
+    "bg-[#60A5FA]": "#93C5FD",
+    "bg-[#9B8EFF]": "#B9A8FF",
+    "bg-[#B11016]": "#FFB4AB",
+    "bg-[#CFE8B5]": "#5AEF82",
+    "bg-[#D6FF5F]": {
+      "value": "var(--lime)",
+      "also": {
+        "color": "var(--on-lime)"
+      }
+    },
+    "bg-[#D6FF5F]/10": "rgba(132,204,22,.1)",
+    "bg-[#D6FF5F]/15": "rgba(132,204,22,.15)",
+    "bg-[#D6FF5F]/20": "rgba(132,204,22,.2)",
+    "bg-[#D6FF5F]/[0.06]": "rgba(132,204,22,.06)",
+    "bg-[#E8F5D8]": "rgba(90,239,130,.12)",
+    "bg-[#E9DDD0]": "var(--line)",
+    "bg-[#EAE0D5]": "var(--line)",
+    "bg-[#EDE8FF]": "rgba(185,168,255,.14)",
+    "bg-[#F1E9DF]": "var(--sand)",
+    "bg-[#F3FAEA]": "rgba(90,239,130,.08)",
+    "bg-[#F7F1EA]": "var(--sand)",
+    "bg-[#F87171]": "#FFB4AB",
+    "bg-[#FBBF24]": "#FBBF24",
+    "bg-[#FBFFEF]": "rgba(132,204,22,.1)",
+    "bg-[#FDBA74]": "#FBBF24",
+    "bg-[#FF8A5B]": "#FFB4AB",
+    "bg-[#FF8A5B]/20": "rgba(255,180,171,.2)",
+    "bg-[#FFE0A3]": "rgba(251,191,36,.2)",
+    "bg-[#FFE0D1]": "rgba(255,180,171,.14)",
+    "bg-[#FFE9E0]": "rgba(255,180,171,.14)",
+    "bg-[#FFF0D6]": "rgba(251,191,36,.14)",
+    "bg-[#FFF3D6]": "rgba(251,191,36,.14)",
+    "bg-[#FFF8F0]": "rgba(251,191,36,.08)",
+    "bg-[#FFFBF5]": "var(--cream)",
+    "bg-[#FFFBF5]/90": "rgba(11,19,38,.9)",
+    "bg-[#FFFDF0]": "rgba(251,191,36,.08)",
+    "bg-white": "var(--card)",
+    "bg-white/90": "rgba(23,31,51,.9)",
+    "border-[#201C19]": {
+      "value": "var(--control-border)",
+      "tags": {
+        "a,button": "var(--lime)"
+      }
+    },
+    "border-[#201C19]/10": "var(--line)",
+    "border-[#201C19]/15": "var(--line)",
+    "border-[#201C19]/20": "var(--line)",
+    "border-[#4ADE80]": "#5AEF82",
+    "border-[#CFE8B5]": "rgba(90,239,130,.3)",
+    "border-[#D6FF5F]": "var(--lime)",
+    "border-[#D8D0FF]": "rgba(185,168,255,.3)",
+    "border-[#E9DDD0]": "var(--line)",
+    "border-[#EAE0D5]": {
+      "value": "var(--line)",
+      "tags": {
+        "input,select,textarea": "var(--control-border)"
+      }
+    },
+    "border-[#F1E9DF]": "var(--line)",
+    "border-[#F2D58A]": "rgba(251,191,36,.35)",
+    "border-[#F5EDE4]": "var(--line)",
+    "border-[#FF8A5B]": "#FFB4AB",
+    "border-[#FF8A5B]/30": "rgba(255,180,171,.3)",
+    "border-[#FFC9B6]": "rgba(255,180,171,.35)",
+    "border-[#FFE0A3]": "rgba(251,191,36,.35)",
+    "divide-[#F5EDE4]": "var(--line)",
+    "file:bg-[#201C19]": "var(--lime)",
+    "file:text-white": "var(--on-lime)",
+    "focus:bg-white": "var(--card)",
+    "focus:border-[#201C19]": "var(--lime-text)",
+    "focus:border-[#D6FF5F]": "var(--lime-text)",
+    "focus:text-[#201C19]": "var(--ink)",
+    "hover:bg-[#201C19]": {
+      "value": "var(--lime)",
+      "also": {
+        "color": "var(--on-lime)"
+      }
+    },
+    "hover:bg-[#CBF052]": "var(--lime-text)",
+    "hover:bg-[#D6FF5F]": {
+      "value": "var(--lime)",
+      "also": {
+        "color": "var(--on-lime)"
+      }
+    },
+    "hover:bg-[#E5DDD4]": "var(--line)",
+    "hover:bg-[#F1E9DF]": "var(--line)",
+    "hover:bg-[#FFD7C7]": "rgba(255,180,171,.24)",
+    "hover:bg-[#FFE9E0]": "rgba(255,180,171,.14)",
+    "hover:bg-[#FFFBF5]": "var(--sand)",
+    "hover:border-[#201C19]": "var(--lime-text)",
+    "hover:border-[#201C19]/20": "rgba(158,233,57,.4)",
+    "hover:border-[#D6FF5F]": "var(--lime-text)",
+    "hover:border-[#FFC9B6]": "rgba(255,180,171,.5)",
+    "hover:text-[#201C19]": "var(--on-lime)",
+    "hover:text-[#8C2C10]": "var(--danger-text)",
+    "hover:text-[#D6FF5F]": "var(--lime-text)",
+    "peer-checked:bg-[#201C19]": "var(--lime)",
+    "placeholder:text-white/40": "rgba(255,255,255,.6)",
+    "ring-[#201C19]": "var(--lime-text)",
+    "ring-[#D6FF5F]": "var(--lime-text)",
+    "selection:bg-[#D6FF5F]": {
+      "value": "var(--lime)",
+      "also": {
+        "color": "var(--on-lime)"
+      }
+    },
+    "text-[#15803D]": "#5AEF82",
+    "text-[#166534]": "#5AEF82",
+    "text-[#201C19]": "var(--ink)",
+    "text-[#201C19]/50": "var(--muted)",
+    "text-[#201C19]/60": "var(--muted)",
+    "text-[#201C19]/70": "var(--muted)",
+    "text-[#201C19]/80": "var(--ink)",
+    "text-[#3B2A9E]": "#CFC4FF",
+    "text-[#3F7019]": "#5AEF82",
+    "text-[#4ADE80]": "#5AEF82",
+    "text-[#4C1D95]": "#CFC4FF",
+    "text-[#5B21B6]": "#CFC4FF",
+    "text-[#7A2E1A]": "var(--danger-text)",
+    "text-[#8A5A00]": "#FCD34D",
+    "text-[#8C2C10]": "var(--danger-text)",
+    "text-[#8C2C10]/80": "var(--danger-text)",
+    "text-[#92400E]": "#FCD34D",
+    "text-[#9A3412]": "var(--danger-text)",
+    "text-[#B91C1C]": "var(--danger-text)",
+    "text-[#D6FF5F]": "var(--lime-text)",
+    "text-[#FF8A5B]": "#FFB4AB",
+    "text-[#FFFBF5]": "var(--on-panel)",
+    "text-black": "var(--ink)",
+    "text-white/40": "rgba(255,255,255,.6)",
+    "text-white/60": "rgba(255,255,255,.72)"
+  },
+  "compounds": [
+    {
+      "id": "primary-white",
+      "when": [
+        "bg-[#201C19]",
+        "text-white"
+      ],
+      "tag": "a,button",
+      "decls": {
+        "color": "var(--on-lime)"
+      },
+      "why": "primary button became lime: text must be on-lime"
+    },
+    {
+      "id": "primary-limetext",
+      "when": [
+        "bg-[#201C19]",
+        "text-[#D6FF5F]"
+      ],
+      "tag": "a,button",
+      "decls": {
+        "color": "var(--on-lime)"
+      },
+      "why": "primary button became lime: lime text would vanish"
+    },
+    {
+      "id": "primary-border",
+      "when": [
+        "bg-[#201C19]",
+        "border-[#EAE0D5]"
+      ],
+      "tag": "a,button",
+      "decls": {
+        "border-color": "var(--lime)"
+      },
+      "why": "primary button border follows the fill"
+    },
+    {
+      "id": "lime-ink",
+      "when": [
+        "bg-[#D6FF5F]",
+        "text-[#201C19]"
+      ],
+      "decls": {
+        "color": "var(--on-lime)"
+      },
+      "why": "lime fill: ink text becomes on-lime"
+    },
+    {
+      "id": "peach-solid-white",
+      "when": [
+        "bg-[#FF8A5B]",
+        "text-white"
+      ],
+      "decls": {
+        "color": "var(--on-lime)"
+      },
+      "why": "solid light peach fill needs dark text"
+    },
+    {
+      "id": "peach-solid-ink",
+      "when": [
+        "bg-[#FF8A5B]",
+        "text-[#201C19]"
+      ],
+      "decls": {
+        "color": "var(--on-lime)"
+      },
+      "why": "solid light peach fill needs dark text"
+    },
+    {
+      "id": "paid-chip-text",
+      "when": [
+        "bg-[#1D4ED8]",
+        "text-white"
+      ],
+      "decls": {
+        "color": "#BFDBFE"
+      },
+      "why": "PAID chip: blue tint, light blue text"
+    },
+    {
+      "id": "progress-fill",
+      "when": [
+        "bg-[#201C19]",
+        "h-full",
+        "rounded-full"
+      ],
+      "decls": {
+        "background-color": "var(--lime)"
+      },
+      "why": "win-rate bar fill: panel == sand track in dark, lime reads"
+    },
+    {
+      "id": "reserved-dot",
+      "when": [
+        "bg-[#201C19]",
+        "w-2",
+        "h-2"
+      ],
+      "decls": {
+        "background-color": "var(--ink)"
+      },
+      "why": "legend dot: panel would vanish on the card"
+    },
+    {
+      "id": "toast-ring-25",
+      "when": [
+        "bg-[#201C19]",
+        "text-white",
+        "shadow-[0_12px_30px_rgba(0,0,0,0.25)]"
+      ],
+      "decls": {
+        "box-shadow": "0 0 0 1px var(--line),0 12px 30px rgba(0,0,0,.5)"
+      },
+      "why": "toast: --panel is within 1.4:1 of the page, a hairline keeps its edge"
+    },
+    {
+      "id": "toast-ring-30",
+      "when": [
+        "bg-[#201C19]",
+        "text-white",
+        "shadow-[0_12px_30px_rgba(0,0,0,0.3)]"
+      ],
+      "decls": {
+        "box-shadow": "0 0 0 1px var(--line),0 12px 30px rgba(0,0,0,.5)"
+      },
+      "why": "cart bar: same as toast"
+    },
+    {
+      "id": "install-banner-ring",
+      "when": [
+        "bg-[#201C19]",
+        "text-white",
+        "shadow-[0_8px_32px_rgba(0,0,0,0.3)]"
+      ],
+      "decls": {
+        "box-shadow": "0 0 0 1px var(--line),0 8px 32px rgba(0,0,0,.5)"
+      },
+      "why": "PWA install banner: --panel is within 1.4:1 of the page, a hairline keeps its edge"
+    }
+  ],
+  "descendants": [
+    {
+      "id": "primary-kid-white",
+      "within": {
+        "tag": "a,button",
+        "classes": [
+          "bg-[#201C19]"
+        ]
+      },
+      "target": [
+        "text-white",
+        "text-[#D6FF5F]"
+      ],
+      "decls": {
+        "color": "var(--on-lime)"
+      },
+      "why": "text inside a primary (lime) button"
+    },
+    {
+      "id": "primary-kid-dots",
+      "within": {
+        "tag": "a,button",
+        "classes": [
+          "bg-[#201C19]"
+        ]
+      },
+      "target": [
+        "bg-[#0055FE]",
+        "bg-[#00BE6A]",
+        "bg-[#B11016]"
+      ],
+      "decls": {
+        "background-color": "var(--on-lime)"
+      },
+      "why": "payment-channel dot inside the active (lime) admin QR tab: the light-blue/green/peach dot tints would vanish on lime"
+    }
+  ],
+  "allow": {
+    "after:bg-white": "toggle knob stays white on both track colours",
+    "after:border-gray-300": "toggle knob border",
+    "bg-[#08111F]": "tournament live-viewer overlay: fixed navy surface, already dark in both themes",
+    "bg-[#101D30]": "tournament live-viewer overlay: navy panel",
+    "bg-[#18181B]": "index brand tile (zinc) with its own literal text pair",
+    "bg-[#FAFAFA]": "index brand tile (light zinc) with its own literal text pair",
+    "bg-red-500/20": "tailwind palette red tint over the dark panel (index admin error)",
+    "bg-transparent": "transparent",
+    "bg-white/10": "translucent white lift over an already-dark panel",
+    "bg-white/15": "translucent white lift over an already-dark panel",
+    "bg-white/20": "translucent white lift over an already-dark panel",
+    "bg-white/5": "translucent white lift over an already-dark panel",
+    "bg-white/[0.03]": "translucent white lift over an already-dark panel",
+    "border-[#27405E]": "tournament live-viewer overlay: navy hairline",
+    "border-t-transparent": "transparent spinner edge",
+    "border-transparent": "transparent",
+    "border-white/10": "translucent white hairline on dark panel",
+    "border-white/15": "translucent white hairline on dark panel",
+    "border-white/30": "translucent white hairline on dark panel",
+    "border-white/40": "white ring around brand dots on any surface",
+    "border-white/5": "translucent white hairline on dark panel",
+    "focus:bg-white/10": "translucent white lift over an already-dark panel",
+    "hover:bg-white/20": "translucent white lift over an already-dark panel",
+    "hover:text-white": "hover text on dark panels / on the lime hover fill rule above",
+    "peer-checked:after:border-white": "toggle knob border stays white",
+    "text-[#18181B]": "index brand tile (zinc) with its own literal bg pair",
+    "text-[#E4E4E7]": "index brand tile text on #18181B",
+    "text-[#F4E7D0]": "tournament live-viewer overlay: warm text on the navy surface",
+    "text-[#FAFAFA]": "index brand tile text on #18181B",
+    "text-red-300": "light red on dark panel",
+    "text-red-400": "light red on dark panel",
+    "text-white": "stays light: on dark panels it is already right; where the fill becomes a light colour a compound rule below sets on-lime text",
+    "text-white/50": "translucent white on dark panel (4.77:1 on --panel)",
+    "text-white/80": "translucent white on dark panel",
+    "text-white/[0.06]": "decorative ghost glyph on an already-dark panel (6% white, not readable text)"
+  },
+  "inline": {
+    "background:#E5DDD4": "page <style> scrollbar thumb; recoloured by the ::-webkit-scrollbar-thumb rule in theme.css extras",
+    "border:#EAE0D5": "'Powered by DulaHQ' pill border; recoloured (border-color) by the .dula-credit pill rule in theme.css extras",
+    "color:#D6FF5F": "pill logo circle (recoloured by the .dula-credit circle rule) and tournament rank disc (#201C19 disc + lime text, 14:1, intentionally kept)",
+    "index.html|background:#F3ECE3": "page <style> .range-track stripe; recoloured by the .range-track rule in theme.css extras",
+    "index.html|background:#FFFBF5": "#loadingScreen inline background; recoloured by the #loadingScreen id rule in theme.css extras",
+    "index.html|background:#0055FE": "static default of #payChannelIcon (JS replaces it with the channel colour); both tinted by the #payChannelIcon id rule",
+    "index.html|background:rgba(255,255,255,0.07)": "index footer credit pill: translucent white pair designed for the (dark in both themes) footer panel",
+    "index.html|border:rgba(255,255,255,0.22)": "index footer credit pill border on the dark footer panel",
+    "index.html|color:#FFFBF5": "index footer credit pill text on the dark footer panel (cream on --panel, 12:1)",
+    "index.html|#D4D4D8": "client-config theme defaults / _themeBaseHex DATA that feeds applyTheme (and the admin colour editor); these are not painted directly, and the generated dark rules (!important, higher specificity) ignore tenant values",
+    "index.html|#A1A1AA": "client-config theme defaults / _themeBaseHex DATA that feeds applyTheme (and the admin colour editor); these are not painted directly, and the generated dark rules (!important, higher specificity) ignore tenant values",
+    "index.html|#18181B": "client-config theme defaults / _themeBaseHex DATA that feeds applyTheme (and the admin colour editor); these are not painted directly, and the generated dark rules (!important, higher specificity) ignore tenant values",
+    "index.html|#E4E4E7": "client-config theme defaults / _themeBaseHex DATA that feeds applyTheme (and the admin colour editor); these are not painted directly, and the generated dark rules (!important, higher specificity) ignore tenant values",
+    "index.html|#F4F4F5": "client-config theme defaults / _themeBaseHex DATA that feeds applyTheme (and the admin colour editor); these are not painted directly, and the generated dark rules (!important, higher specificity) ignore tenant values",
+    "index.html|#FB923C": "client-config theme defaults / _themeBaseHex DATA that feeds applyTheme (and the admin colour editor); these are not painted directly, and the generated dark rules (!important, higher specificity) ignore tenant values",
+    "index.html|#8B5CF6": "example hex inside a toast message string, not a painted colour",
+    "index.html|#34D399": "client-config theme defaults / _themeBaseHex DATA that feeds applyTheme (and the admin colour editor); these are not painted directly, and the generated dark rules (!important, higher specificity) ignore tenant values",
+    "index.html|#FBBF24": "client-config theme defaults / _themeBaseHex DATA that feeds applyTheme (and the admin colour editor); these are not painted directly, and the generated dark rules (!important, higher specificity) ignore tenant values",
+    "index.html|#CBF052": "client-config theme defaults / _themeBaseHex DATA that feeds applyTheme (and the admin colour editor); these are not painted directly, and the generated dark rules (!important, higher specificity) ignore tenant values",
+    "index.html|#EAE0D5": "client-config theme defaults / _themeBaseHex DATA that feeds applyTheme (and the admin colour editor); these are not painted directly, and the generated dark rules (!important, higher specificity) ignore tenant values",
+    "index.html|#F5EDE4": "client-config theme defaults / _themeBaseHex DATA that feeds applyTheme (and the admin colour editor); these are not painted directly, and the generated dark rules (!important, higher specificity) ignore tenant values",
+    "index.html|background:#FAFAFA": "client-config theme default (bg: ...) fed to applyTheme; not painted directly (dark ignores tenant theme)",
+    "index.html|background:#F87171": "JS-set closed-state dot; recoloured by the #footOpenDot/#homeOpenDot attribute rules",
+    "index.html|background:#4ADE80": "JS-set open dot / back-online bar; recoloured by the #homeOpenDot and #pwa-offline-bar rules",
+    "index.html|#0055FE": "generateFallbackSVG(): the QR SVG paints its own white rect and brand logo square, deliberately theme-independent",
+    "index.html|#00BE6A": "generateFallbackSVG(): the QR SVG paints its own white rect and brand logo square, deliberately theme-independent",
+    "index.html|#B11016": "generateFallbackSVG(): the QR SVG paints its own white rect and brand logo square, deliberately theme-independent",
+    "index.html|#EBF2FF": "generateFallbackSVG(): the QR SVG paints its own white rect and brand logo square, deliberately theme-independent",
+    "index.html|#E8FBF2": "generateFallbackSVG(): the QR SVG paints its own white rect and brand logo square, deliberately theme-independent",
+    "index.html|#FDF2F3": "generateFallbackSVG(): the QR SVG paints its own white rect and brand logo square, deliberately theme-independent",
+    "index.html|border:#201C19": "winner-PDF print window document (its own light document, never themed)",
+    "index.html|border-bottom:#EEE": "winner-PDF print window document (its own light document, never themed)",
+    "index.html|#FFFBF5": "generateFallbackSVG() default `light` swatch (unused fill in the theme-independent QR SVG)"
+  },
+  "notes": {
+    "hover:text-[#201C19]": "maps to on-lime and is only safe on an element whose hover fill is lime (hover:bg-[#D6FF5F]); tests/theme-tw-generator.test.js asserts every occurrence has one (index.html only today).",
+    "divide-[#F5EDE4]": "the dark divide rule (0,5,0)!important recolours the border of every child it matches; tests/theme-tw-generator.test.js asserts no divide child carries its own border-[hex]."
+  }
+}

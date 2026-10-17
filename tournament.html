@@ -3,6 +3,8 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<meta name="theme-color" content="#FFFBF5"/>
+<script>try{var r=JSON.parse(localStorage.getItem('cb_theme_v1')||'null'),p=r&&r.pref,d=p==='dark'||(p==='system'&&matchMedia('(prefers-color-scheme: dark)').matches),e=document.documentElement;e.setAttribute('data-theme',d?'dark':'light');e.setAttribute('data-theme-pref',p||'light');document.querySelector('meta[name=theme-color]').content=d?'#0B1326':'#FFFBF5'}catch(x){}</script>
 <title>Tournament</title>
 <link rel="stylesheet" href="tailwind.css">
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
@@ -21,6 +23,9 @@
 .no-scrollbar::-webkit-scrollbar{display:none}
 .no-scrollbar{-ms-overflow-style:none;scrollbar-width:none}
 </style>
+<link rel="stylesheet" href="theme.css"/>
+<script src="/theme.js"></script>
+<script>CBTheme.init();</script>
 </head>
 <body class="bg-[#FFFBF5] text-[#201C19] antialiased">
 

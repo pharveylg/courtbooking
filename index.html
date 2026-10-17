@@ -4,6 +4,7 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <meta name="theme-color" content="#FFFBF5"/>
+<script>try{var r=JSON.parse(localStorage.getItem('cb_theme_v1')||'null'),p=r&&r.pref,d=p==='dark'||(p==='system'&&matchMedia('(prefers-color-scheme: dark)').matches),e=document.documentElement;e.setAttribute('data-theme',d?'dark':'light');e.setAttribute('data-theme-pref',p||'light');document.querySelector('meta[name=theme-color]').content=d?'#0B1326':'#FFFBF5'}catch(x){}</script>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
 <meta name="apple-mobile-web-app-title" content="CourtBook"/>
@@ -46,6 +47,8 @@ body:not(.staff-mode) .staff-link{display:none!important}
   .court-column .mono { font-size: 10px; }
 }
 </style>
+<link rel="stylesheet" href="theme.css"/>
+<script src="/theme.js"></script>
 </head>
 <body class="bg-[#FFFBF5] text-[#201C19] antialiased selection:bg-[#D6FF5F]">
 
@@ -191,6 +194,7 @@ body:not(.staff-mode) .staff-link{display:none!important}
           </button>
           <button data-nav="admin" class="nav-btn admin-only-tab hidden px-5 h-8 rounded-full text-[13px] font-[550] opacity-70 hover:opacity-100 transition">Admin</button>
         </nav>
+        <button type="button" class="cb-theme-btn cb-theme-btn--32 shadow-xs shrink-0 cursor-pointer" data-cb-theme-toggle aria-label="Dark mode" aria-pressed="false" title="Dark mode"><svg class="cb-ico-moon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg><svg class="cb-ico-sun" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></button>
         <button id="headerAdminToggle" title="Staff / Admin Access" class="flex items-center justify-center gap-1.5 px-3.5 h-8 rounded-full bg-white border border-[#EAE0D5] hover:border-[#201C19] text-[12px] font-[700] transition shrink-0 cursor-pointer shadow-xs">
           <span id="headerAdminIcon" class="grid place-items-center"><svg id="headerAdminSvg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span>
           <span id="headerAdminText" class="hidden sm:inline">Staff</span>
@@ -272,6 +276,7 @@ body:not(.staff-mode) .staff-link{display:none!important}
         <div class="mono text-[10px] uppercase tracking-widest opacity-50 mb-2">Also here</div>
         <div id="homeTiles" class="grid grid-cols-1 sm:grid-cols-2 gap-2"></div>
         <div class="dula-credit" style="display:flex;justify-content:center;padding:22px 0 4px"><span style="display:inline-flex;align-items:center;gap:8px;height:38px;padding:0 18px 0 6px;border-radius:999px;background:#ffffff;border:1px solid #EAE0D5;font:500 12.5px 'JetBrains Mono',ui-monospace,monospace;color:#201C19"><span aria-hidden="true" style="width:26px;height:26px;border-radius:50%;background:#201C19;color:#D6FF5F;display:grid;place-items:center;font:900 12px 'Bricolage Grotesque',system-ui,sans-serif">D</span><span>Powered by <a href="https://dulahq.app" target="_blank" rel="noopener" style="font-weight:800;color:inherit;text-decoration:underline;text-underline-offset:3px">DulaHQ</a></span></span></div>
+        <div class="flex justify-center md:hidden pb-2"><button type="button" class="cb-theme-btn cb-theme-btn--foot" data-cb-theme-toggle aria-label="Dark mode" aria-pressed="false" title="Dark mode"><svg class="cb-ico-moon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg><svg class="cb-ico-sun" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></button></div>
       </div>
     </div>
   </section>
@@ -1528,6 +1533,7 @@ body:not(.staff-mode) .staff-link{display:none!important}
               <div class="mt-5 pt-5 border-t border-[#EAE0D5] first:mt-0 first:pt-0 first:border-t-0">
                 <div class="font-[750] text-[14px]">Color Theme</div>
                 <div class="mono text-[11px] opacity-60 mt-1">Sets the accent, header/nav, page background, and border colors site-wide.</div>
+                <div class="mono text-[11px] opacity-60 mt-1">Dark mode ignores these colors (fixed palette).</div>
                 <div class="mt-3.5 grid grid-cols-2 md:grid-cols-4 gap-3">
                   <label class="flex flex-col gap-1.5">
                     <span class="mono text-[10px] uppercase tracking-widest opacity-60">Primary Accent</span>
@@ -4557,7 +4563,7 @@ function renderPinStatus(){
   box.textContent = '';
   if(!latRaw && !lngRaw){ box.textContent = 'No pin set. "Find us" will search the address instead.'; return; }
   const p = parseMapInput(latRaw + ', ' + lngRaw);
-  if(!p || p.short){ box.style.color = '#8C2C10'; box.textContent = 'Enter both numbers: latitude between -90 and 90, longitude between -180 and 180.'; return; }
+  if(!p || p.short){ box.style.color = 'var(--danger-text,#8C2C10)'; box.textContent = 'Enter both numbers: latitude between -90 and 90, longitude between -180 and 180.'; return; }
   box.style.color = '';
   box.appendChild(document.createTextNode('Pin: ' + p.lat + ', ' + p.lng + ' · '));
   const a = document.createElement('a'); a.href = mapPinUrl(p); a.target = '_blank'; a.rel = 'noopener noreferrer'; a.className = 'underline font-[700]'; a.textContent = 'Check it on Google Maps';
@@ -4571,11 +4577,11 @@ function setPinFields(p){
 }
 document.getElementById('bizUseLocationBtn')?.addEventListener('click', () => {
   const box = document.getElementById('bizPinStatus');
-  if(!navigator.geolocation){ box.style.color = '#8C2C10'; box.textContent = "This browser can't share its location. Paste a Google Maps link or type the coordinates instead."; return; }
+  if(!navigator.geolocation){ box.style.color = 'var(--danger-text,#8C2C10)'; box.textContent = "This browser can't share its location. Paste a Google Maps link or type the coordinates instead."; return; }
   box.style.color = ''; box.textContent = 'Getting your location…';
   navigator.geolocation.getCurrentPosition(
     (pos) => setPinFields({ lat: round6(pos.coords.latitude), lng: round6(pos.coords.longitude) }),
-    () => { box.style.color = '#8C2C10'; box.textContent = "Couldn't get your location (permission denied or unavailable). Paste a Google Maps link or type the coordinates instead."; },
+    () => { box.style.color = 'var(--danger-text,#8C2C10)'; box.textContent = "Couldn't get your location (permission denied or unavailable). Paste a Google Maps link or type the coordinates instead."; },
     { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 });
 });
 document.getElementById('bizMapLinkInput')?.addEventListener('input', (e) => {
@@ -4583,7 +4589,7 @@ document.getElementById('bizMapLinkInput')?.addEventListener('input', (e) => {
   if(!v) return;
   const p = parseMapInput(v), box = document.getElementById('bizPinStatus');
   if(p && !p.short){ setPinFields(p); return; }
-  box.style.color = '#8C2C10';
+  box.style.color = 'var(--danger-text,#8C2C10)';
   box.textContent = p && p.short
     ? "That's a short Google Maps link, which can't be read here. Open it, then copy the long address from the browser's address bar, or right-click the spot in Google Maps and copy the coordinates."
     : "Couldn't find coordinates in that. Paste a Google Maps link that contains them, or coordinates like 14.5547, 121.0244.";
@@ -9324,7 +9330,7 @@ document.getElementById('modalGoUpload')?.addEventListener('click', () => {
     if (offlineBar) {
       offlineBar.textContent = '✓ Back online — syncing changes...';
       offlineBar.style.background = '#4ADE80';
-      offlineBar.style.color = '#201C19';
+      offlineBar.style.color = 'var(--on-lime,#201C19)';
       offlineBar.style.display = '';
       offlineBar.classList.remove('hidden');
       setTimeout(() => {
@@ -9414,5 +9420,6 @@ document.getElementById('modalGoUpload')?.addEventListener('click', () => {
 
 })();
 </script>
+<script>CBTheme.init();</script>
 </body>
 </html>

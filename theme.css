@@ -6,7 +6,10 @@
    NOTE on caching: firebase.json sends Cache-Control: no-cache for theme.*, but
    that only affects HTTP revalidation. sw.js serves .css cache-first, so every
    edit to this file needs a CACHE_NAME bump in sw.js (same as tailwind.css).
-   Do NOT put dark rules in motion.css or tailwind.css (immutable-cached). */
+   Do NOT put dark rules in motion.css or tailwind.css (immutable-cached).
+   Tailwind colour utilities (bg-[#201C19], hover:border-[#201C19] ...) are overridden by the
+   GENERATED theme-tw block below (edit theme-tw-map.json, run scripts/gen-theme-tw.js; see
+   ARCHITECTURE.md); the HAND-WRITTEN theme-tw-extras section after it is edited by hand. */
 
 :root { color-scheme: light; }
 
@@ -54,6 +57,201 @@
   }
 }
 
+/* BEGIN GENERATED theme-tw */
+/* Generated from theme-tw-map.json by scripts/gen-theme-tw.js -- do not edit by hand; run: node scripts/gen-theme-tw.js */
+@media screen{
+:root[data-theme="dark"] .accent-\[\#201C19\]{accent-color:var(--lime)!important}
+:root[data-theme="dark"] .bg-\[\#0055FE\]{background-color:#93C5FD!important}
+:root[data-theme="dark"] .bg-\[\#00BE6A\]{background-color:#5AEF82!important}
+:root[data-theme="dark"] .bg-\[\#1D4ED8\]{background-color:rgba(147,197,253,.14)!important}
+:root[data-theme="dark"] .bg-\[\#201C19\]{background-color:var(--panel)!important}
+:root[data-theme="dark"] .bg-\[\#201C19\]\/10{background-color:rgba(218,226,253,.1)!important}
+:root[data-theme="dark"] .bg-\[\#201C19\]\/40{background-color:var(--scrim)!important}
+:root[data-theme="dark"] .bg-\[\#201C19\]\/5{background-color:rgba(218,226,253,.05)!important}
+:root[data-theme="dark"] .bg-\[\#201C19\]\/60{background-color:var(--scrim)!important}
+:root[data-theme="dark"] .bg-\[\#4ADE80\]{background-color:#5AEF82!important}
+:root[data-theme="dark"] .bg-\[\#60A5FA\]{background-color:#93C5FD!important}
+:root[data-theme="dark"] .bg-\[\#9B8EFF\]{background-color:#B9A8FF!important}
+:root[data-theme="dark"] .bg-\[\#B11016\]{background-color:#FFB4AB!important}
+:root[data-theme="dark"] .bg-\[\#CFE8B5\]{background-color:#5AEF82!important}
+:root[data-theme="dark"] .bg-\[\#D6FF5F\]{background-color:var(--lime)!important;color:var(--on-lime)!important}
+:root[data-theme="dark"] .bg-\[\#D6FF5F\]\/10{background-color:rgba(132,204,22,.1)!important}
+:root[data-theme="dark"] .bg-\[\#D6FF5F\]\/15{background-color:rgba(132,204,22,.15)!important}
+:root[data-theme="dark"] .bg-\[\#D6FF5F\]\/20{background-color:rgba(132,204,22,.2)!important}
+:root[data-theme="dark"] .bg-\[\#D6FF5F\]\/\[0\.06\]{background-color:rgba(132,204,22,.06)!important}
+:root[data-theme="dark"] .bg-\[\#E8F5D8\]{background-color:rgba(90,239,130,.12)!important}
+:root[data-theme="dark"] .bg-\[\#E9DDD0\]{background-color:var(--line)!important}
+:root[data-theme="dark"] .bg-\[\#EAE0D5\]{background-color:var(--line)!important}
+:root[data-theme="dark"] .bg-\[\#EDE8FF\]{background-color:rgba(185,168,255,.14)!important}
+:root[data-theme="dark"] .bg-\[\#F1E9DF\]{background-color:var(--sand)!important}
+:root[data-theme="dark"] .bg-\[\#F3FAEA\]{background-color:rgba(90,239,130,.08)!important}
+:root[data-theme="dark"] .bg-\[\#F7F1EA\]{background-color:var(--sand)!important}
+:root[data-theme="dark"] .bg-\[\#F87171\]{background-color:#FFB4AB!important}
+:root[data-theme="dark"] .bg-\[\#FBBF24\]{background-color:#FBBF24!important}
+:root[data-theme="dark"] .bg-\[\#FBFFEF\]{background-color:rgba(132,204,22,.1)!important}
+:root[data-theme="dark"] .bg-\[\#FDBA74\]{background-color:#FBBF24!important}
+:root[data-theme="dark"] .bg-\[\#FF8A5B\]{background-color:#FFB4AB!important}
+:root[data-theme="dark"] .bg-\[\#FF8A5B\]\/20{background-color:rgba(255,180,171,.2)!important}
+:root[data-theme="dark"] .bg-\[\#FFE0A3\]{background-color:rgba(251,191,36,.2)!important}
+:root[data-theme="dark"] .bg-\[\#FFE0D1\]{background-color:rgba(255,180,171,.14)!important}
+:root[data-theme="dark"] .bg-\[\#FFE9E0\]{background-color:rgba(255,180,171,.14)!important}
+:root[data-theme="dark"] .bg-\[\#FFF0D6\]{background-color:rgba(251,191,36,.14)!important}
+:root[data-theme="dark"] .bg-\[\#FFF3D6\]{background-color:rgba(251,191,36,.14)!important}
+:root[data-theme="dark"] .bg-\[\#FFF8F0\]{background-color:rgba(251,191,36,.08)!important}
+:root[data-theme="dark"] .bg-\[\#FFFBF5\]{background-color:var(--cream)!important}
+:root[data-theme="dark"] .bg-\[\#FFFBF5\]\/90{background-color:rgba(11,19,38,.9)!important}
+:root[data-theme="dark"] .bg-\[\#FFFDF0\]{background-color:rgba(251,191,36,.08)!important}
+:root[data-theme="dark"] .bg-white{background-color:var(--card)!important}
+:root[data-theme="dark"] .bg-white\/90{background-color:rgba(23,31,51,.9)!important}
+:root[data-theme="dark"] .border-\[\#201C19\]{border-color:var(--control-border)!important}
+:root[data-theme="dark"] .border-\[\#201C19\]\/10{border-color:var(--line)!important}
+:root[data-theme="dark"] .border-\[\#201C19\]\/15{border-color:var(--line)!important}
+:root[data-theme="dark"] .border-\[\#201C19\]\/20{border-color:var(--line)!important}
+:root[data-theme="dark"] .border-\[\#4ADE80\]{border-color:#5AEF82!important}
+:root[data-theme="dark"] .border-\[\#CFE8B5\]{border-color:rgba(90,239,130,.3)!important}
+:root[data-theme="dark"] .border-\[\#D6FF5F\]{border-color:var(--lime)!important}
+:root[data-theme="dark"] .border-\[\#D8D0FF\]{border-color:rgba(185,168,255,.3)!important}
+:root[data-theme="dark"] .border-\[\#E9DDD0\]{border-color:var(--line)!important}
+:root[data-theme="dark"] .border-\[\#EAE0D5\]{border-color:var(--line)!important}
+:root[data-theme="dark"] .border-\[\#F1E9DF\]{border-color:var(--line)!important}
+:root[data-theme="dark"] .border-\[\#F2D58A\]{border-color:rgba(251,191,36,.35)!important}
+:root[data-theme="dark"] .border-\[\#F5EDE4\]{border-color:var(--line)!important}
+:root[data-theme="dark"] .border-\[\#FF8A5B\]{border-color:#FFB4AB!important}
+:root[data-theme="dark"] .border-\[\#FF8A5B\]\/30{border-color:rgba(255,180,171,.3)!important}
+:root[data-theme="dark"] .border-\[\#FFC9B6\]{border-color:rgba(255,180,171,.35)!important}
+:root[data-theme="dark"] .border-\[\#FFE0A3\]{border-color:rgba(251,191,36,.35)!important}
+:root[data-theme="dark"] .ring-\[\#201C19\]{--tw-ring-color:var(--lime-text)!important}
+:root[data-theme="dark"] .ring-\[\#D6FF5F\]{--tw-ring-color:var(--lime-text)!important}
+:root[data-theme="dark"] .text-\[\#15803D\]{color:#5AEF82!important}
+:root[data-theme="dark"] .text-\[\#166534\]{color:#5AEF82!important}
+:root[data-theme="dark"] .text-\[\#201C19\]{color:var(--ink)!important}
+:root[data-theme="dark"] .text-\[\#201C19\]\/50{color:var(--muted)!important}
+:root[data-theme="dark"] .text-\[\#201C19\]\/60{color:var(--muted)!important}
+:root[data-theme="dark"] .text-\[\#201C19\]\/70{color:var(--muted)!important}
+:root[data-theme="dark"] .text-\[\#201C19\]\/80{color:var(--ink)!important}
+:root[data-theme="dark"] .text-\[\#3B2A9E\]{color:#CFC4FF!important}
+:root[data-theme="dark"] .text-\[\#3F7019\]{color:#5AEF82!important}
+:root[data-theme="dark"] .text-\[\#4ADE80\]{color:#5AEF82!important}
+:root[data-theme="dark"] .text-\[\#4C1D95\]{color:#CFC4FF!important}
+:root[data-theme="dark"] .text-\[\#5B21B6\]{color:#CFC4FF!important}
+:root[data-theme="dark"] .text-\[\#7A2E1A\]{color:var(--danger-text)!important}
+:root[data-theme="dark"] .text-\[\#8A5A00\]{color:#FCD34D!important}
+:root[data-theme="dark"] .text-\[\#8C2C10\]{color:var(--danger-text)!important}
+:root[data-theme="dark"] .text-\[\#8C2C10\]\/80{color:var(--danger-text)!important}
+:root[data-theme="dark"] .text-\[\#92400E\]{color:#FCD34D!important}
+:root[data-theme="dark"] .text-\[\#9A3412\]{color:var(--danger-text)!important}
+:root[data-theme="dark"] .text-\[\#B91C1C\]{color:var(--danger-text)!important}
+:root[data-theme="dark"] .text-\[\#D6FF5F\]{color:var(--lime-text)!important}
+:root[data-theme="dark"] .text-\[\#FF8A5B\]{color:#FFB4AB!important}
+:root[data-theme="dark"] .text-\[\#FFFBF5\]{color:var(--on-panel)!important}
+:root[data-theme="dark"] .text-black{color:var(--ink)!important}
+:root[data-theme="dark"] .text-white\/40{color:rgba(255,255,255,.6)!important}
+:root[data-theme="dark"] .text-white\/60{color:rgba(255,255,255,.72)!important}
+:root[data-theme="dark"] .file\:bg-\[\#201C19\]::file-selector-button{background-color:var(--lime)!important}
+:root[data-theme="dark"] .file\:text-white::file-selector-button{color:var(--on-lime)!important}
+:root[data-theme="dark"] .placeholder\:text-white\/40::placeholder{color:rgba(255,255,255,.6)!important}
+:root[data-theme="dark"] .selection\:bg-\[\#D6FF5F\] ::selection{background-color:var(--lime)!important;color:var(--on-lime)!important}
+:root[data-theme="dark"] .selection\:bg-\[\#D6FF5F\]::selection{background-color:var(--lime)!important;color:var(--on-lime)!important}
+:root[data-theme="dark"] a.bg-\[\#201C19\],:root[data-theme="dark"] button.bg-\[\#201C19\]{background-color:var(--lime)!important;color:var(--on-lime)!important}
+:root[data-theme="dark"] a.border-\[\#201C19\],:root[data-theme="dark"] button.border-\[\#201C19\]{border-color:var(--lime)!important}
+:root[data-theme="dark"] input.border-\[\#EAE0D5\],:root[data-theme="dark"] select.border-\[\#EAE0D5\],:root[data-theme="dark"] textarea.border-\[\#EAE0D5\]{border-color:var(--control-border)!important}
+:root[data-theme="dark"] .bg-\[\#1D4ED8\].text-white{color:#BFDBFE!important}
+:root[data-theme="dark"] .bg-\[\#D6FF5F\].text-\[\#201C19\]{color:var(--on-lime)!important}
+:root[data-theme="dark"] .bg-\[\#FF8A5B\].text-\[\#201C19\]{color:var(--on-lime)!important}
+:root[data-theme="dark"] .bg-\[\#FF8A5B\].text-white{color:var(--on-lime)!important}
+:root[data-theme="dark"] .divide-\[\#F5EDE4\] > :not(:last-child){border-color:var(--line)!important}
+:root[data-theme="dark"] .focus\:bg-white:focus{background-color:var(--card)!important}
+:root[data-theme="dark"] .focus\:border-\[\#201C19\]:focus{border-color:var(--lime-text)!important}
+:root[data-theme="dark"] .focus\:border-\[\#D6FF5F\]:focus{border-color:var(--lime-text)!important}
+:root[data-theme="dark"] .focus\:text-\[\#201C19\]:focus{color:var(--ink)!important}
+:root[data-theme="dark"] .hover\:bg-\[\#201C19\]:hover{background-color:var(--lime)!important;color:var(--on-lime)!important}
+:root[data-theme="dark"] .hover\:bg-\[\#CBF052\]:hover{background-color:var(--lime-text)!important}
+:root[data-theme="dark"] .hover\:bg-\[\#FFFBF5\]:hover{background-color:var(--sand)!important}
+:root[data-theme="dark"] .hover\:border-\[\#201C19\]:hover{border-color:var(--lime-text)!important}
+:root[data-theme="dark"] .hover\:border-\[\#D6FF5F\]:hover{border-color:var(--lime-text)!important}
+:root[data-theme="dark"] .hover\:text-\[\#201C19\]:hover{color:var(--on-lime)!important}
+:root[data-theme="dark"] .hover\:text-\[\#D6FF5F\]:hover{color:var(--lime-text)!important}
+:root[data-theme="dark"] .peer-checked\:bg-\[\#201C19\]:is(:where(.peer):checked~*){background-color:var(--lime)!important}
+:root[data-theme="dark"] a.bg-\[\#201C19\] .bg-\[\#0055FE\],:root[data-theme="dark"] a.bg-\[\#201C19\] .bg-\[\#00BE6A\],:root[data-theme="dark"] a.bg-\[\#201C19\] .bg-\[\#B11016\],:root[data-theme="dark"] button.bg-\[\#201C19\] .bg-\[\#0055FE\],:root[data-theme="dark"] button.bg-\[\#201C19\] .bg-\[\#00BE6A\],:root[data-theme="dark"] button.bg-\[\#201C19\] .bg-\[\#B11016\]{background-color:var(--on-lime)!important}
+:root[data-theme="dark"] a.bg-\[\#201C19\] .text-white,:root[data-theme="dark"] a.bg-\[\#201C19\] .text-\[\#D6FF5F\],:root[data-theme="dark"] button.bg-\[\#201C19\] .text-white,:root[data-theme="dark"] button.bg-\[\#201C19\] .text-\[\#D6FF5F\]{color:var(--on-lime)!important}
+:root[data-theme="dark"] a.bg-\[\#201C19\].border-\[\#EAE0D5\],:root[data-theme="dark"] button.bg-\[\#201C19\].border-\[\#EAE0D5\]{border-color:var(--lime)!important}
+:root[data-theme="dark"] a.bg-\[\#201C19\].text-\[\#D6FF5F\],:root[data-theme="dark"] button.bg-\[\#201C19\].text-\[\#D6FF5F\]{color:var(--on-lime)!important}
+:root[data-theme="dark"] a.bg-\[\#201C19\].text-white,:root[data-theme="dark"] button.bg-\[\#201C19\].text-white{color:var(--on-lime)!important}
+:root[data-theme="dark"] .bg-\[\#201C19\].h-full.rounded-full{background-color:var(--lime)!important}
+:root[data-theme="dark"] .bg-\[\#201C19\].text-white.shadow-\[0_12px_30px_rgba\(0\,0\,0\,0\.25\)\]{box-shadow:0 0 0 1px var(--line),0 12px 30px rgba(0,0,0,.5)!important}
+:root[data-theme="dark"] .bg-\[\#201C19\].text-white.shadow-\[0_12px_30px_rgba\(0\,0\,0\,0\.3\)\]{box-shadow:0 0 0 1px var(--line),0 12px 30px rgba(0,0,0,.5)!important}
+:root[data-theme="dark"] .bg-\[\#201C19\].text-white.shadow-\[0_8px_32px_rgba\(0\,0\,0\,0\.3\)\]{box-shadow:0 0 0 1px var(--line),0 8px 32px rgba(0,0,0,.5)!important}
+:root[data-theme="dark"] .bg-\[\#201C19\].w-2.h-2{background-color:var(--ink)!important}
+:root[data-theme="dark"] .divide-\[\#F5EDE4\] > :not([hidden]) ~ :not([hidden]){border-color:var(--line)!important}
+@media (hover:hover){
+:root[data-theme="dark"] .hover\:bg-\[\#D6FF5F\]:hover{background-color:var(--lime)!important;color:var(--on-lime)!important}
+:root[data-theme="dark"] .hover\:bg-\[\#E5DDD4\]:hover{background-color:var(--line)!important}
+:root[data-theme="dark"] .hover\:bg-\[\#F1E9DF\]:hover{background-color:var(--line)!important}
+:root[data-theme="dark"] .hover\:bg-\[\#FFD7C7\]:hover{background-color:rgba(255,180,171,.24)!important}
+:root[data-theme="dark"] .hover\:bg-\[\#FFE9E0\]:hover{background-color:rgba(255,180,171,.14)!important}
+:root[data-theme="dark"] .hover\:border-\[\#201C19\]\/20:hover{border-color:rgba(158,233,57,.4)!important}
+:root[data-theme="dark"] .hover\:border-\[\#FFC9B6\]:hover{border-color:rgba(255,180,171,.5)!important}
+:root[data-theme="dark"] .hover\:text-\[\#8C2C10\]:hover{color:var(--danger-text)!important}
+}
+}
+/* END GENERATED theme-tw */
+/* BEGIN HAND-WRITTEN theme-tw-extras -- NOT generated (scripts/gen-theme-tw.js never touches this section) */
+@media screen{
+/* 1. Content on a forced-white tile stays white even if a bg-white utility is also present.
+      NOTE: picker/account/onboarding/queue load this file too, so the color rule below also applies
+      there; it only sets the fallback text colour of .cb-force-light tiles (alt text of a logo image). */
+:root[data-theme="dark"] .cb-force-light{background-color:#fff!important;color:var(--ink-fixed)!important}
+/* 2. billing.html applyBranding() paints #gateLogo / #appLogo with the tenant colour via inline
+      style.background. Tenant colours never reach dark chrome: override background-COLOR only
+      (a tenant logo image set as background-image still shows). */
+:root[data-theme="dark"] #gateLogo,:root[data-theme="dark"] #appLogo{background-color:var(--panel)!important}
+/* 3. "Powered by DulaHQ" credit pill on store / tournament / gallery / billing (inline styles, scoped to
+      .dula-credit and to the literal white pill so picker/queue's own dark credit pill is untouched). */
+:root[data-theme="dark"] .dula-credit > span[style*="background:#ffffff"]{background-color:var(--card)!important;border-color:var(--line)!important;color:var(--ink)!important}
+:root[data-theme="dark"] .dula-credit span[style*="background:#201C19"]{background-color:var(--lime)!important;color:var(--on-lime)!important}
+/* 4. tournament.html inline status colours (static markup and the match-history chip) and JS-set
+      element.style.color (browsers serialise those as rgb()): tournament toast tone, billing balance/status. */
+:root[data-theme="dark"] [style*="color:#15803D"],:root[data-theme="dark"] [style*="color:#3F7019"]{color:#5AEF82!important}
+:root[data-theme="dark"] [style*="color:#B91C1C"],:root[data-theme="dark"] [style*="color:#8C2C10"],:root[data-theme="dark"] [style*="color: rgb(140, 44, 16)"]{color:var(--danger-text)!important}
+:root[data-theme="dark"] [style*="color: rgb(138, 90, 0)"]{color:#FCD34D!important}
+:root[data-theme="dark"] [style*="color: rgb(32, 28, 25)"]{color:var(--ink)!important}
+:root[data-theme="dark"] [style*="background:#E8F5D8"]{background-color:rgba(90,239,130,.12)!important}
+:root[data-theme="dark"] [style*="background:#FFE9E0"]{background-color:rgba(255,180,171,.14)!important}
+:root[data-theme="dark"] [style*="background:#F1E9DF"]{background-color:var(--sand)!important}
+:root[data-theme="dark"] [style*="background:#F1E9DF;color:#201C19"]{color:var(--ink)!important}
+/* 5. Inline status chips built from template strings (style="background:${bg};color:${fg}") and rank discs.
+      Amber / purple / Live / Completed use the same Stitch tints as the utility classes. */
+:root[data-theme="dark"] [style*="background:#FFF0D6"]{background-color:rgba(251,191,36,.14)!important}
+:root[data-theme="dark"] [style*="color:#8A5A00"]{color:#FCD34D!important}
+:root[data-theme="dark"] [style*="background:#EDE8FF"],:root[data-theme="dark"] [style*="background:#E4E1FF"]{background-color:rgba(185,168,255,.14)!important}
+:root[data-theme="dark"] [style*="color:#3B2A9E"],:root[data-theme="dark"] [style*="color:#4A3FA0"]{color:#CFC4FF!important}
+:root[data-theme="dark"] [style*="background:#D6FF5F"]{background-color:var(--lime)!important;color:var(--on-lime)!important}
+:root[data-theme="dark"] [style*="color:rgba(32,28,25,0.7)"]{color:var(--muted)!important}
+:root[data-theme="dark"] [style*="background:rgba(214,255,95,0.15)"]{background-color:rgba(132,204,22,.15)!important}
+/* 6. Page-level scrollbar thumb (#e5ddd4 in each page's own <style>) would stay bright. */
+:root[data-theme="dark"] ::-webkit-scrollbar-thumb{background-color:var(--line)!important}
+/* 7. index.html (Phase 3b): id/selector based overrides for inline-styled and page-<style> colours. */
+:root[data-theme="dark"] #loadingScreen{background-color:var(--cream)!important}
+:root[data-theme="dark"] #loadingLogo{background-color:var(--panel)!important;color:var(--on-panel)!important}
+:root[data-theme="dark"] #loadingTenantName{color:var(--ink)!important}
+:root[data-theme="dark"] .court-column{background-color:var(--card)!important}
+:root[data-theme="dark"] .range-track{background:repeating-linear-gradient(90deg,var(--line) 0 12px,transparent 12px 13px)!important}
+/* brand tile (default zinc) and image logos: tile follows the dark panel; an uploaded logo image sits on a white well */
+:root[data-theme="dark"] #brandLogo{background-color:var(--panel)!important;color:var(--on-panel)!important}
+:root[data-theme="dark"] #brandLogo img,:root[data-theme="dark"] #footLogo img,:root[data-theme="dark"] #pausedLogo img,:root[data-theme="dark"] #logoPreview img,:root[data-theme="dark"] #payQrDisplay img{background-color:#fff!important}
+/* payment channel badge: brand colours are tinted, never saturated, in dark (JS sets style.background to the channel colour) */
+:root[data-theme="dark"] #payChannelIcon{background-color:rgba(147,197,253,.14)!important;color:#BFDBFE!important}
+/* open / closed dots: the open colour comes from the tenant theme (CLIENT.theme.queue) -- ignored in dark */
+:root[data-theme="dark"] #footOpenDot,:root[data-theme="dark"] #homeOpenDot{background-color:#5AEF82!important}
+:root[data-theme="dark"] #footOpenDot[style*="background: rgb(248, 113, 113)"],:root[data-theme="dark"] #homeOpenDot[style*="background: rgb(248, 113, 113)"]{background-color:#FFB4AB!important}
+/* "Back online" bar (JS sets style.background / style.color inline) */
+:root[data-theme="dark"] #pwa-offline-bar[style*="background: rgb(74, 222, 128)"]{background-color:#5AEF82!important;color:var(--on-lime)!important}
+/* motion.css glass / mesh surfaces follow the dark palette */
+:root[data-theme="dark"] .mp-glass-dark{background-color:rgba(11,19,38,.7)!important}
+:root[data-theme="dark"] .mp-mesh-bg{--mp-bg-1:#222A3D!important;--mp-bg-2:#283248!important;--mp-bg-3:#1B2336!important;--mp-bg-4:#232C42!important;--mp-mesh-base:#222A3D!important}
+}
+/* END HAND-WRITTEN theme-tw-extras */
+
 /* Theme toggle: a single icon button (moon in light, sun in dark). */
 .cb-theme-btn {
   display: inline-flex; align-items: center; justify-content: center;
@@ -68,6 +266,15 @@
 :root[data-theme="dark"] .cb-theme-btn .cb-ico-sun { display: block; }
 .cb-theme-btn[aria-pressed="true"] { background: var(--sand); border-color: var(--pill-on-border); }
 .cb-theme-btn:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+/* Compact variants for index.html: --32 = desktop header pill row (32px, 40px hit area, no extra header height). */
+.cb-theme-btn--32 { padding: 0; background: var(--card); color: var(--ink); position: relative; min-width: 32px; min-height: 32px; width: 32px; height: 32px; }
+.cb-theme-btn--32 svg { width: 16px; height: 16px; }
+/* invisible hit area: 40px on the desktop pill row */
+.cb-theme-btn--32::after { content: ""; position: absolute; top: -4px; bottom: -4px; left: -4px; right: -4px; }
+/* Home-view footer toggle (mobile only, a row under the "Powered by DulaHQ" pill): 36px visual, 44px hit area. */
+.cb-theme-btn--foot { padding: 0; background: var(--card); color: var(--ink); position: relative; min-width: 36px; min-height: 36px; width: 36px; height: 36px; }
+.cb-theme-btn--foot svg { width: 16px; height: 16px; }
+.cb-theme-btn--foot::after { content: ""; position: absolute; top: -4px; bottom: -4px; left: -4px; right: -4px; }
 
 /* Content that must stay on a white tile in both themes (QR codes, payment
    proofs, tenant logos). */

@@ -119,7 +119,8 @@ check('scoreboard has no dependency on theme.js or require()', !/require\(/.test
 
 section('theme.js is only loaded where it is used (queue.html); the scoreboard no longer needs it');
 check('queue.html loads theme.js and calls CBTheme.init()', /<script src="\/theme\.js"><\/script>/.test(queueHtml) && /CBTheme\.init\(\)/.test(queueHtml));
-['index.html', 'tournament.html', 'tournament-admin.html'].forEach((f) => check(`${f}: no dead theme.js include and no CBTheme.init (stays light-only)`, !/theme\.js/.test(read(f)) && !/CBTheme/.test(read(f))));
+// Phase 3a wired store/tournament/gallery/billing and 3b wired index (see tests/theme-tw-wiring.test.js); tournament-admin (3d) stays light-only for now.
+['tournament-admin.html'].forEach((f) => check(`${f}: no dead theme.js include and no CBTheme.init (stays light-only)`, !/theme\.js/.test(read(f)) && !/CBTheme/.test(read(f))));
 
 section('Phase 0: theme-color and manifest');
 ['index.html', 'queue.html', 'picker.html', 'account.html', 'onboarding.html'].forEach((f) => check(`${f}: single theme-color #FFFBF5`, (read(f).match(/<meta name="theme-color"/g) || []).length === 1 && /<meta name="theme-color" content="#FFFBF5"\s*\/?>/.test(read(f))));

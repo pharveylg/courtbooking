@@ -616,6 +616,31 @@ body:not(.staff-mode) .staff-link{display:none!important}
 
             <div class="grid grid-cols-2 gap-3">
               <div>
+                <label class="block mono text-[10px] uppercase tracking-widest font-[700] mb-1">Points to Win</label>
+                <select id="qTargetPoints" class="w-full h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-3.5 text-[13px] font-[650] outline-none focus:border-[#201C19]">
+                  <option value="11" selected>11</option>
+                  <option value="15">15</option>
+                  <option value="21">21</option>
+                  <option value="custom">Custom</option>
+                </select>
+              </div>
+              <div>
+                <label class="block mono text-[10px] uppercase tracking-widest font-[700] mb-1">Win Condition</label>
+                <select id="qWinCondition" class="w-full h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-3.5 text-[13px] font-[650] outline-none focus:border-[#201C19]">
+                  <option value="2" selected>Win by 2</option>
+                  <option value="1">Sudden Death</option>
+                </select>
+              </div>
+            </div>
+
+            <div id="qCustomTargetWrapper" class="hidden">
+              <label class="block mono text-[10px] uppercase tracking-widest font-[700] mb-1">Custom Points Target</label>
+              <input type="number" min="1" max="50" id="qCustomTarget" placeholder="e.g. 25" class="w-full h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-4 text-[13px] font-[650] outline-none focus:border-[#201C19]"/>
+              <span class="mono text-[9px] opacity-50 block mt-0.5">1-50 points.</span>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3">
+              <div>
                 <label class="block mono text-[10px] uppercase tracking-widest font-[700] mb-1">Lock PIN (4 digits)</label>
                 <input required type="password" inputmode="numeric" maxlength="4" id="qPin" placeholder="e.g. 2580" class="w-full h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-4 text-[13px] text-center font-[700] tracking-widest outline-none focus:border-[#201C19]"/>
               </div>
@@ -8306,6 +8331,12 @@ document.getElementById('qRule')?.addEventListener('change', () => {
   }
 });
 
+// CREATE QUEUE — reveal the custom points input only when "Custom" is chosen
+document.getElementById('qTargetPoints')?.addEventListener('change', () => {
+  const isCustom = document.getElementById('qTargetPoints').value === 'custom';
+  document.getElementById('qCustomTargetWrapper')?.classList.toggle('hidden', !isCustom);
+});
+
 // CREATE QUEUE
 document.getElementById('createQueueForm')?.addEventListener('submit', (e) => {
   e.preventDefault();
@@ -8320,6 +8351,22 @@ document.getElementById('createQueueForm')?.addEventListener('submit', (e) => {
     alert('PIN must be exactly 4 digits.');
     return;
   }
+
+  // Points target: 11/15/21 or a custom value, clamped to the same 1-50
+  // range PickleScore.normalizeConfig enforces, so the setup form's bounds
+  // never disagree with the engine's own validation.
+  const targetSel = document.getElementById('qTargetPoints').value;
+  let target;
+  if (targetSel === 'custom') {
+    target = parseInt(document.getElementById('qCustomTarget').value, 10);
+    if (!Number.isFinite(target) || target < 1 || target > 50) {
+      alert('Custom points target must be a whole number between 1 and 50.');
+      return;
+    }
+  } else {
+    target = parseInt(targetSel, 10);
+  }
+  const winBy = Number(document.getElementById('qWinCondition').value) === 1 ? 1 : 2;
 
   const waiting = [];
   const teams = {};
@@ -8361,6 +8408,7 @@ document.getElementById('createQueueForm')?.addEventListener('submit', (e) => {
     teams,
     activeMatch: null,
     matches: [],
+    gameFormat: { target, winBy, scoring: 'sideout' },
     winnerConfig: {
       minGames: Number.isFinite(minGamesVal) && minGamesVal > 0 ? minGamesVal : null,
       rankingOrder: qRankOrderState.slice(),
@@ -8385,6 +8433,7 @@ document.getElementById('createQueueForm')?.addEventListener('submit', (e) => {
   document.getElementById('createQueueForm').reset();
   qRankOrderState = DEFAULT_RANKING_ORDER.slice(); // form.reset() doesn't touch this JS-tracked list
   renderQRankOrderList();
+  document.getElementById('qCustomTargetWrapper')?.classList.add('hidden'); // form.reset() doesn't re-run the change listener that hides this
   toast('New rotation board generated!');
 });
 

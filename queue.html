@@ -174,6 +174,29 @@ td{padding:7px 6px;border-bottom:1px solid var(--sand)}
       <label for="setTimerLimit">Minutes per match</label>
       <input type="number" id="setTimerLimit" min="1" max="60" value="15"/>
     </div>
+    <div class="row2">
+      <div class="field">
+        <label for="setTargetPoints">Points to win</label>
+        <select id="setTargetPoints">
+          <option value="11" selected>11</option>
+          <option value="15">15</option>
+          <option value="21">21</option>
+          <option value="custom">Custom</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="setWinCondition">Win condition</label>
+        <select id="setWinCondition">
+          <option value="2" selected>Win by 2</option>
+          <option value="1">Sudden death</option>
+        </select>
+      </div>
+    </div>
+    <div class="field" id="setCustomTargetField" style="display:none">
+      <label for="setCustomTarget">Custom points target</label>
+      <input type="number" id="setCustomTarget" min="1" max="50" placeholder="e.g. 25"/>
+      <p class="hint">1-50 points.</p>
+    </div>
     <div class="field">
       <label for="setInitialPlayers">Starting players (optional)</label>
       <textarea id="setInitialPlayers" placeholder="One player per line.&#10;For Fixed Pairs: one team per line, e.g. &quot;Jun &amp; Pat&quot;"></textarea>
@@ -378,6 +401,12 @@ td{padding:7px 6px;border-bottom:1px solid var(--sand)}
     }
   });
 
+  // Points target: reveal the custom input only when "Custom" is chosen.
+  document.getElementById('setTargetPoints').addEventListener('change', () => {
+    const isCustom = document.getElementById('setTargetPoints').value === 'custom';
+    document.getElementById('setCustomTargetField').style.display = isCustom ? '' : 'none';
+  });
+
   document.getElementById('startQueueBtn').addEventListener('click', () => {
     const mode = document.getElementById('setMode').value;
     const rule = document.getElementById('setRule').value;
@@ -388,6 +417,22 @@ td{padding:7px 6px;border-bottom:1px solid var(--sand)}
       alert('That rule needs Doubles mode.');
       return;
     }
+
+    // Points target: 11/15/21 or a custom value, clamped to the same 1-50
+    // range PickleScore.normalizeConfig enforces, so the setup form's bounds
+    // never disagree with the engine's own validation.
+    const targetSel = document.getElementById('setTargetPoints').value;
+    let target;
+    if (targetSel === 'custom') {
+      target = parseInt(document.getElementById('setCustomTarget').value, 10);
+      if (!Number.isFinite(target) || target < 1 || target > 50) {
+        alert('Custom points target must be a whole number between 1 and 50.');
+        return;
+      }
+    } else {
+      target = parseInt(targetSel, 10);
+    }
+    const winBy = Number(document.getElementById('setWinCondition').value) === 1 ? 1 : 2;
 
     const waiting = [];
     const teams = {};
@@ -411,7 +456,7 @@ td{padding:7px 6px;border-bottom:1px solid var(--sand)}
     const session = {
       mode, rule, waiting, teams, activeMatch: null, matches: [], playCounts: {},
       timerLimit, timerSecondsLeft: timerLimit * 60, timerRunning: false,
-      gameFormat: { target: 11, winBy: 2, scoring: 'sideout' },
+      gameFormat: { target, winBy, scoring: 'sideout' },
       winnerConfig: {
         minGames: Number.isFinite(minGamesVal) && minGamesVal > 0 ? minGamesVal : null,
         rankingOrder: setRankOrderState.slice(),

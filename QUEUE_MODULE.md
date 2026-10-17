@@ -21,7 +21,7 @@ A session has:
 | `matches` | Finished matches, used for match numbers and stats |
 | `lastPartnerGroup` | Partner rotation only: the four names from the rotation that just finished, avoided by the next pick (see below) |
 | `playCounts` | Every rule except Fixed Pairs: how many games each player has been picked for, used for rest priority |
-| `gameFormat` | Points target, win-by, and scoring for the live scoreboard |
+| `gameFormat` | `{ target, winBy, scoring }` for the live scoreboard. `target` and `winBy` are set once at queue creation, in the same setup form as mode/rule: points to win (11/15/21, or a custom 1-50 value — the same range `PickleScore.normalizeConfig` clamps to) and win condition (Win by 2, the standard margin, or Sudden Death — first to the target wins outright, `winBy: 1`). Defaults to 11/Win by 2 when left untouched, matching the scoreboard's prior fixed behavior. `scoring` (side-out/rally) isn't exposed at creation; it defaults to `sideout` and, in the facility module, can still be changed per-session from the live scoreboard's own format controls. |
 | `winnerConfig` | `{ minGames, rankingOrder }`, set once at queue creation — overrides the automatic qualifying bar and/or the default winner-ranking order (see "Declaring the overall winner" below). Optional; a missing or invalid value falls back to the defaults. |
 | `expiresAt` | Facility module only: expired sessions are removed on load |
 
@@ -148,4 +148,5 @@ When the scoreboard finishes a match, `onFinish` fills the two score fields and 
 - `tests/queue-match-edit.test.js` — wiring check for the admin-override UI (editable on-court selects, the serves-first control, `CourtBoard.open`'s `firstServer`) in both pages, plus `court-scoreboard.js`'s pre-rally "0-0-2" gate (`PickleScore.atGameStart`/`setFirstServer`/`renameSide`), the `roster`/`waitingNames`/`waitingTeams`/`onSetFirstServer`/`onSwapPlayer`/`onSwapTeam` opts, and that both pages wire them to the same `applyQueue*`/`apply*` functions their dashboard controls already use.
 - `tests/queue-winner-pdf.test.js` — wiring check for the ranking-order/min-games setup fields, `winnerConfig` being built into the new session, and the "Download stats (PDF)" button, in both pages.
 - `tests/queue-standalone.test.js` — the standalone page: no PIN/Firestore/analytics, `sessionStorage`-only queue state, the `storageKey`/cleanup wiring for resume-on-refresh, and that both pages call the same `QueueEngine` functions.
+- `tests/queue-game-format.test.js` — wiring check for the points-to-win/win-condition setup fields (including the Custom points reveal/validation), `gameFormat.target`/`gameFormat.winBy` being built into the new session, and the 11/Win-by-2 default when left untouched, in both pages.
 - Facility-module wiring is checked by the Find a Game tests (`tests/og-queue-link.test.js`, `tests/og-reserve.test.js`).

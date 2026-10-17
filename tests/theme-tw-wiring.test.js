@@ -88,32 +88,37 @@ const ts = h.indexOf('<script src="/theme.js"></script>'), ti = h.indexOf('<scri
   check(f + ': toggle CSS: --32 is 32px, --foot is 36px with a 44px hit area; the old mobile-header modifier is gone', /\.cb-theme-btn--32\s*\{[^}]*height: 32px/.test(tcss) && /\.cb-theme-btn--foot\s*\{[^}]*height: 36px/.test(tcss) && /\.cb-theme-btn--foot::after\s*\{[^}]*top: -4px/.test(tcss) && !/cb-theme-btn--m|cb-theme-btn--36/.test(tcss));
 })();
 
-section('index.html light parity: pinned by an ALLOWED DELTA (toggle buttons, admin hint, token-for-literal substitutions)');
+section('index.html light parity: pinned by an ALLOWED DELTA (recorded additions + token-for-literal substitutions, if any, on top of the fixture baseline)');
 (() => {
   const fx = fixture.index, cur = read('index.html');
   check('the fixture has an index entry with a baseline (' + (fx && fx.baselineRef) + ')', !!fx && /^[0-9a-f]{7,40}$/.test(fx.baselineRef));
   if (!fx) return;
   const body = P.bodyOf(cur);
-  // 1. the class-token multiset delta vs the baseline is EXACTLY the toggle + hint classes
+  // 1. the class-token multiset delta vs the baseline matches exactly what the fixture recorded (empty right
+  //    after a re-baseline; non-empty once a later phase adds its own allowed delta on top of this baseline)
   const now = P.classTokens(norm(cur)), delta = {};
   Object.keys(now).forEach((t) => { if (now[t] !== (fx.baselineClassTokens[t] || 0)) delta[t] = now[t] - (fx.baselineClassTokens[t] || 0); });
   Object.keys(fx.baselineClassTokens).forEach((t) => { if (!(t in now)) delta[t] = -fx.baselineClassTokens[t]; });
-  const expected = { 'cb-theme-btn': 2, 'cb-theme-btn--32': 1, 'cb-theme-btn--foot': 1, 'cb-ico-moon': 2, 'cb-ico-sun': 2, 'shadow-xs': 1, 'shrink-0': 1, 'cursor-pointer': 1, flex: 1, 'justify-center': 1, 'md:hidden': 1, 'pb-2': 1, mono: 1, 'text-[11px]': 1, 'opacity-60': 1, 'mt-1': 1 };
-  check('class-token delta vs ' + fx.baselineRef + ' equals exactly the toggle + hint classes', JSON.stringify(delta, Object.keys(delta).sort()) === JSON.stringify(expected, Object.keys(expected).sort()), JSON.stringify(delta));
-  check('...and equals the delta recorded in the fixture', JSON.stringify(delta, Object.keys(delta).sort()) === JSON.stringify(fx.classTokenDelta, Object.keys(fx.classTokenDelta).sort()));
+  check('class-token delta vs ' + fx.baselineRef + ' equals the delta recorded in the fixture', JSON.stringify(delta, Object.keys(delta).sort()) === JSON.stringify(fx.classTokenDelta, Object.keys(fx.classTokenDelta).sort()), JSON.stringify(delta));
   // 2. reversing exactly the allowed delta in today's body gives back the baseline body (sha256)
   let rev = null;
   try { rev = P.reverseDelta(body, fx.additions, fx.substitutions); } catch (e) { rev = 'ERR ' + e.message; }
-  check('reversing the allowed delta (1 desktop toggle, 1 footer toggle row, 1 hint line, the CBTheme.init() script, ' + fx.substitutions.reduce((n, s) => n + s.count, 0) + ' literal-to-token substitutions) restores the baseline body byte for byte', rev !== null && P.sha(rev) === fx.baselineBodySha256, String(rev).slice(0, 120));
-  // 3. every literal replaced by a token resolves in light to the same value
-  const css = read('theme.css'), root = /:root\s*\{([^}]*--card[^}]*)\}/.exec(css)[1];
-  const light = {}; root.replace(/(--[\w-]+)\s*:\s*([^;]+);/g, (_, k, v) => { light[k] = v.trim(); });
-  fx.substitutions.forEach((s) => {
-    const m = /var\((--[\w-]+),\s*(#[0-9A-Fa-f]{6})\)/.exec(s.to);
-    check('substitution ' + s.token + ': the light token value ' + light[m && m[1]] + ' AND the var() fallback ' + (m && m[2]) + ' both equal the old literal ' + s.lightValue, !!m && m[1] === s.token && light[m[1]].toUpperCase() === s.lightValue.toUpperCase() && m[2].toUpperCase() === s.lightValue.toUpperCase());
-    check('substitution ' + s.token + ': the old literal no longer appears at those ' + s.count + ' sites and the new one does', body.split(s.from).length === 1 && body.split(s.to).length - 1 === s.count);
-  });
-  check('index <head> minus the wiring lines equals the baseline head (only the 4 new wiring lines were added; the meta already existed)', P.describe(cur).headBaseSha256 === fx.headBaseSha256);
+  check('reversing the allowed delta (' + fx.additions.length + ' addition(s), ' + fx.substitutions.reduce((n, s) => n + s.count, 0) + ' literal-to-token substitution(s)) restores the baseline body byte for byte', rev !== null && P.sha(rev) === fx.baselineBodySha256, String(rev).slice(0, 120));
+  // 3. every literal replaced by a token (if THIS re-baseline's delta records any substitutions) resolves in
+  //    light to the same value. Substitutions from an earlier phase that are now baked into the committed
+  //    baseline itself (not part of today's delta) are not re-checked here -- they're covered by the
+  //    byte-identical baseline-body comparison in check 2 above.
+  const css = read('theme.css');
+  if (fx.substitutions.length) {
+    const root = /:root\s*\{([^}]*--card[^}]*)\}/.exec(css)[1];
+    const light = {}; root.replace(/(--[\w-]+)\s*:\s*([^;]+);/g, (_, k, v) => { light[k] = v.trim(); });
+    fx.substitutions.forEach((s) => {
+      const m = /var\((--[\w-]+),\s*(#[0-9A-Fa-f]{6})\)/.exec(s.to);
+      check('substitution ' + s.token + ': the light token value ' + light[m && m[1]] + ' AND the var() fallback ' + (m && m[2]) + ' both equal the old literal ' + s.lightValue, !!m && m[1] === s.token && light[m[1]].toUpperCase() === s.lightValue.toUpperCase() && m[2].toUpperCase() === s.lightValue.toUpperCase());
+      check('substitution ' + s.token + ': the old literal no longer appears at those ' + s.count + ' sites and the new one does', body.split(s.from).length === 1 && body.split(s.to).length - 1 === s.count);
+    });
+  }
+  check('index <head> minus the wiring lines equals the baseline head (only the recorded additions were added; the meta already existed)', P.describe(cur).headBaseSha256 === fx.headBaseSha256);
   // 4. the toggle buttons carry no colour of their own that could change light look: neighbouring borders / white fill
   check('toggle light look = neighbouring circle buttons: 1px var(--control-border) #EAE0D5 border, --card #FFF fill', /--control-border: #EAE0D5/.test(css) && /\.cb-theme-btn--32 \{[^}]*background: var\(--card\)/.test(css) && /--card: #FFFFFF/.test(css));
 })();

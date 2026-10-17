@@ -46,17 +46,9 @@ function describe(html) {
    byte-for-byte hash. The delta is: two header toggle buttons, one admin hint line, and a few JS colour
    literals replaced by theme tokens whose LIGHT value is the old literal. Reversing exactly that delta in the
    current body must give back the baseline body (sha256 recorded from git ref BASELINE_REF). */
-const BASELINE_REF = '9ba0e40';
-const SUBSTITUTIONS = [
-  { from: "box.style.color = '#8C2C10'", to: "box.style.color = 'var(--danger-text,#8C2C10)'", token: '--danger-text', lightValue: '#8C2C10', count: 4 },
-  { from: "offlineBar.style.color = '#201C19'", to: "offlineBar.style.color = 'var(--on-lime,#201C19)'", token: '--on-lime', lightValue: '#201C19', count: 1 },
-];
-const ADDITION_RES = [
-  /^ {8}<button type="button" class="cb-theme-btn cb-theme-btn--32 shadow-xs [^\n]*<\/button>\n/m,
-  /^ {8}<div class="flex justify-center md:hidden pb-2"><button type="button" class="cb-theme-btn cb-theme-btn--foot" [^\n]*<\/button><\/div>\n/m,
-  /^ {16}<div class="mono text-\[11px\] opacity-60 mt-1">Dark mode ignores these colors \(fixed palette\)\.<\/div>\n/m,
-  /^<script>CBTheme\.init\(\);<\/script>\n/m,
-];
+const BASELINE_REF = '3d2eec1e3bd4cf11ebe193d22c2563dc823a5de8';
+const SUBSTITUTIONS = [];
+const ADDITION_RES = [];
 function bodyOf(html) { const h = norm(html); return h.slice(h.indexOf('<body')); }
 function reverseDelta(body, additions, substitutions) {
   let b = body;

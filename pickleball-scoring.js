@@ -209,18 +209,30 @@
 
   function gameScoreText(g) { return `${Math.max(g.home, g.away)} to ${Math.min(g.home, g.away)}`; }
 
+  /* The side (or null) that would win the CURRENT game by winning just one
+     more point, found by applying `gameIsWon` hypothetically -- never by
+     comparing to `target - 1`, which is unsafe once win-by-2 or a deuce-like
+     score is in play. At most one side can be true under normal rules. */
+  function oneAwayFromGameWin(state) {
+    for (const side of ['home', 'away']) {
+      if (gameIsWon(state.config, state[side] + 1, state[other(side)])) return side;
+    }
+    return null;
+  }
+
   /* What to say after a rally moved `prev` to `next`. */
   function announcement(prev, next) {
     if (next === prev) return '';
     const nm = next.names;
-    if (next.complete) {
-      const g = next.games[next.games.length - 1];
-      return `Winner, ${nm[next.winner]}, ${gameScoreText(g)}.`;
-    }
-    if (next.gameOver) {
+    if (next.gameOver && !prev.gameOver) {
       const g = next.games[next.games.length - 1];
       const winner = g.home > g.away ? 'home' : 'away';
-      return `Game to ${nm[winner]}, ${gameScoreText(g)}.`;
+      return `Game! Winner, ${nm[winner]}. ${gameScoreText(g)}`;
+    }
+    const pointAway = oneAwayFromGameWin(next);
+    if (pointAway) {
+      const isMatchPoint = next.gamesWon[pointAway] === gamesToWin(next.config) - 1;
+      return `${isMatchPoint ? 'Match' : 'Set'} point, ${nm[pointAway]}`;
     }
     const sideOut = prev.serving !== next.serving;
     return `${sideOut && next.config.scoring === 'sideout' ? 'Side out. ' : ''}${scoreCallSpoken(next)}`;

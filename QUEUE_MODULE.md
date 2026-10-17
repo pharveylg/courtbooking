@@ -141,6 +141,14 @@ The Live score button opens `CourtBoard` ([court-scoreboard.js](court-scoreboard
 
 When the scoreboard finishes a match, `onFinish` fills the two score fields and clicks Submit, which runs through `recordMatchResult` like a manually entered score.
 
+### Voice callouts: set point and match point
+
+`announcement(prev, next)` in [pickleball-scoring.js](pickleball-scoring.js) is the single source of what `court-scoreboard.js` speaks after every rally. Three cases, checked in order against the state *after* the rally:
+
+1. **The rally just won the game** (`next.gameOver` flips true): `"Game! Winner, <name>. <score>"` — one unified phrasing whether or not the win also ends the match. There is no separate wording for the match-deciding game.
+2. **Otherwise, either side is now one point from winning the current game** — found by asking `gameIsWon` hypothetically (`mine + 1`), never by comparing to `target - 1`, since win-by-2 and deuce scores make that comparison unsafe. If winning that next point would also win the match (that side is already one game-win short of `gamesToWin`), it's `"Match point, <name>"`; if the match would continue into another game, it's `"Set point, <name>"`. This replaces the normal score callout for that point outright. For a one-game match every game is match-deciding, so it is always "Match point", never "Set point". The check re-runs after every rally, so a side stuck at set/match point across repeated side-outs (common in doubles) hears it again each time, not just once.
+3. **Otherwise**, the normal callout: the side-out notice (side-out scoring only) followed by the spoken score (`scoreCallSpoken`).
+
 ## Tests
 
 - `tests/rotation-pick.test.js` — the partner-rotation pick, rest-priority counts, and a seven-player simulation.

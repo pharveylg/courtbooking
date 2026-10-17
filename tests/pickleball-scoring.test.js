@@ -93,10 +93,47 @@ check('a point is just the call', S.announcement(S.applyRally(a0, 'away', 1), a1
 check('second-server hand-over is not called a side out', S.announcement(a1, S.applyRally(a1, 'home', 1)) === '1, 0, 2');
 check('rally scoring never says "side out"', (() => { const r = S.createMatch({ scoring: 'rally' }, N); return !/Side out/.test(S.announcement(r, S.applyRally(r, 'away', 1))); })());
 const gEnd = { ...S.createMatch({ bestOf: 3, doubles: false }, N), home: 10, away: 4, serving: 'home' };
-check('game end names the winner and score', S.announcement(gEnd, S.applyRally(gEnd, 'home', 1)) === 'Game to Alex & Sam, 11 to 4.');
+check('game end (mid-match) uses the unified "Game!" phrasing', S.announcement(gEnd, S.applyRally(gEnd, 'home', 1)) === 'Game! Winner, Alex & Sam. 11 to 4');
 const mEnd = { ...S.createMatch({ doubles: false }, N), home: 10, away: 4, serving: 'home' };
-check('match end calls the winner and final game score', S.announcement(mEnd, S.applyRally(mEnd, 'home', 1)) === 'Winner, Alex & Sam, 11 to 4.');
+check('match end (deciding game) uses the SAME unified "Game!" phrasing', S.announcement(mEnd, S.applyRally(mEnd, 'home', 1)) === 'Game! Winner, Alex & Sam. 11 to 4');
 check('no announcement when nothing changed', S.announcement(g, g) === '');
+
+section('set point and match point announcements');
+/* bestOf 3: winning game 1 only clinches the GAME, not the match -- "Set point". */
+const sp1 = { ...S.createMatch({ bestOf: 3, doubles: false }, N), home: 9, away: 4, serving: 'home' };
+const sp2 = S.applyRally(sp1, 'home', 1);
+check('one point from winning a non-deciding game is "Set point", not "Match point"', !sp2.gameOver && S.announcement(sp1, sp2) === 'Set point, Alex & Sam');
+/* Same shape, but the match is already 1-0: winning this game wins the match -- "Match point". */
+const mp1 = { ...S.startNextGame(S.setPoints(S.createMatch({ bestOf: 3, doubles: false }, N), 11, 4)), home: 9, away: 4, serving: 'home' };
+const mp2 = S.applyRally(mp1, 'home', 1);
+check('one point from winning the match-deciding game is "Match point"', !mp2.gameOver && S.announcement(mp1, mp2) === 'Match point, Alex & Sam');
+/* A single-game match (bestOf 1) is trivially always match-deciding: never "Set point". */
+const sg1 = { ...S.createMatch({ doubles: false }, N), home: 9, away: 4, serving: 'home' };
+const sg2 = S.applyRally(sg1, 'home', 1);
+check('bestOf 1 always says "Match point", never "Set point"', S.announcement(sg1, sg2) === 'Match point, Alex & Sam');
+/* Sudden death (winBy 1): tied at target-1 each is already match point for whoever
+   scores next -- unlike win-by-2 (see the 10-10 check below), no extra cushion is
+   needed. Both sides are technically "one away" here; the formula checks home first. */
+const sd1 = { ...S.createMatch({ winBy: 1, doubles: false }, N), home: 10, away: 9, serving: 'away' };
+const sd2 = S.applyRally(sd1, 'away', 1);
+check('win-by-1 (sudden death): tied at 10-10 is already match point', !sd2.gameOver && sd2.home === 10 && sd2.away === 10 && S.announcement(sd1, sd2) === 'Match point, Alex & Sam');
+/* Win-by-2 deuce: 12-11 IS match point for the side at 12 (13-11 would be a legal win). */
+const dz1 = { ...S.createMatch({ doubles: false }, N), home: 11, away: 11, serving: 'home' };
+const dz2 = S.applyRally(dz1, 'home', 1);
+check('deuce (win-by-2): 12-11 is match point for the side at 12', dz2.home === 12 && dz2.away === 11 && !dz2.gameOver && S.announcement(dz1, dz2) === 'Match point, Alex & Sam');
+/* At 10-10 neither side is one point away yet (11-10 would only be a 1-point lead). */
+const dz0 = { ...S.createMatch({ doubles: false }, N), home: 9, away: 10, serving: 'home' };
+const dzTied = S.applyRally(dz0, 'home', 1);
+check('deuce (win-by-2): 10-10 is not yet match point for either side', dzTied.home === 10 && dzTied.away === 10 && !/point/.test(S.announcement(dz0, dzTied)));
+/* Side-outs in doubles can keep the leading score stuck at match point across rallies:
+   two receiving-side faults in a row (first-server fault, then second-server fault =
+   side out) never change the score, so the hypothetical "one point away" call for the
+   leading side must be re-evaluated -- and re-announced -- after each one. */
+const stick0 = { ...S.createMatch({ doubles: true }, N), home: 10, away: 4, serving: 'home', serverNumber: 1 };
+const stick1 = S.applyRally(stick0, 'away', 1);
+check('match point re-announces on a first-server fault that does not convert it', !stick1.gameOver && stick1.home === 10 && stick1.away === 4 && S.announcement(stick0, stick1) === 'Match point, Alex & Sam');
+const stick2 = S.applyRally(stick1, 'away', 1);
+check('...and again on the side-out that follows, still not converted', !stick2.gameOver && stick2.home === 10 && stick2.away === 4 && stick2.serving === 'away' && S.announcement(stick1, stick2) === 'Match point, Alex & Sam');
 
 section('manual score corrections');
 const cb = S.createMatch({ bestOf: 3, doubles: false }, N);

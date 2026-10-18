@@ -36,6 +36,7 @@ function applyWrite(existing, incoming, merge, where) {
   return out;
 }
 const getPath = (obj, dotted) => dotted.split('.').reduce((o, k) => (o == null ? undefined : o[k]), obj);
+const DOC_ID_SENTINEL = '__name__'; // what FieldPath.documentId() resolves to, below
 
 class DocRef {
   constructor(p) { this.path = p; this.id = p.split('/').pop(); }
@@ -68,9 +69,12 @@ class Query {
     }
     this.filters.forEach(({ f, op, v }) => {
       docs = docs.filter((d) => {
-        const x = getPath(d._d, f);
+        const x = f === DOC_ID_SENTINEL ? d.id : getPath(d._d, f);
         if (op === '==') return x === v;
         if (op === '>=') return x >= v;
+        if (op === '<=') return x <= v;
+        if (op === '<') return x < v;
+        if (op === '>') return x > v;
         if (op === 'in') return Array.isArray(v) && v.includes(x);
         if (op === 'array-contains') return Array.isArray(x) && x.includes(v);
         throw new Error('unsupported op ' + op);
@@ -99,9 +103,32 @@ const fakeDb = {
     for (const w of writes) await w();
     return out;
   },
+  // Real recursiveDelete removes the doc itself plus every doc nested
+  // under it at any depth (all subcollections, and their subcollections).
+  // The flat path-keyed store makes that just a prefix sweep.
+  async recursiveDelete(ref) {
+    const prefix = ref.path + '/';
+    for (const p of [...store.keys()]) {
+      if (p === ref.path || p.startsWith(prefix)) store.delete(p);
+    }
+  },
 };
 class HttpsError extends Error { constructor(code, message, details) { super(message); this.code = code; this.details = details; } }
-const fakeAdmin = { initializeApp() {}, firestore: Object.assign(() => fakeDb, { FieldValue: { serverTimestamp: () => TS, delete: () => DELETE, arrayUnion: ARRAY_UNION } }) };
+const FieldPath = { documentId: () => DOC_ID_SENTINEL };
+
+/* Records every Storage prefix-delete the code under test asks for --
+   good enough to verify "the right prefixes were targeted" without a real
+   bucket. No files are actually tracked/removed, since nothing in this
+   codebase's tests needs to assert file-level content, only which
+   prefixes got swept. */
+const storageDeletes = [];
+const fakeBucket = { async deleteFiles(opts) { storageDeletes.push((opts && opts.prefix) || ''); } };
+const fakeStorage = { bucket: () => fakeBucket };
+const fakeAdmin = {
+  initializeApp() {},
+  firestore: Object.assign(() => fakeDb, { FieldValue: { serverTimestamp: () => TS, delete: () => DELETE, arrayUnion: ARRAY_UNION }, FieldPath }),
+  storage: () => fakeStorage,
+};
 
 /* Records every push the code under test tries to send. */
 const pushCalls = [];
@@ -128,4 +155,4 @@ function installMocks() {
   };
 }
 
-module.exports = { store, DELETE, TS, fakeDb, fakeAdmin, HttpsError, pushCalls, installMocks };
+module.exports = { store, DELETE, TS, fakeDb, fakeAdmin, HttpsError, pushCalls, storageDeletes, installMocks };

@@ -39,7 +39,7 @@ One Firebase project (Hosting + Firestore + Storage + Functions v2 + Auth), serv
 | `next-open.js` | Shared "next open hour" calculation, used by picker.html's Continue card |
 | `pickleball-scoring.js`, `court-scoreboard.js`, `motion.js` | Scoring engine, live scoreboard UI, small animation-observer helper |
 
-**Server side:** `functions/index.js` (24 `onCall`/`onSchedule` exports, including `createFacility`/`publishFacility` for `onboarding.html`'s self-service flow) plus three non-exported helper modules it imports (`notifyRunner.js`, `tournamentCharges.js`, `engines/*.js`).
+**Server side:** `functions/index.js` (25 `onCall`/`onSchedule` exports, including `createFacility`/`publishFacility` for `onboarding.html`'s self-service flow and `deleteTenant` for superadmin's permanent-offboarding action) plus three non-exported helper modules it imports (`notifyRunner.js`, `tournamentCharges.js`, `engines/*.js`).
 
 ---
 
@@ -59,7 +59,7 @@ Every screen found has at least one confirmed entry point and at least one confi
 | Public Tournament page | `tournament.html?client=slug&t=id` | Player-facing schedule/standings/live scores/photo gallery, no PIN | Tenant Home tile; Tournament Admin "View Public Page"/copy-link; push-notification payload URLs; My Account Matches tab | Look up "my matches" by phone, subscribe to alerts, keep score, view gallery | Stays on page | Direct Firestore (open reads) + Cloud Functions (`setLiveScore`, `proposeMatchResult`, `subscribeMatchAlerts`) via raw `fetch` | None gated — deliberately public even if the add-on is later paused | ACTIVE |
 | Gallery Upload | `gallery.html?client=slug&t=id&token=...` | Anonymous, token-gated tournament photo upload | Only via a token link generated in Tournament Admin's Gallery panel | Pick/upload photos | "Thanks!" confirmation | Firestore (`uploadTokens`, `photos`) + Storage (no auth check — rules explicitly call this "the one truly open-to-the-internet upload surface") | Token doc tracks usage cap | ACTIVE |
 | Tenant Billing Portal | `billing.html?client=slug` | Tenant views its own invoices/payment status, submits payment proof | **No in-app link found** — direct URL only | View invoices, submit a payment claim | Stays on page | `getBillingPortalData` Cloud Function (PIN-verified server-side); writes `platformSubmissions` | Own PIN check (server-verified) | ACTIVE, but see §11 (unclear entry point) |
-| Superadmin Console | `superadmin.html` (10 tabs) | Platform-operator control plane | Direct URL, sign-in gated | Manage tenants/entitlements/plans/invoices/reports/diagnostics/feature ideas/audit | Stays on page (tabbed) | Direct Firestore + 2 Cloud Functions callables (`syncTournamentCharges`, `setTournamentChargeOverride`) | `platformTenants`, `platformPlans`, `platformInvoices`, etc. | ACTIVE — all 10 tabs confirmed fully wired |
+| Superadmin Console | `superadmin.html` (10 tabs) | Platform-operator control plane | Direct URL, sign-in gated | Manage tenants/entitlements/plans/invoices/reports/diagnostics/feature ideas/audit | Stays on page (tabbed) | Direct Firestore + 3 Cloud Functions callables (`syncTournamentCharges`, `setTournamentChargeOverride`, `deleteTenant`) | `platformTenants`, `platformPlans`, `platformInvoices`, etc. | ACTIVE — all 10 tabs confirmed fully wired |
 
 ---
 
@@ -210,9 +210,9 @@ Evidence: superadmin.html research pass — `setEntitlement()` as the single ent
 There is no conventional REST API. Two access patterns coexist:
 
 1. **Direct Firestore** (the default): `clients/{slug}/**` is readable/writable by anyone who can format a valid-looking slug (`isValidTenantId()` in `firestore.rules` — no auth check at all). This is a deliberate trust model documented repeatedly in the rules file's own comments ("no user auth in this app to gate on further").
-2. **Cloud Functions callables** (the exception, used specifically where client trust isn't acceptable): tournament match/schedule/standings mutations, push-alert subscribe/unsubscribe, the two platform-billing recalculation callables, and the tenant billing-portal read (`getBillingPortalData`, which explicitly exists to close a prior data-exposure gap — see its own header comment in `functions/index.js`).
+2. **Cloud Functions callables** (the exception, used specifically where client trust isn't acceptable): tournament match/schedule/standings mutations, push-alert subscribe/unsubscribe, the two platform-billing recalculation callables, the tenant billing-portal read (`getBillingPortalData`, which explicitly exists to close a prior data-exposure gap — see its own header comment in `functions/index.js`), and `deleteTenant` (superadmin's permanent-deletion action, server-checked precondition + recursive Firestore/Storage cleanup — see `SUPERADMIN_GUIDE.md` §5 and §10).
 
-All 24 callables were confirmed to have at least one real client caller (or be a scheduled cron with no caller by design) — **no orphaned Cloud Function was found.**
+All 25 callables were confirmed to have at least one real client caller (or be a scheduled cron with no caller by design) — **no orphaned Cloud Function was found.**
 
 Region: all callables and the client's callable factory agree on `asia-southeast1` (confirmed in both `functions/index.js` and every caller). `tournament.html` deliberately calls Functions via raw `fetch()` instead of the Functions SDK (it doesn't load `firebase-functions-compat.js`), unlike every other caller (`tournament-admin.html`, `billing.html`, `superadmin.html`), which do use the SDK's `httpsCallable`. This is a real (minor) inconsistency, not an error — both reach the same endpoints correctly.
 

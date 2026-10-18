@@ -1488,3 +1488,93 @@ async function applySelfServeBilling(slug, tenant, businessName, auth) {
     return null;
   }
 }
+
+/* ================================================================
+   TENANT OFFBOARDING -- permanent deletion.
+   The single most destructive action in this app: there is no undo, no
+   recycle bin, nothing to restore from. Everything else in this file
+   either writes new state or flips a flag; this one erases it.
+
+   Scope (confirmed design, not left to this function's judgment):
+   - DELETED: everything under clients/{slug}/** (all ~20 subcollections --
+     config, courts, pricing, settings, bookings, openPlay, morning,
+     staffReserve, queues, courtHours, storeSettings/Products/Sales/
+     InventoryLog/Shifts, status, openGames (+messages), abuseTracking,
+     proofs, tournaments (+ every nested subcollection: divisions,
+     registrations, participants, photos, uploadTokens, matches,
+     standings, auditLog, live, proposals, pushSubs, notifyOutbox,
+     notifyState)), via one recursiveDelete on the clients/{slug} doc.
+   - DELETED: platformTenants/{slug} (+ its entitlements/usage/events
+     subcollections), via recursiveDelete.
+   - DELETED: tenantDirectory/{slug} (removes the tenant from the public
+     facility picker immediately).
+   - DELETED: platformLiveTournaments/{slug}__{tournamentId} docs for this
+     tenant (id format confirmed in that collection's own rules comment).
+   - KEPT, deliberately: platformInvoices, platformSubmissions, and
+     platformTournamentCharges for this tenant (financial/audit history
+     outlives the tenant on purpose -- see CLIENTS.md's "client data
+     belongs to the client, billing records don't" posture) and
+     platformAuditLog (never touched by anything in this file, this
+     action included -- it is append-only by firestore.rules).
+   - DELETED: this tenant's three Storage prefixes (proofs, branding,
+     tournament galleries -- see index.html/superadmin.html/gallery.html's
+     upload paths). platformProofs/{slug}/** (payer payment-proof uploads,
+     billing.html) is NOT touched -- those belong to the platformSubmissions
+     records above, which are kept.
+
+   Precondition, enforced here (never trust the console's own lifecycle
+   gate, same posture as every other server-checked precondition in this
+   file): the tenant's lifecycle must already be 'cancelled' or 'archived'.
+   superadmin.html hides/disables its own Delete button outside that
+   state too, but that is a UX convenience -- this check is the real one. */
+exports.deleteTenant = onCall({ region: REGION }, async (request) => {
+  const tok = assertPlatformPerm(request, ['manage_organizations']);
+  const { slug } = request.data || {};
+  assertValidTenantId(slug);
+
+  const tenantRef = db.doc(`platformTenants/${slug}`);
+  const tenantSnap = await tenantRef.get();
+  if (!tenantSnap.exists) throw new HttpsError('not-found', `No tenant found for "${slug}".`);
+  const tenant = tenantSnap.data();
+  const lifecycle = tenant.lifecycle || (tenant.status === 'suspended' ? 'suspended' : 'active');
+  if (lifecycle !== 'cancelled' && lifecycle !== 'archived') {
+    throw new HttpsError('failed-precondition', `Tenant must be "cancelled" or "archived" before it can be deleted (current lifecycle: "${lifecycle}").`);
+  }
+  const businessName = tenant.businessName || slug;
+
+  // Everything below is the actual, irreversible deletion. Any failure
+  // partway through is still recorded in the audit log (below) rather than
+  // silently swallowed -- an operator needs to know a delete only half-ran.
+  let liveTournamentIds = [];
+  let deleteError = null;
+  try {
+    await db.recursiveDelete(db.doc(`clients/${slug}`));
+    await db.recursiveDelete(tenantRef);
+    await db.recursiveDelete(db.doc(`tenantDirectory/${slug}`));
+
+    // platformLiveTournaments has no tenant-scoped subcollection to
+    // recursiveDelete from -- its doc ids are `{clientId}__{tournamentId}`,
+    // so a range query on the document id is how every doc for this
+    // tenant is found (Firestore has no native "starts with" operator).
+    const liveSnap = await db.collection('platformLiveTournaments')
+      .where(admin.firestore.FieldPath.documentId(), '>=', `${slug}__`)
+      .where(admin.firestore.FieldPath.documentId(), '<', `${slug}__`)
+      .get();
+    liveTournamentIds = liveSnap.docs.map((d) => d.id);
+    for (const doc of liveSnap.docs) await doc.ref.delete();
+
+    const bucket = admin.storage().bucket();
+    const storagePrefixes = [`clients/${slug}/proofs/`, `clients/${slug}/branding/`, `clients/${slug}/tournaments/`];
+    for (const prefix of storagePrefixes) await bucket.deleteFiles({ prefix, force: true });
+  } catch (ex) {
+    deleteError = ex;
+  }
+
+  const detail = deleteError
+    ? `Deletion of tenant "${businessName}" (${slug}, lifecycle was "${lifecycle}") FAILED partway through: ${deleteError.message}. Check Firestore/Storage for leftover data under clients/${slug}/ and platformTenants/${slug}.`
+    : `Permanently deleted tenant "${businessName}" (${slug}, lifecycle was "${lifecycle}"). Removed: clients/${slug}/** (all subcollections), platformTenants/${slug} (+ entitlements/usage/events), tenantDirectory/${slug}, ${liveTournamentIds.length} platformLiveTournaments doc(s), and Storage under clients/${slug}/{proofs,branding,tournaments}/. Kept: platformInvoices, platformSubmissions, platformTournamentCharges (billing history) and platformAuditLog.`;
+  await logPlatformAudit('delete-tenant', slug, detail, tok.email);
+
+  if (deleteError) throw (deleteError instanceof HttpsError ? deleteError : new HttpsError('internal', `Tenant deletion failed: ${deleteError.message}`));
+  return { ok: true, slug, removedLiveTournaments: liveTournamentIds.length };
+});

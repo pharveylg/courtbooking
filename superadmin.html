@@ -2922,6 +2922,15 @@ function renderTenantRow(slug, data, status, isVisible){
         <div class="mono text-[10px] uppercase tracking-widest opacity-60 mb-1">Subscription</div>
         <div class="mono text-[11px]">${sub ? `<span class="font-[800]">${escapeHtml(sub.planName || sub.planId)}</span> • status <span class="font-[700]">${escapeHtml(sub.status || 'active')}</span> • pricing v${escapeHtml(sub.pricingVersion || 'n/a')} • started ${sub.startedAt && sub.startedAt.toDate ? sub.startedAt.toDate().toLocaleDateString() : '—'}` : `No plan assigned — manual billing formula below. Assign one under <span class="font-[700]">Plans &amp; Pricing</span>.`}</div>
       </div>
+      <div class="md:col-span-2 lg:col-span-4 rounded-[14px] border p-3" style="background:#FFF5F2;border-color:#FFC9B6">
+        <div class="mono text-[10px] uppercase tracking-widest font-[800]" style="color:#8C2C10">Delete Tenant — irreversible</div>
+        ${lifecycle === 'cancelled' || lifecycle === 'archived' ? `
+          <div class="mono text-[11px] opacity-70 mt-1.5 mb-2">Permanently removes <span class="font-[700]">clients/${escapeHtml(slug)}/**</span> (bookings, courts, settings, queues, store, tournaments, everything), the platform tenant record (+ entitlements/usage/events), the directory listing, and this tenant's uploaded files (proofs, branding, tournament galleries) in Storage. Billing history (invoices, payment submissions, tournament charges) and the audit log are kept. Make sure you've exported this tenant's data if needed — see CLIENTS.md — this cannot be undone.</div>
+          <button type="button" data-delete-tenant="${slug}" class="h-9 px-3.5 rounded-full text-white mono text-[10px] font-[800] cursor-pointer hover:opacity-90" style="background:#8C2C10">Delete Tenant Permanently</button>
+        ` : `
+          <div class="mono text-[11px] opacity-60 mt-1.5">Cancel or archive this tenant first — deletion is only available once Tenant Lifecycle (above) is "Cancelled" or "Archived".</div>
+        `}
+      </div>
     </div>
     <div class="p-4 pt-0 md:p-0 md:mt-4 md:pt-4 md:border-t md:border-[#F1E9DF]" id="billingWrap-${cssId(slug)}">
       <div class="mono text-[10px] uppercase tracking-widest opacity-60 mb-2">Billing — base subscription + confirmed-booking overage</div>
@@ -3178,6 +3187,34 @@ function renderTenantRow(slug, data, status, isVisible){
     try {
       const count = await wipeSampleUsageData(slug);
       toast(`Wiped ${count} sample events for ${data.businessName || slug}`);
+      loadTenants();
+    } catch(ex) { toast('Failed: ' + ex.message); }
+    finally { e.target.disabled = false; }
+  });
+  // Only rendered when lifecycle is cancelled/archived (see the conditional
+  // block above) -- optional chaining because the button legitimately isn't
+  // in the DOM otherwise. Server-side (functions/index.js's deleteTenant)
+  // re-checks the same precondition, so this client-side gate is a UX
+  // convenience, never the actual enforcement.
+  row.querySelector(`[data-delete-tenant="${cssAttr(slug)}"]`)?.addEventListener('click', async (e) => {
+    requirePerm('manage_organizations');
+    const current = TENANT_INDEX[slug] || data;
+    const currentLifecycle = current.lifecycle || lifecycle;
+    if(currentLifecycle !== 'cancelled' && currentLifecycle !== 'archived'){
+      toast('Cancel or archive this tenant first');
+      return;
+    }
+    const typed = prompt(`This PERMANENTLY deletes "${data.businessName || slug}" -- all bookings, courts, settings, queues, store data, tournaments, and uploaded files under clients/${slug}/. Billing history (invoices, payment submissions, tournament charges) and the audit log are kept. Make sure you've exported anything you need first (see CLIENTS.md) -- this cannot be undone.\n\nType the tenant slug "${slug}" exactly to confirm:`);
+    if(typed !== slug){
+      toast(typed == null ? 'Deletion cancelled' : 'Slug did not match -- deletion cancelled');
+      return;
+    }
+    e.target.disabled = true;
+    try {
+      await fns.httpsCallable('deleteTenant')({ slug });
+      delete TENANT_INDEX[slug];
+      delete ENT_STATE[slug];
+      toast(`${data.businessName || slug} permanently deleted`);
       loadTenants();
     } catch(ex) { toast('Failed: ' + ex.message); }
     finally { e.target.disabled = false; }
@@ -3957,6 +3994,7 @@ const AUDIT_ACTION_LABELS = {
   'invoice-submitted': 'Payment submitted for verification', 'invoice-payment': 'Verified invoice payment',
   'invoice-credit-applied': 'Applied credit balance to invoice', 'invoice-reject': 'Rejected payment proof',
   'invoice-waive': 'Waived invoice', 'invoice-cancel': 'Cancelled invoice', 'invoice-override': 'Overrode invoice status',
+  'delete-tenant': 'Deleted tenant permanently',
 };
 async function loadAuditLog(){
   const list = document.getElementById('auditLogList');

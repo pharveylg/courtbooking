@@ -32,6 +32,14 @@ fill in Plan/Setup/Renewal only once that customer actually goes live.
 - **Client data** belongs to the client. On termination, export their
   Firestore data scoped to `clients/{tenantId}/**` (Console → Firestore →
   query by prefix, or a targeted export) before removing the tenant.
+  Removal itself is no longer a manual Console job: once a tenant's
+  lifecycle is set to `cancelled` or `archived`, the Superadmin Console's
+  **Delete Tenant** action (Manage panel, confirmed by typing the tenant's
+  slug) permanently deletes `clients/{tenantId}/**`, the platform tenant
+  record, its directory listing, and its uploaded files, while keeping
+  invoices, payment submissions, tournament charges, and the audit log —
+  see `SUPERADMIN_GUIDE.md` §5 and §10. Export first; deletion cannot be
+  undone.
 - All tenants share one Firebase project and one deployment; isolation is
   by Firestore path (`clients/{tenantId}/...`) and Firestore Security
   Rules, not separate infrastructure per client.

@@ -9,6 +9,17 @@
 const fs = require('fs');
 const path = require('path');
 
+/* ---------- server-side deleteTenant (real functions/index.js) ----------
+   Everything else in this file tests superadmin.html's inline client script
+   against its own throwaway in-memory store. deleteTenant's actual recursive
+   delete + Storage sweep happen server-side, so that one Cloud Function is
+   loaded for real (same pattern as tests/tournament-billing.test.js), against
+   its own separate fake Firestore/Storage -- installMocks() must run before
+   functions/index.js is ever required in this process. */
+const { store: fnStore, fakeDb: fnDb, storageDeletes, installMocks } = require('./helpers/fakeFirestore');
+installMocks();
+const fns = require('../functions/index.js');
+
 /* ---------- in-memory Firestore ---------- */
 const TS = () => ({ __ts: true });
 const store = new Map();
@@ -382,6 +393,78 @@ const C = globalThis.__makeCtx();
   check('renderers executed without throw', true);
   C.exportReportingCsv();
   check('CSV export executed', true);
+
+  /* ===== deleteTenant: the real Cloud Function (functions/index.js), against
+     its own separate fake Firestore/Storage -- not the client-script harness
+     above. Covers the full confirmed scope: who may call it, the lifecycle
+     precondition, what gets removed vs. kept, and the audit trail. ===== */
+  const callFn = (name, data, auth) => fns[name]({ data, ...(auth ? { auth } : {}) });
+  const tok = (t) => ({ token: t });
+  const codeOf = async (p) => { try { await p; return null; } catch (e) { return e.code; } };
+
+  await fnDb.doc('platformTenants/zeta').set({ businessName: 'Zeta Club', lifecycle: 'active' });
+  await fnDb.doc('clients/zeta/config/state').set({ data: { business: { name: 'Zeta Club' } } });
+  await fnDb.doc('clients/zeta/courts/state').set({ data: [{ id: 'court1' }] });
+  await fnDb.doc('clients/zeta/bookings/state').set({ data: [] });
+  await fnDb.doc('clients/zeta/tournaments/t1').set({ name: 'Zeta Open' });
+  await fnDb.doc('clients/zeta/tournaments/t1/divisions/d1').set({ name: 'Open' });
+  await fnDb.doc('tenantDirectory/zeta').set({ businessName: 'Zeta Club', status: 'active' });
+  await fnDb.doc('platformTenants/zeta/entitlements/store').set({ status: 'active' });
+  await fnDb.doc('platformTenants/zeta/usage/2026-10').set({ views: 5 });
+  await fnDb.doc('platformInvoices/inv_zeta_2026-10').set({ tenantId: 'zeta', status: 'draft' });
+  await fnDb.doc('platformSubmissions/sub1').set({ tenantId: 'zeta' });
+  await fnDb.doc('platformTournamentCharges/zeta__t1').set({ tenantId: 'zeta' });
+  await fnDb.doc('platformLiveTournaments/zeta__t1').set({ live: true });
+  await fnDb.doc('platformAuditLog/existing1').set({ action: 'noop' });
+
+  check('deleteTenant: unauthenticated is refused', await codeOf(callFn('deleteTenant', { slug: 'zeta' })) === 'unauthenticated');
+  check('deleteTenant: signed in without manage_organizations is refused', await codeOf(callFn('deleteTenant', { slug: 'zeta' }, tok({ platformPerms: ['manage_entitlements'] }))) === 'permission-denied');
+  check('deleteTenant: refused while lifecycle is active (not cancelled/archived)', await codeOf(callFn('deleteTenant', { slug: 'zeta' }, tok({ superadmin: true }))) === 'failed-precondition');
+  check('deleteTenant: unknown tenant is not-found', await codeOf(callFn('deleteTenant', { slug: 'nope-at-all' }, tok({ superadmin: true }))) === 'not-found');
+  check('deleteTenant: every rejected attempt above left the data untouched', fnStore.has('clients/zeta/config/state') && fnStore.has('platformTenants/zeta'));
+
+  await fnDb.doc('platformTenants/zeta').set({ lifecycle: 'cancelled' }, { merge: true });
+  const delRes = await callFn('deleteTenant', { slug: 'zeta' }, tok({ platformPerms: ['manage_organizations'], email: 'staff@test.dev' }));
+  check('deleteTenant: succeeds once cancelled, returns ok + slug', delRes && delRes.ok === true && delRes.slug === 'zeta');
+  check('deleteTenant: clients/{slug}/** fully removed, including nested tournament subcollections',
+    !fnStore.has('clients/zeta/config/state') && !fnStore.has('clients/zeta/courts/state') &&
+    !fnStore.has('clients/zeta/tournaments/t1') && !fnStore.has('clients/zeta/tournaments/t1/divisions/d1'));
+  check('deleteTenant: platformTenants/{slug} and its entitlements/usage subcollections removed',
+    !fnStore.has('platformTenants/zeta') && !fnStore.has('platformTenants/zeta/entitlements/store') && !fnStore.has('platformTenants/zeta/usage/2026-10'));
+  check('deleteTenant: tenantDirectory/{slug} removed (drops off the public picker)', !fnStore.has('tenantDirectory/zeta'));
+  check('deleteTenant: this tenant\'s platformLiveTournaments doc removed', !fnStore.has('platformLiveTournaments/zeta__t1'));
+  check('deleteTenant: billing/audit history is KEPT, not deleted -- platformInvoices', fnStore.has('platformInvoices/inv_zeta_2026-10'));
+  check('deleteTenant: billing/audit history is KEPT, not deleted -- platformSubmissions', fnStore.has('platformSubmissions/sub1'));
+  check('deleteTenant: billing/audit history is KEPT, not deleted -- platformTournamentCharges', fnStore.has('platformTournamentCharges/zeta__t1'));
+  const auditAfterDelete = [...fnStore.entries()].filter(([k]) => k.startsWith('platformAuditLog/'));
+  check('deleteTenant: platformAuditLog gains exactly one new entry; the pre-existing entry is untouched',
+    auditAfterDelete.length === 2 && auditAfterDelete.some(([, v]) => v.action === 'delete-tenant' && v.slug === 'zeta' && /Permanently deleted tenant/.test(v.details)));
+  check('deleteTenant: Storage is swept for all three tenant-owned prefixes',
+    storageDeletes.includes('clients/zeta/proofs/') && storageDeletes.includes('clients/zeta/branding/') && storageDeletes.includes('clients/zeta/tournaments/'));
+
+  await fnDb.doc('platformTenants/theta').set({ businessName: 'Theta', lifecycle: 'archived' });
+  await fnDb.doc('clients/theta/config/state').set({ data: {} });
+  const delRes2 = await callFn('deleteTenant', { slug: 'theta' }, tok({ superadmin: true }));
+  check('deleteTenant: "archived" lifecycle is accepted too, not just "cancelled"',
+    delRes2 && delRes2.ok === true && !fnStore.has('clients/theta/config/state') && !fnStore.has('platformTenants/theta'));
+
+  /* ===== wiring: superadmin.html's Delete Tenant control (regex-over-HTML,
+     same style as tests/queue-winner-pdf.test.js) ===== */
+  const deleteBtnMarkupIdx = html.indexOf('data-delete-tenant="${slug}"');
+  const lifecycleGateIdx = html.indexOf("lifecycle === 'cancelled' || lifecycle === 'archived'");
+  check('wiring: the Delete button markup exists, gated behind the cancelled/archived lifecycle check',
+    deleteBtnMarkupIdx > -1 && lifecycleGateIdx > -1 && deleteBtnMarkupIdx > lifecycleGateIdx && deleteBtnMarkupIdx - lifecycleGateIdx < 800);
+  check('wiring: a disabled explanation is shown otherwise, telling the operator to cancel/archive first',
+    /Cancel or archive this tenant first[\s\S]{0,300}?"Cancelled" or "Archived"/.test(html));
+  const deleteHandlerMarker = 'data-delete-tenant="${cssAttr(slug)}"]`)?.addEventListener(\'click\', async (e) => {';
+  const deleteHandlerIdx = html.indexOf(deleteHandlerMarker);
+  const handlerBlock = deleteHandlerIdx > -1 ? html.slice(deleteHandlerIdx, deleteHandlerIdx + 1500) : '';
+  check('wiring: the Delete click handler exists and is gated on manage_organizations', deleteHandlerIdx > -1 && /requirePerm\('manage_organizations'\)/.test(handlerBlock));
+  check('wiring: the click handler requires typing the exact slug via prompt() before proceeding',
+    /const typed = prompt\([\s\S]{0,600}?if\(typed !== slug\)/.test(handlerBlock));
+  check('wiring: on confirmed deletion it calls the deleteTenant callable and drops the tenant from local state',
+    handlerBlock.includes("await fns.httpsCallable('deleteTenant')({ slug })") && /delete TENANT_INDEX\[slug\]/.test(handlerBlock));
+  check('wiring: the new action is registered in AUDIT_ACTION_LABELS', /'delete-tenant':\s*'Deleted tenant permanently'/.test(html));
 
   const passed = results.filter(r => r[1]).length;
   console.log(`\n=== CONTROL-PLANE TESTS: ${passed}/${results.length} passed ===`);

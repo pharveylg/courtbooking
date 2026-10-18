@@ -209,15 +209,12 @@
 
   function gameScoreText(g) { return `${Math.max(g.home, g.away)} to ${Math.min(g.home, g.away)}`; }
 
-  /* The side (or null) that would win the CURRENT game by winning just one
-     more point, found by applying `gameIsWon` hypothetically -- never by
+  /* Whether `side` would win the CURRENT game by winning just one more
+     point, found by applying `gameIsWon` hypothetically -- never by
      comparing to `target - 1`, which is unsafe once win-by-2 or a deuce-like
-     score is in play. At most one side can be true under normal rules. */
-  function oneAwayFromGameWin(state) {
-    for (const side of ['home', 'away']) {
-      if (gameIsWon(state.config, state[side] + 1, state[other(side)])) return side;
-    }
-    return null;
+     score is in play. */
+  function oneAwayFromGameWin(state, side) {
+    return gameIsWon(state.config, state[side] + 1, state[other(side)]);
   }
 
   /* What to say after a rally moved `prev` to `next`. */
@@ -229,10 +226,25 @@
       const winner = g.home > g.away ? 'home' : 'away';
       return `Game! Winner, ${nm[winner]}. ${gameScoreText(g)}`;
     }
-    const pointAway = oneAwayFromGameWin(next);
-    if (pointAway) {
-      const isMatchPoint = next.gamesWon[pointAway] === gamesToWin(next.config) - 1;
-      return `${isMatchPoint ? 'Match' : 'Set'} point, ${nm[pointAway]}`;
+    /* Set/match point is only announced for the SERVING side. In side-out
+       scoring only the server can actually score on the next rally -- the
+       receivers winning it only earns a side out (or, in doubles, a
+       hand-over to the second server), not a point -- so a receiving side
+       that is mathematically "one point from winning" can't actually get
+       there on the very next rally, and calling it out would be premature.
+       Checking the server directly (rather than asking "is either side one
+       away, and if so is that side serving") also gets the rare sudden-death
+       tie right, where BOTH sides are mathematically one away at once: only
+       the server's version of that fact describes what can really happen
+       next. Rally scoring has no such restriction -- any rally's winner can
+       score -- but the server is also always the side that scored the
+       rally just played, so this check still matches that side whenever
+       their own point makes them one away; it just stays silent about a
+       point the OTHER side is one away from, even though in rally scoring
+       they could in fact reach it on the very next rally too. */
+    if (oneAwayFromGameWin(next, next.serving)) {
+      const isMatchPoint = next.gamesWon[next.serving] === gamesToWin(next.config) - 1;
+      return `${isMatchPoint ? 'Match' : 'Set'} point, ${nm[next.serving]}`;
     }
     const sideOut = prev.serving !== next.serving;
     return `${sideOut && next.config.scoring === 'sideout' ? 'Side out. ' : ''}${scoreCallSpoken(next)}`;

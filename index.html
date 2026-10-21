@@ -589,8 +589,9 @@ body:not(.staff-mode) .staff-link{display:none!important}
             </div>
 
             <div id="qCourtWrapper" class="hidden">
-              <label class="block mono text-[10px] uppercase tracking-widest font-[700] mb-1">Court</label>
-              <select id="qCourt" class="w-full h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-3.5 text-[13px] font-[650] outline-none focus:border-[#201C19]"></select>
+              <label class="block mono text-[10px] uppercase tracking-widest font-[700] mb-1">Court(s) -- select one or more</label>
+              <select id="qCourt" multiple size="3" class="w-full rounded-[18px] border border-[#EAE0D5] bg-[#FFFBF5] px-3.5 py-2 text-[13px] font-[650] outline-none focus:border-[#201C19]"></select>
+              <p class="mono text-[10px] opacity-55 mt-1">Ctrl/Cmd-click (or tap, on mobile) to pick more than one. The queue runs across every court you pick -- one shared waiting line, one match per court. Set once; can't be changed mid-session.</p>
             </div>
 
             <div class="grid grid-cols-2 gap-3">
@@ -714,85 +715,20 @@ body:not(.staff-mode) .staff-link{display:none!important}
               </div>
             </div>
 
-            <!-- Court Board: Side A vs Side B -->
-            <div class="grid grid-cols-11 items-center gap-2 my-5">
-              <!-- Team A -->
-              <div class="col-span-5 bg-white/5 border border-white/10 rounded-[20px] p-4 text-center">
-                <span class="mono text-[10px] uppercase opacity-50 tracking-wider">Team A</span>
-                <div id="teamAPlayers" class="mt-2 text-[15px] font-[800] leading-snug tracking-[-0.01em] min-h-[44px] flex flex-col justify-center">
-                  <div>Player 1</div><div>Player 2</div>
-                </div>
-                <div class="mt-4 flex items-center justify-center gap-1.5">
-                  <span class="mono text-[10px] opacity-60">Score:</span>
-                  <input type="number" id="scoreA" min="0" max="99" placeholder="0" class="w-16 h-10 rounded-xl bg-white/10 border border-white/15 text-center text-[18px] font-black text-white focus:bg-white focus:text-[#201C19] outline-none transition"/>
-                </div>
-              </div>
-
-              <!-- VS Divider -->
-              <div class="col-span-1 text-center font-black text-[13px] opacity-40">VS</div>
-
-              <!-- Team B -->
-              <div class="col-span-5 bg-white/5 border border-white/10 rounded-[20px] p-4 text-center">
-                <span class="mono text-[10px] uppercase opacity-50 tracking-wider">Team B</span>
-                <div id="teamBPlayers" class="mt-2 text-[15px] font-[800] leading-snug tracking-[-0.01em] min-h-[44px] flex flex-col justify-center">
-                  <div>Player 3</div><div>Player 4</div>
-                </div>
-                <div class="mt-4 flex items-center justify-center gap-1.5">
-                  <span class="mono text-[10px] opacity-60">Score:</span>
-                  <input type="number" id="scoreB" min="0" max="99" placeholder="0" class="w-16 h-10 rounded-xl bg-white/10 border border-white/15 text-center text-[18px] font-black text-white focus:bg-white focus:text-[#201C19] outline-none transition"/>
-                </div>
-              </div>
+            <!-- Game format: session-wide (shared by every court), same as
+                 mode/rule/winner-ranking -- not a per-court setting. -->
+            <div class="relative flex flex-wrap items-center gap-2 justify-center sm:justify-start mb-4">
+              <select id="qFmtTarget" aria-label="Game to" class="h-9 rounded-full bg-white/10 border border-white/15 text-white px-3 mono text-[11px] font-[700] outline-none"><option value="7" class="text-black">To 7</option><option value="9" class="text-black">To 9</option><option value="11" selected class="text-black">To 11</option><option value="15" class="text-black">To 15</option><option value="21" class="text-black">To 21</option></select>
+              <select id="qFmtWinBy" aria-label="Win by" class="h-9 rounded-full bg-white/10 border border-white/15 text-white px-3 mono text-[11px] font-[700] outline-none"><option value="2" selected class="text-black">Win by 2</option><option value="1" class="text-black">Win by 1</option></select>
+              <select id="qFmtScoring" aria-label="Scoring" class="h-9 rounded-full bg-white/10 border border-white/15 text-white px-3 mono text-[11px] font-[700] outline-none"><option value="sideout" selected class="text-black">Side-out</option><option value="rally" class="text-black">Rally</option></select>
             </div>
 
-            <!-- Serves first (admin override -- always editable, never validated) -->
-            <div id="qServeFirstRow" class="hidden flex items-center justify-center gap-2 flex-wrap -mt-2 mb-4">
-              <span class="mono text-[10px] uppercase tracking-wider opacity-50">Serves first</span>
-              <button type="button" id="qServeFirstA" data-serve="teamA" class="h-7 px-3 rounded-full mono text-[10.5px] font-[700] transition cursor-pointer"></button>
-              <button type="button" id="qServeFirstB" data-serve="teamB" class="h-7 px-3 rounded-full mono text-[10.5px] font-[700] transition cursor-pointer"></button>
-            </div>
-
-            <!-- Timed Rotation Widget (Visible only if timed_rotation is active) -->
-            <div id="qTimerWrapper" class="hidden my-4 p-4 rounded-[20px] bg-white/5 border border-white/10 flex flex-col sm:flex-row items-center justify-between gap-3 relative overflow-hidden">
-              <div class="flex items-center gap-3">
-                <div class="w-10 h-10 rounded-full bg-[#D6FF5F]/20 text-[#D6FF5F] grid place-items-center text-[18px]">⏱️</div>
-                <div>
-                  <div class="mono text-[10px] uppercase tracking-wider opacity-60">Timed Rotation Limit</div>
-                  <div class="flex items-center gap-1.5 mt-0.5">
-                    <span id="qTimerDisplay" class="mono text-[22px] font-black tracking-wider text-[#D6FF5F]">10:00</span>
-                    <span id="qTimerFinishedLabel" class="hidden mono text-[10px] px-2 py-0.5 rounded-full bg-red-500/20 text-red-300 font-[800] uppercase animate-pulse">Time's Up!</span>
-                  </div>
-                </div>
-              </div>
-              <div class="flex items-center gap-2">
-                <button type="button" id="qTimerToggleBtn" class="h-9 px-4 rounded-full bg-white text-[#201C19] mono text-[11px] font-[800] hover:bg-[#D6FF5F] transition cursor-pointer">Start</button>
-                <button type="button" id="qTimerResetBtn" class="h-9 px-3 rounded-full bg-white/10 hover:bg-white/20 text-white mono text-[11px] font-[700] transition cursor-pointer">Reset</button>
-                <select id="qTimerLimitSelect" class="h-9 rounded-full bg-white/10 border border-white/15 text-white px-3 mono text-[11px] font-[700] outline-none">
-                  <option value="5" class="text-black">5 Min</option>
-                  <option value="10" selected class="text-black">10 Min</option>
-                  <option value="12" class="text-black">12 Min</option>
-                  <option value="15" class="text-black">15 Min</option>
-                  <option value="20" class="text-black">20 Min</option>
-                </select>
-              </div>
-            </div>
-
-            <!-- Live scoreboard: tap points as they happen, then it submits for you -->
-            <div class="relative flex flex-col sm:flex-row items-center justify-between gap-3 bg-white/5 rounded-2xl p-3 border border-white/5 mb-3">
-              <div class="flex flex-wrap items-center gap-2 justify-center sm:justify-start">
-                <select id="qFmtTarget" aria-label="Game to" class="h-9 rounded-full bg-white/10 border border-white/15 text-white px-3 mono text-[11px] font-[700] outline-none"><option value="7" class="text-black">To 7</option><option value="9" class="text-black">To 9</option><option value="11" selected class="text-black">To 11</option><option value="15" class="text-black">To 15</option><option value="21" class="text-black">To 21</option></select>
-                <select id="qFmtWinBy" aria-label="Win by" class="h-9 rounded-full bg-white/10 border border-white/15 text-white px-3 mono text-[11px] font-[700] outline-none"><option value="2" selected class="text-black">Win by 2</option><option value="1" class="text-black">Win by 1</option></select>
-                <select id="qFmtScoring" aria-label="Scoring" class="h-9 rounded-full bg-white/10 border border-white/15 text-white px-3 mono text-[11px] font-[700] outline-none"><option value="sideout" selected class="text-black">Side-out</option><option value="rally" class="text-black">Rally</option></select>
-              </div>
-              <button type="button" id="liveScoreBtn" class="h-10 px-5 rounded-full bg-white text-[#201C19] font-[800] text-[13px] hover:bg-[#D6FF5F] transition cursor-pointer shrink-0 disabled:opacity-40 disabled:cursor-not-allowed">Live score (tap points)</button>
-            </div>
-
-            <!-- Submit Button -->
-            <div class="relative flex flex-col sm:flex-row items-center justify-between gap-3 bg-white/5 rounded-2xl p-3 border border-white/5">
-              <span class="mono text-[11px] opacity-60 text-center sm:text-left">Or enter both final scores and submit to advance the queue.</span>
-              <button type="button" id="submitScoreBtn" class="h-10 px-5 rounded-full bg-[#D6FF5F] hover:bg-[#CBF052] text-[#201C19] font-[800] text-[13px] transition cursor-pointer shrink-0">
-                Submit & Rotate Queue →
-              </button>
-            </div>
+            <!-- One card per court (data-court), following the same per-item
+                 loop pattern as the Waiting Room list below -- see
+                 renderActiveMatchCourts() in the script. A court label is
+                 only shown when the session runs on more than one court, so
+                 a single-court session looks exactly as it always has. -->
+            <div id="activeMatchCourtsContainer" class="flex flex-col gap-5"></div>
           </div>
 
           <!-- Queue Management: Next Up, Waiting, Join -->
@@ -7793,7 +7729,9 @@ function renderQueueModule() {
         div.className = `p-3.5 rounded-[18px] border transition cursor-pointer flex items-center justify-between gap-2
           ${isSelected ? 'bg-[#201C19] text-white border-[#201C19] shadow-sm' : 'bg-[#FFFBF5] border-[#EAE0D5] hover:border-[#201C19]'}`;
         
-        const totalP = (s.activeMatch ? (s.mode === 'doubles' ? 4 : 2) : 0) + s.waiting.reduce((sum, w) => sum + w.names.length, 0);
+        QueueEngine.ensureCourts(s); // backward compatible: an old/foreign session shape defaults to exactly 1 court
+        const occupiedCourts = s.activeMatches.filter(Boolean).length;
+        const totalP = occupiedCourts * (s.mode === 'doubles' ? 4 : 2) + s.waiting.reduce((sum, w) => sum + w.names.length, 0);
 
         const courtName = s.court ? getCourtName(s.court) : '';
         div.innerHTML = `
@@ -7841,9 +7779,14 @@ function selectQueueSession(id) {
   renderQueueModule();
 }
 
-/* ---------- Live Timer & Buzzer for Timed Rotations ---------- */
-let activeTimerInterval = null;
+/* ---------- Live Timer & Buzzer for Timed Rotations ----------
+   One independent timer per court: session.timerSecondsLeft/timerRunning/
+   timerLimit are each an array indexed by court (see queue-engine.js), and
+   activeTimerIntervals is keyed by `${sessionId}_${court}` so two courts'
+   intervals never collide or interfere with each other. */
+let activeTimerIntervals = {};
 let activeTimerSessionId = null;
+function timerKey(sessionId, court) { return sessionId + '_' + court; }
 
 function playTimerBuzzer() {
   try {
@@ -7869,46 +7812,49 @@ function playTimerBuzzer() {
   }
 }
 
-function stopActiveTimer() {
-  if (activeTimerInterval) {
-    clearInterval(activeTimerInterval);
-    activeTimerInterval = null;
+/* Stops one court's timer interval, or every interval for the current
+   session (no `court` arg) -- e.g. when the dashboard switches to a
+   different session, or the rule isn't timed_rotation at all. */
+function stopActiveTimer(court) {
+  if (court !== undefined) {
+    const key = timerKey(activeTimerSessionId, court);
+    if (activeTimerIntervals[key]) { clearInterval(activeTimerIntervals[key]); delete activeTimerIntervals[key]; }
+    return;
   }
+  Object.keys(activeTimerIntervals).forEach((k) => clearInterval(activeTimerIntervals[k]));
+  activeTimerIntervals = {};
   activeTimerSessionId = null;
 }
 
-function initDashboardTimer(session) {
-  const display = document.getElementById('qTimerDisplay');
-  const toggleBtn = document.getElementById('qTimerToggleBtn');
-  const resetBtn = document.getElementById('qTimerResetBtn');
-  const limitSelect = document.getElementById('qTimerLimitSelect');
-  const finishedLabel = document.getElementById('qTimerFinishedLabel');
+function initDashboardTimer(session, court) {
+  const display = document.getElementById(`qTimerDisplay_${court}`);
+  const toggleBtn = document.getElementById(`qTimerToggleBtn_${court}`);
+  const resetBtn = document.getElementById(`qTimerResetBtn_${court}`);
+  const limitSelect = document.getElementById(`qTimerLimitSelect_${court}`);
+  const finishedLabel = document.getElementById(`qTimerFinishedLabel_${court}`);
 
   if (!display || !toggleBtn || !resetBtn || !limitSelect || !finishedLabel) return;
-
-  if (session.timerSecondsLeft === undefined) session.timerSecondsLeft = 600;
-  if (session.timerLimit === undefined) session.timerLimit = 10;
-  if (session.timerRunning === undefined) session.timerRunning = false;
-
-  limitSelect.value = String(session.timerLimit);
 
   if (activeTimerSessionId !== session.id) {
     stopActiveTimer();
   }
   activeTimerSessionId = session.id;
+  const key = timerKey(session.id, court);
+
+  limitSelect.value = String(session.timerLimit[court]);
 
   function updateDisplay() {
-    const mins = Math.floor(session.timerSecondsLeft / 60);
-    const secs = session.timerSecondsLeft % 60;
+    const mins = Math.floor(session.timerSecondsLeft[court] / 60);
+    const secs = session.timerSecondsLeft[court] % 60;
     display.textContent = `${mins}:${secs < 10 ? '0' : ''}${secs}`;
-    
-    if (session.timerSecondsLeft <= 0) {
+
+    if (session.timerSecondsLeft[court] <= 0) {
       finishedLabel.classList.remove('hidden');
       display.classList.add('text-red-400');
       display.classList.remove('text-[#D6FF5F]');
       toggleBtn.textContent = 'Start';
-      session.timerRunning = false;
-      stopActiveTimer();
+      session.timerRunning[court] = false;
+      stopActiveTimer(court);
     } else {
       finishedLabel.classList.add('hidden');
       display.classList.remove('text-red-400');
@@ -7918,76 +7864,66 @@ function initDashboardTimer(session) {
 
   updateDisplay();
 
-  resetBtn.onclick = () => {
-    session.timerSecondsLeft = session.timerLimit * 60;
-    session.timerRunning = false;
-    stopActiveTimer();
-    updateDisplay();
+  function persist() {
     const currentQueues = loadQueues();
     saveQueues(currentQueues.map(q => q.id === session.id ? session : q));
+  }
+
+  function startInterval() {
+    stopActiveTimer(court);
+    activeTimerIntervals[key] = setInterval(() => {
+      if (session.timerSecondsLeft[court] > 0) {
+        session.timerSecondsLeft[court]--;
+        updateDisplay();
+        if (session.timerSecondsLeft[court] <= 0) {
+          playTimerBuzzer();
+          toast(session.courtCount > 1 ? `Court ${court + 1}: time's up! Enter score to rotate.` : "Time's Up! Enter score to rotate.");
+          persist();
+        }
+      }
+    }, 1000);
+  }
+
+  resetBtn.onclick = () => {
+    session.timerSecondsLeft[court] = session.timerLimit[court] * 60;
+    session.timerRunning[court] = false;
+    stopActiveTimer(court);
+    updateDisplay();
+    persist();
     toast('Timer reset');
   };
 
   toggleBtn.onclick = () => {
-    const currentQueues = loadQueues();
-    if (session.timerRunning) {
-      session.timerRunning = false;
-      stopActiveTimer();
+    if (session.timerRunning[court]) {
+      session.timerRunning[court] = false;
+      stopActiveTimer(court);
       toggleBtn.textContent = 'Start';
-      saveQueues(currentQueues.map(q => q.id === session.id ? session : q));
+      persist();
     } else {
-      if (session.timerSecondsLeft <= 0) {
-        session.timerSecondsLeft = session.timerLimit * 60;
+      if (session.timerSecondsLeft[court] <= 0) {
+        session.timerSecondsLeft[court] = session.timerLimit[court] * 60;
       }
-      session.timerRunning = true;
+      session.timerRunning[court] = true;
       toggleBtn.textContent = 'Pause';
-      saveQueues(currentQueues.map(q => q.id === session.id ? session : q));
-      
-      stopActiveTimer();
-      activeTimerSessionId = session.id;
-      activeTimerInterval = setInterval(() => {
-        if (session.timerSecondsLeft > 0) {
-          session.timerSecondsLeft--;
-          updateDisplay();
-          if (session.timerSecondsLeft <= 0) {
-            playTimerBuzzer();
-            toast("Time's Up! Enter score to rotate.");
-            const qList = loadQueues();
-            saveQueues(qList.map(q => q.id === session.id ? session : q));
-          }
-        }
-      }, 1000);
+      persist();
+      startInterval();
     }
   };
 
   limitSelect.onchange = () => {
     const mins = parseInt(limitSelect.value, 10);
-    session.timerLimit = mins;
-    session.timerSecondsLeft = mins * 60;
-    session.timerRunning = false;
-    stopActiveTimer();
+    session.timerLimit[court] = mins;
+    session.timerSecondsLeft[court] = mins * 60;
+    session.timerRunning[court] = false;
+    stopActiveTimer(court);
     toggleBtn.textContent = 'Start';
     updateDisplay();
-    const currentQueues = loadQueues();
-    saveQueues(currentQueues.map(q => q.id === session.id ? session : q));
+    persist();
   };
 
-  if (session.timerRunning) {
+  if (session.timerRunning[court]) {
     toggleBtn.textContent = 'Pause';
-    if (!activeTimerInterval) {
-      activeTimerInterval = setInterval(() => {
-        if (session.timerSecondsLeft > 0) {
-          session.timerSecondsLeft--;
-          updateDisplay();
-          if (session.timerSecondsLeft <= 0) {
-            playTimerBuzzer();
-            toast("Time's Up! Enter score to rotate.");
-            const qList = loadQueues();
-            saveQueues(qList.map(q => q.id === session.id ? session : q));
-          }
-        }
-      }, 1000);
-    }
+    if (!activeTimerIntervals[key]) startInterval();
   } else {
     toggleBtn.textContent = 'Start';
   }
@@ -8015,6 +7951,7 @@ function renderActiveQueueDashboard() {
 
   placeholder.classList.add('hidden');
   dashboard.classList.remove('hidden');
+  QueueEngine.ensureCourts(session); // backward compatible: defaults to exactly 1 court for an old/foreign session shape
 
   // Render details
   const nameEl = document.getElementById('dashboardSessionName');
@@ -8040,18 +7977,6 @@ function renderActiveQueueDashboard() {
   }
   if (matchNumEl) matchNumEl.textContent = `Match #${session.matches.length + 1}`;
 
-  // Timed Rotation Widget toggle
-  const timerWrapper = document.getElementById('qTimerWrapper');
-  if (timerWrapper) {
-    if (session.rule === 'timed_rotation') {
-      timerWrapper.classList.remove('hidden');
-      initDashboardTimer(session);
-    } else {
-      timerWrapper.classList.add('hidden');
-      stopActiveTimer();
-    }
-  }
-
   // Hide / Show / Require Partner name field based on game mode + rule
   const jPlayer2Wrapper = document.getElementById('jPlayer2Wrapper');
   if (jPlayer2Wrapper) {
@@ -8073,57 +7998,9 @@ function renderActiveQueueDashboard() {
     }
   }
 
-  // Active Court players
-  const teamAPlayers = document.getElementById('teamAPlayers');
-  const teamBPlayers = document.getElementById('teamBPlayers');
-  const scoreAInput = document.getElementById('scoreA');
-  const scoreBInput = document.getElementById('scoreB');
-  syncQueueFormatControls(session);
-
-  const serveFirstRow = document.getElementById('qServeFirstRow');
-  if (teamAPlayers && teamBPlayers) {
-    if (session.activeMatch) {
-      const recordChip = (tid) => {
-        if (session.rule !== 'fixed_pairs' || !tid || !session.teams || !session.teams[tid]) return '';
-        const t = session.teams[tid];
-        return `<span class="mt-1 inline-block mono text-[9px] px-1.5 py-0.5 rounded-full bg-white/10 border border-white/10 opacity-80">${t.w}W–${t.l}L</span>`;
-      };
-      const fixedPairs = session.rule === 'fixed_pairs';
-      const m = session.activeMatch;
-      const selCls = 'name-edit-dark bg-transparent border-0 border-b border-dashed border-white/30 text-white font-[800] text-[15px] text-center outline-none cursor-pointer w-full py-0.5 truncate';
-      if (fixedPairs) {
-        teamAPlayers.innerHTML = `<select class="${selCls}" data-team-swap="teamA">${qTeamOptionsHtml(session, 'teamA', m.teamAId)}</select>` + recordChip(m.teamAId);
-        teamBPlayers.innerHTML = `<select class="${selCls}" data-team-swap="teamB">${qTeamOptionsHtml(session, 'teamB', m.teamBId)}</select>` + recordChip(m.teamBId);
-      } else {
-        teamAPlayers.innerHTML = m.teamA.map((p, i) => `<select class="${selCls}" data-team="teamA" data-index="${i}">${qNameOptionsHtml(session, 'teamA', i, p)}</select>`).join('');
-        teamBPlayers.innerHTML = m.teamB.map((p, i) => `<select class="${selCls}" data-team="teamB" data-index="${i}">${qNameOptionsHtml(session, 'teamB', i, p)}</select>`).join('');
-      }
-      teamAPlayers.querySelectorAll('select[data-team]').forEach((sel) => sel.addEventListener('change', () => applyQueueSwap(sel.dataset.team, Number(sel.dataset.index), sel.value)));
-      teamBPlayers.querySelectorAll('select[data-team]').forEach((sel) => sel.addEventListener('change', () => applyQueueSwap(sel.dataset.team, Number(sel.dataset.index), sel.value)));
-      teamAPlayers.querySelectorAll('select[data-team-swap]').forEach((sel) => sel.addEventListener('change', () => applyQueueTeamSwap(sel.dataset.teamSwap, sel.value)));
-      teamBPlayers.querySelectorAll('select[data-team-swap]').forEach((sel) => sel.addEventListener('change', () => applyQueueTeamSwap(sel.dataset.teamSwap, sel.value)));
-      if (scoreAInput) scoreAInput.disabled = false;
-      if (scoreBInput) scoreBInput.disabled = false;
-      if (serveFirstRow) {
-        serveFirstRow.classList.remove('hidden');
-        const serving = m.firstServer === 'teamB' ? 'teamB' : 'teamA';
-        const baseCls = 'h-7 px-3 rounded-full mono text-[10.5px] font-[700] transition cursor-pointer';
-        const onCls = baseCls + ' bg-white text-[#201C19]';
-        const offCls = baseCls + ' bg-white/10 text-white/60 hover:bg-white/20';
-        const aBtn = document.getElementById('qServeFirstA'), bBtn = document.getElementById('qServeFirstB');
-        aBtn.textContent = teamLabel(m.teamA);
-        bBtn.textContent = teamLabel(m.teamB);
-        aBtn.className = serving === 'teamA' ? onCls : offCls;
-        bBtn.className = serving === 'teamB' ? onCls : offCls;
-      }
-    } else {
-      teamAPlayers.innerHTML = `<div class="text-[#D6FF5F] font-[600] mono text-[12px] opacity-70">Awaiting players...</div>`;
-      teamBPlayers.innerHTML = `<div class="text-[#D6FF5F] font-[600] mono text-[12px] opacity-70">Awaiting players...</div>`;
-      if (scoreAInput) { scoreAInput.disabled = true; scoreAInput.value = ''; }
-      if (scoreBInput) { scoreBInput.disabled = true; scoreBInput.value = ''; }
-      if (serveFirstRow) serveFirstRow.classList.add('hidden');
-    }
-  }
+  // Active Court players -- one card per court (data-court), same per-item
+  // loop pattern as the Waiting Room list below.
+  renderActiveMatchCourts(session);
 
   // Rest-priority note: say how the next match is picked when the queue is uneven.
   // Every rule except Fixed Pairs (teams are the fixed unit there) pulls by rest priority.
@@ -8288,6 +8165,134 @@ function renderActiveQueueDashboard() {
   }
 }
 
+/* One card per court (data-court), same per-item loop pattern as the
+   Waiting Room list -- replaces the old singleton teamAPlayers/teamBPlayers/
+   scoreA/scoreB/qServeFirstRow/qTimerWrapper/liveScoreBtn/submitScoreBtn ids
+   with one full set of controls per court slot: `_<court>`-suffixed ids, a
+   `data-court` attribute on every per-court control, and its own listeners.
+   Each court's score entry, live-score button, serve-first toggle, and
+   (for Timed Rotation) timer are fully independent of every other court's. */
+function renderActiveMatchCourts(session) {
+  const container = document.getElementById('activeMatchCourtsContainer');
+  if (!container) return;
+  const courtCount = session.courtCount || 1;
+  const fixedPairs = session.rule === 'fixed_pairs';
+  const f = queueFormatOf(session);
+  container.innerHTML = '';
+  for (let court = 0; court < courtCount; court++) {
+    const m = session.activeMatches[court];
+    const wrap = document.createElement('div');
+    wrap.className = 'rounded-[20px] bg-white/[0.03] border border-white/5 p-4';
+    wrap.dataset.court = String(court);
+    const courtName = (session.courtLabels && session.courtLabels[court]) || `Court ${court + 1}`;
+    const courtLabel = courtCount > 1 ? `<div class="mono text-[10px] uppercase tracking-wider opacity-50 mb-2">${escapeHtml(courtName)}</div>` : '';
+
+    const recordChip = (tid) => {
+      if (!fixedPairs || !tid || !session.teams || !session.teams[tid]) return '';
+      const t = session.teams[tid];
+      return `<span class="mt-1 inline-block mono text-[9px] px-1.5 py-0.5 rounded-full bg-white/10 border border-white/10 opacity-80">${t.w}W–${t.l}L</span>`;
+    };
+    const selCls = 'name-edit-dark bg-transparent border-0 border-b border-dashed border-white/30 text-white font-[800] text-[15px] text-center outline-none cursor-pointer w-full py-0.5 truncate';
+
+    const teamACell = !m ? '' : (fixedPairs
+      ? `<select class="${selCls}" data-team-swap="teamA">${qTeamOptionsHtml(session, court, 'teamA', m.teamAId)}</select>` + recordChip(m.teamAId)
+      : m.teamA.map((p, i) => `<select class="${selCls}" data-team="teamA" data-index="${i}">${qNameOptionsHtml(session, court, 'teamA', i, p)}</select>`).join(''));
+    const teamBCell = !m ? '' : (fixedPairs
+      ? `<select class="${selCls}" data-team-swap="teamB">${qTeamOptionsHtml(session, court, 'teamB', m.teamBId)}</select>` + recordChip(m.teamBId)
+      : m.teamB.map((p, i) => `<select class="${selCls}" data-team="teamB" data-index="${i}">${qNameOptionsHtml(session, court, 'teamB', i, p)}</select>`).join(''));
+
+    const serving = m && m.firstServer === 'teamB' ? 'teamB' : 'teamA';
+    const serveBaseCls = 'h-7 px-3 rounded-full mono text-[10.5px] font-[700] transition cursor-pointer';
+    const serveOnCls = serveBaseCls + ' bg-white text-[#201C19]';
+    const serveOffCls = serveBaseCls + ' bg-white/10 text-white/60 hover:bg-white/20';
+
+    wrap.innerHTML = `
+      ${courtLabel}
+      <div class="grid grid-cols-11 items-center gap-2 mb-3">
+        <div class="col-span-5 bg-white/5 border border-white/10 rounded-[20px] p-4 text-center">
+          <span class="mono text-[10px] uppercase opacity-50 tracking-wider">Team A</span>
+          <div class="mt-2 text-[15px] font-[800] leading-snug tracking-[-0.01em] min-h-[44px] flex flex-col justify-center">
+            ${m ? teamACell : '<div class="text-[#D6FF5F] font-[600] mono text-[12px] opacity-70">Awaiting players...</div>'}
+          </div>
+          <div class="mt-4 flex items-center justify-center gap-1.5">
+            <span class="mono text-[10px] opacity-60">Score:</span>
+            <input type="number" id="scoreA_${court}" min="0" max="99" placeholder="0" ${m ? '' : 'disabled'} class="w-16 h-10 rounded-xl bg-white/10 border border-white/15 text-center text-[18px] font-black text-white focus:bg-white focus:text-[#201C19] outline-none transition"/>
+          </div>
+        </div>
+        <div class="col-span-1 text-center font-black text-[13px] opacity-40">VS</div>
+        <div class="col-span-5 bg-white/5 border border-white/10 rounded-[20px] p-4 text-center">
+          <span class="mono text-[10px] uppercase opacity-50 tracking-wider">Team B</span>
+          <div class="mt-2 text-[15px] font-[800] leading-snug tracking-[-0.01em] min-h-[44px] flex flex-col justify-center">
+            ${m ? teamBCell : '<div class="text-[#D6FF5F] font-[600] mono text-[12px] opacity-70">Awaiting players...</div>'}
+          </div>
+          <div class="mt-4 flex items-center justify-center gap-1.5">
+            <span class="mono text-[10px] opacity-60">Score:</span>
+            <input type="number" id="scoreB_${court}" min="0" max="99" placeholder="0" ${m ? '' : 'disabled'} class="w-16 h-10 rounded-xl bg-white/10 border border-white/15 text-center text-[18px] font-black text-white focus:bg-white focus:text-[#201C19] outline-none transition"/>
+          </div>
+        </div>
+      </div>
+
+      <div id="qServeFirstRow_${court}" class="${m ? '' : 'hidden'} flex items-center justify-center gap-2 flex-wrap -mt-1 mb-4">
+        <span class="mono text-[10px] uppercase tracking-wider opacity-50">Serves first</span>
+        <button type="button" id="qServeFirstA_${court}" data-serve="teamA" class="${serving === 'teamA' ? serveOnCls : serveOffCls}">${m ? escapeHtml(teamLabel(m.teamA)) : ''}</button>
+        <button type="button" id="qServeFirstB_${court}" data-serve="teamB" class="${serving === 'teamB' ? serveOnCls : serveOffCls}">${m ? escapeHtml(teamLabel(m.teamB)) : ''}</button>
+      </div>
+
+      ${session.rule === 'timed_rotation' ? `
+      <div class="my-4 p-4 rounded-[20px] bg-white/5 border border-white/10 flex flex-col sm:flex-row items-center justify-between gap-3 relative overflow-hidden">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-full bg-[#D6FF5F]/20 text-[#D6FF5F] grid place-items-center text-[18px]">⏱️</div>
+          <div>
+            <div class="mono text-[10px] uppercase tracking-wider opacity-60">Timed Rotation Limit</div>
+            <div class="flex items-center gap-1.5 mt-0.5">
+              <span id="qTimerDisplay_${court}" class="mono text-[22px] font-black tracking-wider text-[#D6FF5F]">10:00</span>
+              <span id="qTimerFinishedLabel_${court}" class="hidden mono text-[10px] px-2 py-0.5 rounded-full bg-red-500/20 text-red-300 font-[800] uppercase animate-pulse">Time's Up!</span>
+            </div>
+          </div>
+        </div>
+        <div class="flex items-center gap-2">
+          <button type="button" id="qTimerToggleBtn_${court}" class="h-9 px-4 rounded-full bg-white text-[#201C19] mono text-[11px] font-[800] hover:bg-[#D6FF5F] transition cursor-pointer">Start</button>
+          <button type="button" id="qTimerResetBtn_${court}" class="h-9 px-3 rounded-full bg-white/10 hover:bg-white/20 text-white mono text-[11px] font-[700] transition cursor-pointer">Reset</button>
+          <select id="qTimerLimitSelect_${court}" class="h-9 rounded-full bg-white/10 border border-white/15 text-white px-3 mono text-[11px] font-[700] outline-none">
+            <option value="5" class="text-black">5 Min</option>
+            <option value="10" selected class="text-black">10 Min</option>
+            <option value="12" class="text-black">12 Min</option>
+            <option value="15" class="text-black">15 Min</option>
+            <option value="20" class="text-black">20 Min</option>
+          </select>
+        </div>
+      </div>` : ''}
+
+      <div class="relative flex flex-col sm:flex-row items-center justify-end gap-3 bg-white/5 rounded-2xl p-3 border border-white/5 mb-3">
+        <button type="button" id="liveScoreBtn_${court}" ${m ? '' : 'disabled'} class="h-10 px-5 rounded-full bg-white text-[#201C19] font-[800] text-[13px] hover:bg-[#D6FF5F] transition cursor-pointer shrink-0 disabled:opacity-40 disabled:cursor-not-allowed">Live score (tap points)</button>
+      </div>
+
+      <div class="relative flex flex-col sm:flex-row items-center justify-between gap-3 bg-white/5 rounded-2xl p-3 border border-white/5">
+        <span class="mono text-[11px] opacity-60 text-center sm:text-left">Or enter both final scores and submit to advance the queue.</span>
+        <button type="button" id="submitScoreBtn_${court}" class="h-10 px-5 rounded-full bg-[#D6FF5F] hover:bg-[#CBF052] text-[#201C19] font-[800] text-[13px] transition cursor-pointer shrink-0">
+          Submit & Rotate Queue →
+        </button>
+      </div>`;
+    container.appendChild(wrap);
+
+    if (m) {
+      wrap.querySelectorAll('select[data-team]').forEach((sel) => sel.addEventListener('change', () => applyQueueSwap(court, sel.dataset.team, Number(sel.dataset.index), sel.value)));
+      wrap.querySelectorAll('select[data-team-swap]').forEach((sel) => sel.addEventListener('change', () => applyQueueTeamSwap(court, sel.dataset.teamSwap, sel.value)));
+      wrap.querySelector(`#qServeFirstA_${court}`)?.addEventListener('click', () => applyQueueFirstServer(court, 'teamA'));
+      wrap.querySelector(`#qServeFirstB_${court}`)?.addEventListener('click', () => applyQueueFirstServer(court, 'teamB'));
+    }
+    wrap.querySelector(`#liveScoreBtn_${court}`)?.addEventListener('click', () => onQueueLiveScore(court));
+    wrap.querySelector(`#submitScoreBtn_${court}`)?.addEventListener('click', () => onQueueSubmitScore(court));
+    if (session.rule === 'timed_rotation') initDashboardTimer(session, court);
+  }
+  // Note: index.html's live-scoreboard keys are already per-session-AND-
+  // match-id (cb_board_<sessionId>_<matchId>, see onQueueLiveScore below),
+  // so concurrent courts never collide and there is no shared cleanup
+  // function here to update for multi-court -- that bug (and fix) is
+  // specific to queue.html's single shared BOARD_KEY_PREFIX scheme; see
+  // cleanupBoardKeys in queue.html.
+}
+
 /* Overall winner ranking order: a reorderable priority list of the 5
    configurable criteria (DEFAULT_RANKING_ORDER), set once at queue creation
    like mode/rule. Up/down buttons instead of drag-and-drop -- simplest
@@ -8394,6 +8399,23 @@ document.getElementById('createQueueForm')?.addEventListener('submit', (e) => {
 
   const minGamesVal = parseInt(document.getElementById('qMinGames').value, 10);
 
+  // Court(s): a real multi-select of the facility's own active courts (only
+  // shown/used when the facility has more than one), not a bare number --
+  // reuses the existing qCourt/qCourtWrapper picker. Pick one or more; the
+  // session runs across all of them, one shared waiting line, one match per
+  // court. Falls back to the facility's single court when there's only one,
+  // same as before. Set once at creation, like mode/rule -- not adjustable
+  // mid-session.
+  const qCourtEl = document.getElementById('qCourt');
+  const courtPickerShown = qCourtEl && !document.getElementById('qCourtWrapper').classList.contains('hidden');
+  let courtIds = courtPickerShown ? Array.from(qCourtEl.selectedOptions).map(o => o.value) : [];
+  if (courtPickerShown && courtIds.length === 0) {
+    alert('Please select at least one court for this queue session.');
+    return;
+  }
+  if (!courtIds.length) courtIds = [COURTS[0] ? COURTS[0].id : 'court1'];
+  const courtCount = courtIds.length;
+
   const session = {
     id: 'q_' + Date.now(),
     name,
@@ -8401,12 +8423,18 @@ document.getElementById('createQueueForm')?.addEventListener('submit', (e) => {
     rule,
     pin,
     allowJoin,
-    court: (document.getElementById('qCourt') && !document.getElementById('qCourtWrapper').classList.contains('hidden'))
-      ? document.getElementById('qCourt').value
-      : (COURTS[0] ? COURTS[0].id : 'court1'),
+    court: courtIds[0], // single-value analytics label, kept for backward compatibility -- the real multi-court driver is courtIds/courtCount below
+    courtIds,
+    courtCount,
+    courtLabels: courtIds.map(id => getCourtName(id) || id),
     waiting,
     teams,
-    activeMatch: null,
+    activeMatches: new Array(courtCount).fill(null),
+    lastPartnerGroup: new Array(courtCount).fill(null),
+    lastFinishedByCourt: new Array(courtCount).fill(null),
+    timerLimit: new Array(courtCount).fill(10),
+    timerSecondsLeft: new Array(courtCount).fill(600),
+    timerRunning: new Array(courtCount).fill(false),
     matches: [],
     gameFormat: { target, winBy, scoring: 'sideout' },
     winnerConfig: {
@@ -8509,9 +8537,12 @@ document.getElementById('joinQueueForm')?.addEventListener('submit', (e) => {
    Always editable mid-match, never validated against the rotation rule --
    swapActivePlayer/swapActiveTeam only ever WARN (consecutiveWarning) when a
    pick just played, never block it. "Change the whole match" is just
-   changing every select in turn; there's no separate bulk action. */
-function qNameOptionsHtml(session, team, index, current){
-  const m = session.activeMatch;
+   changing every select in turn; there's no separate bulk action. Every one
+   of these now takes `court` (a 0-based index into session.activeMatches),
+   since there can be several matches on court at once -- one per court slot,
+   all pulling from the SAME shared waiting line. */
+function qNameOptionsHtml(session, court, team, index, current){
+  const m = session.activeMatches[court];
   const seen = new Set([current]);
   let opts = `<option value="${escapeHtml(current)}" selected class="text-black">${escapeHtml(current)}</option>`;
   ['teamA', 'teamB'].forEach((t) => {
@@ -8530,8 +8561,8 @@ function qNameOptionsHtml(session, team, index, current){
   });
   return opts;
 }
-function qTeamOptionsHtml(session, side, currentId){
-  const m = session.activeMatch;
+function qTeamOptionsHtml(session, court, side, currentId){
+  const m = session.activeMatches[court];
   let opts = `<option value="${escapeHtml(currentId)}" selected class="text-black">${escapeHtml(teamLabel(m[side]))}</option>`;
   session.waiting.forEach((g) => {
     const flag = g.names.some((n) => QueueEngine.justPlayed(session, n)) ? ' — just played' : '';
@@ -8539,50 +8570,50 @@ function qTeamOptionsHtml(session, side, currentId){
   });
   return opts;
 }
-function applyQueueSwap(team, index, newName){
+function applyQueueSwap(court, team, index, newName){
   if (!selectedQueueSessionId) return { error: 'No active session.' };
   const sessions = loadQueues();
   const session = sessions.find(s => s.id === selectedQueueSessionId);
   if (!session) return { error: 'No active session.' };
-  const r = swapActivePlayer(session, team, index, newName);
+  const r = swapActivePlayer(session, court, team, index, newName);
   if (r.error) { toast(r.error); renderActiveQueueDashboard(); return r; }
   saveQueues(sessions);
   renderActiveQueueDashboard();
   if (r.consecutiveWarning) toast(`${r.added} just played last match — added anyway.`);
   return r;
 }
-function applyQueueTeamSwap(side, newTeamId){
+function applyQueueTeamSwap(court, side, newTeamId){
   if (!selectedQueueSessionId) return { error: 'No active session.' };
   const sessions = loadQueues();
   const session = sessions.find(s => s.id === selectedQueueSessionId);
   if (!session) return { error: 'No active session.' };
-  const r = swapActiveTeam(session, side, newTeamId);
+  const r = swapActiveTeam(session, court, side, newTeamId);
   if (r.error) { toast(r.error); renderActiveQueueDashboard(); return r; }
   saveQueues(sessions);
   renderActiveQueueDashboard();
   if (r.consecutiveWarning) toast('That team just played last match — added anyway.');
   return r;
 }
-function applyQueueFirstServer(side){
+function applyQueueFirstServer(court, side){
   if (!selectedQueueSessionId) return { error: 'No active session.' };
   const sessions = loadQueues();
   const session = sessions.find(s => s.id === selectedQueueSessionId);
   if (!session) return { error: 'No active session.' };
-  const r = setFirstServer(session, side);
+  const r = setFirstServer(session, court, side);
   if (r.error) return r;
   saveQueues(sessions);
   renderActiveQueueDashboard();
   return r;
 }
-document.getElementById('qServeFirstA')?.addEventListener('click', () => applyQueueFirstServer('teamA'));
-document.getElementById('qServeFirstB')?.addEventListener('click', () => applyQueueFirstServer('teamB'));
 
 // SUBMIT Live scoreboard score & Rotate Queue
 /* ---------- Live scoreboard for the current queue match ----------
-   Format is remembered per session. When the match ends the scoreboard fills
-   in the two final scores and presses the normal Submit & Rotate button, so
-   every rotation rule (winner stays, pairs, timed...) behaves exactly as
-   before. Sessions play a single game. */
+   Format is remembered per session (shared across every court, same as
+   mode/rule -- not a per-court setting). When a court's match ends, that
+   court's scoreboard fills in its two final scores and presses that same
+   court's Submit & Rotate button, so every rotation rule (winner stays,
+   pairs, timed...) behaves exactly as before. Sessions play a single game
+   per court per round. */
 function queueFormatOf(session){
   const f = (session && session.gameFormat) || {};
   return { target: Number(f.target) || 11, winBy: Number(f.winBy) || 2, scoring: f.scoring === 'rally' ? 'rally' : 'sideout' };
@@ -8591,8 +8622,6 @@ function syncQueueFormatControls(session){
   const f = queueFormatOf(session);
   const set = (id, v) => { const el = document.getElementById(id); if(el) el.value = String(v); };
   set('qFmtTarget', f.target); set('qFmtWinBy', f.winBy); set('qFmtScoring', f.scoring);
-  const btn = document.getElementById('liveScoreBtn');
-  if(btn) btn.disabled = !(session && session.activeMatch);
 }
 ['qFmtTarget', 'qFmtWinBy', 'qFmtScoring'].forEach(id => document.getElementById(id)?.addEventListener('change', () => {
   if(!selectedQueueSessionId) return;
@@ -8602,53 +8631,53 @@ function syncQueueFormatControls(session){
   session.gameFormat = { target: Number(document.getElementById('qFmtTarget').value), winBy: Number(document.getElementById('qFmtWinBy').value), scoring: document.getElementById('qFmtScoring').value };
   saveQueues(sessions);
 }));
-document.getElementById('liveScoreBtn')?.addEventListener('click', () => {
+function onQueueLiveScore(court){
   if(!selectedQueueSessionId || typeof CourtBoard === 'undefined') return;
   const session = loadQueues().find(s => s.id === selectedQueueSessionId);
-  if(!session || !session.activeMatch){ toast('Waiting for players to step up'); return; }
-  const m = session.activeMatch, f = queueFormatOf(session);
+  if(!session || !session.activeMatches[court]){ toast('Waiting for players to step up'); return; }
+  const m = session.activeMatches[court], f = queueFormatOf(session);
   const fixedPairs = session.rule === 'fixed_pairs';
   const accent = CLIENT && CLIENT.theme && /^#[0-9a-fA-F]{6}$/.test(CLIENT.theme.primary || '') ? CLIENT.theme.primary : null;
   CourtBoard.open({
-    title: session.name || 'Live score',
+    title: session.courtCount > 1 ? `${session.name || 'Live score'} — Court ${court + 1}` : (session.name || 'Live score'),
     names: { home: m.teamA.join(' & '), away: m.teamB.join(' & ') },
     firstServer: m.firstServer === 'teamB' ? 'away' : 'home',
     roster: { home: m.teamA.slice(), away: m.teamB.slice() },
     waitingNames: fixedPairs ? undefined : session.waiting.flatMap((g) => g.names),
     waitingTeams: fixedPairs ? session.waiting.map((g) => ({ id: g.id, names: g.names.slice() })) : undefined,
-    onSetFirstServer: (side) => applyQueueFirstServer(side === 'away' ? 'teamB' : 'teamA'),
-    onSwapPlayer: fixedPairs ? undefined : (side, index, newName) => applyQueueSwap(side === 'away' ? 'teamB' : 'teamA', index, newName),
-    onSwapTeam: fixedPairs ? (side, newTeamId) => applyQueueTeamSwap(side === 'away' ? 'teamB' : 'teamA', newTeamId) : undefined,
+    onSetFirstServer: (side) => applyQueueFirstServer(court, side === 'away' ? 'teamB' : 'teamA'),
+    onSwapPlayer: fixedPairs ? undefined : (side, index, newName) => applyQueueSwap(court, side === 'away' ? 'teamB' : 'teamA', index, newName),
+    onSwapTeam: fixedPairs ? (side, newTeamId) => applyQueueTeamSwap(court, side === 'away' ? 'teamB' : 'teamA', newTeamId) : undefined,
     config: { target: f.target, winBy: f.winBy, scoring: f.scoring, bestOf: 1, doubles: session.mode === 'doubles' },
     storageKey: lsKey('cb_board_' + session.id + '_' + m.id),
     finishLabel: 'Submit & rotate queue',
     accent,
     onFinish: (sum) => {
       const g = sum.games[0];
-      document.getElementById('scoreA').value = g.home;
-      document.getElementById('scoreB').value = g.away;
-      document.getElementById('submitScoreBtn').click();
+      document.getElementById(`scoreA_${court}`).value = g.home;
+      document.getElementById(`scoreB_${court}`).value = g.away;
+      document.getElementById(`submitScoreBtn_${court}`).click();
     },
   });
-});
+}
 
-document.getElementById('submitScoreBtn')?.addEventListener('click', () => {
+function onQueueSubmitScore(court){
   if (!selectedQueueSessionId) return;
 
   const sessions = loadQueues();
   const session = sessions.find(s => s.id === selectedQueueSessionId);
-  if (!session || !session.activeMatch) return;
+  if (!session || !session.activeMatches[court]) return;
 
   // B6: per-match participation event (analytics) -- how many players a
   // rotation actually put on court, across the session's lifetime.
-  const matchPlayerCount = (session.activeMatch.teamA || []).length + (session.activeMatch.teamB || []).length;
+  const matchPlayerCount = (session.activeMatches[court].teamA || []).length + (session.activeMatches[court].teamB || []).length;
 
-  const scoreAVal = document.getElementById('scoreA').value;
-  const scoreBVal = document.getElementById('scoreB').value;
-  const result = recordMatchResult(session, scoreAVal, scoreBVal);
+  const scoreAVal = document.getElementById(`scoreA_${court}`).value;
+  const scoreBVal = document.getElementById(`scoreB_${court}`).value;
+  const result = recordMatchResult(session, court, scoreAVal, scoreBVal);
   if (result.error) { alert(result.error); return; }
 
-  if (result.timerReset) stopActiveTimer();
+  if (result.timerReset) stopActiveTimer(court);
   logUsageEvent('queue_match_completed', {
     court: session.court || null,
     sessionId: session.id || null,
@@ -8657,12 +8686,8 @@ document.getElementById('submitScoreBtn')?.addEventListener('click', () => {
 
   saveQueues(sessions);
   renderActiveQueueDashboard();
-
-  // Reset inputs
-  document.getElementById('scoreA').value = '';
-  document.getElementById('scoreB').value = '';
   result.notices.forEach(msg => toast(msg));
-});
+}
 
 // Captured right before a session's data is wiped, so the "Download stats
 // (PDF)" button on the winner modal still has something to show.
@@ -8678,8 +8703,9 @@ document.getElementById('qResetSessionBtn')?.addEventListener('click', () => {
   if (confirm('Are you sure you want to reset this queue session? This will wipe the scoreboard and clear court rotation.')) {
     const winner = computeOverallWinner(session);
     lastEndedQueueStats = buildStatsReport(session);
+    QueueEngine.ensureCourts(session);
     session.waiting = [];
-    session.activeMatch = null;
+    session.activeMatches = session.activeMatches.map(() => null);
     session.matches = [];
     saveQueues(sessions);
     renderActiveQueueDashboard();

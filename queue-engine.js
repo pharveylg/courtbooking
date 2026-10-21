@@ -6,9 +6,21 @@
 
    A session looks like:
      { mode: 'singles'|'doubles', rule: <one of the six rules>,
-       waiting: [{ id, names: [...] }], activeMatch: { teamA, teamB, ... } | null,
-       matches: [...], playCounts: {}, teams: {}, lastPartnerGroup,
+       waiting: [{ id, names: [...] }],
+       courtCount: <number of court slots, default 1>,
+       activeMatches: [{ id, court, teamA, teamB, firstServer?, teamAId?, teamBId? } | null, ...],
+       matches: [...], playCounts: {}, teams: {},
+       lastPartnerGroup: [ [names] | null, ... ]  // per court slot
+       lastFinishedByCourt: [ { teamA, teamB } | null, ... ]  // per court slot
+       timerSecondsLeft: [ number, ... ], timerRunning: [ bool, ... ], timerLimit: [ number, ... ]  // per court slot (Timed Rotation)
        winnerConfig: { minGames, rankingOrder } | undefined, ... }
+
+   One court slot per active court; `courtCount` and `activeMatches` grow
+   together. A session that predates multi-court support (no courtCount/
+   activeMatches at all, just a single activeMatch object|null and scalar
+   timer/lastPartnerGroup fields) is migrated transparently and in place by
+   ensureCourts(), called defensively at the top of every court-aware
+   function below -- it always behaves as exactly 1 court, same as before.
 
    Six rotation rules: winner_stays, four_off_four_on (the default), fixed_rotation,
    timed_rotation, partner_rotation (doubles only), fixed_pairs (doubles only).
@@ -16,7 +28,12 @@
    PRIORITY (RotationPick): whoever has played the fewest games goes first, so
    nobody is stuck sitting out indefinitely and nobody plays non-stop while
    others wait. fixed_pairs rotates whole teams, strictly FIFO, since the team
-   -- not the player -- is its unit.
+   -- not the player -- is its unit. The waiting line itself is NOT split per
+   court -- every court's empty slot is filled from the same shared line, in
+   the same fill pass (checkAndFillActiveMatch loops court-by-court, so with
+   multiple empty slots the fill order across courts is itself FIFO/rest-
+   priority consistent, e.g. Fixed Pairs' first two waiting teams go to the
+   first empty court, the next two to the second).
 
    Loaded by the browser as `QueueEngine` and by the tests via require(). */
 (function (root, factory) {
@@ -26,6 +43,8 @@
   'use strict';
 
   function teamLabel(names) { return (names || []).join(' & '); }
+
+  const MAX_COURTS = 8;
 
   /* Overall-winner qualifying bar (computeStandings, computeOverallWinner): a
      player/team must have played at least this share of the session's most
@@ -75,6 +94,76 @@
     return Math.ceil(maxCount * MIN_GAMES_SHARE);
   }
 
+  /* ---------- Multi-court session shape: ensure/migrate ----------
+     Called defensively at the top of every function below that touches
+     court state, so a session missing the new fields entirely (an old,
+     single-court session; a hand-built test fixture) is always treated as
+     exactly 1 court behaving exactly as before -- never a hard error. Safe
+     to call repeatedly; it is a no-op once the session is already in the
+     current shape. */
+  function ensureCourts(session) {
+    if (!session || typeof session !== 'object') return session;
+
+    const hadActiveMatches = Array.isArray(session.activeMatches);
+    if (!hadActiveMatches) {
+      const legacy = ('activeMatch' in session) ? session.activeMatch : null;
+      session.activeMatches = [legacy || null];
+    }
+    if (!Number.isFinite(session.courtCount) || session.courtCount < 1) {
+      session.courtCount = session.activeMatches.length || 1;
+    }
+    const n = session.courtCount;
+    while (session.activeMatches.length < n) session.activeMatches.push(null);
+    if (session.activeMatches.length > n) session.activeMatches.length = n;
+
+    // lastPartnerGroup: legacy shape was a flat array of NAMES (the group
+    // that just played, for the single court); new shape is an array of
+    // (names-array | null), one slot per court. Distinguish by the type of
+    // the first element, not just Array.isArray, since both shapes are arrays.
+    if (!Array.isArray(session.lastPartnerGroup)) {
+      session.lastPartnerGroup = new Array(n).fill(null);
+    } else if (session.lastPartnerGroup.length && typeof session.lastPartnerGroup[0] === 'string') {
+      const legacy = session.lastPartnerGroup;
+      session.lastPartnerGroup = new Array(n).fill(null);
+      session.lastPartnerGroup[0] = legacy;
+    } else {
+      while (session.lastPartnerGroup.length < n) session.lastPartnerGroup.push(null);
+    }
+
+    // Timed Rotation state: legacy shape was 3 session-level scalars; new
+    // shape is 3 parallel arrays, one entry per court.
+    if (!Array.isArray(session.timerSecondsLeft)) {
+      const legacySec = session.timerSecondsLeft, legacyRun = session.timerRunning, legacyLim = session.timerLimit;
+      session.timerSecondsLeft = new Array(n).fill(legacySec != null ? legacySec : null);
+      session.timerRunning = new Array(n).fill(!!legacyRun);
+      session.timerLimit = new Array(n).fill(legacyLim != null ? legacyLim : null);
+    } else {
+      while (session.timerSecondsLeft.length < n) session.timerSecondsLeft.push(null);
+      if (!Array.isArray(session.timerRunning)) session.timerRunning = [];
+      while (session.timerRunning.length < n) session.timerRunning.push(false);
+      if (!Array.isArray(session.timerLimit)) session.timerLimit = [];
+      while (session.timerLimit.length < n) session.timerLimit.push(null);
+    }
+
+    // justPlayed's per-court "most recently finished match" pointers. The
+    // very first time a session is seen (its own history built directly on
+    // session.matches -- a hand-built fixture, or a single-court legacy
+    // session with history already on it, predating this pointer existing
+    // at all), seed court 0 from the last recorded match so justPlayed
+    // works immediately, not just for matches recorded going forward.
+    if (!Array.isArray(session.lastFinishedByCourt)) {
+      session.lastFinishedByCourt = new Array(n).fill(null);
+      if (n === 1 && session.matches && session.matches.length) {
+        const last = session.matches[session.matches.length - 1];
+        session.lastFinishedByCourt[0] = { teamA: last.teamA, teamB: last.teamB };
+      }
+    } else {
+      while (session.lastFinishedByCourt.length < n) session.lastFinishedByCourt.push(null);
+    }
+
+    return session;
+  }
+
   /* ---------- Fixed Pairs League: team-level standings ---------- */
   function ensureTeam(session, id, names) {
     if (!session.teams) session.teams = {};
@@ -83,8 +172,8 @@
   }
 
   function applyMatchResult(session, aId, bId, scoreA, scoreB) {
-    const a = ensureTeam(session, aId, (session.activeMatch && session.activeMatch.teamA) || []);
-    const b = ensureTeam(session, bId, (session.activeMatch && session.activeMatch.teamB) || []);
+    const a = ensureTeam(session, aId, []);
+    const b = ensureTeam(session, bId, []);
     a.gp++; b.gp++;
     a.pf += scoreA; a.pa += scoreB;
     b.pf += scoreB; b.pa += scoreA;
@@ -182,51 +271,64 @@
      Staff can always override who's on court right now and who serves
      first -- these never validate against the rotation rule or the
      consecutive-games concern, they only ever WARN about it (see
-     justPlayed below) and let the admin decide. */
+     justPlayed below) and let the admin decide. Every one of these takes
+     `court` (a 0-based index into session.activeMatches) so staff can
+     target any single court independently of the others. */
 
-  function setFirstServer(session, side) {
-    if (!session || !session.activeMatch) return { error: 'No active match.' };
+  function setFirstServer(session, court, side) {
+    ensureCourts(session);
+    const match = session && session.activeMatches[court];
+    if (!match) return { error: 'No active match.' };
     if (side !== 'teamA' && side !== 'teamB') return { error: 'Invalid side.' };
-    session.activeMatch = { ...session.activeMatch, firstServer: side };
+    session.activeMatches[court] = { ...match, firstServer: side };
     return { ok: true };
   }
 
-  /* Did `name` play in the match that just finished? The one signal used to
-     flag (never block) a consecutive-games pick, regardless of which rule
-     is running -- rest-priority already keeps this from happening on its
-     own, this is purely for when an admin overrides it by hand. */
+  /* Did `name` play in the match that just finished -- on ANY court, not
+     just the one being asked about? The one signal used to flag (never
+     block) a consecutive-games pick, regardless of which rule is running
+     -- rest-priority already keeps this from happening on its own, this is
+     purely for when an admin overrides it by hand. Tracks a per-court
+     "last finished match" pointer (session.lastFinishedByCourt) rather than
+     just the single most recent entry in session.matches, since with
+     multiple courts finishing independently, the single most-recent global
+     entry no longer reflects "just played" for a player whose court
+     finished its match one tick earlier than another court's. */
   function justPlayed(session, name) {
-    const last = session && session.matches && session.matches[session.matches.length - 1];
-    return !!(last && [...(last.teamA || []), ...(last.teamB || [])].includes(name));
+    ensureCourts(session);
+    return (session.lastFinishedByCourt || []).some((last) => last && [...(last.teamA || []), ...(last.teamB || [])].includes(name));
   }
 
-  /* Swaps the player at session.activeMatch[team][index] for `newName`, which
-     is either (a) another player currently on court -- a straight position
-     swap, no waiting-line involved, no consecutive-games concern since
-     neither player is new to this match -- or (b) someone from the waiting
-     line, who is pulled in while the replaced player goes back to the FRONT
-     of the line (they were about to play and got bumped, so they're first
-     up next round among equal playCounts, not shuffled to the back).
-     Calling this once per slot is also how "change the whole match" works --
-     there's no separate bulk version, it's the same edit repeated. Not for
-     Fixed Pairs: see swapActiveTeam. Returns { error } or
+  /* Swaps the player at session.activeMatches[court][team][index] for
+     `newName`, which is either (a) another player currently on that SAME
+     court -- a straight position swap, no waiting-line involved, no
+     consecutive-games concern since neither player is new to this match --
+     or (b) someone from the (session-wide, shared) waiting line, who is
+     pulled in while the replaced player goes back to the FRONT of the line
+     (they were about to play and got bumped, so they're first up next round
+     among equal playCounts, not shuffled to the back). Calling this once
+     per slot is also how "change the whole match" works -- there's no
+     separate bulk version, it's the same edit repeated. Not for Fixed
+     Pairs: see swapActiveTeam. Returns { error } or
      { ok, replaced, added, consecutiveWarning, swappedWithinMatch }. */
-  function swapActivePlayer(session, team, index, newName) {
-    if (!session || !session.activeMatch) return { error: 'No active match.' };
+  function swapActivePlayer(session, court, team, index, newName) {
+    ensureCourts(session);
+    const match = session && session.activeMatches[court];
+    if (!match) return { error: 'No active match.' };
     if (session.rule === 'fixed_pairs') return { error: 'Fixed Pairs swaps whole teams, not individual players -- see swapActiveTeam.' };
-    const roster = session.activeMatch[team];
+    const roster = match[team];
     if (!Array.isArray(roster) || index < 0 || index >= roster.length) return { error: 'Invalid player slot.' };
     const oldName = roster[index];
     if (newName === oldName) return { error: `${newName} is already playing there.` };
 
     for (const t of ['teamA', 'teamB']) {
-      const i = (session.activeMatch[t] || []).indexOf(newName);
+      const i = (match[t] || []).indexOf(newName);
       if (i !== -1 && (t !== team || i !== index)) {
-        const nextA = session.activeMatch.teamA.slice();
-        const nextB = session.activeMatch.teamB.slice();
+        const nextA = match.teamA.slice();
+        const nextB = match.teamB.slice();
         (t === 'teamA' ? nextA : nextB)[i] = oldName;
         (team === 'teamA' ? nextA : nextB)[index] = newName;
-        session.activeMatch = { ...session.activeMatch, teamA: nextA, teamB: nextB };
+        session.activeMatches[court] = { ...match, teamA: nextA, teamB: nextB };
         return { ok: true, replaced: oldName, added: newName, consecutiveWarning: false, swappedWithinMatch: true };
       }
     }
@@ -248,7 +350,7 @@
     session.waiting.unshift({ id: 'w_swap_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6), names: [oldName] });
     const nextRoster = roster.slice();
     nextRoster[index] = newName;
-    session.activeMatch = { ...session.activeMatch, [team]: nextRoster };
+    session.activeMatches[court] = { ...match, [team]: nextRoster };
     return { ok: true, replaced: oldName, added: newName, consecutiveWarning, swappedWithinMatch: false };
   }
 
@@ -260,21 +362,23 @@
      replaced team goes back to the front of the line, same reasoning as
      swapActivePlayer. Returns { error } or
      { ok, replacedTeamId, addedTeamId, consecutiveWarning }. */
-  function swapActiveTeam(session, side, newTeamGroupId) {
-    if (!session || !session.activeMatch) return { error: 'No active match.' };
+  function swapActiveTeam(session, court, side, newTeamGroupId) {
+    ensureCourts(session);
+    const match = session && session.activeMatches[court];
+    if (!match) return { error: 'No active match.' };
     if (session.rule !== 'fixed_pairs') return { error: 'Not a Fixed Pairs match -- see swapActivePlayer.' };
     if (side !== 'teamA' && side !== 'teamB') return { error: 'Invalid side.' };
-    const oldTeamId = side === 'teamA' ? session.activeMatch.teamAId : session.activeMatch.teamBId;
-    const otherTeamId = side === 'teamA' ? session.activeMatch.teamBId : session.activeMatch.teamAId;
+    const oldTeamId = side === 'teamA' ? match.teamAId : match.teamBId;
+    const otherTeamId = side === 'teamA' ? match.teamBId : match.teamAId;
     if (newTeamGroupId === otherTeamId) return { error: 'That team is already on court.' };
     const idx = session.waiting.findIndex((g) => g.id === newTeamGroupId);
     if (idx === -1) return { error: 'That team is not in the waiting line.' };
     const incoming = session.waiting[idx];
-    const oldNames = session.activeMatch[side];
+    const oldNames = match[side];
     const consecutiveWarning = incoming.names.some((n) => justPlayed(session, n));
     session.waiting = session.waiting.slice(0, idx).concat(session.waiting.slice(idx + 1));
     session.waiting.unshift({ id: oldTeamId, names: oldNames });
-    session.activeMatch = { ...session.activeMatch, [side]: incoming.names, [side + 'Id']: incoming.id };
+    session.activeMatches[court] = { ...match, [side]: incoming.names, [side + 'Id']: incoming.id };
     ensureTeam(session, incoming.id, incoming.names);
     return { ok: true, replacedTeamId: oldTeamId, addedTeamId: incoming.id, consecutiveWarning };
   }
@@ -318,10 +422,16 @@
     return { teamA: pick.teamA, teamB: pick.teamB };
   }
 
-  /* Starts the next match when there are enough waiting players and none is
-     already running. No-op otherwise. */
-  function checkAndFillActiveMatch(session) {
-    if (session.activeMatch) return;
+  let matchSeq = 0;
+  function nextMatchId(court) { return 'match_' + Date.now() + '_' + (matchSeq++) + '_c' + court; }
+
+  /* Fills ONE empty court slot, same per-rule logic as before -- just now
+     scoped to `court` (a single slot in session.activeMatches) instead of
+     the single session-wide session.activeMatch. Called once per empty
+     slot by checkAndFillActiveMatch's loop. No-op if the slot is already
+     occupied or there aren't enough waiting players for it yet. */
+  function fillCourt(session, court) {
+    if (session.activeMatches[court]) return;
 
     if (session.rule === 'fixed_pairs') {
       if (session.waiting.length >= 2) {
@@ -329,7 +439,7 @@
         const tB = session.waiting.shift();
         ensureTeam(session, tA.id, tA.names);
         ensureTeam(session, tB.id, tB.names);
-        session.activeMatch = { id: 'match_' + Date.now(), teamA: tA.names, teamB: tB.names, teamAId: tA.id, teamBId: tB.id };
+        session.activeMatches[court] = { id: nextMatchId(court), court, teamA: tA.names, teamB: tB.names, teamAId: tA.id, teamBId: tB.id };
       }
       return;
     }
@@ -340,15 +450,17 @@
     if (session.rule === 'partner_rotation' && isDoubles) {
       // Pull the 4 LEAST-PLAYED eligible players every round (same
       // rest-priority mechanism every other rule uses), avoiding the exact
-      // group that just played unless there aren't enough others -- nobody
-      // is ever held together for a fixed block of rounds, so a queue
-      // larger than four never leaves anyone sitting out while the same
-      // four play repeatedly. Then pair them to minimize repeated
+      // group that just played on THIS court (lastPartnerGroup is tracked
+      // per court, not shared across courts) unless there aren't enough
+      // others -- nobody is ever held together for a fixed block of rounds,
+      // so a queue larger than four never leaves anyone sitting out while
+      // the same four play repeatedly. Then pair them to minimize repeated
       // teammates: see bestPartnerPairing.
-      const players = pullRestedPlayersAvoiding(session, 4, session.lastPartnerGroup);
+      const avoid = session.lastPartnerGroup[court];
+      const players = pullRestedPlayersAvoiding(session, 4, avoid);
       if (players) {
         const pairing = bestPartnerPairing(session, players);
-        session.activeMatch = { id: 'match_' + Date.now(), teamA: pairing.teamA, teamB: pairing.teamB };
+        session.activeMatches[court] = { id: nextMatchId(court), court, teamA: pairing.teamA, teamB: pairing.teamB };
       }
       return;
     }
@@ -357,7 +469,7 @@
       const players = pullRestedPlayers(session, countNeeded);
       if (players) {
         const half = countNeeded / 2;
-        session.activeMatch = { id: 'match_' + Date.now(), teamA: players.slice(0, half), teamB: players.slice(half) };
+        session.activeMatches[court] = { id: nextMatchId(court), court, teamA: players.slice(0, half), teamB: players.slice(half) };
       }
       return;
     }
@@ -366,21 +478,41 @@
     const players = pullRestedPlayers(session, countNeeded);
     if (players) {
       const teamSize = countNeeded / 2;
-      session.activeMatch = { id: 'match_' + Date.now(), teamA: players.slice(0, teamSize), teamB: players.slice(teamSize) };
+      session.activeMatches[court] = { id: nextMatchId(court), court, teamA: players.slice(0, teamSize), teamB: players.slice(teamSize) };
+    }
+  }
+
+  /* Starts the next match on every currently-empty court slot, in court
+     order, for as long as the shared waiting line holds enough players --
+     no-op on any slot that's already running or that can't yet be filled.
+     Looping court-by-court (rather than one session-wide guard-and-return)
+     is what makes multiple courts work at all: each call fills every slot
+     it can, so e.g. Fixed Pairs' FIFO pull naturally lands the queue's
+     first two teams on the first empty court and the next two on the
+     second, and Partner Rotation/rest-priority rules draw a fresh pick for
+     each slot in turn from whoever is still waiting after the previous
+     slot's pick. */
+  function checkAndFillActiveMatch(session) {
+    ensureCourts(session);
+    for (let court = 0; court < session.courtCount; court++) {
+      fillCourt(session, court);
     }
   }
 
   /* ---------- Recording a finished match ---------- */
 
-  /* Validates the two scores, records the match, rotates the queue
-     according to the session's rule, and fills the next match. Mutates
-     `session`. Returns { error } if the scores are not valid or there is
-     no active match, otherwise { winner, winnerNames, loserNames, notices,
-     timerReset }. `notices` is the toast text the caller may want to show,
-     in the order the rule produced them -- this never touches the DOM
-     itself, so the caller decides how (or whether) to display them. */
-  function recordMatchResult(session, scoreAInput, scoreBInput) {
-    if (!session || !session.activeMatch) return { error: 'No active match.' };
+  /* Validates the two scores, records the match ON THE GIVEN COURT, rotates
+     the queue according to the session's rule, and fills every currently
+     empty court slot (not just this one -- see checkAndFillActiveMatch).
+     Mutates `session`. Returns { error } if the scores are not valid or
+     there is no active match on that court, otherwise { winner,
+     winnerNames, loserNames, notices, timerReset, court }. `notices` is the
+     toast text the caller may want to show, in the order the rule produced
+     them -- this never touches the DOM itself, so the caller decides how
+     (or whether) to display them. */
+  function recordMatchResult(session, court, scoreAInput, scoreBInput) {
+    ensureCourts(session);
+    if (!session || court == null || !session.activeMatches[court]) return { error: 'No active match.' };
     if (scoreAInput === '' || scoreBInput === '' || scoreAInput == null || scoreBInput == null) {
       return { error: 'Please enter final scores for both teams.' };
     }
@@ -390,13 +522,14 @@
     }
     if (scoreA === scoreB) return { error: 'Pickleball matches cannot end in a draw. Please specify a winner.' };
 
-    const match = session.activeMatch;
+    const match = session.activeMatches[court];
     const winner = scoreA > scoreB ? 'teamA' : 'teamB';
     const winnerNames = winner === 'teamA' ? match.teamA : match.teamB;
     const loserNames = winner === 'teamA' ? match.teamB : match.teamA;
 
     session.matches = session.matches || [];
-    session.matches.push({ id: 'm_' + Date.now(), teamA: match.teamA, teamB: match.teamB, scoreA, scoreB, winner, timestamp: Date.now() });
+    session.matches.push({ id: 'm_' + Date.now() + '_c' + court, court, teamA: match.teamA, teamB: match.teamB, scoreA, scoreB, winner, timestamp: Date.now() });
+    session.lastFinishedByCourt[court] = { teamA: match.teamA, teamB: match.teamB };
 
     const notices = [];
     let timerReset = false;
@@ -406,52 +539,53 @@
       const teamSize = session.mode === 'doubles' ? 2 : 1;
       const nextChallengers = pullRestedPlayers(session, teamSize);
       if (nextChallengers) {
-        session.activeMatch = { id: 'match_' + Date.now(), teamA: winnerNames, teamB: nextChallengers };
+        session.activeMatches[court] = { id: nextMatchId(court), court, teamA: winnerNames, teamB: nextChallengers };
       } else {
         session.waiting.unshift({ id: 'w_win_' + Date.now(), names: winnerNames });
-        session.activeMatch = null;
+        session.activeMatches[court] = null;
       }
     } else if (session.rule === 'partner_rotation' && session.mode === 'doubles') {
-      // Every round stands alone now (see checkAndFillActiveMatch): rotate
-      // all four off immediately, same as any other rule, so nobody plays
-      // twice in a row and the next checkAndFillActiveMatch call re-draws
-      // the next 4 LEAST-PLAYED players from the full, current waiting
-      // line -- never the same held-together foursome.
+      // Every round stands alone now (see fillCourt): rotate all four off
+      // immediately, same as any other rule, so nobody plays twice in a row
+      // and the next checkAndFillActiveMatch call re-draws the next 4
+      // LEAST-PLAYED players from the full, current waiting line -- never
+      // the same held-together foursome. lastPartnerGroup is tracked per
+      // court, so this only biases THIS court's own next fill.
       session.waiting.push({ id: 'w_pr_single_' + Date.now(), names: match.teamA });
       session.waiting.push({ id: 'w_pr_single_' + (Date.now() + 1), names: match.teamB });
-      session.lastPartnerGroup = [...match.teamA, ...match.teamB];
-      session.activeMatch = null;
+      session.lastPartnerGroup[court] = [...match.teamA, ...match.teamB];
+      session.activeMatches[court] = null;
     } else if (session.rule === 'fixed_rotation') {
       [...match.teamA, ...match.teamB].forEach((name) => session.waiting.push({ id: 'w_fr_end_' + Math.random().toString(36).slice(2, 6), names: [name] }));
-      session.activeMatch = null;
+      session.activeMatches[court] = null;
     } else if (session.rule === 'fixed_pairs') {
-      if (match.teamAId && match.teamBId) applyMatchResult(session, match.teamAId, match.teamBId, scoreA, scoreB);
       const tA = { id: match.teamAId || ('T' + Date.now().toString(36)), names: match.teamA };
       const tB = { id: match.teamBId || ('T' + (Date.now() + 1).toString(36)), names: match.teamB };
       ensureTeam(session, tA.id, tA.names);
       ensureTeam(session, tB.id, tB.names);
+      if (match.teamAId && match.teamBId) applyMatchResult(session, match.teamAId, match.teamBId, scoreA, scoreB);
       session.waiting.push(tA);
       session.waiting.push(tB);
-      session.activeMatch = null;
+      session.activeMatches[court] = null;
     } else if (session.rule === 'timed_rotation') {
-      session.timerSecondsLeft = session.timerLimit * 60;
-      session.timerRunning = false;
+      session.timerSecondsLeft[court] = session.timerLimit[court] * 60;
+      session.timerRunning[court] = false;
       timerReset = true;
       session.waiting.push({ id: 'w_rot_A_' + Date.now(), names: match.teamA });
       session.waiting.push({ id: 'w_rot_B_' + Date.now(), names: match.teamB });
-      session.activeMatch = null;
+      session.activeMatches[court] = null;
       notices.push('Timer reset for the next match!');
     } else {
       // Four Off, Four On (default)
       session.waiting.push({ id: 'w_rot_A_' + Date.now(), names: match.teamA });
       session.waiting.push({ id: 'w_rot_B_' + Date.now(), names: match.teamB });
-      session.activeMatch = null;
+      session.activeMatches[court] = null;
     }
 
     checkAndFillActiveMatch(session);
     notices.push(`Match completed! Winners: ${winnerNames.join(' & ')}`);
 
-    return { winner, winnerNames, loserNames, notices, timerReset };
+    return { winner, winnerNames, loserNames, notices, timerReset, court };
   }
 
   /* ---------- Name matching, to catch duplicate/misspelled entries ---------- */
@@ -484,10 +618,12 @@
   function getAllPlayerNamesInSession(session) {
     const names = new Set();
     (session.waiting || []).forEach((w) => w.names.forEach((n) => names.add(n)));
-    if (session.activeMatch) {
-      (session.activeMatch.teamA || []).forEach((n) => names.add(n));
-      (session.activeMatch.teamB || []).forEach((n) => names.add(n));
-    }
+    const actives = Array.isArray(session.activeMatches) ? session.activeMatches : (session.activeMatch ? [session.activeMatch] : []);
+    actives.forEach((m) => {
+      if (!m) return;
+      (m.teamA || []).forEach((n) => names.add(n));
+      (m.teamB || []).forEach((n) => names.add(n));
+    });
     (session.matches || []).forEach((m) => {
       (m.teamA || []).forEach((n) => names.add(n));
       (m.teamB || []).forEach((n) => names.add(n));
@@ -730,6 +866,7 @@
 
   return {
     teamLabel,
+    ensureCourts, MAX_COURTS,
     ensureTeam, applyMatchResult, computeStandings,
     pullRestedPlayers, pullRestedPlayersAvoiding, checkAndFillActiveMatch, recordMatchResult, removeWaitingPlayer,
     setFirstServer, justPlayed, swapActivePlayer, swapActiveTeam,

@@ -8,47 +8,47 @@ const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 const solo = (...names) => names.map((n) => ({ id: 'w_' + n, names: [n] }));
 
 const base = (rule, mode, waiting) => ({
-  mode, rule, waiting: waiting || [], activeMatch: null, matches: [], teams: {}, playCounts: {},
+  mode, rule, waiting: waiting || [], courtCount: 1, activeMatches: [null], matches: [], teams: {}, playCounts: {},
 });
 
 section('checkAndFillActiveMatch: pure rules');
 check('winner stays doubles: fills from the front when exactly enough', (() => {
   const s = base('winner_stays', 'doubles', solo('a', 'b', 'c', 'd'));
   Q.checkAndFillActiveMatch(s);
-  return eq(s.activeMatch.teamA, ['a', 'b']) && eq(s.activeMatch.teamB, ['c', 'd']) && s.waiting.length === 0;
+  return eq(s.activeMatches[0].teamA, ['a', 'b']) && eq(s.activeMatches[0].teamB, ['c', 'd']) && s.waiting.length === 0;
 })());
 check('winner stays singles: needs only two', (() => {
   const s = base('winner_stays', 'singles', solo('a', 'b'));
   Q.checkAndFillActiveMatch(s);
-  return eq(s.activeMatch.teamA, ['a']) && eq(s.activeMatch.teamB, ['b']);
+  return eq(s.activeMatches[0].teamA, ['a']) && eq(s.activeMatches[0].teamB, ['b']);
 })());
 check('not enough waiting: no match forms', (() => {
   const s = base('winner_stays', 'doubles', solo('a', 'b', 'c'));
   Q.checkAndFillActiveMatch(s);
-  return s.activeMatch === null && s.waiting.length === 3;
+  return s.activeMatches[0] === null && s.waiting.length === 3;
 })());
 check('a match already running is left alone', (() => {
   const s = base('winner_stays', 'doubles', solo('a', 'b', 'c', 'd'));
-  s.activeMatch = { teamA: ['x'], teamB: ['y'] };
+  s.activeMatches[0] = { teamA: ['x'], teamB: ['y'] };
   Q.checkAndFillActiveMatch(s);
-  return eq(s.activeMatch, { teamA: ['x'], teamB: ['y'] }) && s.waiting.length === 4;
+  return eq(s.activeMatches[0], { teamA: ['x'], teamB: ['y'] }) && s.waiting.length === 4;
 })());
 check('fixed pairs: pulls two teams strictly FIFO, no rest priority', (() => {
   const s = base('fixed_pairs', 'doubles', [{ id: 'T1', names: ['a', 'b'] }, { id: 'T2', names: ['c', 'd'] }, { id: 'T3', names: ['e', 'f'] }]);
   Q.checkAndFillActiveMatch(s);
-  return s.activeMatch.teamAId === 'T1' && s.activeMatch.teamBId === 'T2' && s.waiting.length === 1 && s.teams.T1 && s.teams.T2;
+  return s.activeMatches[0].teamAId === 'T1' && s.activeMatches[0].teamBId === 'T2' && s.waiting.length === 1 && s.teams.T1 && s.teams.T2;
 })());
 check('fixed rotation: fills from four individuals, splits in half', (() => {
   const s = base('fixed_rotation', 'doubles', solo('a', 'b', 'c', 'd'));
   Q.checkAndFillActiveMatch(s);
-  return eq(s.activeMatch.teamA, ['a', 'b']) && eq(s.activeMatch.teamB, ['c', 'd']);
+  return eq(s.activeMatches[0].teamA, ['a', 'b']) && eq(s.activeMatches[0].teamB, ['c', 'd']);
 })());
 check('partner rotation: pulls four and forms one of the 3 valid pairings, no held-together round state', (() => {
   const s = base('partner_rotation', 'doubles', solo('a', 'b', 'c', 'd'));
   Q.checkAndFillActiveMatch(s);
-  const onCourt = [...s.activeMatch.teamA, ...s.activeMatch.teamB].slice().sort();
+  const onCourt = [...s.activeMatches[0].teamA, ...s.activeMatches[0].teamB].slice().sort();
   const validPairings = [[['a', 'b'], ['c', 'd']], [['a', 'c'], ['b', 'd']], [['a', 'd'], ['b', 'c']]];
-  const isValid = validPairings.some(([x, y]) => (eq(s.activeMatch.teamA, x) && eq(s.activeMatch.teamB, y)) || (eq(s.activeMatch.teamA, y) && eq(s.activeMatch.teamB, x)));
+  const isValid = validPairings.some(([x, y]) => (eq(s.activeMatches[0].teamA, x) && eq(s.activeMatches[0].teamB, y)) || (eq(s.activeMatches[0].teamA, y) && eq(s.activeMatches[0].teamB, x)));
   return eq(onCourt, ['a', 'b', 'c', 'd']) && isValid && s.partnerRotationState === undefined;
 })());
 
@@ -58,7 +58,7 @@ section('rest priority: shared across every rule except fixed pairs');
     const s = base(rule, 'doubles', solo('a', 'b', 'c', 'd', 'e'));
     s.playCounts = { a: 3 };
     Q.checkAndFillActiveMatch(s);
-    const onCourt = [...s.activeMatch.teamA, ...s.activeMatch.teamB];
+    const onCourt = [...s.activeMatches[0].teamA, ...s.activeMatches[0].teamB];
     return !onCourt.includes('a') && s.waiting.length === 1 && s.waiting[0].names[0] === 'a';
   })());
 });
@@ -66,54 +66,54 @@ check('fixed pairs ignores play counts entirely (teams rotate FIFO)', (() => {
   const s = base('fixed_pairs', 'doubles', [{ id: 'T1', names: ['a', 'b'] }, { id: 'T2', names: ['c', 'd'] }]);
   s.playCounts = { a: 99 };
   Q.checkAndFillActiveMatch(s);
-  return s.activeMatch.teamAId === 'T1';
+  return s.activeMatches[0].teamAId === 'T1';
 })());
 
 section('recordMatchResult: validation');
-check('refuses when there is no active match', !!Q.recordMatchResult(base('winner_stays', 'doubles'), 11, 4).error);
-check('refuses a blank score', !!Q.recordMatchResult({ ...base('winner_stays', 'doubles'), activeMatch: { teamA: ['a'], teamB: ['b'] } }, '', 4).error);
+check('refuses when there is no active match', !!Q.recordMatchResult(base('winner_stays', 'doubles'), 0, 11, 4).error);
+check('refuses a blank score', !!Q.recordMatchResult({ ...base('winner_stays', 'doubles'), activeMatches: [{ teamA: ['a'], teamB: ['b'] }] }, 0, '', 4).error);
 check('refuses a non-numeric or negative score', (() => {
-  const s = { ...base('winner_stays', 'doubles'), activeMatch: { teamA: ['a'], teamB: ['b'] } };
-  return !!Q.recordMatchResult(s, 'x', 4).error && !!Q.recordMatchResult(s, -1, 4).error;
+  const s = { ...base('winner_stays', 'doubles'), activeMatches: [{ teamA: ['a'], teamB: ['b'] }] };
+  return !!Q.recordMatchResult(s, 0, 'x', 4).error && !!Q.recordMatchResult(s, 0, -1, 4).error;
 })());
-check('refuses a tie', !!Q.recordMatchResult({ ...base('winner_stays', 'doubles'), activeMatch: { teamA: ['a'], teamB: ['b'] } }, 7, 7).error);
+check('refuses a tie', !!Q.recordMatchResult({ ...base('winner_stays', 'doubles'), activeMatches: [{ teamA: ['a'], teamB: ['b'] }] }, 0, 7, 7).error);
 
 section('recordMatchResult: winner stays');
 check('winner stays on as team A, loser to the back, next challenger pulled', (() => {
   const s = base('winner_stays', 'singles', solo('c'));
-  s.activeMatch = { teamA: ['a'], teamB: ['b'] };
-  const r = Q.recordMatchResult(s, 11, 4);
-  return !r.error && r.winner === 'teamA' && eq(s.activeMatch, { id: s.activeMatch.id, teamA: ['a'], teamB: ['c'] }) && s.waiting.length === 1 && s.waiting[0].names[0] === 'b' && s.matches.length === 1;
+  s.activeMatches[0] = { teamA: ['a'], teamB: ['b'] };
+  const r = Q.recordMatchResult(s, 0, 11, 4);
+  return !r.error && r.winner === 'teamA' && eq(s.activeMatches[0], { id: s.activeMatches[0].id, court: 0, teamA: ['a'], teamB: ['c'] }) && s.waiting.length === 1 && s.waiting[0].names[0] === 'b' && s.matches.length === 1;
 })());
 check('winner stays with nobody else queued: the loser immediately re-challenges', (() => {
   // Matches the original behavior: the loser joins the back of an otherwise
   // empty line, and the queue is immediately refilled from that same line.
   const s = base('winner_stays', 'singles', []);
-  s.activeMatch = { teamA: ['a'], teamB: ['b'] };
-  const r = Q.recordMatchResult(s, 11, 4);
-  return !r.error && s.waiting.length === 0 && eq(s.activeMatch.teamA, ['a']) && eq(s.activeMatch.teamB, ['b']);
+  s.activeMatches[0] = { teamA: ['a'], teamB: ['b'] };
+  const r = Q.recordMatchResult(s, 0, 11, 4);
+  return !r.error && s.waiting.length === 0 && eq(s.activeMatches[0].teamA, ['a']) && eq(s.activeMatches[0].teamB, ['b']);
 })());
 
 section('recordMatchResult: partner rotation -- every round stands alone, nobody is held over');
 check('all four re-queue as individuals after one round, no round-counter; recordMatchResult already re-fills the next match from whoever is rested', (() => {
   const s = base('partner_rotation', 'doubles', solo('e', 'f', 'g', 'h'));
-  s.activeMatch = { teamA: ['a', 'd'], teamB: ['b', 'c'] };
-  const r = Q.recordMatchResult(s, 11, 4);
+  s.activeMatches[0] = { teamA: ['a', 'd'], teamB: ['b', 'c'] };
+  const r = Q.recordMatchResult(s, 0, 11, 4);
   const justPlayedNowWaiting = s.waiting.flatMap((w) => w.names).filter((n) => ['a', 'b', 'c', 'd'].includes(n)).sort();
-  return !r.error && !s.partnerRotationState && eq(justPlayedNowWaiting, ['a', 'b', 'c', 'd']) && eq([...s.activeMatch.teamA, ...s.activeMatch.teamB].sort(), ['e', 'f', 'g', 'h']);
+  return !r.error && !s.partnerRotationState && eq(justPlayedNowWaiting, ['a', 'b', 'c', 'd']) && eq([...s.activeMatches[0].teamA, ...s.activeMatches[0].teamB].sort(), ['e', 'f', 'g', 'h']);
 })());
 check('session.lastPartnerGroup records who just played, so the very next pick avoids repeating them', (() => {
   const s = base('partner_rotation', 'doubles', solo('e', 'f', 'g', 'h'));
-  s.activeMatch = { teamA: ['a', 'd'], teamB: ['b', 'c'] };
-  Q.recordMatchResult(s, 11, 4);
-  return eq(s.lastPartnerGroup.slice().sort(), ['a', 'b', 'c', 'd']);
+  s.activeMatches[0] = { teamA: ['a', 'd'], teamB: ['b', 'c'] };
+  Q.recordMatchResult(s, 0, 11, 4);
+  return eq(s.lastPartnerGroup[0].slice().sort(), ['a', 'b', 'c', 'd']);
 })());
 check('with only 4 players ever, the next match still re-forms from the same 4 (no other choice) but is not "held" by any special state', (() => {
   const s = base('partner_rotation', 'doubles');
-  s.activeMatch = { teamA: ['a', 'd'], teamB: ['b', 'c'] };
-  Q.recordMatchResult(s, 11, 4);
+  s.activeMatches[0] = { teamA: ['a', 'd'], teamB: ['b', 'c'] };
+  Q.recordMatchResult(s, 0, 11, 4);
   Q.checkAndFillActiveMatch(s);
-  const onCourt = [...s.activeMatch.teamA, ...s.activeMatch.teamB].slice().sort();
+  const onCourt = [...s.activeMatches[0].teamA, ...s.activeMatches[0].teamB].slice().sort();
   return eq(onCourt, ['a', 'b', 'c', 'd']) && s.partnerRotationState === undefined;
 })());
 
@@ -149,7 +149,7 @@ check('checkAndFillActiveMatch honors session.lastPartnerGroup end to end', (() 
   s.lastPartnerGroup = ['a', 'b', 'c', 'd'];
   s.playCounts = { a: 1, b: 1, c: 1, d: 1 };
   Q.checkAndFillActiveMatch(s);
-  const onCourt = [...s.activeMatch.teamA, ...s.activeMatch.teamB].sort();
+  const onCourt = [...s.activeMatches[0].teamA, ...s.activeMatches[0].teamB].sort();
   return eq(onCourt, ['e', 'f', 'g', 'h']);
 })());
 
@@ -171,14 +171,14 @@ section('partner rotation: no held-over foursome, any queue size -- every round 
     const minUnavoidableOverlap = Math.max(0, 8 - n);
     let prev = null, bad = null;
     for (let i = 0; i < 25 && !bad; i++) {
-      if (!s.activeMatch) { bad = 'no active match at match ' + i; break; }
-      const cur = [...s.activeMatch.teamA, ...s.activeMatch.teamB].slice().sort();
+      if (!s.activeMatches[0]) { bad = 'no active match at match ' + i; break; }
+      const cur = [...s.activeMatches[0].teamA, ...s.activeMatches[0].teamB].slice().sort();
       if (prev) {
         const overlap = cur.filter((p) => prev.includes(p)).length;
         if (overlap > minUnavoidableOverlap) bad = `overlap ${overlap} exceeds minimum ${minUnavoidableOverlap} at match ${i}`;
       }
       prev = cur;
-      const r = Q.recordMatchResult(s, 11, 4); // recordMatchResult already re-fills the next match internally
+      const r = Q.recordMatchResult(s, 0, 11, 4); // recordMatchResult already re-fills the next match internally
       if (r.error) { bad = r.error; break; }
     }
     return !bad;
@@ -188,8 +188,8 @@ section('partner rotation: no held-over foursome, any queue size -- every round 
     const s = base('partner_rotation', 'doubles', solo(...names));
     Q.checkAndFillActiveMatch(s);
     for (let i = 0; i < 40; i++) {
-      if (!s.activeMatch) break;
-      Q.recordMatchResult(s, 11, 4);
+      if (!s.activeMatches[0]) break;
+      Q.recordMatchResult(s, 0, 11, 4);
       Q.checkAndFillActiveMatch(s);
     }
     const counts = names.map((nm) => s.playCounts[nm] || 0);
@@ -199,7 +199,7 @@ section('partner rotation: no held-over foursome, any queue size -- every round 
 check('no partnerRotationState / round-counter exists anywhere in the new design', (() => {
   const s = base('partner_rotation', 'doubles', solo('a', 'b', 'c', 'd', 'e', 'f'));
   Q.checkAndFillActiveMatch(s);
-  Q.recordMatchResult(s, 11, 4);
+  Q.recordMatchResult(s, 0, 11, 4);
   return s.partnerRotationState === undefined;
 })());
 
@@ -243,7 +243,7 @@ check('when a&b have already partnered twice and every other pairing is fresh, a
 check('end-to-end: over many rounds with a stable group of 4, every pair ends up partnering roughly evenly -- no single duo dominates', (() => {
   const s = base('partner_rotation', 'doubles', solo('a', 'b', 'c', 'd'));
   Q.checkAndFillActiveMatch(s);
-  for (let i = 0; i < 60; i++) { Q.recordMatchResult(s, 11, 4); Q.checkAndFillActiveMatch(s); }
+  for (let i = 0; i < 60; i++) { Q.recordMatchResult(s, 0, 11, 4); Q.checkAndFillActiveMatch(s); }
   const pairs = [['a', 'b'], ['a', 'c'], ['a', 'd'], ['b', 'c'], ['b', 'd'], ['c', 'd']];
   const counts = pairs.map(([x, y]) => Q.partnerCount(s, x, y));
   return Math.max(...counts) - Math.min(...counts) <= 1;
@@ -252,42 +252,42 @@ check('end-to-end: over many rounds with a stable group of 4, every pair ends up
 section('recordMatchResult: fixed rotation, fixed pairs, timed rotation, four off');
 check('fixed rotation breaks pairs, everyone re-queues as individuals', (() => {
   const s = base('fixed_rotation', 'doubles', solo('e', 'f', 'g', 'h'));
-  s.activeMatch = { teamA: ['a', 'b'], teamB: ['c', 'd'] };
-  const r = Q.recordMatchResult(s, 11, 4);
+  s.activeMatches[0] = { teamA: ['a', 'b'], teamB: ['c', 'd'] };
+  const r = Q.recordMatchResult(s, 0, 11, 4);
   // e/f/g/h are rested (0 games); a/b/c/d just played, so they wait this time.
-  return !r.error && eq(s.activeMatch.teamA, ['e', 'f']) && eq(s.activeMatch.teamB, ['g', 'h']) && eq(s.waiting.map((w) => w.names[0]), ['a', 'b', 'c', 'd']);
+  return !r.error && eq(s.activeMatches[0].teamA, ['e', 'f']) && eq(s.activeMatches[0].teamB, ['g', 'h']) && eq(s.waiting.map((w) => w.names[0]), ['a', 'b', 'c', 'd']);
 })());
 check('fixed pairs records league stats and both teams go to the back, strictly FIFO', (() => {
   const s = base('fixed_pairs', 'doubles', [{ id: 'T3', names: ['e', 'f'] }, { id: 'T4', names: ['g', 'h'] }]);
-  s.activeMatch = { teamAId: 'T1', teamBId: 'T2', teamA: ['a', 'b'], teamB: ['c', 'd'] };
-  const r = Q.recordMatchResult(s, 11, 4);
+  s.activeMatches[0] = { teamAId: 'T1', teamBId: 'T2', teamA: ['a', 'b'], teamB: ['c', 'd'] };
+  const r = Q.recordMatchResult(s, 0, 11, 4);
   // FIFO, not rest priority: T3/T4 play next because they were already waiting, not because of play counts.
-  return !r.error && s.teams.T1.w === 1 && s.teams.T2.l === 1 && s.activeMatch.teamAId === 'T3' && s.activeMatch.teamBId === 'T4' && eq(s.waiting.map((w) => w.id), ['T1', 'T2']);
+  return !r.error && s.teams.T1.w === 1 && s.teams.T2.l === 1 && s.activeMatches[0].teamAId === 'T3' && s.activeMatches[0].teamBId === 'T4' && eq(s.waiting.map((w) => w.id), ['T1', 'T2']);
 })());
 check('timed rotation resets the timer and flags it for the caller', (() => {
   const s = base('timed_rotation', 'doubles');
   s.timerLimit = 10; s.timerSecondsLeft = 3; s.timerRunning = true;
-  s.activeMatch = { teamA: ['a', 'b'], teamB: ['c', 'd'] };
-  const r = Q.recordMatchResult(s, 11, 4);
-  return !r.error && r.timerReset === true && s.timerSecondsLeft === 600 && s.timerRunning === false;
+  s.activeMatches[0] = { teamA: ['a', 'b'], teamB: ['c', 'd'] };
+  const r = Q.recordMatchResult(s, 0, 11, 4);
+  return !r.error && r.timerReset === true && s.timerSecondsLeft[0] === 600 && s.timerRunning[0] === false;
 })());
 check('four off four on: both teams rotate to the back as pairs (not broken into individuals)', (() => {
   const s = base('four_off_four_on', 'doubles', solo('e', 'f', 'g', 'h'));
-  s.activeMatch = { teamA: ['a', 'b'], teamB: ['c', 'd'] };
-  const r = Q.recordMatchResult(s, 11, 4);
-  return !r.error && eq(s.activeMatch.teamA, ['e', 'f']) && eq(s.activeMatch.teamB, ['g', 'h']) && eq(s.waiting.map((w) => w.names), [['a', 'b'], ['c', 'd']]);
+  s.activeMatches[0] = { teamA: ['a', 'b'], teamB: ['c', 'd'] };
+  const r = Q.recordMatchResult(s, 0, 11, 4);
+  return !r.error && eq(s.activeMatches[0].teamA, ['e', 'f']) && eq(s.activeMatches[0].teamB, ['g', 'h']) && eq(s.waiting.map((w) => w.names), [['a', 'b'], ['c', 'd']]);
 })());
 check('the final notice always names the winners', (() => {
   const s = base('four_off_four_on', 'doubles');
-  s.activeMatch = { teamA: ['a', 'b'], teamB: ['c', 'd'] };
-  const r = Q.recordMatchResult(s, 11, 4);
+  s.activeMatches[0] = { teamA: ['a', 'b'], teamB: ['c', 'd'] };
+  const r = Q.recordMatchResult(s, 0, 11, 4);
   return r.notices[r.notices.length - 1] === 'Match completed! Winners: a & b';
 })());
 check('recordMatchResult fills the next match automatically when enough are waiting', (() => {
   const s = base('four_off_four_on', 'doubles', solo('e', 'f', 'g', 'h'));
-  s.activeMatch = { teamA: ['a', 'b'], teamB: ['c', 'd'] };
-  const r = Q.recordMatchResult(s, 11, 4);
-  return !r.error && s.activeMatch !== null && s.waiting.length === 2;
+  s.activeMatches[0] = { teamA: ['a', 'b'], teamB: ['c', 'd'] };
+  const r = Q.recordMatchResult(s, 0, 11, 4);
+  return !r.error && s.activeMatches[0] !== null && s.waiting.length === 2;
 })());
 
 section('fixed pairs standings');
@@ -343,7 +343,7 @@ check('findSimilarNames finds a near-miss and ranks it first', (() => {
 })());
 check('getAllPlayerNamesInSession covers waiting, active match, and history', (() => {
   const s = base('winner_stays', 'doubles', solo('a'));
-  s.activeMatch = { teamA: ['b'], teamB: ['c'] };
+  s.activeMatches[0] = { teamA: ['b'], teamB: ['c'] };
   s.matches = [{ teamA: ['d'], teamB: ['e'] }];
   return eq(Q.getAllPlayerNamesInSession(s).sort(), ['a', 'b', 'c', 'd', 'e']);
 })());
@@ -393,8 +393,8 @@ check('winner_stays: a joiner waits behind the original challenger (only 2 are n
   const s = base('winner_stays', 'doubles', solo('a', 'b', 'c', 'd', 'e', 'f'));
   Q.checkAndFillActiveMatch(s); // a,b vs c,d; e,f still original and unplayed
   s.waiting.push({ id: 'w_join', names: ['zoe'] }); // a brand-new joiner, appended at the back
-  const r = Q.recordMatchResult(s, 11, 4); // the loser stays off court; e,f challenge the winner next
-  const onCourt = [...s.activeMatch.teamA, ...s.activeMatch.teamB];
+  const r = Q.recordMatchResult(s, 0, 11, 4); // the loser stays off court; e,f challenge the winner next
+  const onCourt = [...s.activeMatches[0].teamA, ...s.activeMatches[0].teamB];
   return !r.error && onCourt.includes('e') && onCourt.includes('f') && !onCourt.includes('zoe');
 })());
 ['four_off_four_on', 'fixed_rotation', 'partner_rotation'].forEach((rule) => {
@@ -404,8 +404,8 @@ check('winner_stays: a joiner waits behind the original challenger (only 2 are n
     const s = base(rule, 'doubles', solo('a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'));
     Q.checkAndFillActiveMatch(s); // a,b vs c,d
     s.waiting.push({ id: 'w_join', names: ['zoe'] });
-    const r = Q.recordMatchResult(s, 11, 4); // a,b,c,d rotate off; e,f,g,h should fill next
-    const onCourt = [...s.activeMatch.teamA, ...s.activeMatch.teamB];
+    const r = Q.recordMatchResult(s, 0, 11, 4); // a,b,c,d rotate off; e,f,g,h should fill next
+    const onCourt = [...s.activeMatches[0].teamA, ...s.activeMatches[0].teamB];
     return !r.error && eq(onCourt.slice().sort(), ['e', 'f', 'g', 'h']) && !onCourt.includes('zoe');
   })());
   check(`${rule}: when too FEW unplayed originals remain to fill the match, a joiner with fewer games correctly fills the gap`, (() => {
@@ -416,8 +416,8 @@ check('winner_stays: a joiner waits behind the original challenger (only 2 are n
     const s = base(rule, 'doubles', solo('a', 'b', 'c', 'd', 'e', 'f'));
     Q.checkAndFillActiveMatch(s);
     s.waiting.push({ id: 'w_join', names: ['zoe'] });
-    const r = Q.recordMatchResult(s, 11, 4);
-    const onCourt = [...s.activeMatch.teamA, ...s.activeMatch.teamB];
+    const r = Q.recordMatchResult(s, 0, 11, 4);
+    const onCourt = [...s.activeMatches[0].teamA, ...s.activeMatches[0].teamB];
     return !r.error && onCourt.includes('e') && onCourt.includes('f') && onCourt.includes('zoe');
   })());
 });
@@ -425,8 +425,8 @@ check('once every original has played, a recent joiner is not starved forever', 
   const s = base('winner_stays', 'singles', solo('a', 'b'));
   Q.checkAndFillActiveMatch(s); // a vs b -- both originals, both about to have played
   s.waiting.push({ id: 'w_join', names: ['zoe'] });
-  const r = Q.recordMatchResult(s, 11, 4); // b (loser) goes to the back; zoe already waiting ahead of them
-  const onCourt = [...s.activeMatch.teamA, ...s.activeMatch.teamB];
+  const r = Q.recordMatchResult(s, 0, 11, 4); // b (loser) goes to the back; zoe already waiting ahead of them
+  const onCourt = [...s.activeMatches[0].teamA, ...s.activeMatches[0].teamB];
   // Both originals (a, b) have now played once; zoe (0 games) gets picked over b (who is
   // just waiting for a second go), which is correct, ordinary rest priority -- not starved.
   return !r.error && onCourt.includes('zoe');
@@ -438,14 +438,14 @@ section('odd headcounts (confirming no regression from the above)');
     const s = base(rule, 'doubles', solo('a', 'b', 'c', 'd', 'e'));
     if (rule === 'timed_rotation') { s.timerLimit = 15; s.timerSecondsLeft = 900; }
     Q.checkAndFillActiveMatch(s);
-    const onCourt = [...s.activeMatch.teamA, ...s.activeMatch.teamB];
+    const onCourt = [...s.activeMatches[0].teamA, ...s.activeMatches[0].teamB];
     return onCourt.length === 4 && s.waiting.length === 1;
   })());
 });
 check('a 7-player singles queue (odd total, odd vs. the 2-per-match size) fills one match and rests 5', (() => {
   const s = base('winner_stays', 'singles', solo('a', 'b', 'c', 'd', 'e', 'f', 'g'));
   Q.checkAndFillActiveMatch(s);
-  const onCourt = [...s.activeMatch.teamA, ...s.activeMatch.teamB];
+  const onCourt = [...s.activeMatches[0].teamA, ...s.activeMatches[0].teamB];
   return onCourt.length === 2 && s.waiting.length === 5;
 })());
 check('join with an odd headcount still fills a match once there are enough', (() => {
@@ -453,7 +453,7 @@ check('join with an odd headcount still fills a match once there are enough', ((
   Q.checkAndFillActiveMatch(s); // only 3 -- not enough for doubles
   s.waiting.push({ id: 'w_join', names: ['d'] }); // 4th joiner completes the match
   Q.checkAndFillActiveMatch(s);
-  return s.activeMatch !== null && s.waiting.length === 0;
+  return s.activeMatches[0] !== null && s.waiting.length === 0;
 })());
 
 section('match stats');
@@ -683,15 +683,15 @@ section('setFirstServer: who serves first, admin override');
 check('sets activeMatch.firstServer to the chosen side', (() => {
   const s = base('winner_stays', 'doubles', solo('a', 'b', 'c', 'd'));
   Q.checkAndFillActiveMatch(s);
-  const r = Q.setFirstServer(s, 'teamB');
-  return r.ok && s.activeMatch.firstServer === 'teamB';
+  const r = Q.setFirstServer(s, 0, 'teamB');
+  return r.ok && s.activeMatches[0].firstServer === 'teamB';
 })());
 check('rejects an invalid side', (() => {
   const s = base('winner_stays', 'doubles', solo('a', 'b', 'c', 'd'));
   Q.checkAndFillActiveMatch(s);
-  return !!Q.setFirstServer(s, 'nonsense').error;
+  return !!Q.setFirstServer(s, 0, 'nonsense').error;
 })());
-check('no active match -> error', !!Q.setFirstServer(base('winner_stays', 'doubles'), 'teamA').error);
+check('no active match -> error', !!Q.setFirstServer(base('winner_stays', 'doubles'), 0, 'teamA').error);
 
 section('justPlayed: the one signal used to warn (never block) a consecutive pick');
 check('true for someone in the most recently finished match', (() => {
@@ -712,101 +712,101 @@ check('false with no matches yet', Q.justPlayed(base('winner_stays', 'doubles'),
 section('swapActivePlayer: pulling someone in from the waiting line');
 check('replaces the named slot, pulls the new player out of waiting, sends the old one to the FRONT of the line', (() => {
   const s = base('winner_stays', 'doubles', solo('e'));
-  s.activeMatch = { id: 'm1', teamA: ['a', 'b'], teamB: ['c', 'd'] };
-  const r = Q.swapActivePlayer(s, 'teamA', 1, 'e');
-  return r.ok && eq(s.activeMatch.teamA, ['a', 'e']) && s.waiting[0].names[0] === 'b' && !s.waiting.some((g) => g.names.includes('e'));
+  s.activeMatches[0] = { id: 'm1', teamA: ['a', 'b'], teamB: ['c', 'd'] };
+  const r = Q.swapActivePlayer(s, 0, 'teamA', 1, 'e');
+  return r.ok && eq(s.activeMatches[0].teamA, ['a', 'e']) && s.waiting[0].names[0] === 'b' && !s.waiting.some((g) => g.names.includes('e'));
 })());
 check('pulling one half of a waiting pair leaves the other half waiting on their own -- pair-safe, same as removeWaitingPlayer', (() => {
   const s = base('winner_stays', 'doubles', [{ id: 'w_pair', names: ['e', 'f'] }]);
-  s.activeMatch = { id: 'm1', teamA: ['a', 'b'], teamB: ['c', 'd'] };
-  Q.swapActivePlayer(s, 'teamA', 1, 'e');
+  s.activeMatches[0] = { id: 'm1', teamA: ['a', 'b'], teamB: ['c', 'd'] };
+  Q.swapActivePlayer(s, 0, 'teamA', 1, 'e');
   const pairGroup = s.waiting.find((g) => g.id === 'w_pair');
   return eq(pairGroup.names, ['f']);
 })());
 check('flags consecutiveWarning when the incoming player was in the match that just finished -- but still applies the swap', (() => {
   const s = base('winner_stays', 'doubles', solo('c'));
-  s.activeMatch = { id: 'm2', teamA: ['a', 'b'], teamB: ['x', 'y'] };
+  s.activeMatches[0] = { id: 'm2', teamA: ['a', 'b'], teamB: ['x', 'y'] };
   s.matches = [{ teamA: ['a', 'b'], teamB: ['c', 'd'], scoreA: 11, scoreB: 9, winner: 'teamA' }]; // c just played
-  const r = Q.swapActivePlayer(s, 'teamB', 0, 'c');
-  return r.ok && r.consecutiveWarning === true && s.activeMatch.teamB[0] === 'c';
+  const r = Q.swapActivePlayer(s, 0, 'teamB', 0, 'c');
+  return r.ok && r.consecutiveWarning === true && s.activeMatches[0].teamB[0] === 'c';
 })());
 check('no warning for a player who did not just play', (() => {
   const s = base('winner_stays', 'doubles', solo('e'));
-  s.activeMatch = { id: 'm2', teamA: ['a', 'b'], teamB: ['x', 'y'] };
+  s.activeMatches[0] = { id: 'm2', teamA: ['a', 'b'], teamB: ['x', 'y'] };
   s.matches = [{ teamA: ['a', 'b'], teamB: ['c', 'd'], scoreA: 11, scoreB: 9, winner: 'teamA' }];
-  const r = Q.swapActivePlayer(s, 'teamB', 0, 'e');
+  const r = Q.swapActivePlayer(s, 0, 'teamB', 0, 'e');
   return r.ok && r.consecutiveWarning === false;
 })());
 check('swapping with another player already on court is a straight position exchange -- no waiting-line change, no consecutive warning', (() => {
   const s = base('winner_stays', 'doubles', solo('e'));
-  s.activeMatch = { id: 'm1', teamA: ['a', 'b'], teamB: ['c', 'd'] };
-  const r = Q.swapActivePlayer(s, 'teamA', 0, 'c'); // swap a (teamA[0]) with c (teamB[1]... wait c is teamB[0])
-  return r.ok && r.swappedWithinMatch === true && eq(s.activeMatch.teamA, ['c', 'b']) && eq(s.activeMatch.teamB, ['a', 'd']) && s.waiting.length === 1 && s.waiting[0].names[0] === 'e';
+  s.activeMatches[0] = { id: 'm1', teamA: ['a', 'b'], teamB: ['c', 'd'] };
+  const r = Q.swapActivePlayer(s, 0, 'teamA', 0, 'c'); // swap a (teamA[0]) with c (teamB[1]... wait c is teamB[0])
+  return r.ok && r.swappedWithinMatch === true && eq(s.activeMatches[0].teamA, ['c', 'b']) && eq(s.activeMatches[0].teamB, ['a', 'd']) && s.waiting.length === 1 && s.waiting[0].names[0] === 'e';
 })());
 check('picking the same player already in that slot is a no-op error', (() => {
   const s = base('winner_stays', 'doubles', solo('e'));
-  s.activeMatch = { id: 'm1', teamA: ['a', 'b'], teamB: ['c', 'd'] };
-  return !!Q.swapActivePlayer(s, 'teamA', 0, 'a').error;
+  s.activeMatches[0] = { id: 'm1', teamA: ['a', 'b'], teamB: ['c', 'd'] };
+  return !!Q.swapActivePlayer(s, 0, 'teamA', 0, 'a').error;
 })());
 check('a name that is neither on court nor waiting is an error, nothing is mutated', (() => {
   const s = base('winner_stays', 'doubles', solo('e'));
-  s.activeMatch = { id: 'm1', teamA: ['a', 'b'], teamB: ['c', 'd'] };
-  const r = Q.swapActivePlayer(s, 'teamA', 0, 'nobody');
-  return !!r.error && eq(s.activeMatch.teamA, ['a', 'b']) && s.waiting.length === 1;
+  s.activeMatches[0] = { id: 'm1', teamA: ['a', 'b'], teamB: ['c', 'd'] };
+  const r = Q.swapActivePlayer(s, 0, 'teamA', 0, 'nobody');
+  return !!r.error && eq(s.activeMatches[0].teamA, ['a', 'b']) && s.waiting.length === 1;
 })());
 check('Fixed Pairs rejects an individual-player swap -- teams are a stable unit, use swapActiveTeam instead', (() => {
   const s = base('fixed_pairs', 'doubles', solo('e'));
-  s.activeMatch = { id: 'm1', teamA: ['a', 'b'], teamB: ['c', 'd'], teamAId: 'T1', teamBId: 'T2' };
-  return !!Q.swapActivePlayer(s, 'teamA', 0, 'e').error;
+  s.activeMatches[0] = { id: 'm1', teamA: ['a', 'b'], teamB: ['c', 'd'], teamAId: 'T1', teamBId: 'T2' };
+  return !!Q.swapActivePlayer(s, 0, 'teamA', 0, 'e').error;
 })());
-check('no active match -> error', !!Q.swapActivePlayer(base('winner_stays', 'doubles'), 'teamA', 0, 'x').error);
+check('no active match -> error', !!Q.swapActivePlayer(base('winner_stays', 'doubles'), 0, 'teamA', 0, 'x').error);
 
 section('"change the whole match" is just swapActivePlayer called once per slot -- no separate bulk function needed');
 check('four calls fully replace the lineup, each displaced player landing at the front of the line in turn', (() => {
   const s = base('winner_stays', 'doubles', solo('e', 'f', 'g', 'h'));
-  s.activeMatch = { id: 'm1', teamA: ['a', 'b'], teamB: ['c', 'd'] };
-  Q.swapActivePlayer(s, 'teamA', 0, 'e');
-  Q.swapActivePlayer(s, 'teamA', 1, 'f');
-  Q.swapActivePlayer(s, 'teamB', 0, 'g');
-  Q.swapActivePlayer(s, 'teamB', 1, 'h');
+  s.activeMatches[0] = { id: 'm1', teamA: ['a', 'b'], teamB: ['c', 'd'] };
+  Q.swapActivePlayer(s, 0, 'teamA', 0, 'e');
+  Q.swapActivePlayer(s, 0, 'teamA', 1, 'f');
+  Q.swapActivePlayer(s, 0, 'teamB', 0, 'g');
+  Q.swapActivePlayer(s, 0, 'teamB', 1, 'h');
   const waitingNames = s.waiting.flatMap((g) => g.names).sort();
-  return eq(s.activeMatch.teamA, ['e', 'f']) && eq(s.activeMatch.teamB, ['g', 'h']) && eq(waitingNames, ['a', 'b', 'c', 'd']);
+  return eq(s.activeMatches[0].teamA, ['e', 'f']) && eq(s.activeMatches[0].teamB, ['g', 'h']) && eq(waitingNames, ['a', 'b', 'c', 'd']);
 })());
 
 section('swapActiveTeam: Fixed Pairs, swapping the whole team on one side');
 check('replaces the team, pulls the incoming team out of waiting, sends the old team to the FRONT of the line', (() => {
   const s = base('fixed_pairs', 'doubles', [{ id: 'T3', names: ['e', 'f'] }]);
-  s.activeMatch = { id: 'm1', teamA: ['a', 'b'], teamB: ['c', 'd'], teamAId: 'T1', teamBId: 'T2' };
-  const r = Q.swapActiveTeam(s, 'teamA', 'T3');
-  return r.ok && eq(s.activeMatch.teamA, ['e', 'f']) && s.activeMatch.teamAId === 'T3' && s.waiting[0].id === 'T1' && eq(s.waiting[0].names, ['a', 'b']);
+  s.activeMatches[0] = { id: 'm1', teamA: ['a', 'b'], teamB: ['c', 'd'], teamAId: 'T1', teamBId: 'T2' };
+  const r = Q.swapActiveTeam(s, 0, 'teamA', 'T3');
+  return r.ok && eq(s.activeMatches[0].teamA, ['e', 'f']) && s.activeMatches[0].teamAId === 'T3' && s.waiting[0].id === 'T1' && eq(s.waiting[0].names, ['a', 'b']);
 })());
 check('materializes the incoming team via ensureTeam, so its win/loss record is tracked from here on', (() => {
   const s = base('fixed_pairs', 'doubles', [{ id: 'T3', names: ['e', 'f'] }]);
-  s.activeMatch = { id: 'm1', teamA: ['a', 'b'], teamB: ['c', 'd'], teamAId: 'T1', teamBId: 'T2' };
-  Q.swapActiveTeam(s, 'teamA', 'T3');
+  s.activeMatches[0] = { id: 'm1', teamA: ['a', 'b'], teamB: ['c', 'd'], teamAId: 'T1', teamBId: 'T2' };
+  Q.swapActiveTeam(s, 0, 'teamA', 'T3');
   return !!s.teams.T3 && eq(s.teams.T3.names, ['e', 'f']);
 })());
 check('flags consecutiveWarning when the incoming team just played, by player name not team id', (() => {
   const s = base('fixed_pairs', 'doubles', [{ id: 'T3', names: ['e', 'f'] }]);
-  s.activeMatch = { id: 'm1', teamA: ['a', 'b'], teamB: ['c', 'd'], teamAId: 'T1', teamBId: 'T2' };
+  s.activeMatches[0] = { id: 'm1', teamA: ['a', 'b'], teamB: ['c', 'd'], teamAId: 'T1', teamBId: 'T2' };
   s.matches = [{ teamA: ['e', 'f'], teamB: ['x', 'y'], scoreA: 11, scoreB: 9, winner: 'teamA' }];
-  const r = Q.swapActiveTeam(s, 'teamA', 'T3');
+  const r = Q.swapActiveTeam(s, 0, 'teamA', 'T3');
   return r.ok && r.consecutiveWarning === true;
 })());
 check('rejects bringing in the team already on the other side', (() => {
   const s = base('fixed_pairs', 'doubles', [{ id: 'T2', names: ['c', 'd'] }]);
-  s.activeMatch = { id: 'm1', teamA: ['a', 'b'], teamB: ['c', 'd'], teamAId: 'T1', teamBId: 'T2' };
-  return !!Q.swapActiveTeam(s, 'teamA', 'T2').error;
+  s.activeMatches[0] = { id: 'm1', teamA: ['a', 'b'], teamB: ['c', 'd'], teamAId: 'T1', teamBId: 'T2' };
+  return !!Q.swapActiveTeam(s, 0, 'teamA', 'T2').error;
 })());
 check('rejects a team id not actually in the waiting line', (() => {
   const s = base('fixed_pairs', 'doubles');
-  s.activeMatch = { id: 'm1', teamA: ['a', 'b'], teamB: ['c', 'd'], teamAId: 'T1', teamBId: 'T2' };
-  return !!Q.swapActiveTeam(s, 'teamA', 'T999').error;
+  s.activeMatches[0] = { id: 'm1', teamA: ['a', 'b'], teamB: ['c', 'd'], teamAId: 'T1', teamBId: 'T2' };
+  return !!Q.swapActiveTeam(s, 0, 'teamA', 'T999').error;
 })());
 check('rejects a non-Fixed-Pairs session -- use swapActivePlayer instead', (() => {
   const s = base('winner_stays', 'doubles', [{ id: 'T3', names: ['e', 'f'] }]);
-  s.activeMatch = { id: 'm1', teamA: ['a', 'b'], teamB: ['c', 'd'] };
-  return !!Q.swapActiveTeam(s, 'teamA', 'T3').error;
+  s.activeMatches[0] = { id: 'm1', teamA: ['a', 'b'], teamB: ['c', 'd'] };
+  return !!Q.swapActiveTeam(s, 0, 'teamA', 'T3').error;
 })());
 
 section('normalizeRankingOrder: only a genuine permutation of the 5 criteria is accepted');
@@ -942,6 +942,151 @@ check('an empty session (no matches) still returns a well-formed report with emp
   const s = base('winner_stays', 'doubles');
   const r = Q.buildStatsReport(s);
   return eq(r.players, []) && eq(r.teams, []) && eq(r.headToHead, []) && eq(r.matches, []) && eq(r.standings, []);
+})());
+
+section('multi-court: session.activeMatches is an array, one slot per court');
+const base2 = (rule, mode, waiting) => ({
+  mode, rule, waiting: waiting || [], courtCount: 2, activeMatches: [null, null], matches: [], teams: {}, playCounts: {},
+});
+check('two empty courts both fill independently from the same shared waiting line, with no player on both', (() => {
+  const s = base2('four_off_four_on', 'doubles', solo('a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'));
+  Q.checkAndFillActiveMatch(s);
+  const court0 = s.activeMatches[0], court1 = s.activeMatches[1];
+  if (!court0 || !court1) return false;
+  const on0 = [...court0.teamA, ...court0.teamB];
+  const on1 = [...court1.teamA, ...court1.teamB];
+  const noOverlap = on0.every((n) => !on1.includes(n));
+  return on0.length === 4 && on1.length === 4 && noOverlap && s.waiting.length === 0 &&
+    court0.court === 0 && court1.court === 1;
+})());
+check('only one court fills when there are only enough players for one, the other stays empty', (() => {
+  const s = base2('four_off_four_on', 'doubles', solo('a', 'b', 'c', 'd'));
+  Q.checkAndFillActiveMatch(s);
+  return s.activeMatches[0] !== null && s.activeMatches[1] === null && s.waiting.length === 0;
+})());
+check('backward compatible: a session with no courtCount/activeMatches at all defaults to exactly 1 court', (() => {
+  const s = { mode: 'doubles', rule: 'winner_stays', waiting: solo('a', 'b', 'c', 'd'), activeMatch: null, matches: [], teams: {}, playCounts: {} };
+  Q.checkAndFillActiveMatch(s);
+  return s.courtCount === 1 && Array.isArray(s.activeMatches) && s.activeMatches.length === 1 && s.activeMatches[0] !== null;
+})());
+check('backward compatible: an old session already mid-match (activeMatch set, no activeMatches array) migrates that match onto court 0 instead of losing it', (() => {
+  const s = { mode: 'doubles', rule: 'winner_stays', waiting: solo('e'), activeMatch: { id: 'legacy1', teamA: ['a', 'b'], teamB: ['c', 'd'] }, matches: [], teams: {}, playCounts: {} };
+  const r = Q.recordMatchResult(s, 0, 11, 4);
+  return !r.error && s.courtCount === 1 && s.activeMatches.length === 1;
+})());
+
+section('multi-court: recordMatchResult/setFirstServer/swapActivePlayer/swapActiveTeam target one court slot, leaving others untouched');
+check('recordMatchResult(session, court, ...) only records and refills the given court; the other court is untouched', (() => {
+  const s = base2('four_off_four_on', 'doubles', solo('i', 'j'));
+  s.activeMatches[0] = { id: 'm0', court: 0, teamA: ['a', 'b'], teamB: ['c', 'd'] };
+  s.activeMatches[1] = { id: 'm1', court: 1, teamA: ['w', 'x'], teamB: ['y', 'z'] };
+  const r = Q.recordMatchResult(s, 0, 11, 4);
+  return !r.error && r.court === 0 && eq(s.activeMatches[1], { id: 'm1', court: 1, teamA: ['w', 'x'], teamB: ['y', 'z'] }) && s.matches.length === 1 && s.matches[0].court === 0;
+})());
+check('setFirstServer(session, court, side) only edits the named court', (() => {
+  const s = base2('winner_stays', 'doubles');
+  s.activeMatches[0] = { id: 'm0', teamA: ['a', 'b'], teamB: ['c', 'd'] };
+  s.activeMatches[1] = { id: 'm1', teamA: ['w', 'x'], teamB: ['y', 'z'] };
+  const r = Q.setFirstServer(s, 1, 'teamB');
+  return r.ok && s.activeMatches[1].firstServer === 'teamB' && s.activeMatches[0].firstServer === undefined;
+})());
+check('swapActivePlayer(session, court, ...) only edits the named court, pulling from the one shared waiting line', (() => {
+  const s = base2('winner_stays', 'doubles', solo('q'));
+  s.activeMatches[0] = { id: 'm0', teamA: ['a', 'b'], teamB: ['c', 'd'] };
+  s.activeMatches[1] = { id: 'm1', teamA: ['w', 'x'], teamB: ['y', 'z'] };
+  const r = Q.swapActivePlayer(s, 1, 'teamA', 0, 'q');
+  return r.ok && eq(s.activeMatches[1].teamA, ['q', 'x']) && eq(s.activeMatches[0].teamA, ['a', 'b']);
+})());
+check('swapActiveTeam(session, court, ...) only edits the named court', (() => {
+  const s = base2('fixed_pairs', 'doubles', [{ id: 'T9', names: ['q', 'r'] }]);
+  s.activeMatches[0] = { id: 'm0', teamA: ['a', 'b'], teamB: ['c', 'd'], teamAId: 'T1', teamBId: 'T2' };
+  s.activeMatches[1] = { id: 'm1', teamA: ['w', 'x'], teamB: ['y', 'z'], teamAId: 'T3', teamBId: 'T4' };
+  const r = Q.swapActiveTeam(s, 1, 'teamA', 'T9');
+  return r.ok && s.activeMatches[1].teamAId === 'T9' && s.activeMatches[0].teamAId === 'T1';
+})());
+
+section('multi-court: Winner Stays keeps the winner on THEIR OWN court, never swapped onto the other court');
+check('two simultaneous Winner Stays courts: recording a result on court 0 keeps that winner on court 0, court 1 unaffected', (() => {
+  const s = base2('winner_stays', 'singles', solo('e', 'f'));
+  s.activeMatches[0] = { id: 'm0', teamA: ['a'], teamB: ['b'] };
+  s.activeMatches[1] = { id: 'm1', teamA: ['c'], teamB: ['d'] };
+  const r = Q.recordMatchResult(s, 0, 11, 4);
+  return !r.error && s.activeMatches[0].teamA[0] === 'a' && eq(s.activeMatches[1], { id: 'm1', teamA: ['c'], teamB: ['d'] });
+})());
+
+section('multi-court: Partner Rotation\'s anti-repeat bias is tracked PER COURT, not shared across courts');
+check('court 0\'s just-finished foursome only biases court 0\'s own next fill, not court 1\'s', (() => {
+  const s = base2('partner_rotation', 'doubles', solo('a', 'b', 'c', 'd'));
+  s.lastPartnerGroup = [['a', 'b', 'c', 'd'], null];
+  // Only enough players for ONE fresh foursome (a,b,c,d) -- court 0 is
+  // biased against them (and has no choice but to repeat them, since
+  // nobody else is waiting), court 1 has no bias recorded at all.
+  Q.checkAndFillActiveMatch(s);
+  const onCourt0 = s.activeMatches[0] ? [...s.activeMatches[0].teamA, ...s.activeMatches[0].teamB].sort() : null;
+  return eq(onCourt0, ['a', 'b', 'c', 'd']) && s.activeMatches[1] === null;
+})());
+check('recording a result on court 0 under Partner Rotation sets lastPartnerGroup[0] only, leaving lastPartnerGroup[1] untouched', (() => {
+  const s = base2('partner_rotation', 'doubles', solo('e', 'f', 'g', 'h'));
+  s.activeMatches[0] = { id: 'm0', teamA: ['a', 'd'], teamB: ['b', 'c'] };
+  s.activeMatches[1] = { id: 'm1', teamA: ['w', 'z'], teamB: ['x', 'y'] };
+  s.lastPartnerGroup = [null, ['w', 'x', 'y', 'z']];
+  Q.recordMatchResult(s, 0, 11, 4);
+  return eq(s.lastPartnerGroup[0].slice().sort(), ['a', 'b', 'c', 'd']) && eq(s.lastPartnerGroup[1], ['w', 'x', 'y', 'z']);
+})());
+
+section('multi-court: Timed Rotation gives each court its own independent timer state');
+check('each court slot carries its own timerSecondsLeft/timerRunning/timerLimit, not a shared session-level scalar', (() => {
+  const s = base2('timed_rotation', 'doubles');
+  s.timerLimit = [10, 15]; s.timerSecondsLeft = [40, 500]; s.timerRunning = [true, false];
+  s.activeMatches[0] = { id: 'm0', teamA: ['a', 'b'], teamB: ['c', 'd'] };
+  s.activeMatches[1] = { id: 'm1', teamA: ['w', 'x'], teamB: ['y', 'z'] };
+  const r = Q.recordMatchResult(s, 0, 11, 4);
+  // Court 0's timer resets to its own 10-minute limit; court 1's timer
+  // (15 min limit, already at 500s, running) is completely untouched.
+  return !r.error && r.timerReset === true &&
+    s.timerSecondsLeft[0] === 600 && s.timerRunning[0] === false &&
+    s.timerSecondsLeft[1] === 500 && s.timerRunning[1] === false; // court 1's own state (untouched) is exactly as set up above
+})());
+
+section('multi-court: Fixed Pairs FIFO distributes waiting teams across multiple empty court slots in queue order');
+check('2 empty courts, 4 waiting teams: court 0 gets the first 2 teams, court 1 gets the next 2 -- not the same pair on both', (() => {
+  const s = base2('fixed_pairs', 'doubles', [
+    { id: 'T1', names: ['a', 'b'] }, { id: 'T2', names: ['c', 'd'] },
+    { id: 'T3', names: ['e', 'f'] }, { id: 'T4', names: ['g', 'h'] },
+  ]);
+  Q.checkAndFillActiveMatch(s);
+  return s.activeMatches[0].teamAId === 'T1' && s.activeMatches[0].teamBId === 'T2' &&
+    s.activeMatches[1].teamAId === 'T3' && s.activeMatches[1].teamBId === 'T4' && s.waiting.length === 0;
+})());
+check('2 empty courts, only 3 waiting teams: court 0 fills (FIFO), court 1 stays empty for lack of a 2nd team', (() => {
+  const s = base2('fixed_pairs', 'doubles', [
+    { id: 'T1', names: ['a', 'b'] }, { id: 'T2', names: ['c', 'd'] }, { id: 'T3', names: ['e', 'f'] },
+  ]);
+  Q.checkAndFillActiveMatch(s);
+  return s.activeMatches[0].teamAId === 'T1' && s.activeMatches[0].teamBId === 'T2' &&
+    s.activeMatches[1] === null && s.waiting.length === 1 && s.waiting[0].id === 'T3';
+})());
+
+section('multi-court: justPlayed reflects "just played on ANY court", since the admin-override warning applies session-wide');
+check('two different courts each just finished a match: a player from EITHER court\'s just-finished match is flagged', (() => {
+  const s = base2('winner_stays', 'doubles', solo('i', 'j', 'k', 'l'));
+  s.activeMatches[0] = { id: 'm0', teamA: ['a', 'b'], teamB: ['c', 'd'] };
+  s.activeMatches[1] = { id: 'm1', teamA: ['w', 'x'], teamB: ['y', 'z'] };
+  Q.recordMatchResult(s, 0, 11, 4); // court 0 finishes: a,b,c,d just played
+  Q.recordMatchResult(s, 1, 11, 4); // court 1 finishes: w,x,y,z just played
+  // Both courts' most-recently-finished groups should flag "just played",
+  // even though court 0 finished strictly before court 1 and is no longer
+  // session.matches' single most-recent global entry.
+  return Q.justPlayed(s, 'a') === true && Q.justPlayed(s, 'd') === true &&
+    Q.justPlayed(s, 'w') === true && Q.justPlayed(s, 'z') === true;
+})());
+check('a player who only played an earlier round on a court is not flagged once that same court has moved on', (() => {
+  const s = base2('winner_stays', 'doubles', solo('i', 'j', 'k', 'l'));
+  s.activeMatches[0] = { id: 'm0', teamA: ['a', 'b'], teamB: ['c', 'd'] };
+  s.activeMatches[1] = { id: 'm1', teamA: ['w', 'x'], teamB: ['y', 'z'] };
+  Q.recordMatchResult(s, 0, 11, 4); // court 0 round 1: a,b beat c,d -- c,d are now "just played"; winner a,b stays, challenged by i,j
+  Q.recordMatchResult(s, 0, 11, 4); // court 0 round 2: a,b beat i,j -- court 0's last-finished match is now a,b vs i,j, not a,b vs c,d
+  return Q.justPlayed(s, 'c') === false && Q.justPlayed(s, 'd') === false && Q.justPlayed(s, 'i') === true && Q.justPlayed(s, 'j') === true;
 })());
 
 console.log(`\n=== QUEUE ENGINE: ${passed}/${passed + failed} passed ===`);

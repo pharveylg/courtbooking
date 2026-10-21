@@ -80,6 +80,11 @@ textarea{height:96px;padding:10px 13px;resize:vertical;font-weight:500;line-heig
 .score-row{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:10px}
 .score-row input{text-align:center;font-size:20px;font-weight:800}
 .no-match{text-align:center;padding:18px 0;opacity:0.5;font-size:13px}
+.court-block{padding:14px 0}
+.court-block + .court-block{border-top:1px solid var(--line);margin-top:4px}
+.court-label{font-family:"JetBrains Mono",monospace;font-size:10px;text-transform:uppercase;letter-spacing:0.08em;opacity:0.55;margin-bottom:8px}
+.timer-block{display:flex;align-items:center;gap:12px;padding:8px 0}
+.timer-block + .timer-block{border-top:1px solid var(--line)}
 
 .wait-item{display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--line)}
 .wait-item:last-child{border-bottom:none}
@@ -121,7 +126,7 @@ td{padding:7px 6px;border-bottom:1px solid var(--sand)}
 :root[data-theme="dark"] .name-edit{border-bottom-color:rgba(218,226,253,.5)}
 :root[data-theme="dark"] .name-edit:hover,:root[data-theme="dark"] .name-edit:focus{border-bottom-color:var(--ink)}
 /* low opacity text tiers fall under 4.5:1 in dark -- use the muted tone at full opacity */
-:root[data-theme="dark"] .brand-sub,:root[data-theme="dark"] .disclaimer,:root[data-theme="dark"] .hint,:root[data-theme="dark"] .rank-item .rank-num,:root[data-theme="dark"] .vs,:root[data-theme="dark"] .amp-static,:root[data-theme="dark"] .serve-label,:root[data-theme="dark"] .no-match,:root[data-theme="dark"] .wait-item .amp,:root[data-theme="dark"] .empty-note,:root[data-theme="dark"] th,:root[data-theme="dark"] .winner-label,:root[data-theme="dark"] .winner-note{opacity:1;color:var(--muted)}
+:root[data-theme="dark"] .brand-sub,:root[data-theme="dark"] .disclaimer,:root[data-theme="dark"] .hint,:root[data-theme="dark"] .rank-item .rank-num,:root[data-theme="dark"] .vs,:root[data-theme="dark"] .amp-static,:root[data-theme="dark"] .serve-label,:root[data-theme="dark"] .no-match,:root[data-theme="dark"] .wait-item .amp,:root[data-theme="dark"] .empty-note,:root[data-theme="dark"] th,:root[data-theme="dark"] .winner-label,:root[data-theme="dark"] .winner-note,:root[data-theme="dark"] .court-label{opacity:1;color:var(--muted)}
 /* inline style="opacity:0.5" beats a normal rule, hence !important */
 :root[data-theme="dark"] [style*="opacity:0.5"]{opacity:1!important;color:var(--muted)}
 }
@@ -169,6 +174,11 @@ td{padding:7px 6px;border-bottom:1px solid var(--sand)}
         <option value="partner_rotation">Partner Rotation (Doubles only)</option>
         <option value="fixed_pairs">Fixed Pairs League (Doubles only)</option>
       </select>
+    </div>
+    <div class="field">
+      <label for="setCourtCount">Number of courts</label>
+      <input type="number" id="setCourtCount" min="1" max="8" value="1"/>
+      <p class="hint">Run this queue across several courts at once -- the waiting line is shared, but each court gets its own match. Leave at 1 for a single court. Set once; can't be changed mid-session.</p>
     </div>
     <div class="field" id="setTimerField" style="display:none">
       <label for="setTimerLimit">Minutes per match</label>
@@ -233,12 +243,7 @@ td{padding:7px 6px;border-bottom:1px solid var(--sand)}
 
     <div class="card" id="timerCard" style="display:none">
       <label>Match timer</label>
-      <div style="display:flex;align-items:center;gap:12px">
-        <div class="mono" id="timerDisplay" style="font-size:28px;font-weight:800">15:00</div>
-        <div class="btn-row">
-          <button type="button" class="btn ghost" id="timerToggleBtn" style="border:1px solid var(--ink)">Start</button>
-        </div>
-      </div>
+      <div id="timerBlocks"></div>
     </div>
 
     <div class="tabs">
@@ -344,15 +349,25 @@ td{padding:7px 6px;border-bottom:1px solid var(--sand)}
   /* The live scoreboard (court-scoreboard.js) always persists mid-game progress
      to localStorage, by design, so a refresh while it's open can resume --
      that's the one piece of this page that outlives the sessionStorage model.
-     Keep it tidy: drop any board key that isn't the current match's. */
+     Keep it tidy: drop any board key that isn't one of the CURRENTLY ACTIVE
+     courts' matches. With multiple courts potentially mid-game at once,
+     `keepMatchIds` is the full set of ids to preserve (every court's current
+     activeMatches[court].id) -- not a single id -- so re-rendering after one
+     court's board progresses never wipes another court's independently
+     in-progress scoreboard. Pass null/empty to clean up everything (queue
+     ended, nothing to keep). */
   const BOARD_KEY_PREFIX = 'cb_standalone_board_';
   function boardKeyFor(matchId){ return BOARD_KEY_PREFIX + matchId; }
-  function cleanupBoardKeys(keepMatchId){
+  function cleanupBoardKeys(keepMatchIds){
+    const keep = new Set((keepMatchIds || []).filter(Boolean).map(boardKeyFor));
     try {
       Object.keys(localStorage).forEach((k) => {
-        if (k.indexOf(BOARD_KEY_PREFIX) === 0 && k !== boardKeyFor(keepMatchId)) localStorage.removeItem(k);
+        if (k.indexOf(BOARD_KEY_PREFIX) === 0 && !keep.has(k)) localStorage.removeItem(k);
       });
     } catch (e) { /* ignore */ }
+  }
+  function activeMatchIds(session){
+    return (session.activeMatches || []).filter(Boolean).map((m) => m.id);
   }
 
   /* ---------- Setup ---------- */
@@ -412,6 +427,12 @@ td{padding:7px 6px;border-bottom:1px solid var(--sand)}
     const rule = document.getElementById('setRule').value;
     const timerLimit = parseInt(document.getElementById('setTimerLimit').value, 10) || 15;
     const initialText = document.getElementById('setInitialPlayers').value.trim();
+    // Court count: no real court records exist on this standalone tool (unlike
+    // the facility module), so this is just a plain number, clamped to a
+    // reasonable 1-8 range and defaulting to 1 -- same single-court behavior
+    // as before out of the box. Set once at creation, like mode/rule.
+    const courtCountRaw = parseInt(document.getElementById('setCourtCount').value, 10);
+    const courtCount = Number.isFinite(courtCountRaw) && courtCountRaw > 0 ? Math.min(courtCountRaw, QueueEngine.MAX_COURTS) : 1;
 
     if ((rule === 'fixed_pairs' || rule === 'partner_rotation') && mode !== 'doubles') {
       alert('That rule needs Doubles mode.');
@@ -454,8 +475,14 @@ td{padding:7px 6px;border-bottom:1px solid var(--sand)}
     const minGamesVal = parseInt(document.getElementById('setMinGames').value, 10);
 
     const session = {
-      mode, rule, waiting, teams, activeMatch: null, matches: [], playCounts: {},
-      timerLimit, timerSecondsLeft: timerLimit * 60, timerRunning: false,
+      mode, rule, waiting, teams, matches: [], playCounts: {},
+      courtCount,
+      activeMatches: new Array(courtCount).fill(null),
+      lastPartnerGroup: new Array(courtCount).fill(null),
+      lastFinishedByCourt: new Array(courtCount).fill(null),
+      timerLimit: new Array(courtCount).fill(timerLimit),
+      timerSecondsLeft: new Array(courtCount).fill(timerLimit * 60),
+      timerRunning: new Array(courtCount).fill(false),
       gameFormat: { target, winBy, scoring: 'sideout' },
       winnerConfig: {
         minGames: Number.isFinite(minGamesVal) && minGamesVal > 0 ? minGamesVal : null,
@@ -492,6 +519,7 @@ td{padding:7px 6px;border-bottom:1px solid var(--sand)}
     render();
     if (winner) showWinner(winner);
   });
+
 
   /* Declares the overall winner, ranked (by default) by qualifying games
      played (the session's winnerConfig.minGames, or QueueEngine.
@@ -602,9 +630,12 @@ td{padding:7px 6px;border-bottom:1px solid var(--sand)}
      always editable mid-match -- never validated against the rotation rule,
      only flagged (justPlayed / consecutiveWarning) if the pick just played,
      never blocked. "Change the whole match" is just changing every select
-     in turn, same mechanism as changing one. */
-  function nameOptionsHtml(session, team, index, current){
-    const m = session.activeMatch;
+     in turn, same mechanism as changing one. Every one of these now takes
+     `court` (a 0-based index into session.activeMatches), since there can be
+     several matches on court at once -- one per court slot, all pulling
+     from the SAME shared waiting line. */
+  function nameOptionsHtml(session, court, team, index, current){
+    const m = session.activeMatches[court];
     const seen = new Set([current]);
     let opts = `<option value="${escapeHtml(current)}" selected>${escapeHtml(current)}</option>`;
     ['teamA', 'teamB'].forEach((t) => {
@@ -623,8 +654,8 @@ td{padding:7px 6px;border-bottom:1px solid var(--sand)}
     });
     return opts;
   }
-  function teamOptionsHtml(session, side, currentId){
-    const m = session.activeMatch;
+  function teamOptionsHtml(session, court, side, currentId){
+    const m = session.activeMatches[court];
     let opts = `<option value="${escapeHtml(currentId)}" selected>${escapeHtml(QueueEngine.teamLabel(m[side]))}</option>`;
     session.waiting.forEach((g) => {
       const flag = g.names.some((n) => QueueEngine.justPlayed(session, n)) ? ' — just played' : '';
@@ -632,64 +663,85 @@ td{padding:7px 6px;border-bottom:1px solid var(--sand)}
     });
     return opts;
   }
+  /* One card per court, following the same per-item loop pattern as
+     renderWaitingList below -- a court label is only shown when there's
+     more than one court, so a single-court session looks exactly as it
+     always has. */
   function renderActiveMatch(session){
     const block = document.getElementById('activeMatchBlock');
-    const m = session.activeMatch;
-    if (!m) { block.innerHTML = '<div class="no-match">Waiting for enough players to start a match…</div>'; return; }
+    const courtCount = session.courtCount || 1;
     const fixedPairs = session.rule === 'fixed_pairs';
-    const sideHtml = (team) => fixedPairs
-      ? `<select class="name-edit" data-team-swap="${team}">${teamOptionsHtml(session, team, team === 'teamA' ? m.teamAId : m.teamBId)}</select>`
-      : m[team].map((n, i) => `<select class="name-edit" data-team="${team}" data-index="${i}">${nameOptionsHtml(session, team, i, n)}</select>`).join('<span class="amp-static">&amp;</span>');
-    const serving = m.firstServer === 'teamB' ? 'teamB' : 'teamA';
-    block.innerHTML = `
-      <div class="matchup">
-        <div class="side"><div class="names">${sideHtml('teamA')}</div></div>
-        <div class="vs">VS</div>
-        <div class="side"><div class="names">${sideHtml('teamB')}</div></div>
-      </div>
-      <div class="serve-row">
-        <span class="serve-label">Serves first</span>
-        <button type="button" class="serve-pill" data-serve="teamA" aria-pressed="${serving === 'teamA'}">${escapeHtml(QueueEngine.teamLabel(m.teamA))}</button>
-        <button type="button" class="serve-pill" data-serve="teamB" aria-pressed="${serving === 'teamB'}">${escapeHtml(QueueEngine.teamLabel(m.teamB))}</button>
-      </div>
-      <div class="score-row">
-        <input type="number" id="scoreA" min="0" placeholder="0"/>
-        <span class="vs mono">–</span>
-        <input type="number" id="scoreB" min="0" placeholder="0"/>
-      </div>
-      <div class="btn-row" style="margin-top:12px">
-        <button type="button" class="btn lime" id="submitScoreBtn">Submit &amp; rotate</button>
-        <button type="button" class="btn ghost" id="liveScoreBtn" style="border:1px solid var(--ink)">Live score</button>
-      </div>`;
-    document.getElementById('submitScoreBtn').addEventListener('click', onSubmitScore);
-    document.getElementById('liveScoreBtn').addEventListener('click', onLiveScore);
-    block.querySelectorAll('.serve-pill').forEach((btn) => btn.addEventListener('click', () => applyServeFirst(btn.dataset.serve)));
-    block.querySelectorAll('select[data-team]').forEach((sel) => sel.addEventListener('change', () => applySwapPlayer(sel.dataset.team, Number(sel.dataset.index), sel.value)));
-    block.querySelectorAll('select[data-team-swap]').forEach((sel) => sel.addEventListener('change', () => applySwapTeam(sel.dataset.teamSwap, sel.value)));
+    block.innerHTML = '';
+    for (let court = 0; court < courtCount; court++) {
+      const m = session.activeMatches[court];
+      const wrap = document.createElement('div');
+      wrap.className = 'court-block';
+      const label = courtCount > 1 ? `<div class="court-label">Court ${court + 1}</div>` : '';
+      if (!m) {
+        wrap.innerHTML = `${label}<div class="no-match">Waiting for enough players to start a match…</div>`;
+        block.appendChild(wrap);
+        continue;
+      }
+      const sideHtml = (team) => fixedPairs
+        ? `<select class="name-edit" data-team-swap="${team}" data-court="${court}">${teamOptionsHtml(session, court, team, team === 'teamA' ? m.teamAId : m.teamBId)}</select>`
+        : m[team].map((n, i) => `<select class="name-edit" data-team="${team}" data-index="${i}" data-court="${court}">${nameOptionsHtml(session, court, team, i, n)}</select>`).join('<span class="amp-static">&amp;</span>');
+      const serving = m.firstServer === 'teamB' ? 'teamB' : 'teamA';
+      wrap.innerHTML = `
+        ${label}
+        <div class="matchup">
+          <div class="side"><div class="names">${sideHtml('teamA')}</div></div>
+          <div class="vs">VS</div>
+          <div class="side"><div class="names">${sideHtml('teamB')}</div></div>
+        </div>
+        <div class="serve-row">
+          <span class="serve-label">Serves first</span>
+          <button type="button" class="serve-pill" data-serve="teamA" data-court="${court}" aria-pressed="${serving === 'teamA'}">${escapeHtml(QueueEngine.teamLabel(m.teamA))}</button>
+          <button type="button" class="serve-pill" data-serve="teamB" data-court="${court}" aria-pressed="${serving === 'teamB'}">${escapeHtml(QueueEngine.teamLabel(m.teamB))}</button>
+        </div>
+        <div class="score-row">
+          <input type="number" id="scoreA_${court}" min="0" placeholder="0"/>
+          <span class="vs mono">–</span>
+          <input type="number" id="scoreB_${court}" min="0" placeholder="0"/>
+        </div>
+        <div class="btn-row" style="margin-top:12px">
+          <button type="button" class="btn lime" id="submitScoreBtn_${court}" data-court="${court}">Submit &amp; rotate</button>
+          <button type="button" class="btn ghost" id="liveScoreBtn_${court}" data-court="${court}" style="border:1px solid var(--ink)">Live score</button>
+        </div>`;
+      block.appendChild(wrap);
+      wrap.querySelector(`#submitScoreBtn_${court}`).addEventListener('click', () => onSubmitScore(court));
+      wrap.querySelector(`#liveScoreBtn_${court}`).addEventListener('click', () => onLiveScore(court));
+      wrap.querySelectorAll('.serve-pill').forEach((btn) => btn.addEventListener('click', () => applyServeFirst(court, btn.dataset.serve)));
+      wrap.querySelectorAll('select[data-team]').forEach((sel) => sel.addEventListener('change', () => applySwapPlayer(court, sel.dataset.team, Number(sel.dataset.index), sel.value)));
+      wrap.querySelectorAll('select[data-team-swap]').forEach((sel) => sel.addEventListener('change', () => applySwapTeam(court, sel.dataset.teamSwap, sel.value)));
+    }
+    // Stray scoreboard keys: keep every court's currently-in-progress board,
+    // drop everything else (see cleanupBoardKeys).
+    cleanupBoardKeys(activeMatchIds(session));
   }
 
   /* Admin override, pushed into the session the same way whether it comes
      from the dashboard selects above or the live scoreboard's own pre-game
      controls (see onLiveScore) -- one place to load, call the shared
-     engine, save, and re-render. */
-  function applyServeFirst(side){
-    const s = load(); if (!s || !s.activeMatch) return { error: 'No active match.' };
-    const r = QueueEngine.setFirstServer(s, side);
+     engine, save, and re-render. Each takes `court` first, so staff can
+     target any one court independently of the others. */
+  function applyServeFirst(court, side){
+    const s = load(); if (!s || !s.activeMatches[court]) return { error: 'No active match.' };
+    const r = QueueEngine.setFirstServer(s, court, side);
     if (r.error) return r;
     save(s); render();
     return r;
   }
-  function applySwapPlayer(team, index, newName){
-    const s = load(); if (!s || !s.activeMatch) return { error: 'No active match.' };
-    const r = QueueEngine.swapActivePlayer(s, team, index, newName);
+  function applySwapPlayer(court, team, index, newName){
+    const s = load(); if (!s || !s.activeMatches[court]) return { error: 'No active match.' };
+    const r = QueueEngine.swapActivePlayer(s, court, team, index, newName);
     if (r.error) { toast(r.error); return r; }
     save(s); render();
     if (r.consecutiveWarning) toast(`${r.added} just played last match — added anyway.`);
     return r;
   }
-  function applySwapTeam(side, newTeamId){
-    const s = load(); if (!s || !s.activeMatch) return { error: 'No active match.' };
-    const r = QueueEngine.swapActiveTeam(s, side, newTeamId);
+  function applySwapTeam(court, side, newTeamId){
+    const s = load(); if (!s || !s.activeMatches[court]) return { error: 'No active match.' };
+    const r = QueueEngine.swapActiveTeam(s, court, side, newTeamId);
     if (r.error) { toast(r.error); return r; }
     save(s); render();
     if (r.consecutiveWarning) toast(`That team just played last match — added anyway.`);
@@ -761,72 +813,97 @@ td{padding:7px 6px;border-bottom:1px solid var(--sand)}
     `).join('');
   }
 
+  /* One independent timer per court -- its own interval, its own display,
+     its own start/pause state (session.timerSecondsLeft/timerRunning/
+     timerLimit are each an array indexed by court; see queue-engine.js). */
+  let timerIntervals = {}; // court -> interval id
   function renderTimer(session){
     const card = document.getElementById('timerCard');
     if (session.rule !== 'timed_rotation') { card.style.display = 'none'; stopTimerLoop(); return; }
     card.style.display = '';
-    updateTimerDisplay(session);
-    document.getElementById('timerToggleBtn').onclick = () => {
-      const s = load(); if (!s) return;
-      s.timerRunning = !s.timerRunning;
-      save(s);
-      if (s.timerRunning) startTimerLoop(); else stopTimerLoop();
-      document.getElementById('timerToggleBtn').textContent = s.timerRunning ? 'Pause' : 'Start';
-    };
-    document.getElementById('timerToggleBtn').textContent = session.timerRunning ? 'Pause' : 'Start';
-    if (session.timerRunning) startTimerLoop();
+    const courtCount = session.courtCount || 1;
+    const blocks = document.getElementById('timerBlocks');
+    blocks.innerHTML = '';
+    for (let court = 0; court < courtCount; court++) {
+      const row = document.createElement('div');
+      row.className = 'timer-block';
+      const label = courtCount > 1 ? `<span class="court-label" style="margin:0;min-width:64px">Court ${court + 1}</span>` : '';
+      row.innerHTML = `${label}<div class="mono" id="timerDisplay_${court}" style="font-size:28px;font-weight:800"></div>
+        <div class="btn-row"><button type="button" class="btn ghost" id="timerToggleBtn_${court}" style="border:1px solid var(--ink)"></button></div>`;
+      blocks.appendChild(row);
+      updateTimerDisplay(session, court);
+      const toggleBtn = row.querySelector(`#timerToggleBtn_${court}`);
+      toggleBtn.textContent = session.timerRunning[court] ? 'Pause' : 'Start';
+      toggleBtn.onclick = () => {
+        const s = load(); if (!s) return;
+        s.timerRunning[court] = !s.timerRunning[court];
+        save(s);
+        if (s.timerRunning[court]) startTimerLoop(court); else stopTimerLoop(court);
+        toggleBtn.textContent = s.timerRunning[court] ? 'Pause' : 'Start';
+      };
+      if (session.timerRunning[court]) startTimerLoop(court);
+    }
   }
-  function updateTimerDisplay(session){
-    const secs = Math.max(0, session.timerSecondsLeft || 0);
+  function updateTimerDisplay(session, court){
+    const el = document.getElementById(`timerDisplay_${court}`);
+    if (!el) return;
+    const secs = Math.max(0, (session.timerSecondsLeft && session.timerSecondsLeft[court]) || 0);
     const m = Math.floor(secs / 60), s = secs % 60;
-    document.getElementById('timerDisplay').textContent = `${m}:${String(s).padStart(2, '0')}`;
+    el.textContent = `${m}:${String(s).padStart(2, '0')}`;
   }
-  function startTimerLoop(){
-    stopTimerLoop();
-    timerInterval = setInterval(() => {
-      const s = load(); if (!s || !s.timerRunning) { stopTimerLoop(); return; }
-      s.timerSecondsLeft = Math.max(0, (s.timerSecondsLeft || 0) - 1);
-      if (s.timerSecondsLeft === 0) { s.timerRunning = false; toast("Time's up!"); stopTimerLoop(); }
+  function startTimerLoop(court){
+    stopTimerLoop(court);
+    timerIntervals[court] = setInterval(() => {
+      const s = load(); if (!s || !s.timerRunning || !s.timerRunning[court]) { stopTimerLoop(court); return; }
+      s.timerSecondsLeft[court] = Math.max(0, (s.timerSecondsLeft[court] || 0) - 1);
+      if (s.timerSecondsLeft[court] === 0) { s.timerRunning[court] = false; toast(`Court ${court + 1}: time's up!`); stopTimerLoop(court); }
       save(s);
-      updateTimerDisplay(s);
+      updateTimerDisplay(s, court);
     }, 1000);
   }
-  function stopTimerLoop(){ clearTimeout(timerInterval); clearInterval(timerInterval); timerInterval = null; }
+  function stopTimerLoop(court){
+    if (court === undefined) {
+      Object.keys(timerIntervals).forEach((c) => { clearInterval(timerIntervals[c]); });
+      timerIntervals = {};
+      return;
+    }
+    if (timerIntervals[court]) { clearInterval(timerIntervals[court]); delete timerIntervals[court]; }
+  }
 
-  function onSubmitScore(){
-    const session = load(); if (!session || !session.activeMatch) return;
-    const scoreAVal = document.getElementById('scoreA').value;
-    const scoreBVal = document.getElementById('scoreB').value;
-    const result = QueueEngine.recordMatchResult(session, scoreAVal, scoreBVal);
+  function onSubmitScore(court){
+    const session = load(); if (!session || !session.activeMatches[court]) return;
+    const scoreAVal = document.getElementById(`scoreA_${court}`).value;
+    const scoreBVal = document.getElementById(`scoreB_${court}`).value;
+    const result = QueueEngine.recordMatchResult(session, court, scoreAVal, scoreBVal);
     if (result.error) { alert(result.error); return; }
     save(session);
     render();
     result.notices.forEach((msg) => toast(msg));
   }
 
-  function onLiveScore(){
-    const session = load(); if (!session || !session.activeMatch || typeof CourtBoard === 'undefined') return;
-    const m = session.activeMatch, f = session.gameFormat || { target: 11, winBy: 2, scoring: 'sideout' };
+  function onLiveScore(court){
+    const session = load(); if (!session || !session.activeMatches[court] || typeof CourtBoard === 'undefined') return;
+    const m = session.activeMatches[court], f = session.gameFormat || { target: 11, winBy: 2, scoring: 'sideout' };
     const fixedPairs = session.rule === 'fixed_pairs';
-    cleanupBoardKeys(m.id);
+    cleanupBoardKeys(activeMatchIds(session));
     CourtBoard.open({
-      title: 'Walk-in Queue — live score',
+      title: session.courtCount > 1 ? `Walk-in Queue — Court ${court + 1} live score` : 'Walk-in Queue — live score',
       names: { home: QueueEngine.teamLabel(m.teamA), away: QueueEngine.teamLabel(m.teamB) },
       firstServer: m.firstServer === 'teamB' ? 'away' : 'home',
       roster: { home: m.teamA.slice(), away: m.teamB.slice() },
       waitingNames: fixedPairs ? undefined : session.waiting.flatMap((g) => g.names),
       waitingTeams: fixedPairs ? session.waiting.map((g) => ({ id: g.id, names: g.names.slice() })) : undefined,
-      onSetFirstServer: (side) => applyServeFirst(side === 'away' ? 'teamB' : 'teamA'),
-      onSwapPlayer: fixedPairs ? undefined : (side, index, newName) => applySwapPlayer(side === 'away' ? 'teamB' : 'teamA', index, newName),
-      onSwapTeam: fixedPairs ? (side, newTeamId) => applySwapTeam(side === 'away' ? 'teamB' : 'teamA', newTeamId) : undefined,
+      onSetFirstServer: (side) => applyServeFirst(court, side === 'away' ? 'teamB' : 'teamA'),
+      onSwapPlayer: fixedPairs ? undefined : (side, index, newName) => applySwapPlayer(court, side === 'away' ? 'teamB' : 'teamA', index, newName),
+      onSwapTeam: fixedPairs ? (side, newTeamId) => applySwapTeam(court, side === 'away' ? 'teamB' : 'teamA', newTeamId) : undefined,
       config: { target: f.target, winBy: f.winBy, scoring: f.scoring, bestOf: 1, doubles: session.mode === 'doubles' },
       storageKey: boardKeyFor(m.id),
       finishLabel: 'Submit & rotate queue',
       onFinish: (sum) => {
         const g = sum.games[0];
-        document.getElementById('scoreA').value = g.home;
-        document.getElementById('scoreB').value = g.away;
-        document.getElementById('submitScoreBtn').click();
+        document.getElementById(`scoreA_${court}`).value = g.home;
+        document.getElementById(`scoreB_${court}`).value = g.away;
+        document.getElementById(`submitScoreBtn_${court}`).click();
       },
     });
   }
@@ -868,16 +945,15 @@ td{padding:7px 6px;border-bottom:1px solid var(--sand)}
     document.getElementById('setupSection').classList.toggle('hidden', !!session);
     document.getElementById('dashboardSection').classList.toggle('hidden', !session);
     if (!session) { stopTimerLoop(); cleanupBoardKeys(null); return; }
+    QueueEngine.ensureCourts(session); // backward compatible: defaults to exactly 1 court for an old/foreign session shape
 
     document.getElementById('modeBadge').textContent = session.mode === 'doubles' ? 'Doubles' : 'Singles';
     document.getElementById('ruleBadge').textContent = ruleLabel(session.rule);
     renderRotationNote(session);
-    renderActiveMatch(session);
+    renderActiveMatch(session); // also calls cleanupBoardKeys -- see there
     renderWaitingList(session);
     renderStats(session);
     renderTimer(session);
-    // The live scoreboard key only matters for the match on court right now.
-    cleanupBoardKeys(session.activeMatch ? session.activeMatch.id : null);
   }
 
   render();

@@ -86,15 +86,15 @@ function fnBody(src, header) {
   return m ? m[0] : '';
 }
 
-section('index.html -- the dashboard wrapper functions report their result, so CourtBoard can mirror a swap it triggered');
-check('applyQueueSwap returns the engine result (not void)', fnBody(indexHtml, 'function applyQueueSwap(team, index, newName)').includes('return r;'));
-check('applyQueueTeamSwap returns the engine result (not void)', fnBody(indexHtml, 'function applyQueueTeamSwap(side, newTeamId)').includes('return r;'));
-check('applyQueueFirstServer exists and returns the engine result', fnBody(indexHtml, 'function applyQueueFirstServer(side)').includes('return r;'));
+section('index.html -- the dashboard wrapper functions report their result, so CourtBoard can mirror a swap it triggered -- and now take `court` first, since several matches can be on court at once');
+check('applyQueueSwap returns the engine result (not void)', fnBody(indexHtml, 'function applyQueueSwap(court, team, index, newName)').includes('return r;'));
+check('applyQueueTeamSwap returns the engine result (not void)', fnBody(indexHtml, 'function applyQueueTeamSwap(court, side, newTeamId)').includes('return r;'));
+check('applyQueueFirstServer exists and returns the engine result', fnBody(indexHtml, 'function applyQueueFirstServer(court, side)').includes('return r;'));
 
-section('queue.html -- the dashboard wrapper functions report their result, so CourtBoard can mirror a swap it triggered');
-check('applyServeFirst exists and returns the engine result', fnBody(queueHtml, 'function applyServeFirst(side)').includes('return r;'));
-check('applySwapPlayer exists and returns the engine result', fnBody(queueHtml, 'function applySwapPlayer(team, index, newName)').includes('return r;'));
-check('applySwapTeam exists and returns the engine result', fnBody(queueHtml, 'function applySwapTeam(side, newTeamId)').includes('return r;'));
+section('queue.html -- the dashboard wrapper functions report their result, so CourtBoard can mirror a swap it triggered -- and now take `court` first, since several matches can be on court at once');
+check('applyServeFirst exists and returns the engine result', fnBody(queueHtml, 'function applyServeFirst(court, side)').includes('return r;'));
+check('applySwapPlayer exists and returns the engine result', fnBody(queueHtml, 'function applySwapPlayer(court, team, index, newName)').includes('return r;'));
+check('applySwapTeam exists and returns the engine result', fnBody(queueHtml, 'function applySwapTeam(court, side, newTeamId)').includes('return r;'));
 
 console.log(`\n=== QUEUE MATCH EDIT (ADMIN OVERRIDE): ${passed}/${passed + failed} passed ===`);
 process.exit(failed === 0 ? 0 : 1);

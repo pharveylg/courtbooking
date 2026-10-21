@@ -29,11 +29,12 @@ check('the live scoreboard opens with a storageKey, so a refresh mid-game can re
   const call = queueHtml.slice(i, queueHtml.indexOf('});', i));
   return i > -1 && /^\s*storageKey\s*:\s*boardKeyFor\(m\.id\)/m.test(call);
 })());
-check('stray scoreboard keys are cleaned up on render, and fully on End Queue -- the one piece of state that\'s in localStorage never outlives this tool', /function cleanupBoardKeys\(/.test(queueHtml) && /cleanupBoardKeys\(session\.activeMatch \? session\.activeMatch\.id : null\)/.test(queueHtml) && /cleanupBoardKeys\(null\)/.test(queueHtml));
+check('stray scoreboard keys are cleaned up on render, and fully on End Queue -- the one piece of state that\'s in localStorage never outlives this tool', /function cleanupBoardKeys\(/.test(queueHtml) && /cleanupBoardKeys\(activeMatchIds\(session\)\)/.test(queueHtml) && /cleanupBoardKeys\(null\)/.test(queueHtml));
+check('cleanupBoardKeys preserves every CURRENTLY ACTIVE court\'s board key, not just one -- multiple courts can be mid-game at once without wiping each other\'s scoreboard progress', /function cleanupBoardKeys\(keepMatchIds\)/.test(queueHtml) && /function activeMatchIds\(session\)/.test(queueHtml));
 
 section('shares the rotation engine with the facility queue module -- no duplicate logic');
 check('index.html pulls the rule engine from QueueEngine instead of defining its own copy', /\}\s*=\s*QueueEngine;/.test(indexHtml) && !/^function checkAndFillActiveMatch\(/m.test(indexHtml) && !/^function ensureTeam\(/m.test(indexHtml));
-check('both index.html and queue.html call the same QueueEngine.recordMatchResult for scoring', /recordMatchResult\(session, scoreAVal, scoreBVal\)/.test(indexHtml) && /QueueEngine\.recordMatchResult\(session, scoreAVal, scoreBVal\)/.test(queueHtml));
+check('both index.html and queue.html call the same QueueEngine.recordMatchResult for scoring, now court-aware', /recordMatchResult\(session, court, scoreAVal, scoreBVal\)/.test(indexHtml) && /QueueEngine\.recordMatchResult\(session, court, scoreAVal, scoreBVal\)/.test(queueHtml));
 check('both call the same QueueEngine.checkAndFillActiveMatch to fill the next match', /checkAndFillActiveMatch\(session\)/.test(indexHtml) && /QueueEngine\.checkAndFillActiveMatch\(session\)/.test(queueHtml));
 check('both pages compute head-to-head with the same shared function, not two implementations', /computeHeadToHead\(session\)/.test(indexHtml) && /QueueEngine\.computeHeadToHead\(session\)/.test(queueHtml));
 check('removing a waiting player goes through the shared removeWaitingPlayer -- removes one player, not the whole pair -- in both pages', /removeWaitingPlayer\(session, waitId, removeName\)/.test(indexHtml) && /QueueEngine\.removeWaitingPlayer\(session, btn\.dataset\.id, btn\.dataset\.name\)/.test(queueHtml));

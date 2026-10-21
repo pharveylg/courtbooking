@@ -43,11 +43,71 @@ function describe(html) {
   return { bodySha256: sha(body), headBaseSha256: sha(baseHead), classTokensSha256: sha(JSON.stringify(tokens)), classTokenCount: Object.keys(tokens).length, classTokens: tokens };
 }
 /* ---- index.html (Phase 3b): its body DID change on purpose, so it is pinned by an ALLOWED DELTA, not by a
-   byte-for-byte hash. The delta is: two header toggle buttons, one admin hint line, and a few JS colour
-   literals replaced by theme tokens whose LIGHT value is the old literal. Reversing exactly that delta in the
-   current body must give back the baseline body (sha256 recorded from git ref BASELINE_REF). */
+   byte-for-byte hash. The delta (queue multi-court dashboard fix): renderActiveQueueDashboard/
+   renderActiveMatchCourts now take an optional `affectedCourts` list so a single-court action (submit score,
+   swap, serve-first) redraws only that court's card -- instead of wiping and rebuilding every court's card,
+   which used to blow away whatever staff had typed into any OTHER court's still-unsubmitted score inputs --
+   plus a new per-court "Match N" counter in each card's header (QueueEngine.matchesFinishedOnCourt). Each
+   entry below is one contiguous changed region; reversing all of them in the current body must give back the
+   baseline body (sha256 recorded from git ref BASELINE_REF) exactly. */
 const BASELINE_REF = 'b3ac2f6';
-const SUBSTITUTIONS = [];
+const SUBSTITUTIONS = [
+  {
+    "from": "  pullRestedPlayers, checkAndFillActiveMatch, recordMatchResult, removeWaitingPlayer,\n  setFirstServer, swapActivePlayer, swapActiveTeam,",
+    "to": "  pullRestedPlayers, checkAndFillActiveMatch, recordMatchResult, removeWaitingPlayer,\n  matchesFinishedOnCourt,\n  setFirstServer, swapActivePlayer, swapActiveTeam,",
+    "count": 1
+  },
+  {
+    "from": "function renderActiveQueueDashboard() {",
+    "to": "function renderActiveQueueDashboard(affectedCourts) {",
+    "count": 1
+  },
+  {
+    "from": "  renderActiveMatchCourts(session);",
+    "to": "  renderActiveMatchCourts(session, affectedCourts);",
+    "count": 1
+  },
+  {
+    "from": "   (for Timed Rotation) timer are fully independent of every other court's. */\nfunction renderActiveMatchCourts(session) {",
+    "to": "   (for Timed Rotation) timer are fully independent of every other court's.\n   `affectedCourts`, when given, redraws only those specific court cards\n   (replacing each one's existing DOM node in place) instead of wiping and\n   rebuilding every card -- so a single-court action never touches any\n   OTHER court's still-unsubmitted score inputs. */\nfunction renderActiveMatchCourts(session, affectedCourts) {",
+    "count": 1
+  },
+  {
+    "from": "  container.innerHTML = '';\n  for (let court = 0; court < courtCount; court++) {\n    const m = session.activeMatches[court];",
+    "to": "  if (!affectedCourts) container.innerHTML = '';\n  const courts = affectedCourts || Array.from({ length: courtCount }, (_, i) => i);\n  courts.forEach((court) => {\n    if (session.rule === 'timed_rotation') stopActiveTimer(court);\n    const m = session.activeMatches[court];",
+    "count": 1
+  },
+  {
+    "from": "    const courtLabel = courtCount > 1 ? `<div class=\"mono text-[10px] uppercase tracking-wider opacity-50 mb-2\">${escapeHtml(courtName)}</div>` : '';",
+    "to": "    const matchNum = matchesFinishedOnCourt(session, court) + 1;\n    const courtLabel = `<div class=\"flex items-center justify-between mb-2\">\n        <span class=\"mono text-[10px] uppercase tracking-wider opacity-50\">${courtCount > 1 ? escapeHtml(courtName) : ''}</span>\n        <span class=\"mono text-[10px] uppercase tracking-wider opacity-50\">Match ${matchNum}</span>\n      </div>`;",
+    "count": 1
+  },
+  {
+    "from": "      </div>`;\n    container.appendChild(wrap);",
+    "to": "      </div>`;\n    const existing = container.querySelector(`[data-court=\"${court}\"]`);\n    if (existing) container.replaceChild(wrap, existing); else container.appendChild(wrap);",
+    "count": 1
+  },
+  {
+    "from": "    if (session.rule === 'timed_rotation') initDashboardTimer(session, court);\n  }",
+    "to": "    if (session.rule === 'timed_rotation') initDashboardTimer(session, court);\n  });",
+    "count": 1
+  },
+  {
+    "from": "if (r.error) { toast(r.error); renderActiveQueueDashboard(); return r; }",
+    "to": "if (r.error) { toast(r.error); renderActiveQueueDashboard([court]); return r; }",
+    "count": 2
+  },
+  {
+    "from": "  renderActiveQueueDashboard();",
+    "to": "  renderActiveQueueDashboard([court]);",
+    "count": 3
+  },
+  {
+    "from": "  renderActiveQueueDashboard();",
+    "to": "  renderActiveQueueDashboard(result.affectedCourts);",
+    "count": 1
+  }
+];
 const ADDITION_RES = [];
 function bodyOf(html) { const h = norm(html); return h.slice(h.indexOf('<body')); }
 function reverseDelta(body, additions, substitutions) {

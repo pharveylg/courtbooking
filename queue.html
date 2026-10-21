@@ -82,7 +82,9 @@ textarea{height:96px;padding:10px 13px;resize:vertical;font-weight:500;line-heig
 .no-match{text-align:center;padding:18px 0;opacity:0.5;font-size:13px}
 .court-block{padding:14px 0}
 .court-block + .court-block{border-top:1px solid var(--line);margin-top:4px}
-.court-label{font-family:"JetBrains Mono",monospace;font-size:10px;text-transform:uppercase;letter-spacing:0.08em;opacity:0.55;margin-bottom:8px}
+.court-header{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}
+.court-label{font-family:"JetBrains Mono",monospace;font-size:10px;text-transform:uppercase;letter-spacing:0.08em;opacity:0.55}
+.match-num{font-family:"JetBrains Mono",monospace;font-size:10px;text-transform:uppercase;letter-spacing:0.08em;opacity:0.55}
 .timer-block{display:flex;align-items:center;gap:12px;padding:8px 0}
 .timer-block + .timer-block{border-top:1px solid var(--line)}
 
@@ -126,7 +128,7 @@ td{padding:7px 6px;border-bottom:1px solid var(--sand)}
 :root[data-theme="dark"] .name-edit{border-bottom-color:rgba(218,226,253,.5)}
 :root[data-theme="dark"] .name-edit:hover,:root[data-theme="dark"] .name-edit:focus{border-bottom-color:var(--ink)}
 /* low opacity text tiers fall under 4.5:1 in dark -- use the muted tone at full opacity */
-:root[data-theme="dark"] .brand-sub,:root[data-theme="dark"] .disclaimer,:root[data-theme="dark"] .hint,:root[data-theme="dark"] .rank-item .rank-num,:root[data-theme="dark"] .vs,:root[data-theme="dark"] .amp-static,:root[data-theme="dark"] .serve-label,:root[data-theme="dark"] .no-match,:root[data-theme="dark"] .wait-item .amp,:root[data-theme="dark"] .empty-note,:root[data-theme="dark"] th,:root[data-theme="dark"] .winner-label,:root[data-theme="dark"] .winner-note,:root[data-theme="dark"] .court-label{opacity:1;color:var(--muted)}
+:root[data-theme="dark"] .brand-sub,:root[data-theme="dark"] .disclaimer,:root[data-theme="dark"] .hint,:root[data-theme="dark"] .rank-item .rank-num,:root[data-theme="dark"] .vs,:root[data-theme="dark"] .amp-static,:root[data-theme="dark"] .serve-label,:root[data-theme="dark"] .no-match,:root[data-theme="dark"] .wait-item .amp,:root[data-theme="dark"] .empty-note,:root[data-theme="dark"] th,:root[data-theme="dark"] .winner-label,:root[data-theme="dark"] .winner-note,:root[data-theme="dark"] .court-label,:root[data-theme="dark"] .match-num{opacity:1;color:var(--muted)}
 /* inline style="opacity:0.5" beats a normal rule, hence !important */
 :root[data-theme="dark"] [style*="opacity:0.5"]{opacity:1!important;color:var(--muted)}
 }
@@ -666,53 +668,88 @@ td{padding:7px 6px;border-bottom:1px solid var(--sand)}
   /* One card per court, following the same per-item loop pattern as
      renderWaitingList below -- a court label is only shown when there's
      more than one court, so a single-court session looks exactly as it
-     always has. */
-  function renderActiveMatch(session){
-    const block = document.getElementById('activeMatchBlock');
+     always has; the per-court "Match N" counter on the opposite side of
+     that same header row always shows (QueueEngine.matchesFinishedOnCourt
+     -- each court numbers its own matches independently of every other
+     court, never a session-wide total).
+
+     buildCourtWrap builds exactly one court's card element (not touching
+     the DOM); renderActiveMatch(session, courts) -- with `courts` omitted
+     -- does the original full rebuild (every card wiped and regenerated),
+     still right for first render / switching sessions / a global action
+     like removing someone from the shared waiting line. Passed an array of
+     court indices instead, it redraws ONLY those cards via mountCourtWrap,
+     leaving every other court's card (and whatever is currently typed into
+     its still-unsubmitted score inputs) completely untouched -- that's
+     what a single-court action (submit score, swap, serve-first) now uses,
+     since rebuilding every card on every such action used to wipe out
+     whatever staff had typed into any OTHER court's inputs. See
+     QUEUE_MODULE.md and tests/queue-multicourt-render.test.js. */
+  function courtHeaderHtml(session, court, courtCount){
+    const matchNum = QueueEngine.matchesFinishedOnCourt(session, court) + 1;
+    const label = courtCount > 1 ? `<span class="court-label">Court ${court + 1}</span>` : '<span></span>';
+    return `<div class="court-header">${label}<span class="match-num">Match ${matchNum}</span></div>`;
+  }
+  function buildCourtWrap(session, court){
     const courtCount = session.courtCount || 1;
     const fixedPairs = session.rule === 'fixed_pairs';
-    block.innerHTML = '';
-    for (let court = 0; court < courtCount; court++) {
-      const m = session.activeMatches[court];
-      const wrap = document.createElement('div');
-      wrap.className = 'court-block';
-      const label = courtCount > 1 ? `<div class="court-label">Court ${court + 1}</div>` : '';
-      if (!m) {
-        wrap.innerHTML = `${label}<div class="no-match">Waiting for enough players to start a match…</div>`;
-        block.appendChild(wrap);
-        continue;
-      }
-      const sideHtml = (team) => fixedPairs
-        ? `<select class="name-edit" data-team-swap="${team}" data-court="${court}">${teamOptionsHtml(session, court, team, team === 'teamA' ? m.teamAId : m.teamBId)}</select>`
-        : m[team].map((n, i) => `<select class="name-edit" data-team="${team}" data-index="${i}" data-court="${court}">${nameOptionsHtml(session, court, team, i, n)}</select>`).join('<span class="amp-static">&amp;</span>');
-      const serving = m.firstServer === 'teamB' ? 'teamB' : 'teamA';
-      wrap.innerHTML = `
-        ${label}
-        <div class="matchup">
-          <div class="side"><div class="names">${sideHtml('teamA')}</div></div>
-          <div class="vs">VS</div>
-          <div class="side"><div class="names">${sideHtml('teamB')}</div></div>
-        </div>
-        <div class="serve-row">
-          <span class="serve-label">Serves first</span>
-          <button type="button" class="serve-pill" data-serve="teamA" data-court="${court}" aria-pressed="${serving === 'teamA'}">${escapeHtml(QueueEngine.teamLabel(m.teamA))}</button>
-          <button type="button" class="serve-pill" data-serve="teamB" data-court="${court}" aria-pressed="${serving === 'teamB'}">${escapeHtml(QueueEngine.teamLabel(m.teamB))}</button>
-        </div>
-        <div class="score-row">
-          <input type="number" id="scoreA_${court}" min="0" placeholder="0"/>
-          <span class="vs mono">–</span>
-          <input type="number" id="scoreB_${court}" min="0" placeholder="0"/>
-        </div>
-        <div class="btn-row" style="margin-top:12px">
-          <button type="button" class="btn lime" id="submitScoreBtn_${court}" data-court="${court}">Submit &amp; rotate</button>
-          <button type="button" class="btn ghost" id="liveScoreBtn_${court}" data-court="${court}" style="border:1px solid var(--ink)">Live score</button>
-        </div>`;
-      block.appendChild(wrap);
-      wrap.querySelector(`#submitScoreBtn_${court}`).addEventListener('click', () => onSubmitScore(court));
-      wrap.querySelector(`#liveScoreBtn_${court}`).addEventListener('click', () => onLiveScore(court));
-      wrap.querySelectorAll('.serve-pill').forEach((btn) => btn.addEventListener('click', () => applyServeFirst(court, btn.dataset.serve)));
-      wrap.querySelectorAll('select[data-team]').forEach((sel) => sel.addEventListener('change', () => applySwapPlayer(court, sel.dataset.team, Number(sel.dataset.index), sel.value)));
-      wrap.querySelectorAll('select[data-team-swap]').forEach((sel) => sel.addEventListener('change', () => applySwapTeam(court, sel.dataset.teamSwap, sel.value)));
+    const m = session.activeMatches[court];
+    const wrap = document.createElement('div');
+    wrap.className = 'court-block';
+    wrap.dataset.court = String(court);
+    const header = courtHeaderHtml(session, court, courtCount);
+    if (!m) {
+      wrap.innerHTML = `${header}<div class="no-match">Waiting for enough players to start a match…</div>`;
+      return wrap;
+    }
+    const sideHtml = (team) => fixedPairs
+      ? `<select class="name-edit" data-team-swap="${team}" data-court="${court}">${teamOptionsHtml(session, court, team, team === 'teamA' ? m.teamAId : m.teamBId)}</select>`
+      : m[team].map((n, i) => `<select class="name-edit" data-team="${team}" data-index="${i}" data-court="${court}">${nameOptionsHtml(session, court, team, i, n)}</select>`).join('<span class="amp-static">&amp;</span>');
+    const serving = m.firstServer === 'teamB' ? 'teamB' : 'teamA';
+    wrap.innerHTML = `
+      ${header}
+      <div class="matchup">
+        <div class="side"><div class="names">${sideHtml('teamA')}</div></div>
+        <div class="vs">VS</div>
+        <div class="side"><div class="names">${sideHtml('teamB')}</div></div>
+      </div>
+      <div class="serve-row">
+        <span class="serve-label">Serves first</span>
+        <button type="button" class="serve-pill" data-serve="teamA" data-court="${court}" aria-pressed="${serving === 'teamA'}">${escapeHtml(QueueEngine.teamLabel(m.teamA))}</button>
+        <button type="button" class="serve-pill" data-serve="teamB" data-court="${court}" aria-pressed="${serving === 'teamB'}">${escapeHtml(QueueEngine.teamLabel(m.teamB))}</button>
+      </div>
+      <div class="score-row">
+        <input type="number" id="scoreA_${court}" min="0" placeholder="0"/>
+        <span class="vs mono">–</span>
+        <input type="number" id="scoreB_${court}" min="0" placeholder="0"/>
+      </div>
+      <div class="btn-row" style="margin-top:12px">
+        <button type="button" class="btn lime" id="submitScoreBtn_${court}" data-court="${court}">Submit &amp; rotate</button>
+        <button type="button" class="btn ghost" id="liveScoreBtn_${court}" data-court="${court}" style="border:1px solid var(--ink)">Live score</button>
+      </div>`;
+    wrap.querySelector(`#submitScoreBtn_${court}`).addEventListener('click', () => onSubmitScore(court));
+    wrap.querySelector(`#liveScoreBtn_${court}`).addEventListener('click', () => onLiveScore(court));
+    wrap.querySelectorAll('.serve-pill').forEach((btn) => btn.addEventListener('click', () => applyServeFirst(court, btn.dataset.serve)));
+    wrap.querySelectorAll('select[data-team]').forEach((sel) => sel.addEventListener('change', () => applySwapPlayer(court, sel.dataset.team, Number(sel.dataset.index), sel.value)));
+    wrap.querySelectorAll('select[data-team-swap]').forEach((sel) => sel.addEventListener('change', () => applySwapTeam(court, sel.dataset.teamSwap, sel.value)));
+    return wrap;
+  }
+  /* Replaces (or appends) exactly ONE court's card -- the only place that
+     ever touches `block`'s children for a single court, so every OTHER
+     court's card is left completely alone. */
+  function mountCourtWrap(block, session, court){
+    const el = buildCourtWrap(session, court);
+    const existing = block.querySelector(`[data-court="${court}"]`);
+    if (existing) block.replaceChild(el, existing); else block.appendChild(el);
+  }
+  function renderActiveMatch(session, courts){
+    const block = document.getElementById('activeMatchBlock');
+    const courtCount = session.courtCount || 1;
+    if (!courts) {
+      block.innerHTML = '';
+      for (let court = 0; court < courtCount; court++) mountCourtWrap(block, session, court);
+    } else {
+      courts.forEach((court) => { if (court >= 0 && court < courtCount) mountCourtWrap(block, session, court); });
     }
     // Stray scoreboard keys: keep every court's currently-in-progress board,
     // drop everything else (see cleanupBoardKeys).
@@ -723,19 +760,23 @@ td{padding:7px 6px;border-bottom:1px solid var(--sand)}
      from the dashboard selects above or the live scoreboard's own pre-game
      controls (see onLiveScore) -- one place to load, call the shared
      engine, save, and re-render. Each takes `court` first, so staff can
-     target any one court independently of the others. */
+     target any one court independently of the others. None of these three
+     call checkAndFillActiveMatch, so the ONLY court whose card can change
+     is the one passed in -- render([court]) redraws just that card,
+     leaving every other court's (including whatever's typed into its
+     still-unsubmitted score inputs) completely untouched. */
   function applyServeFirst(court, side){
     const s = load(); if (!s || !s.activeMatches[court]) return { error: 'No active match.' };
     const r = QueueEngine.setFirstServer(s, court, side);
     if (r.error) return r;
-    save(s); render();
+    save(s); render([court]);
     return r;
   }
   function applySwapPlayer(court, team, index, newName){
     const s = load(); if (!s || !s.activeMatches[court]) return { error: 'No active match.' };
     const r = QueueEngine.swapActivePlayer(s, court, team, index, newName);
     if (r.error) { toast(r.error); return r; }
-    save(s); render();
+    save(s); render([court]);
     if (r.consecutiveWarning) toast(`${r.added} just played last match — added anyway.`);
     return r;
   }
@@ -743,7 +784,7 @@ td{padding:7px 6px;border-bottom:1px solid var(--sand)}
     const s = load(); if (!s || !s.activeMatches[court]) return { error: 'No active match.' };
     const r = QueueEngine.swapActiveTeam(s, court, side, newTeamId);
     if (r.error) { toast(r.error); return r; }
-    save(s); render();
+    save(s); render([court]);
     if (r.consecutiveWarning) toast(`That team just played last match — added anyway.`);
     return r;
   }
@@ -877,7 +918,11 @@ td{padding:7px 6px;border-bottom:1px solid var(--sand)}
     const result = QueueEngine.recordMatchResult(session, court, scoreAVal, scoreBVal);
     if (result.error) { alert(result.error); return; }
     save(session);
-    render();
+    // result.affectedCourts is this court plus any OTHER court that was
+    // empty and just got filled as a side effect of this rotation -- never
+    // every occupied court, so an unrelated court's still-unsubmitted
+    // score inputs are never touched by this submit.
+    render(result.affectedCourts);
     result.notices.forEach((msg) => toast(msg));
   }
 
@@ -939,8 +984,13 @@ td{padding:7px 6px;border-bottom:1px solid var(--sand)}
     toast(`${p1} added to the line!`);
   });
 
-  /* ---------- Render ---------- */
-  function render(){
+  /* ---------- Render ----------
+     `affectedCourts`, when given, is forwarded to renderActiveMatch so only
+     those specific court cards are redrawn (see there); omitted, every
+     court's card is rebuilt, which is still correct for the global actions
+     that call render() with no argument (join, remove from waiting,
+     initial load, resetting/ending the whole session). */
+  function render(affectedCourts){
     const session = load();
     document.getElementById('setupSection').classList.toggle('hidden', !!session);
     document.getElementById('dashboardSection').classList.toggle('hidden', !session);
@@ -950,7 +1000,7 @@ td{padding:7px 6px;border-bottom:1px solid var(--sand)}
     document.getElementById('modeBadge').textContent = session.mode === 'doubles' ? 'Doubles' : 'Singles';
     document.getElementById('ruleBadge').textContent = ruleLabel(session.rule);
     renderRotationNote(session);
-    renderActiveMatch(session); // also calls cleanupBoardKeys -- see there
+    renderActiveMatch(session, affectedCourts); // also calls cleanupBoardKeys -- see there
     renderWaitingList(session);
     renderStats(session);
     renderTimer(session);

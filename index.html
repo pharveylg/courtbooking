@@ -2019,6 +2019,7 @@ body:not(.staff-mode) .staff-link{display:none!important}
 const {
   teamLabel, ensureTeam, applyMatchResult, computeStandings,
   pullRestedPlayers, checkAndFillActiveMatch, recordMatchResult, removeWaitingPlayer,
+  matchesFinishedOnCourt,
   setFirstServer, swapActivePlayer, swapActiveTeam,
   normalizeName: _normalizeName, nameSimilarity: _nameSimilarity,
   getAllPlayerNamesInSession, findSimilarNames, promptNameConflict,
@@ -7929,7 +7930,7 @@ function initDashboardTimer(session, court) {
   }
 }
 
-function renderActiveQueueDashboard() {
+function renderActiveQueueDashboard(affectedCourts) {
   const dashboard = document.getElementById('queueDashboard');
   const placeholder = document.getElementById('noQueueSelected');
   if (!dashboard || !placeholder) return;
@@ -8000,7 +8001,7 @@ function renderActiveQueueDashboard() {
 
   // Active Court players -- one card per court (data-court), same per-item
   // loop pattern as the Waiting Room list below.
-  renderActiveMatchCourts(session);
+  renderActiveMatchCourts(session, affectedCourts);
 
   // Rest-priority note: say how the next match is picked when the queue is uneven.
   // Every rule except Fixed Pairs (teams are the fixed unit there) pulls by rest priority.
@@ -8171,21 +8172,31 @@ function renderActiveQueueDashboard() {
    with one full set of controls per court slot: `_<court>`-suffixed ids, a
    `data-court` attribute on every per-court control, and its own listeners.
    Each court's score entry, live-score button, serve-first toggle, and
-   (for Timed Rotation) timer are fully independent of every other court's. */
-function renderActiveMatchCourts(session) {
+   (for Timed Rotation) timer are fully independent of every other court's.
+   `affectedCourts`, when given, redraws only those specific court cards
+   (replacing each one's existing DOM node in place) instead of wiping and
+   rebuilding every card -- so a single-court action never touches any
+   OTHER court's still-unsubmitted score inputs. */
+function renderActiveMatchCourts(session, affectedCourts) {
   const container = document.getElementById('activeMatchCourtsContainer');
   if (!container) return;
   const courtCount = session.courtCount || 1;
   const fixedPairs = session.rule === 'fixed_pairs';
   const f = queueFormatOf(session);
-  container.innerHTML = '';
-  for (let court = 0; court < courtCount; court++) {
+  if (!affectedCourts) container.innerHTML = '';
+  const courts = affectedCourts || Array.from({ length: courtCount }, (_, i) => i);
+  courts.forEach((court) => {
+    if (session.rule === 'timed_rotation') stopActiveTimer(court);
     const m = session.activeMatches[court];
     const wrap = document.createElement('div');
     wrap.className = 'rounded-[20px] bg-white/[0.03] border border-white/5 p-4';
     wrap.dataset.court = String(court);
     const courtName = (session.courtLabels && session.courtLabels[court]) || `Court ${court + 1}`;
-    const courtLabel = courtCount > 1 ? `<div class="mono text-[10px] uppercase tracking-wider opacity-50 mb-2">${escapeHtml(courtName)}</div>` : '';
+    const matchNum = matchesFinishedOnCourt(session, court) + 1;
+    const courtLabel = `<div class="flex items-center justify-between mb-2">
+        <span class="mono text-[10px] uppercase tracking-wider opacity-50">${courtCount > 1 ? escapeHtml(courtName) : ''}</span>
+        <span class="mono text-[10px] uppercase tracking-wider opacity-50">Match ${matchNum}</span>
+      </div>`;
 
     const recordChip = (tid) => {
       if (!fixedPairs || !tid || !session.teams || !session.teams[tid]) return '';
@@ -8273,7 +8284,8 @@ function renderActiveMatchCourts(session) {
           Submit & Rotate Queue →
         </button>
       </div>`;
-    container.appendChild(wrap);
+    const existing = container.querySelector(`[data-court="${court}"]`);
+    if (existing) container.replaceChild(wrap, existing); else container.appendChild(wrap);
 
     if (m) {
       wrap.querySelectorAll('select[data-team]').forEach((sel) => sel.addEventListener('change', () => applyQueueSwap(court, sel.dataset.team, Number(sel.dataset.index), sel.value)));
@@ -8284,7 +8296,7 @@ function renderActiveMatchCourts(session) {
     wrap.querySelector(`#liveScoreBtn_${court}`)?.addEventListener('click', () => onQueueLiveScore(court));
     wrap.querySelector(`#submitScoreBtn_${court}`)?.addEventListener('click', () => onQueueSubmitScore(court));
     if (session.rule === 'timed_rotation') initDashboardTimer(session, court);
-  }
+  });
   // Note: index.html's live-scoreboard keys are already per-session-AND-
   // match-id (cb_board_<sessionId>_<matchId>, see onQueueLiveScore below),
   // so concurrent courts never collide and there is no shared cleanup
@@ -8576,9 +8588,9 @@ function applyQueueSwap(court, team, index, newName){
   const session = sessions.find(s => s.id === selectedQueueSessionId);
   if (!session) return { error: 'No active session.' };
   const r = swapActivePlayer(session, court, team, index, newName);
-  if (r.error) { toast(r.error); renderActiveQueueDashboard(); return r; }
+  if (r.error) { toast(r.error); renderActiveQueueDashboard([court]); return r; }
   saveQueues(sessions);
-  renderActiveQueueDashboard();
+  renderActiveQueueDashboard([court]);
   if (r.consecutiveWarning) toast(`${r.added} just played last match — added anyway.`);
   return r;
 }
@@ -8588,9 +8600,9 @@ function applyQueueTeamSwap(court, side, newTeamId){
   const session = sessions.find(s => s.id === selectedQueueSessionId);
   if (!session) return { error: 'No active session.' };
   const r = swapActiveTeam(session, court, side, newTeamId);
-  if (r.error) { toast(r.error); renderActiveQueueDashboard(); return r; }
+  if (r.error) { toast(r.error); renderActiveQueueDashboard([court]); return r; }
   saveQueues(sessions);
-  renderActiveQueueDashboard();
+  renderActiveQueueDashboard([court]);
   if (r.consecutiveWarning) toast('That team just played last match — added anyway.');
   return r;
 }
@@ -8602,7 +8614,7 @@ function applyQueueFirstServer(court, side){
   const r = setFirstServer(session, court, side);
   if (r.error) return r;
   saveQueues(sessions);
-  renderActiveQueueDashboard();
+  renderActiveQueueDashboard([court]);
   return r;
 }
 
@@ -8685,7 +8697,7 @@ function onQueueSubmitScore(court){
   });
 
   saveQueues(sessions);
-  renderActiveQueueDashboard();
+  renderActiveQueueDashboard(result.affectedCourts);
   result.notices.forEach(msg => toast(msg));
 }
 

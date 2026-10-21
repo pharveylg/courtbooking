@@ -104,15 +104,18 @@ section('index.html light parity: pinned by an ALLOWED DELTA (recorded additions
   let rev = null;
   try { rev = P.reverseDelta(body, fx.additions, fx.substitutions); } catch (e) { rev = 'ERR ' + e.message; }
   check('reversing the allowed delta (' + fx.additions.length + ' addition(s), ' + fx.substitutions.reduce((n, s) => n + s.count, 0) + ' literal-to-token substitution(s)) restores the baseline body byte for byte', rev !== null && P.sha(rev) === fx.baselineBodySha256, String(rev).slice(0, 120));
-  // 3. every literal replaced by a token (if THIS re-baseline's delta records any substitutions) resolves in
-  //    light to the same value. Substitutions from an earlier phase that are now baked into the committed
-  //    baseline itself (not part of today's delta) are not re-checked here -- they're covered by the
-  //    byte-identical baseline-body comparison in check 2 above.
+  // 3. every literal replaced by a THEME TOKEN (if THIS re-baseline's delta records any substitutions shaped
+  //    like `var(--token, #hex)`) resolves in light to the same value. Substitutions from an earlier phase
+  //    that are now baked into the committed baseline itself (not part of today's delta) are not re-checked
+  //    here -- they're covered by the byte-identical baseline-body comparison in check 2 above. A substitution
+  //    that ISN'T a colour-literal-to-token swap (e.g. a later phase's structural code change -- new function
+  //    params, a loop rewritten to redraw one court instead of every court) isn't this check's concern at all:
+  //    its correctness is already fully covered by check 2's byte-for-byte reversal, so it's skipped here.
   const css = read('theme.css');
   if (fx.substitutions.length) {
     const root = /:root\s*\{([^}]*--card[^}]*)\}/.exec(css)[1];
     const light = {}; root.replace(/(--[\w-]+)\s*:\s*([^;]+);/g, (_, k, v) => { light[k] = v.trim(); });
-    fx.substitutions.forEach((s) => {
+    fx.substitutions.filter((s) => /var\((--[\w-]+),\s*#[0-9A-Fa-f]{6}\)/.test(s.to)).forEach((s) => {
       const m = /var\((--[\w-]+),\s*(#[0-9A-Fa-f]{6})\)/.exec(s.to);
       check('substitution ' + s.token + ': the light token value ' + light[m && m[1]] + ' AND the var() fallback ' + (m && m[2]) + ' both equal the old literal ' + s.lightValue, !!m && m[1] === s.token && light[m[1]].toUpperCase() === s.lightValue.toUpperCase() && m[2].toUpperCase() === s.lightValue.toUpperCase());
       check('substitution ' + s.token + ': the old literal no longer appears at those ' + s.count + ' sites and the new one does', body.split(s.from).length === 1 && body.split(s.to).length - 1 === s.count);

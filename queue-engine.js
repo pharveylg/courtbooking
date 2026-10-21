@@ -425,6 +425,22 @@
   let matchSeq = 0;
   function nextMatchId(court) { return 'match_' + Date.now() + '_' + (matchSeq++) + '_c' + court; }
 
+  /* How many matches have already FINISHED on this one court -- each
+     court's own count, derived from session.matches' per-court `court`
+     field (the existing, already-tracked source of truth; see the
+     session-shape comment at the top of this file), never a session-wide
+     total across every court. Both pages use this directly for the
+     court-card's "Match N" label: N = matchesFinishedOnCourt(...) + 1 while
+     a match is in progress there (Match 1 for that court's very first
+     match), so each court numbers its own matches independently of every
+     other court. */
+  function matchesFinishedOnCourt(session, court) {
+    // A match recorded before multi-court support existed has no `court`
+    // field at all; ensureCourts migrates that whole session to exactly
+    // court 0, so treat a missing field the same way here.
+    return ((session && session.matches) || []).filter((m) => (m.court == null ? 0 : m.court) === court).length;
+  }
+
   /* Fills ONE empty court slot, same per-rule logic as before -- just now
      scoped to `court` (a single slot in session.activeMatches) instead of
      the single session-wide session.activeMatch. Called once per empty
@@ -506,10 +522,25 @@
      empty court slot (not just this one -- see checkAndFillActiveMatch).
      Mutates `session`. Returns { error } if the scores are not valid or
      there is no active match on that court, otherwise { winner,
-     winnerNames, loserNames, notices, timerReset, court }. `notices` is the
-     toast text the caller may want to show, in the order the rule produced
-     them -- this never touches the DOM itself, so the caller decides how
-     (or whether) to display them. */
+     winnerNames, loserNames, notices, timerReset, court, affectedCourts }.
+     `notices` is the toast text the caller may want to show, in the order
+     the rule produced them -- this never touches the DOM itself, so the
+     caller decides how (or whether) to display them.
+
+     `affectedCourts` is the exact, minimal list of court indices whose
+     on-screen card actually needs to be redrawn: the court just scored
+     (always) plus any OTHER court that was sitting empty before this call
+     and got filled as a side effect of checkAndFillActiveMatch below (the
+     freed-up players from this court's rotation can complete another
+     court's match too). Every other court -- in particular every other
+     COURT THAT WAS ALREADY OCCUPIED -- never appears here, because
+     fillCourt() is a no-op on an occupied slot and nothing else in this
+     function touches a court other than `court`. This is what lets both
+     pages' dashboards redraw only the card(s) that actually changed instead
+     of wiping and rebuilding every court's card (which would blow away
+     whatever staff had already typed into any OTHER court's still-in-
+     progress score inputs -- see tests/queue-engine.test.js and
+     QUEUE_MODULE.md for the bug this fixes). */
   function recordMatchResult(session, court, scoreAInput, scoreBInput) {
     ensureCourts(session);
     if (!session || court == null || !session.activeMatches[court]) return { error: 'No active match.' };
@@ -521,6 +552,11 @@
       return { error: 'Please enter valid numeric scores.' };
     }
     if (scoreA === scoreB) return { error: 'Pickleball matches cannot end in a draw. Please specify a winner.' };
+
+    // Snapshot of which OTHER courts are empty before this call -- the only
+    // courts checkAndFillActiveMatch (below) could possibly change besides
+    // `court` itself.
+    const emptyBefore = session.activeMatches.map((m, i) => (i !== court && !m ? i : -1)).filter((i) => i !== -1);
 
     const match = session.activeMatches[court];
     const winner = scoreA > scoreB ? 'teamA' : 'teamB';
@@ -585,7 +621,10 @@
     checkAndFillActiveMatch(session);
     notices.push(`Match completed! Winners: ${winnerNames.join(' & ')}`);
 
-    return { winner, winnerNames, loserNames, notices, timerReset, court };
+    const newlyFilled = emptyBefore.filter((i) => session.activeMatches[i] !== null);
+    const affectedCourts = [court, ...newlyFilled];
+
+    return { winner, winnerNames, loserNames, notices, timerReset, court, affectedCourts };
   }
 
   /* ---------- Name matching, to catch duplicate/misspelled entries ---------- */
@@ -869,6 +908,7 @@
     ensureCourts, MAX_COURTS,
     ensureTeam, applyMatchResult, computeStandings,
     pullRestedPlayers, pullRestedPlayersAvoiding, checkAndFillActiveMatch, recordMatchResult, removeWaitingPlayer,
+    matchesFinishedOnCourt,
     setFirstServer, justPlayed, swapActivePlayer, swapActiveTeam,
     partnerCount, bestPartnerPairing,
     normalizeName, nameSimilarity, getAllPlayerNamesInSession, findSimilarNames, promptNameConflict,

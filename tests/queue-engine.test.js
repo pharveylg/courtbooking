@@ -1089,5 +1089,60 @@ check('a player who only played an earlier round on a court is not flagged once 
   return Q.justPlayed(s, 'c') === false && Q.justPlayed(s, 'd') === false && Q.justPlayed(s, 'i') === true && Q.justPlayed(s, 'j') === true;
 })());
 
+section('multi-court: recordMatchResult reports the MINIMAL set of courts whose card actually needs to be redrawn (bug: both pages used to blanket-rebuild every court\'s card on any single-court action, wiping out whatever staff had typed into another court\'s still-unsubmitted score inputs)');
+check('4 occupied courts: scoring court 1 reports affectedCourts = [1] only -- the other 3, all occupied, are never listed', (() => {
+  const s = { mode: 'doubles', rule: 'four_off_four_on', waiting: [], courtCount: 4, activeMatches: [
+    { id: 'm0', court: 0, teamA: ['a1', 'a2'], teamB: ['a3', 'a4'] },
+    { id: 'm1', court: 1, teamA: ['b1', 'b2'], teamB: ['b3', 'b4'] },
+    { id: 'm2', court: 2, teamA: ['c1', 'c2'], teamB: ['c3', 'c4'] },
+    { id: 'm3', court: 3, teamA: ['d1', 'd2'], teamB: ['d3', 'd4'] },
+  ], matches: [], teams: {}, playCounts: {} };
+  const r = Q.recordMatchResult(s, 1, 11, 4);
+  return !r.error && eq(r.affectedCourts, [1]) &&
+    eq(s.activeMatches[0], { id: 'm0', court: 0, teamA: ['a1', 'a2'], teamB: ['a3', 'a4'] }) &&
+    eq(s.activeMatches[2], { id: 'm2', court: 2, teamA: ['c1', 'c2'], teamB: ['c3', 'c4'] }) &&
+    eq(s.activeMatches[3], { id: 'm3', court: 3, teamA: ['d1', 'd2'], teamB: ['d3', 'd4'] });
+})());
+check('an empty OTHER court that gets filled as a side effect of this rotation IS included in affectedCourts (its card really does need to be redrawn)', (() => {
+  const s = { mode: 'doubles', rule: 'four_off_four_on', waiting: solo('e1', 'e2', 'e3', 'e4'), courtCount: 2, activeMatches: [
+    { id: 'm0', court: 0, teamA: ['a1', 'a2'], teamB: ['a3', 'a4'] },
+    null,
+  ], matches: [], teams: {}, playCounts: {} };
+  const r = Q.recordMatchResult(s, 0, 11, 4);
+  // Four Off Four On frees a1-a4 back to waiting; checkAndFillActiveMatch then
+  // fills the empty court 1 from the 4 fresh waiting players (rest priority
+  // over the just-finished four), so court 1's card changed too.
+  return !r.error && eq(r.affectedCourts.slice().sort(), [0, 1]) && s.activeMatches[1] !== null;
+})());
+check('an OTHER court that stays empty (not enough waiting players) is NOT included', (() => {
+  const s = { mode: 'doubles', rule: 'four_off_four_on', waiting: [], courtCount: 2, activeMatches: [
+    { id: 'm0', court: 0, teamA: ['a1', 'a2'], teamB: ['a3', 'a4'] },
+    null,
+  ], matches: [], teams: {}, playCounts: {} };
+  const r = Q.recordMatchResult(s, 0, 11, 4);
+  return !r.error && eq(r.affectedCourts, [0]) && s.activeMatches[1] === null;
+})());
+
+section('multi-court: matchesFinishedOnCourt -- each court\'s own running match count, independent of every other court (the "Match N" card header)');
+check('2 courts, 3 matches finished on court 0 and 1 on court 1: each reports its own count, not a session-wide total', (() => {
+  const s = base2('four_off_four_on', 'doubles');
+  s.activeMatches[0] = { id: 'm0', court: 0, teamA: ['a', 'b'], teamB: ['c', 'd'] };
+  s.activeMatches[1] = { id: 'm1', court: 1, teamA: ['w', 'x'], teamB: ['y', 'z'] };
+  Q.recordMatchResult(s, 0, 11, 4); // court 0: match 1 done -- auto-refilled from the same freed 4 (a,b,c,d)
+  Q.recordMatchResult(s, 0, 11, 4); // court 0: match 2 done
+  Q.recordMatchResult(s, 0, 11, 4); // court 0: match 3 done
+  Q.recordMatchResult(s, 1, 11, 4); // court 1: match 1 done
+  return Q.matchesFinishedOnCourt(s, 0) === 3 && Q.matchesFinishedOnCourt(s, 1) === 1 &&
+    s.matches.length === 4; // sanity: the session-wide total is 4, never what a single court's header should show
+})());
+check('a court with no matches yet reports 0 (so its card shows "Match 1" while the first one is in progress)', (() => {
+  const s = base2('four_off_four_on', 'doubles');
+  return Q.matchesFinishedOnCourt(s, 0) === 0 && Q.matchesFinishedOnCourt(s, 1) === 0;
+})());
+check('a legacy match with no `court` field at all (recorded before multi-court support existed) counts toward court 0, matching ensureCourts\' own single-court migration', (() => {
+  const s = { mode: 'doubles', rule: 'winner_stays', waiting: [], matches: [{ teamA: ['a', 'b'], teamB: ['c', 'd'], scoreA: 11, scoreB: 4, winner: 'teamA' }], teams: {}, playCounts: {} };
+  return Q.matchesFinishedOnCourt(s, 0) === 1;
+})());
+
 console.log(`\n=== QUEUE ENGINE: ${passed}/${passed + failed} passed ===`);
 process.exit(failed === 0 ? 0 : 1);

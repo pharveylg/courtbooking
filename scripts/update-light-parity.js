@@ -46,7 +46,7 @@ function describe(html) {
    byte-for-byte hash. The delta is: two header toggle buttons, one admin hint line, and a few JS colour
    literals replaced by theme tokens whose LIGHT value is the old literal. Reversing exactly that delta in the
    current body must give back the baseline body (sha256 recorded from git ref BASELINE_REF). */
-const BASELINE_REF = '3d2eec1e3bd4cf11ebe193d22c2563dc823a5de8';
+const BASELINE_REF = 'b3ac2f6';
 const SUBSTITUTIONS = [];
 const ADDITION_RES = [];
 function bodyOf(html) { const h = norm(html); return h.slice(h.indexOf('<body')); }

@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<meta name="theme-color" content="#0B1326"/>
+<title>Tournament Display</title>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js"></script>
+<script src="tournament-display.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+/* ================================================================
+   This page is a dedicated, unattended "venue screen" dashboard, not a
+   phone-facing page -- it deliberately does NOT participate in the
+   per-tenant light/dark theme toggle system (theme.js/theme.css) that
+   every other public page shares. It is always dark, same posture as
+   court-scoreboard.js's live overlay (see ARCHITECTURE.md's theme
+   section: "always dark, own CSS"). Colors below reuse the app's
+   existing Stitch dark palette so it still feels like the same product.
+   ================================================================ */
+:root{
+  --bg:#0B1326; --panel:#171F33; --panel2:#101a30; --line:#27405E;
+  --ink:#F4E7D0; --muted:#9FB0CF; --lime:#D6FF5F; --lime-ink:#201C19;
+  --win:#5AEF82; --loss:#FFB4AB; --accent:#93C5FD;
+}
+*{font-family:"Bricolage Grotesque",system-ui,sans-serif; box-sizing:border-box}
+.mono{font-family:"JetBrains Mono",monospace}
+html,body{margin:0; background:var(--bg); color:var(--ink); overflow-x:hidden}
+.card{background:var(--panel); border:1px solid var(--line); border-radius:20px}
+.scrollbox::-webkit-scrollbar{width:6px}
+.scrollbox::-webkit-scrollbar-thumb{background:var(--line); border-radius:999px}
+
+#ticker{overflow:hidden; white-space:nowrap}
+#tickerTrack{display:inline-block; padding-left:100%; animation-name:ticker-scroll; animation-timing-function:linear; animation-iteration-count:infinite}
+@keyframes ticker-scroll{ from{transform:translateX(0)} to{transform:translateX(-100%)} }
+
+.lb-tab{cursor:pointer}
+.lb-tab[data-active="1"]{background:var(--lime); color:var(--lime-ink)}
+.lb-tab[data-active="0"]{background:var(--panel2); color:var(--muted); border:1px solid var(--line)}
+
+.podium-step{display:flex; flex-direction:column; align-items:center; justify-content:flex-end}
+</style>
+</head>
+<body class="min-h-screen">
+
+<!-- Gate screen: loading / not found / not published -->
+<div id="gateScreen" style="min-height:100vh; display:grid; place-items:center; padding:24px">
+  <div class="card" style="max-width:460px; width:100%; padding:28px; text-align:center">
+    <div style="margin:0 auto; width:56px; height:56px; border-radius:999px; background:var(--lime); color:var(--lime-ink); display:grid; place-items:center; font-weight:900; font-size:20px">🏆</div>
+    <div id="gateStateWrap">
+      <p class="mono" style="margin-top:18px; font-size:12px; color:var(--muted)">Loading tournament display...</p>
+    </div>
+  </div>
+</div>
+
+<!-- Main screen -->
+<div id="appScreen" style="display:none; min-height:100vh; display:flex; flex-direction:column">
+
+  <!-- 1. Header strip -->
+  <header class="card" style="margin:14px; padding:16px 22px; display:flex; align-items:center; justify-content:space-between; gap:18px; flex-wrap:wrap; border-radius:22px">
+    <div style="min-width:220px">
+      <div id="hdrHost" class="mono" style="font-size:11px; letter-spacing:0.12em; text-transform:uppercase; color:var(--muted)"></div>
+      <div id="hdrName" style="font-size:clamp(20px,2.4vw,30px); font-weight:800; letter-spacing:-0.01em"></div>
+      <div id="hdrVenue" class="mono" style="font-size:12px; color:var(--muted); margin-top:2px"></div>
+    </div>
+    <div style="display:flex; align-items:center; gap:22px; flex-wrap:wrap">
+      <div id="hdrLiveBadge" style="display:none; align-items:center; gap:8px; background:#3a1414; color:#FFB4AB; border:1px solid #6b2a2a; padding:8px 16px; border-radius:999px; font-weight:800; font-size:13px">
+        <span style="width:9px; height:9px; border-radius:999px; background:#FF5C5C; display:inline-block; animation:pulse 1.4s ease-in-out infinite"></span> LIVE
+      </div>
+      <div style="text-align:center">
+        <div id="hdrTimer" class="mono" style="font-size:22px; font-weight:700">--:--:--</div>
+        <div class="mono" style="font-size:9.5px; text-transform:uppercase; letter-spacing:0.1em; color:var(--muted)">Session time</div>
+      </div>
+      <div style="text-align:center">
+        <div id="hdrCourts" class="mono" style="font-size:22px; font-weight:700">0/0</div>
+        <div class="mono" style="font-size:9.5px; text-transform:uppercase; letter-spacing:0.1em; color:var(--muted)">Courts playing</div>
+      </div>
+      <div style="text-align:center">
+        <div id="hdrCompleted" class="mono" style="font-size:22px; font-weight:700">0</div>
+        <div class="mono" style="font-size:9.5px; text-transform:uppercase; letter-spacing:0.1em; color:var(--muted)">Completed matches</div>
+      </div>
+      <button type="button" id="fullscreenBtn" class="mono" style="background:var(--panel2); border:1px solid var(--line); color:var(--ink); border-radius:999px; height:38px; padding:0 16px; font-size:11px; font-weight:800; cursor:pointer">⛶ Fullscreen</button>
+    </div>
+  </header>
+
+  <main style="flex:1; display:grid; grid-template-columns:1.1fr 1fr; gap:14px; margin:0 14px 14px; align-items:start">
+
+    <!-- 2. Featured match panel -->
+    <section class="card" style="padding:22px; min-height:320px; display:flex; flex-direction:column">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px">
+        <div class="mono" style="font-size:11px; text-transform:uppercase; letter-spacing:0.1em; color:var(--muted)">On court now</div>
+        <div id="featuredDots" style="display:flex; gap:5px"></div>
+      </div>
+      <div id="featuredBody" style="flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px">
+        <div class="mono" style="color:var(--muted); font-size:13px">No match is live right now.</div>
+      </div>
+    </section>
+
+    <!-- 3. Leaderboard -->
+    <section class="card" style="padding:22px">
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; margin-bottom:12px">
+        <div class="mono" style="font-size:11px; text-transform:uppercase; letter-spacing:0.1em; color:var(--muted)">Leaderboard</div>
+        <div id="lbTabs" style="display:flex; gap:6px; flex-wrap:wrap"></div>
+      </div>
+      <div id="lbPodium" style="display:flex; align-items:flex-end; justify-content:center; gap:10px; margin-bottom:14px; min-height:120px"></div>
+      <div id="lbList" class="scrollbox" style="max-height:260px; overflow-y:auto"></div>
+    </section>
+  </main>
+
+  <!-- 4. Spotlight ticker -->
+  <footer id="ticker" class="card" style="margin:0 14px 14px; padding:12px 0; border-radius:16px">
+    <div id="tickerTrack" class="mono" style="font-size:14px; font-weight:700; color:var(--lime)"></div>
+  </footer>
+</div>
+
+<style>
+@keyframes pulse{ 0%,100%{opacity:1} 50%{opacity:0.25} }
+</style>
+
+<script>
+/* ================================================================
+   TV/VENUE-SCREEN DASHBOARD -- public, no PIN, same trust model as
+   tournament.html (a different presentation of data that is already
+   fully public there). Uses the pure logic in tournament-display.js
+   for every computation; this script is just Firestore wiring + DOM
+   rendering, following the exact onSnapshot-everywhere pattern
+   tournament.html already established (no polling anywhere).
+   ================================================================ */
+function getParams(){
+  const p = new URLSearchParams(window.location.search);
+  const client = p.get('client');
+  const t = p.get('t');
+  return {
+    client: (client && /^[a-z0-9-]+$/.test(client)) ? client : null,
+    tournamentId: (t && /^[a-zA-Z0-9_-]+$/.test(t)) ? t : null,
+  };
+}
+const { client: currentClientId, tournamentId: CURRENT_TOURNAMENT_ID } = getParams();
+
+const FIREBASE_CFG = (window.FIREBASE_CONFIG && window.FIREBASE_CONFIG.apiKey && !String(window.FIREBASE_CONFIG.apiKey).startsWith('PASTE')) ? window.FIREBASE_CONFIG : null;
+const FB_ENABLED = !!(FIREBASE_CFG && FIREBASE_CFG.projectId);
+let db = null;
+if (FB_ENABLED) {
+  try { firebase.initializeApp(FIREBASE_CFG); db = firebase.firestore(); }
+  catch(e) { console.warn('[TournamentDisplay] Firebase init failed:', e.message); }
+}
+
+function escapeHtml(s){ return (s==null?'':String(s)).replace(/[&<>"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+
+function renderGateState(html){ document.getElementById('gateStateWrap').innerHTML = html; }
+function showNotFound(){
+  renderGateState(`<h2 style="margin-top:18px; font-size:19px; font-weight:800">Tournament Not Found</h2><p class="mono" style="margin-top:10px; font-size:12px; color:var(--muted)">This link may be out of date, or the tournament may have been removed.</p>`);
+}
+function showNotPublished(){
+  renderGateState(`<h2 style="margin-top:18px; font-size:19px; font-weight:800">Not Published Yet</h2><p class="mono" style="margin-top:10px; font-size:12px; color:var(--muted)">This tournament is still being set up.</p>`);
+}
+
+/* ================================================================
+   STATE
+   ================================================================ */
+let PUB_T = null;          // tournament doc data
+let DIVISIONS = [];        // [{id, name, ...}]
+let ALL_MATCHES = [];      // every division's matches, unfiltered
+let LIVE_DOCS = [];        // [{id /* matchId */, ...liveData}]
+let bizName = '';
+let sessionStampInFlight = false;
+
+const FEATURED_ROTATOR = TournamentDisplay.createRotator([]);
+const LEADERBOARD_ROTATOR = TournamentDisplay.createRotator(['combined']);
+
+function matchesById(){
+  const map = {};
+  ALL_MATCHES.forEach(m => { map[m.id] = m; });
+  return map;
+}
+function schedulePublished(){ return !!(PUB_T && PUB_T.schedule && PUB_T.schedule.status === 'published'); }
+
+/* ================================================================
+   HEADER -- name/venue, LIVE badge, session timer, courts playing,
+   completed-matches count.
+   ================================================================ */
+function renderHeaderStatic(t){
+  document.getElementById('hdrHost').textContent = bizName;
+  document.getElementById('hdrName').textContent = t.name || 'Untitled Tournament';
+  document.title = `${t.name || 'Tournament'} — Display`;
+  const venueNames = (t.venues || []).map(v => v.name).filter(Boolean);
+  document.getElementById('hdrVenue').textContent = t.venue || venueNames.join(', ') || '';
+}
+function renderLiveBadge(){
+  document.getElementById('hdrLiveBadge').style.display = LIVE_DOCS.length ? 'flex' : 'none';
+}
+function renderCourtsPlaying(){
+  const agg = TournamentDisplay.aggregateCourtsPlaying({ liveDocs: LIVE_DOCS, matchesById: matchesById(), venues: (PUB_T && PUB_T.venues) || [] });
+  document.getElementById('hdrCourts').textContent = `${agg.playing}/${agg.total}`;
+}
+function renderCompletedCount(){
+  const n = ALL_MATCHES.filter(m => m.status === 'completed').length;
+  document.getElementById('hdrCompleted').textContent = String(n);
+}
+
+let timerInterval = null;
+function renderSessionTimer(){
+  const el = document.getElementById('hdrTimer');
+  const startedAtMs = PUB_T && PUB_T.displaySession && PUB_T.displaySession.startedAtMs;
+  if(!startedAtMs){ el.textContent = '--:--:--'; return; }
+  const secs = Math.max(0, Math.floor((Date.now() - startedAtMs) / 1000));
+  const h = String(Math.floor(secs / 3600)).padStart(2, '0');
+  const m = String(Math.floor((secs % 3600) / 60)).padStart(2, '0');
+  const s = String(secs % 60).padStart(2, '0');
+  el.textContent = `${h}:${m}:${s}`;
+}
+function ensureTimerRunning(){
+  if(timerInterval) return;
+  timerInterval = setInterval(renderSessionTimer, 1000);
+}
+
+/* Idempotent: only writes once, the first time any match is seen live and
+   no session-start timestamp exists yet on the tournament doc. The rules
+   already allow an open client write on the tournament doc itself (same
+   trust level as every other operational field there), so this is a
+   direct client write -- no Cloud Function change needed. */
+async function maybeStampSessionStart(){
+  if(!db || !PUB_T || sessionStampInFlight) return;
+  if(!LIVE_DOCS.length) return;
+  const payload = TournamentDisplay.computeSessionStampPayload(PUB_T, Date.now());
+  if(!payload) return;
+  sessionStampInFlight = true;
+  try {
+    await db.doc(`clients/${currentClientId}/tournaments/${CURRENT_TOURNAMENT_ID}`).set({ displaySession: payload }, { merge: true });
+  } catch(ex) { console.warn('[TournamentDisplay] session stamp failed:', ex.message); }
+  finally { sessionStampInFlight = false; }
+}
+
+/* ================================================================
+   FEATURED MATCH PANEL -- whichever match(es) are live right now,
+   auto-rotating through all of them every few seconds.
+   ================================================================ */
+const FEATURED_ROTATE_MS = 6000;
+function featuredSide(v, names, points, side, serving){
+  return `<div style="flex:1; min-width:0; text-align:center; border-radius:20px; background:var(--panel2); border:2px solid ${serving === side ? 'var(--lime)' : 'var(--line)'}; padding:18px">
+    <div style="font-size:clamp(14px,2vw,20px); font-weight:800; overflow-wrap:break-word">${escapeHtml(names[side])}</div>
+    <div style="font-weight:900; line-height:1; font-size:clamp(56px,10vw,120px); margin-top:6px">${points[side]}</div>
+    <div class="mono" style="font-size:11px; text-transform:uppercase; letter-spacing:0.08em; color:var(--lime); min-height:14px; margin-top:4px">${serving === side ? 'Serving' : ''}</div>
+  </div>`;
+}
+function renderFeatured(){
+  const dotsWrap = document.getElementById('featuredDots');
+  const body = document.getElementById('featuredBody');
+  const venues = (PUB_T && PUB_T.venues) || [];
+  const liveMap = {};
+  LIVE_DOCS.forEach(l => { liveMap[l.id] = l; });
+
+  dotsWrap.innerHTML = LIVE_DOCS.map(l => {
+    const active = l.id === FEATURED_ROTATOR.current();
+    return `<span style="width:7px; height:7px; border-radius:999px; background:${active ? 'var(--lime)' : 'var(--line)'}; display:inline-block"></span>`;
+  }).join('');
+
+  const current = FEATURED_ROTATOR.current();
+  const live = current && liveMap[current];
+  if(!live){
+    body.innerHTML = `<div class="mono" style="color:var(--muted); font-size:13px">No match is live right now.</div>`;
+    return;
+  }
+  const match = matchesById()[live.id];
+  const courtLabel = match && schedulePublished() ? TournamentDisplay.venueCourtLabel(match.sched, venues) : null;
+  const divName = (DIVISIONS.find(d => d.id === (live.divisionId || (match && match.divisionId))) || {}).name || '';
+  body.innerHTML = `
+    <div class="mono" style="font-size:11px; color:var(--muted); text-align:center">${escapeHtml([divName, courtLabel].filter(Boolean).join(' · ') || 'Court assignment pending')}</div>
+    <div style="display:flex; gap:14px; width:100%">${featuredSide(live, live.names, live.points, 'home', live.serving)}${featuredSide(live, live.names, live.points, 'away', live.serving)}</div>
+    <div class="mono" style="font-size:12px; color:var(--muted)">${(live.games||[]).length ? 'Games: ' + live.games.map(g=>`${g.home}-${g.away}`).join('  ') : ''}</div>`;
+}
+let featuredTimer = null;
+function ensureFeaturedRotating(){
+  if(featuredTimer) return;
+  featuredTimer = setInterval(() => { FEATURED_ROTATOR.advance(); renderFeatured(); }, FEATURED_ROTATE_MS);
+}
+
+/* ================================================================
+   LEADERBOARD -- Combined (default) + per-division, Auto cycles
+   through them on a timer; Manual pins one and overrides the cycle
+   until released back to Auto.
+   ================================================================ */
+const LEADERBOARD_ROTATE_MS = 8000;
+function leaderboardLabel(viewId){
+  if(viewId === 'combined') return 'Combined';
+  return (DIVISIONS.find(d => d.id === viewId) || {}).name || viewId;
+}
+function renderLeaderboardTabs(){
+  const wrap = document.getElementById('lbTabs');
+  const items = LEADERBOARD_ROTATOR.items();
+  const current = LEADERBOARD_ROTATOR.current();
+  const isManual = LEADERBOARD_ROTATOR.isManual();
+  wrap.innerHTML = items.map(id => `<button type="button" data-lb-view="${escapeHtml(id)}" class="lb-tab mono" data-active="${id === current ? '1' : '0'}" style="border-radius:999px; height:30px; padding:0 12px; font-size:10.5px; font-weight:800; cursor:pointer">${escapeHtml(leaderboardLabel(id))}</button>`).join('')
+    + `<button type="button" id="lbAutoBtn" class="mono" style="border-radius:999px; height:30px; padding:0 12px; font-size:10.5px; font-weight:800; cursor:pointer; background:${isManual ? 'var(--panel2)' : 'transparent'}; border:1px dashed var(--line); color:var(--muted)">${isManual ? 'Resume Auto' : 'Auto ●'}</button>`;
+  wrap.querySelectorAll('[data-lb-view]').forEach(btn => btn.addEventListener('click', () => { LEADERBOARD_ROTATOR.pin(btn.dataset.lbView); renderLeaderboard(); }));
+  const autoBtn = document.getElementById('lbAutoBtn');
+  if(autoBtn) autoBtn.addEventListener('click', () => { LEADERBOARD_ROTATOR.release(); renderLeaderboard(); });
+}
+function podiumHtml(rows){
+  const top3 = rows.slice(0, 3);
+  if(!top3.length) return '';
+  const order = [1, 0, 2]; // 2nd, 1st, 3rd across the podium
+  const heights = { 0: 110, 1: 86, 2: 66 };
+  const medal = { 0: '🥇', 1: '🥈', 2: '🥉' };
+  return order.filter(i => top3[i]).map(i => `
+    <div class="podium-step" style="width:120px">
+      <div style="font-size:22px">${medal[i]}</div>
+      <div style="font-weight:800; font-size:13px; text-align:center; overflow-wrap:break-word">${escapeHtml(top3[i].name)}</div>
+      <div class="mono" style="font-size:10px; color:var(--muted)">${Math.round(top3[i].winPct)}% · ${top3[i].w}-${top3[i].l}</div>
+      <div style="width:100%; height:${heights[i]}px; margin-top:6px; border-radius:10px 10px 0 0; background:${i === 0 ? 'var(--lime)' : 'var(--panel2)'}; border:1px solid var(--line)"></div>
+    </div>`).join('');
+}
+function leaderboardRowsHtml(rows, hasAnyRows){
+  if(!rows.length) return hasAnyRows ? '' : `<div class="mono" style="color:var(--muted); font-size:12px; text-align:center; padding:24px 0">Leaderboard will appear once matches are scored.</div>`;
+  return `<table class="mono" style="width:100%; font-size:12px; border-collapse:collapse">
+    <thead><tr style="text-align:left; color:var(--muted)"><th style="padding:4px 6px">#</th><th style="padding:4px 6px">Player / Team</th><th style="padding:4px 6px">GP</th><th style="padding:4px 6px">W-L</th><th style="padding:4px 6px; text-align:right">+/-</th><th style="padding:4px 6px; text-align:right">Win%</th></tr></thead>
+    <tbody>${rows.map((r,i) => `<tr style="border-top:1px solid var(--line)">
+      <td style="padding:5px 6px; font-weight:800">${i+1}</td>
+      <td style="padding:5px 6px; font-weight:700">${escapeHtml(r.name)}</td>
+      <td style="padding:5px 6px">${r.gp}</td>
+      <td style="padding:5px 6px">${r.w}-${r.l}</td>
+      <td style="padding:5px 6px; text-align:right; color:${r.diff>0?'var(--win)':r.diff<0?'var(--loss)':'var(--muted)'}">${r.diff>0?'+':''}${r.diff}</td>
+      <td style="padding:5px 6px; text-align:right; font-weight:800">${Math.round(r.winPct)}%</td>
+    </tr>`).join('')}</tbody></table>`;
+}
+function renderLeaderboard(){
+  renderLeaderboardTabs();
+  const view = LEADERBOARD_ROTATOR.current();
+  const matches = view === 'combined' ? ALL_MATCHES : ALL_MATCHES.filter(m => m.divisionId === view);
+  const { rows } = TournamentDisplay.computeLeaderboardRows(matches);
+  document.getElementById('lbPodium').innerHTML = podiumHtml(rows);
+  document.getElementById('lbList').innerHTML = leaderboardRowsHtml(rows.slice(3), rows.length > 0);
+}
+let leaderboardTimer = null;
+function ensureLeaderboardRotating(){
+  if(leaderboardTimer) return;
+  leaderboardTimer = setInterval(() => { LEADERBOARD_ROTATOR.advance(); renderLeaderboard(); }, LEADERBOARD_ROTATE_MS);
+}
+
+/* ================================================================
+   SPOTLIGHT TICKER -- auto-generated callouts, scrolling along the
+   bottom. Built from the same combined-matches data the leaderboard
+   already computed, no extra reads.
+   ================================================================ */
+function renderTicker(){
+  const { rows } = TournamentDisplay.computeLeaderboardRows(ALL_MATCHES);
+  const callouts = TournamentDisplay.buildSpotlightCallouts({ matches: ALL_MATCHES, rows });
+  const track = document.getElementById('tickerTrack');
+  const text = callouts.length ? callouts.join('   •   ') : 'Spotlight stats will appear once matches are completed.';
+  track.textContent = text;
+  // Keep scroll speed roughly constant regardless of how much text there is
+  // (CSS animation-duration has no useful default, so this has to be set in JS).
+  track.style.animationDuration = `${Math.max(12, text.length * 0.09)}s`;
+}
+
+/* ================================================================
+   FULLSCREEN + WAKE LOCK -- best-effort only, this is a nice-to-have
+   for an unattended venue screen; never block or break the page if
+   either API is unsupported or the request fails.
+   ================================================================ */
+function initFullscreenButton(){
+  const btn = document.getElementById('fullscreenBtn');
+  if(!document.documentElement.requestFullscreen){ btn.style.display = 'none'; return; }
+  btn.addEventListener('click', () => {
+    try {
+      if(!document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => {});
+      else document.exitFullscreen().catch(() => {});
+    } catch(e) { /* best effort */ }
+  });
+}
+let wakeLockRef = null;
+async function requestWakeLock(){
+  if(!('wakeLock' in navigator)) return;
+  try { wakeLockRef = await navigator.wakeLock.request('screen'); }
+  catch(e) { /* best effort -- e.g. permission denied, not on battery saver, etc. */ }
+}
+function initWakeLock(){
+  requestWakeLock();
+  document.addEventListener('visibilitychange', () => {
+    if(document.visibilityState === 'visible') requestWakeLock();
+  });
+}
+
+/* ================================================================
+   SUBSCRIPTIONS -- matches (ALL divisions, unfiltered -- the Combined
+   leaderboard and courts-playing join both need the full set) and
+   live, both onSnapshot, same pattern as tournament.html.
+   ================================================================ */
+function subscribeMatches(){
+  db.collection(`clients/${currentClientId}/tournaments/${CURRENT_TOURNAMENT_ID}/matches`).onSnapshot(snap => {
+    ALL_MATCHES = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderCourtsPlaying();
+    renderCompletedCount();
+    renderFeatured();
+    renderLeaderboard();
+    renderTicker();
+  }, ex => console.warn('[TournamentDisplay] matches listener failed:', ex.message));
+}
+function subscribeLive(){
+  db.collection(`clients/${currentClientId}/tournaments/${CURRENT_TOURNAMENT_ID}/live`).onSnapshot(snap => {
+    LIVE_DOCS = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    FEATURED_ROTATOR.setItems(LIVE_DOCS.map(l => l.id));
+    renderLiveBadge();
+    renderCourtsPlaying();
+    renderFeatured();
+    maybeStampSessionStart();
+    ensureFeaturedRotating();
+  }, ex => console.warn('[TournamentDisplay] live listener failed:', ex.message));
+}
+function subscribeDivisions(){
+  db.collection(`clients/${currentClientId}/tournaments/${CURRENT_TOURNAMENT_ID}/divisions`).orderBy('createdAt', 'asc').onSnapshot(snap => {
+    DIVISIONS = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    LEADERBOARD_ROTATOR.setItems(['combined', ...DIVISIONS.map(d => d.id)]);
+    renderLeaderboard();
+    renderFeatured();
+  }, ex => console.warn('[TournamentDisplay] divisions listener failed:', ex.message));
+}
+
+/* ================================================================
+   INIT
+   ================================================================ */
+async function init(){
+  if(!currentClientId || !CURRENT_TOURNAMENT_ID){ showNotFound(); return; }
+  if(!db){ renderGateState(`<p class="mono" style="margin-top:18px; font-size:12px; color:var(--loss)">Firebase is not configured.</p>`); return; }
+
+  initFullscreenButton();
+  initWakeLock();
+
+  try {
+    const configSnap = await db.doc(`clients/${currentClientId}/config/state`).get();
+    const cfg = (configSnap.exists && configSnap.data().data) || {};
+    bizName = (cfg.business && cfg.business.name) || cfg.businessName || currentClientId;
+
+    db.doc(`clients/${currentClientId}/tournaments/${CURRENT_TOURNAMENT_ID}`).onSnapshot(snap => {
+      if(!snap.exists){ showNotFound(); return; }
+      const t = snap.data();
+      if(t.status === 'draft'){ showNotPublished(); return; }
+      PUB_T = t;
+
+      document.getElementById('gateScreen').style.display = 'none';
+      document.getElementById('appScreen').style.display = 'flex';
+      renderHeaderStatic(t);
+      renderSessionTimer();
+      ensureTimerRunning();
+      renderCourtsPlaying();
+      maybeStampSessionStart();
+
+      if(!window.__subsStarted){
+        window.__subsStarted = true;
+        subscribeDivisions();
+        subscribeMatches();
+        subscribeLive();
+        ensureLeaderboardRotating();
+      }
+    }, ex => { renderGateState(`<p class="mono" style="margin-top:18px; font-size:12px; color:var(--loss)">Failed to load: ${escapeHtml(ex.message)}</p>`); });
+  } catch(ex) {
+    renderGateState(`<p class="mono" style="margin-top:18px; font-size:12px; color:var(--loss)">Failed to load: ${escapeHtml(ex.message)}</p>`);
+  }
+}
+init();
+</script>
+</body>
+</html>

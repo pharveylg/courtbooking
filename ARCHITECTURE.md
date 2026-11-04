@@ -10,7 +10,7 @@
 
 One Firebase project (Hosting + Firestore + Storage + Functions v2 + Auth), serving a family of static HTML pages (no bundler, no framework — plain `<script>` tags, Tailwind CDN, Firebase compat SDKs). Every tenant ("facility") is a slug-scoped subtree `clients/{slug}/...`; the same static files serve every tenant, selecting which one via `?client=slug`, a remembered slug, or (rarely) a path segment.
 
-**Runtime pages (12 top-level HTML files):**
+**Runtime pages (13 top-level HTML files):**
 
 | File | Role |
 |---|---|
@@ -23,6 +23,7 @@ One Firebase project (Hosting + Firestore + Storage + Functions v2 + Auth), serv
 | `store.html` | Pickle Court Store (POS/inventory/reports add-on), own PIN |
 | `tournament-admin.html` | Tournament organizer/staff console, reuses the tenant's Booking Admin PIN |
 | `tournament.html` | Public tournament page — **no PIN, no entitlement check** (see §6) |
+| `tournament-display.html` | Public, no-PIN "venue screen" TV dashboard (courts playing, featured live match, Combined/per-division leaderboard, spotlight ticker) — same trust model as `tournament.html`, linked from Tournament Admin's Announcements panel |
 | `gallery.html` | Anonymous, token-gated tournament photo upload |
 | `billing.html` | Tenant billing portal (PIN-gated), no in-app link found — reached only by direct URL (see §11) |
 | `superadmin.html` | Platform operator console (10 tabs) |

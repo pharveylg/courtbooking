@@ -373,7 +373,10 @@
       <div id="announcementsWrap" class="hidden mt-5 rounded-[24px] bg-white border border-[#EAE0D5] p-5 md:p-6">
         <div class="flex items-center justify-between flex-wrap gap-2 mb-3">
           <h3 class="text-[16px] font-[800] tracking-[-0.02em]">Announcements</h3>
-          <a id="publicPageLink" href="#" target="_blank" rel="noopener" class="hidden mono text-[10px] opacity-60 hover:opacity-100 underline">View Public Page ↗</a>
+          <span class="flex items-center gap-3">
+            <a id="publicPageLink" href="#" target="_blank" rel="noopener" class="hidden mono text-[10px] opacity-60 hover:opacity-100 underline">View Public Page ↗</a>
+            <a id="displayPageLink" href="#" target="_blank" rel="noopener" class="hidden mono text-[10px] opacity-60 hover:opacity-100 underline">Open Venue Display ↗</a>
+          </span>
         </div>
         <form id="announcementForm" class="flex flex-wrap gap-2 mb-3">
           <input id="announcementText" placeholder="e.g. Round 2 starts at 2pm on Court 3" class="flex-1 min-w-[220px] h-10 rounded-full border border-[#EAE0D5] bg-[#FFFBF5] px-4 mono text-[12px] outline-none focus:border-[#201C19]"/>
@@ -705,11 +708,15 @@ async function openTournament(tournamentId){
     document.getElementById('publishBtn').classList.remove('hidden');
   }
   const publicLink = document.getElementById('publicPageLink');
+  const displayLink = document.getElementById('displayPageLink');
   if(t.status === 'draft'){
     publicLink.classList.add('hidden');
+    displayLink.classList.add('hidden');
   } else {
     publicLink.href = `tournament.html?client=${encodeURIComponent(currentClientId)}&t=${encodeURIComponent(tournamentId)}`;
     publicLink.classList.remove('hidden');
+    displayLink.href = `tournament-display.html?client=${encodeURIComponent(currentClientId)}&t=${encodeURIComponent(tournamentId)}`;
+    displayLink.classList.remove('hidden');
   }
   renderAnnouncements(t.announcements || []);
   loadDivisions(tournamentId).then(() => populateDivisionSelect());

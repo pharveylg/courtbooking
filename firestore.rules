@@ -146,24 +146,43 @@ service cloud.firestore {
 
 
     // Platform-level tenant registry, used by the superadmin console.
-    // Writes are superadmin-only. Reads are superadmin/platform-staff
-    // only. A tenant-self `get` branch (`isValidTenantId(tenantId)`) used
-    // to live here so billing.html could show a tenant its own plan,
-    // subscription, billing formula, and prepaid balance -- but that
-    // condition only checks the SLUG'S FORMAT, not that the caller ever
-    // proved PIN knowledge, and slugs are public. Proven live: an
-    // unauthenticated REST call to this path returned another tenant's
-    // real creditBalance and billing formula. billing.html now reaches
-    // this data through the getBillingPortalData callable
-    // (functions/index.js), which checks the tenant's PIN server-side
-    // (Admin SDK, not gated by these rules) first. `list` stays
-    // superadmin-only.
+    // Writes are superadmin-only. Reads are superadmin/platform-staff,
+    // OR the tenant's own owner reading their own doc. A tenant-self
+    // `get` branch (`isValidTenantId(tenantId)`) used to live here so
+    // billing.html could show a tenant its own plan, subscription,
+    // billing formula, and prepaid balance -- but that condition only
+    // checks the SLUG'S FORMAT, not that the caller ever proved PIN
+    // knowledge, and slugs are public. Proven live: an unauthenticated
+    // REST call to this path returned another tenant's real
+    // creditBalance and billing formula. billing.html now reaches this
+    // data through the getBillingPortalData callable (functions/index.js),
+    // which checks the tenant's PIN server-side (Admin SDK, not gated by
+    // these rules) first.
+    //
+    // The owner-self branch added below (`resource.data.ownerUid ==
+    // request.auth.uid`) is NOT a repeat of that mistake: it binds access
+    // to a verified, signed-in Firebase Auth identity matching a field
+    // that is never client-writable (see `allow update` below -- ownerUid
+    // is not in any permission's allowed-keys list, and `allow create` is
+    // manage_organizations-only), not to a guessable public-format string
+    // anyone can supply unauthenticated. It exists so picker.html can show
+    // a self-serve owner a "finish setup" nudge for their own
+    // lifecycle:'provisioning' tenant (createFacility in functions/index.js
+    // stamps ownerUid server-side, via the Admin SDK, at creation time and
+    // nothing ever changes it after). This still lets that owner read
+    // their OWN tenant's creditBalance/billing/subscription fields too
+    // (Firestore rules can't redact individual fields on get/list) --
+    // judged acceptable because it is the owner's own tenant's own billing
+    // data, not another tenant's, which is what the historical exploits
+    // actually exposed.
     // The entitlements/ subcollection (one doc per product: booking,
     // store, tournament) inherits these rules -- product entitlement
     // lifecycle and history are platform-controlled state.
     match /platformTenants/{tenantId} {
-      allow get: if canReadTenantData();
-      allow list: if canReadTenantData();
+      allow get: if canReadTenantData()
+                || (request.auth != null && request.auth.uid == resource.data.ownerUid);
+      allow list: if canReadTenantData()
+                || (request.auth != null && request.auth.uid == resource.data.ownerUid);
       // Creating or deleting a tenant registry doc entirely (provisioning,
       // offboarding) stays manage_organizations-only -- but a plain
       // `allow write` here made every OTHER permission that names this

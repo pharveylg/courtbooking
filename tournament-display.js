@@ -151,6 +151,40 @@
     return { startedAtMs: typeof nowMs === 'number' ? nowMs : Date.now() };
   }
 
+  /* ---------------- feed health / stale-data indicator ----------------
+     This is an unattended venue TV: if a listener silently stops updating
+     nobody is there to notice, so the page would just keep showing stale
+     data forever with no signal anything is wrong. Pure decision logic
+     for tournament-display.html's "Reconnecting..." header line: given
+     each tracked listener's last-successful-snapshot time (and any
+     outstanding error), and the current time, what (if anything) should
+     the indicator say?
+
+     health: { <name>: { lastOkAt: ms|null, errorMsg: string|null }, ... }
+     An error on ANY listener is shown immediately (no threshold -- a
+     permission-denied or similar failure doesn't need 30s to be real).
+     Otherwise, once at least one listener has reported in, staleness is
+     judged from the MOST RECENT lastOkAt across all of them (any one
+     updating is evidence the connection is alive); past thresholdMs with
+     no update from any of them, show "last updated Xs ago". */
+  function computeFeedStatus(health, nowMs, thresholdMs) {
+    const now = typeof nowMs === 'number' ? nowMs : Date.now();
+    const threshold = typeof thresholdMs === 'number' ? thresholdMs : 30000;
+    const entries = Object.values(health || {});
+    const erroring = entries.find((e) => e && e.errorMsg);
+    if (erroring) return { show: true, text: '⚠ Reconnecting… live feed hit an error' };
+
+    const started = entries.filter((e) => e && e.lastOkAt != null);
+    if (!started.length) return { show: false, text: '' };
+
+    const mostRecent = Math.max.apply(null, started.map((e) => e.lastOkAt));
+    const ageMs = now - mostRecent;
+    if (ageMs > threshold) {
+      return { show: true, text: `⚠ Reconnecting… last updated ${Math.floor(ageMs / 1000)}s ago` };
+    }
+    return { show: false, text: '' };
+  }
+
   /* ---------------- generic Auto/Manual rotator ----------------
      Used for both:
        - the featured-match panel (auto-only: just cycles through whichever
@@ -198,6 +232,7 @@
     computeLeaderboardRows,
     buildSpotlightCallouts,
     computeSessionStampPayload,
+    computeFeedStatus,
     createRotator,
   };
 }));

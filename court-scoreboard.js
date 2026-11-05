@@ -22,6 +22,11 @@
        onSwapTeam(side, newTeamId) -> {ok,...}|{error}      // Fixed Pairs only
      })
 
+   open() returns { close(), getState(), reportLiveSync(ok) } -- callers that throttle
+   their own network push for onLive should call reportLiveSync(true/false) after each
+   attempt so the board can show a small "not syncing" note near the score controls
+   after a few consecutive failures (purely informational; local scoring never blocks).
+
    Tap the side that WON the rally. Undo reaches back through the whole match.
    Edit score corrects the game in progress or any finished game by hand.
    Spoken score calls are on by default (the toggle is remembered). Needs
@@ -232,6 +237,7 @@
         const so = el('button', '', 'Start over'); so.type = 'button'; so.addEventListener('click', startOver); b.appendChild(so); bannerHost.appendChild(b);
       }
       if (!voiceOk && audioOn) bannerHost.appendChild(el('div', 'rb-banner', 'This browser has no speech voice, so calls will be silent.'));
+      if (liveSyncBad) bannerHost.appendChild(el('div', 'rb-banner', 'Not syncing — check connection. Scoring here still works; the live feed is just behind.'));
       renderPreGame();
       renderPanel();
     }
@@ -393,6 +399,21 @@
       if (!opts.onLive) return;
       try { opts.onLive(P.liveView(state)); } catch (e) { /* live view is best-effort */ }
     }
+    /* ---------- live-score sync status (informational only, never blocks local scoring) ----------
+       The actual network push happens outside this module (callers throttle it, see
+       tournament.html/tournament-admin.html's flush()), so those callers report each
+       push's outcome back here via the returned reportLiveSync(ok) method. After a
+       couple of consecutive failures, show a small, non-alarming note near the score
+       controls so the SCORER (not spectators -- this overlay is courtside-only) knows
+       the feed may be stale; clears the moment a push succeeds again. */
+    const LIVE_SYNC_FAIL_THRESHOLD = 3;
+    let liveSyncFailures = 0;
+    let liveSyncBad = false;
+    function reportLiveSync(ok) {
+      liveSyncFailures = ok ? 0 : liveSyncFailures + 1;
+      const next = !ok && liveSyncFailures >= LIVE_SYNC_FAIL_THRESHOLD;
+      if (next !== liveSyncBad) { liveSyncBad = next; render(); }
+    }
     function change(next, sayText) {
       state = next; resumed = false; persist(); render(); live();
       if (sayText) speak(sayText);
@@ -469,7 +490,9 @@
         if (opts.onFinish) await opts.onFinish(P.summary(state), state);
         forget(); close(true);
       } catch (e) {
-        errBox.textContent = (e && e.message) ? e.message : 'Could not save. Check your connection and try again.';
+        // Always the friendly message, never the raw e.message -- this is the app's
+        // template for "save failed, let them retry".
+        errBox.textContent = 'Could not save. Check your connection and try again.';
         btn.disabled = false; btn.textContent = old; saving = false;
       }
     }
@@ -504,7 +527,7 @@
 
     render(); live();
     setTimeout(() => { try { cancelBtn.focus(); } catch (e) { /* ignore */ } }, 0);
-    return { close: () => close(false), getState: () => state };
+    return { close: () => close(false), getState: () => state, reportLiveSync };
   }
 
   window.CourtBoard = { open };

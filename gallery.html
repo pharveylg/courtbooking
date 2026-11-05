@@ -11,6 +11,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-storage-compat.js"></script>
 <script src="firebase-config.js"></script>
+<script src="gallery-upload-batch.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
@@ -115,54 +116,106 @@ function renderUploadUi(tournamentName){
     previewGrid.innerHTML = selectedFiles.map(f => `<div class="aspect-square rounded-[10px] overflow-hidden bg-[#F1E9DF]"><img src="${URL.createObjectURL(f)}" class="w-full h-full object-cover"/></div>`).join('');
     uploadBtn.disabled = selectedFiles.length === 0;
   });
-  uploadBtn.addEventListener('click', async () => {
+  // Uploads one photo; never throws -- returns a result the batch runner below
+  // can act on. `hardStop: true` means every remaining file would fail the same
+  // way (link revoked/expired/over its cap), so the batch should stop outright
+  // rather than burn through the rest one by one. Anything else is scoped to
+  // just this one photo, so the batch keeps going and this file alone is
+  // offered for retry.
+  async function uploadOnePhoto(file){
+    // Re-check the token fresh before every file, not just once at page load --
+    // an organizer revoking a link mid-batch (or someone else's uploads pushing
+    // it over the cap) should stop this session cold, not just the next time
+    // the page happens to reload.
+    let liveToken;
+    try { liveToken = (await db.doc(`clients/${currentClientId}/tournaments/${CURRENT_TOURNAMENT_ID}/uploadTokens/${TOKEN}`).get()).data(); }
+    catch(ex) {
+      console.warn('[Gallery] could not verify upload token:', ex && ex.message);
+      return { ok: false, hardStop: true, message: 'Could not verify the upload link -- check your connection and try again.' };
+    }
+    const nowExpired = liveToken.expiresAt && Date.now() > liveToken.expiresAt;
+    if(liveToken.revoked || nowExpired){
+      return { ok: false, hardStop: true, message: `This link has been ${liveToken.revoked ? 'revoked' : 'expired'} since you started uploading.` };
+    }
+    const remaining = liveToken.maxUploads ? liveToken.maxUploads - liveToken.uploadCount : Infinity;
+    if(remaining <= 0){
+      return { ok: false, hardStop: true, message: 'Upload limit reached for this link.' };
+    }
+    try {
+      const blob = await compressImage(file);
+      const photoId = `${Date.now().toString(36)}${Math.random().toString(36).slice(2,8)}`;
+      const path = `clients/${currentClientId}/tournaments/${CURRENT_TOURNAMENT_ID}/gallery/${photoId}.jpg`;
+      const ref = fbStorage.ref(path);
+      await ref.put(blob, { contentType: 'image/jpeg' });
+      const downloadUrl = await ref.getDownloadURL();
+      await db.collection(`clients/${currentClientId}/tournaments/${CURRENT_TOURNAMENT_ID}/photos`).add({
+        uploadTokenId: TOKEN, storagePath: path, downloadUrl, status: 'pending',
+        uploadedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      });
+      // Incremented immediately (not batched at the end) so the fresh re-check
+      // at the top of the next call -- and anyone else uploading against this
+      // same shared link at the same time -- both see an accurate count, not
+      // last-known-at-page-load.
+      await db.doc(`clients/${currentClientId}/tournaments/${CURRENT_TOURNAMENT_ID}/uploadTokens/${TOKEN}`)
+        .set({ uploadCount: firebase.firestore.FieldValue.increment(1) }, { merge: true });
+      return { ok: true };
+    } catch(ex) {
+      console.warn('[Gallery] upload failed for a photo:', ex && ex.message);
+      return { ok: false, hardStop: false };
+    }
+  }
+
+  // Runs (or re-runs, for just the failed subset) a batch. Never stops on a
+  // single photo's failure -- that photo is set aside for retry while the
+  // rest of the batch keeps going. Only a hard-stop condition (link revoked/
+  // expired/over cap, or can't even verify the link) ends the batch early.
+  // The fold/summarize decision logic is pure and lives in
+  // gallery-upload-batch.js (GalleryUploadBatch) so it's unit-testable
+  // without Firestore/Storage; this is just the async loop driving it.
+  async function runUploadBatch(files){
     uploadBtn.disabled = true;
     const statusEl = document.getElementById('uploadStatus');
-    let uploaded = 0;
-    for (const file of selectedFiles) {
-      // Re-check the token fresh before every file, not just once at page
-      // load -- an organizer revoking a link mid-batch (or someone else's
-      // uploads pushing it over the cap) should stop this session cold,
-      // not just the next time the page happens to reload.
-      let liveToken;
-      try { liveToken = (await db.doc(`clients/${currentClientId}/tournaments/${CURRENT_TOURNAMENT_ID}/uploadTokens/${TOKEN}`).get()).data(); }
-      catch(ex) { statusEl.textContent = 'Could not verify the upload link -- check your connection and try again.'; break; }
-      const nowExpired = liveToken.expiresAt && Date.now() > liveToken.expiresAt;
-      if(liveToken.revoked || nowExpired){ statusEl.textContent = `This link has been ${liveToken.revoked ? 'revoked' : 'expired'} since you started uploading.`; break; }
-      const remaining = liveToken.maxUploads ? liveToken.maxUploads - liveToken.uploadCount : Infinity;
-      if(remaining <= 0){ statusEl.textContent = 'Upload limit reached for this link.'; break; }
-      try {
-        statusEl.textContent = `Uploading ${uploaded + 1} of ${selectedFiles.length}...`;
-        const blob = await compressImage(file);
-        const photoId = `${Date.now().toString(36)}${Math.random().toString(36).slice(2,8)}`;
-        const path = `clients/${currentClientId}/tournaments/${CURRENT_TOURNAMENT_ID}/gallery/${photoId}.jpg`;
-        const ref = fbStorage.ref(path);
-        await ref.put(blob, { contentType: 'image/jpeg' });
-        const downloadUrl = await ref.getDownloadURL();
-        await db.collection(`clients/${currentClientId}/tournaments/${CURRENT_TOURNAMENT_ID}/photos`).add({
-          uploadTokenId: TOKEN, storagePath: path, downloadUrl, status: 'pending',
-          uploadedAt: firebase.firestore.FieldValue.serverTimestamp(),
-        });
-        // Incremented immediately (not batched at the end) so the fresh
-        // re-check at the top of the next loop iteration -- and anyone
-        // else uploading against this same shared link at the same time
-        // -- both see an accurate count, not last-known-at-page-load.
-        await db.doc(`clients/${currentClientId}/tournaments/${CURRENT_TOURNAMENT_ID}/uploadTokens/${TOKEN}`)
-          .set({ uploadCount: firebase.firestore.FieldValue.increment(1) }, { merge: true });
-        uploaded++;
-      } catch(ex) { statusEl.textContent = `Failed on photo ${uploaded + 1}: ${ex.message}`; break; }
+    let state = GalleryUploadBatch.initialState();
+    for (let i = 0; i < files.length && !state.stopped; i++) {
+      statusEl.textContent = `Uploading ${i + 1} of ${files.length}...`;
+      const outcome = await uploadOnePhoto(files[i]);
+      state = GalleryUploadBatch.foldOutcome(state, outcome, files[i]);
     }
-    if(uploaded === selectedFiles.length){
+    renderUploadOutcome(state, files.length);
+  }
+
+  function renderUploadOutcome(state, total){
+    const statusEl = document.getElementById('uploadStatus');
+    const summary = GalleryUploadBatch.summarize(state, total);
+    if (summary.kind === 'allOk') {
       statusEl.textContent = '';
       renderState(`
         <div class="mx-auto w-14 h-14 rounded-full bg-[#E8F5D8] text-[#3F7019] grid place-items-center font-black text-[24px]">✓</div>
         <h1 class="mt-5 text-[19px] font-[800] tracking-[-0.02em]">Thanks!</h1>
-        <p class="mt-2 mono text-[12px] opacity-60">${uploaded} photo${uploaded===1?'':'s'} submitted for review.</p>
+        <p class="mt-2 mono text-[12px] opacity-60">${summary.text}</p>
       `);
-    } else {
-      uploadBtn.disabled = false;
+      return;
     }
-  });
+    if (summary.kind === 'hardStop') {
+      statusEl.textContent = summary.text;
+      uploadBtn.disabled = false;
+      return;
+    }
+    // Partial failure: friendly summary, never a raw error message, with a
+    // retry action scoped to just the photos that failed.
+    statusEl.textContent = '';
+    const line = document.createElement('div');
+    line.textContent = summary.text;
+    const retryBtn = document.createElement('button');
+    retryBtn.type = 'button';
+    retryBtn.className = 'mt-1.5 mono text-[11px] font-[800] underline cursor-pointer';
+    retryBtn.textContent = summary.retryLabel;
+    retryBtn.addEventListener('click', () => runUploadBatch(state.failed));
+    statusEl.append(line, retryBtn);
+    uploadBtn.disabled = false;
+  }
+
+  uploadBtn.addEventListener('click', () => runUploadBatch(selectedFiles));
 }
 
 async function init(){

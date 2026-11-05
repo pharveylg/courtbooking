@@ -259,6 +259,8 @@
 :root[data-theme="dark"] #loadingScreen{background-color:var(--cream)!important}
 :root[data-theme="dark"] #loadingLogo{background-color:var(--panel)!important;color:var(--on-panel)!important}
 :root[data-theme="dark"] #loadingTenantName{color:var(--ink)!important}
+:root[data-theme="dark"] #loadingTimeoutHeading{color:var(--ink)!important}
+:root[data-theme="dark"] #loadingTimeoutRetryBtn{background-color:var(--panel)!important;color:var(--on-panel)!important}
 :root[data-theme="dark"] .court-column{background-color:var(--card)!important}
 :root[data-theme="dark"] .range-track{background:repeating-linear-gradient(90deg,var(--line) 0 12px,transparent 12px 13px)!important}
 /* brand tile (default zinc) and image logos: tile follows the dark panel; an uploaded logo image sits on a white well */

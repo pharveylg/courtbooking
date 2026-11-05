@@ -304,6 +304,15 @@ function toast(msg){
   clearTimeout(toast._t);
   toast._t = setTimeout(() => t.classList.add('hidden'), 2600);
 }
+// Our own `throw new Error('...')` validation failures inside a transaction
+// (e.g. "Not enough stock for X") are deliberately written to be read by the
+// cashier, so show them as-is. Anything with a `.code` is a Firebase/network
+// error (permission-denied, unavailable, etc) -- never show that raw text,
+// use a friendly fallback instead. Either way this is shown via toast(), never
+// a blocking alert(), and the triggering button stays usable for retry.
+function friendlyTxError(ex, fallback){
+  return (ex && !ex.code && ex.message) ? ex.message : fallback;
+}
 const LS_UNLOCKED = () => `pcs_store_unlocked_${currentClientId}`;
 
 /* ================================================================
@@ -737,7 +746,7 @@ async function completeSale(){
     renderPOS(); renderProducts(); renderInventory();
     toast(isCredit ? 'Credit sale recorded -- needs sign-off in the Credit tab' : 'Sale completed');
   } catch(ex) {
-    alert('Sale failed: ' + ex.message);
+    toast(friendlyTxError(ex, 'Could not complete the sale. Check your connection and try again.'));
   } finally { btn.disabled = false; }
 }
 
@@ -1165,7 +1174,7 @@ async function receiveStock(productId, qtyReceived, unitCostPaid){
     await loadProducts();
     renderInventory(); renderProducts(); renderPOS();
     toast('Stock received');
-  } catch(ex) { alert('Failed: ' + ex.message); }
+  } catch(ex) { toast(friendlyTxError(ex, 'Could not record the received stock. Check your connection and try again.')); }
 }
 async function adjustStock(productId, qtyChange, reason){
   const productsRef = db.doc(`clients/${currentClientId}/storeProducts/state`);
@@ -1189,7 +1198,7 @@ async function adjustStock(productId, qtyChange, reason){
     await loadProducts();
     renderInventory(); renderProducts(); renderPOS();
     toast('Stock adjusted');
-  } catch(ex) { alert('Failed: ' + ex.message); }
+  } catch(ex) { toast(friendlyTxError(ex, 'Could not adjust stock. Check your connection and try again.')); }
 }
 const INV_LOG_LABELS = { sale: 'Sale', receive: 'Received', adjustment: 'Adjustment', void: 'Sale Voided' };
 async function loadInventoryLog(){
@@ -1308,7 +1317,7 @@ async function voidSale(saleId){
     await loadSalesAndRenderReports();
     renderProducts(); renderInventory(); renderPOS();
     toast('Sale voided, stock restored');
-  } catch(ex) { alert('Void failed: ' + ex.message); }
+  } catch(ex) { toast(friendlyTxError(ex, 'Could not void the sale. Check your connection and try again.')); }
 }
 document.getElementById('refreshSalesBtn').addEventListener('click', loadSalesAndRenderReports);
 

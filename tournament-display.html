@@ -66,6 +66,11 @@ html,body{margin:0; background:var(--bg); color:var(--ink); overflow-x:hidden}
       <div id="hdrHost" class="mono" style="font-size:11px; letter-spacing:0.12em; text-transform:uppercase; color:var(--muted)"></div>
       <div id="hdrName" style="font-size:clamp(20px,2.4vw,30px); font-weight:800; letter-spacing:-0.01em"></div>
       <div id="hdrVenue" class="mono" style="font-size:12px; color:var(--muted); margin-top:2px"></div>
+      <!-- Stale-data / feed-error indicator: honest, unobtrusive signal that the data
+           on screen may be out of date. Never blanks the screen or hides the last-known
+           state -- venue staff/spectators keep seeing it, just with a caveat. Cleared
+           the instant a fresh snapshot lands on any of the three live-data listeners. -->
+      <div id="feedStatus" class="mono" style="display:none; font-size:11px; color:#FFB4AB; margin-top:4px; font-weight:700"></div>
     </div>
     <div style="display:flex; align-items:center; gap:22px; flex-wrap:wrap">
       <div id="hdrLiveBadge" style="display:none; align-items:center; gap:8px; background:#3a1414; color:#FFB4AB; border:1px solid #6b2a2a; padding:8px 16px; border-radius:999px; font-weight:800; font-size:13px">
@@ -157,6 +162,12 @@ function showNotFound(){
 }
 function showNotPublished(){
   renderGateState(`<h2 style="margin-top:18px; font-size:19px; font-weight:800">Not Published Yet</h2><p class="mono" style="margin-top:10px; font-size:12px; color:var(--muted)">This tournament is still being set up.</p>`);
+}
+function showLoadFailed(){
+  // Friendly message + retry affordance, never the raw exception text (same shape as
+  // court-scoreboard.js's finish() -- the app's template for a failed load/save).
+  renderGateState(`<h2 style="margin-top:18px; font-size:19px; font-weight:800">Could Not Load</h2><p class="mono" style="margin-top:10px; font-size:12px; color:var(--muted)">Check your connection and try again.</p><button type="button" id="gateRetryBtn" class="mono" style="margin-top:14px; background:var(--lime); color:var(--lime-ink); border:none; border-radius:999px; padding:10px 22px; font-size:12px; font-weight:800; cursor:pointer">Retry</button>`);
+  document.getElementById('gateRetryBtn')?.addEventListener('click', () => location.reload());
 }
 
 /* ================================================================
@@ -386,22 +397,76 @@ function initWakeLock(){
 }
 
 /* ================================================================
+   FEED HEALTH -- stale-data / listener-error indicator.
+   This is an unattended venue TV: if a listener silently stops
+   updating (dropped connection, permission hiccup, etc.) nobody is
+   there to notice, so the screen would just keep showing whatever it
+   last had, forever, with no signal anything is wrong. Track the
+   timestamp of the last successful snapshot per listener (matches,
+   live, divisions) plus any outstanding error, and surface one
+   small, honest "Reconnecting..." line in the header -- never blank
+   the screen or hide the last-known data, just caveat it.
+
+   Threshold: 30s. Live scores update frequently during active play,
+   so a 30s gap during a match is a real signal something's wrong.
+   During genuine lulls (no match live, nobody touching the data)
+   there's no server-side heartbeat independent of data changes, so
+   this can also fire when everything is actually fine and simply
+   quiet -- an accepted tradeoff per the audit: the indicator says
+   "may be stale", not "broken", and clears itself the instant any of
+   the three listeners gets a fresh snapshot.
+   ================================================================ */
+const FEED_STALE_THRESHOLD_MS = 30000;
+const FEED_POLL_MS = 5000;
+const feedHealth = {
+  matches: { lastOkAt: null, errorMsg: null },
+  live: { lastOkAt: null, errorMsg: null },
+  divisions: { lastOkAt: null, errorMsg: null },
+};
+let feedPollTimer = null;
+function feedOk(name){
+  feedHealth[name].lastOkAt = Date.now();
+  feedHealth[name].errorMsg = null;
+  renderFeedStatus();
+}
+function feedFailed(name, ex){
+  console.warn(`[TournamentDisplay] ${name} listener failed:`, ex && ex.message);
+  feedHealth[name].errorMsg = (ex && ex.message) || 'unknown error';
+  renderFeedStatus();
+}
+function renderFeedStatus(){
+  const el = document.getElementById('feedStatus');
+  if(!el) return;
+  // Pure decision logic lives in tournament-display.js (TournamentDisplay)
+  // so it's unit-testable without Firestore/DOM -- see computeFeedStatus.
+  const status = TournamentDisplay.computeFeedStatus(feedHealth, Date.now(), FEED_STALE_THRESHOLD_MS);
+  el.textContent = status.text;
+  el.style.display = status.show ? '' : 'none';
+}
+function ensureFeedPolling(){
+  if(feedPollTimer) return;
+  feedPollTimer = setInterval(renderFeedStatus, FEED_POLL_MS);
+}
+
+/* ================================================================
    SUBSCRIPTIONS -- matches (ALL divisions, unfiltered -- the Combined
    leaderboard and courts-playing join both need the full set) and
    live, both onSnapshot, same pattern as tournament.html.
    ================================================================ */
 function subscribeMatches(){
   db.collection(`clients/${currentClientId}/tournaments/${CURRENT_TOURNAMENT_ID}/matches`).onSnapshot(snap => {
+    feedOk('matches');
     ALL_MATCHES = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     renderCourtsPlaying();
     renderCompletedCount();
     renderFeatured();
     renderLeaderboard();
     renderTicker();
-  }, ex => console.warn('[TournamentDisplay] matches listener failed:', ex.message));
+  }, ex => feedFailed('matches', ex));
 }
 function subscribeLive(){
   db.collection(`clients/${currentClientId}/tournaments/${CURRENT_TOURNAMENT_ID}/live`).onSnapshot(snap => {
+    feedOk('live');
     LIVE_DOCS = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     FEATURED_ROTATOR.setItems(LIVE_DOCS.map(l => l.id));
     renderLiveBadge();
@@ -409,15 +474,16 @@ function subscribeLive(){
     renderFeatured();
     maybeStampSessionStart();
     ensureFeaturedRotating();
-  }, ex => console.warn('[TournamentDisplay] live listener failed:', ex.message));
+  }, ex => feedFailed('live', ex));
 }
 function subscribeDivisions(){
   db.collection(`clients/${currentClientId}/tournaments/${CURRENT_TOURNAMENT_ID}/divisions`).orderBy('createdAt', 'asc').onSnapshot(snap => {
+    feedOk('divisions');
     DIVISIONS = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     LEADERBOARD_ROTATOR.setItems(['combined', ...DIVISIONS.map(d => d.id)]);
     renderLeaderboard();
     renderFeatured();
-  }, ex => console.warn('[TournamentDisplay] divisions listener failed:', ex.message));
+  }, ex => feedFailed('divisions', ex));
 }
 
 /* ================================================================
@@ -455,10 +521,12 @@ async function init(){
         subscribeMatches();
         subscribeLive();
         ensureLeaderboardRotating();
+        ensureFeedPolling();
       }
-    }, ex => { renderGateState(`<p class="mono" style="margin-top:18px; font-size:12px; color:var(--loss)">Failed to load: ${escapeHtml(ex.message)}</p>`); });
+    }, ex => { console.warn('[TournamentDisplay] tournament doc listener failed:', ex && ex.message); showLoadFailed(); });
   } catch(ex) {
-    renderGateState(`<p class="mono" style="margin-top:18px; font-size:12px; color:var(--loss)">Failed to load: ${escapeHtml(ex.message)}</p>`);
+    console.warn('[TournamentDisplay] init failed:', ex && ex.message);
+    showLoadFailed();
   }
 }
 init();

@@ -58,6 +58,13 @@ body:not(.staff-mode) .staff-link{display:none!important}
     <div id="loadingLogo" style="width:48px;height:48px;margin:0 auto 16px;border-radius:50%;background:#201C19;color:white;display:grid;place-items:center;font-weight:900;font-size:16px;animation:pulse 2s cubic-bezier(0.4,0,0.6,1) infinite">CB</div>
     <div id="loadingTenantName" style="font-size:20px;font-weight:800;letter-spacing:-0.02em;color:#201C19">Loading...</div>
     <div style="font-family:'JetBrains Mono',monospace;font-size:11px;opacity:0.6;margin-top:8px">Preparing your booking page</div>
+    <!-- Shown only if initializeApp() hasn't resolved within LOAD_TIMEOUT_MS; augments the
+         spinner above rather than replacing it, since the load may still finish on its own. -->
+    <div id="loadingTimeoutMsg" style="display:none;margin-top:18px;max-width:280px">
+      <div id="loadingTimeoutHeading" style="font-size:13px;font-weight:700;color:#201C19">Taking longer than expected</div>
+      <div style="font-family:'JetBrains Mono',monospace;font-size:11px;opacity:0.7;margin-top:4px">This can happen on a slow or unstable connection.</div>
+      <button type="button" id="loadingTimeoutRetryBtn" style="margin-top:12px;background:#201C19;color:white;border:none;border-radius:999px;padding:8px 20px;font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;cursor:pointer">Retry</button>
+    </div>
   </div>
   <style>@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}</style>
 </div>
@@ -146,8 +153,13 @@ body:not(.staff-mode) .staff-link{display:none!important}
 
 <!-- PWA Offline Indicator -->
 <div id="pwa-offline-bar" class="hidden fixed top-0 left-0 right-0 z-[9999] bg-[#FF8A5B] text-white text-center py-2 px-4 mono text-[11px] font-[700] tracking-wide" style="display:none">
-  ⚡ You're offline — changes will sync when reconnected
+  ⚡ You're offline — booking actions won't work until you're back online
 </div>
+
+<!-- Live-data sync error indicator: shown when a core onSnapshot listener (bookings/pricing/courts/etc)
+     is failing while the app otherwise thinks it's online (permission error, blocked connection, etc).
+     Separate from pwa-offline-bar above, which already covers the plain "no network" case. -->
+<div id="dataSyncErrorBar" class="hidden fixed top-0 left-0 right-0 z-[9998] bg-[#FFF0D6] text-[#8A5A00] text-center py-2 px-4 mono text-[11px] font-[700] tracking-wide" style="display:none"></div>
 
 <!-- PWA Install Banner -->
 <div id="pwa-install-banner" class="hidden fixed bottom-20 left-4 right-4 md:left-auto md:right-4 md:bottom-4 md:w-[380px] z-[10001] rounded-[20px] bg-[#201C19] text-white border border-white/10 p-4 shadow-[0_8px_32px_rgba(0,0,0,0.3)]" style="display:none">
@@ -1998,6 +2010,7 @@ body:not(.staff-mode) .staff-link{display:none!important}
 </div>
 
 <script src="next-open.js"></script>
+<script src="pin-gate.js"></script>
 <script src="/my-active.js"></script>
 <script src="/my-auth.js"></script>
 <script src="/staff-auth.js"></script>
@@ -3288,10 +3301,61 @@ async function applyRetentionIfDue(){
   }
 }
 
+/* ----------------------------------------------------------------
+   Core-listener error signal. Each core onSnapshot below (bookings,
+   openPlay, staffReserve, pricing, courtHours, settings, queues,
+   courts) previously swallowed failures with a console.warn only --
+   a permission-denied or network-loss failure was invisible to the
+   user. Track which named listeners currently have an outstanding
+   error and surface one small, non-blocking, honest banner (never a
+   blocking alert()) describing the likely cause. Cleared per-listener
+   the moment that listener's handler runs successfully again.
+   ---------------------------------------------------------------- */
+window._listenerErrors = window._listenerErrors || new Map();
+function _classifyFirestoreError(e) {
+  if (!navigator.onLine) return 'offline';
+  if (e && e.code === 'permission-denied') return 'permission';
+  if (e && (e.code === 'unavailable' || e.code === 'deadline-exceeded' || e.code === 'cancelled')) return 'network';
+  return 'unknown';
+}
+function renderListenerErrorBar() {
+  const bar = document.getElementById('dataSyncErrorBar');
+  if (!bar) return;
+  // The offline bar already explains a plain "no network" state -- don't pile on.
+  if (!navigator.onLine || window._listenerErrors.size === 0) {
+    bar.style.display = 'none';
+    bar.classList.add('hidden');
+    return;
+  }
+  const kinds = new Set(Array.from(window._listenerErrors.values()).map(v => v.kind));
+  let msg;
+  if (kinds.has('permission')) {
+    msg = '⚠ Permission error loading live data — try refreshing or signing in again.';
+  } else if (kinds.has('network')) {
+    msg = '⚠ Connection trouble — some data may be out of date.';
+  } else {
+    msg = '⚠ Live updates are having trouble syncing — some changes may not appear yet.';
+  }
+  bar.textContent = msg;
+  bar.style.display = '';
+  bar.classList.remove('hidden');
+}
+function setListenerError(name, e) {
+  console.warn(name + ' listener:', e && e.message);
+  window._listenerErrors.set(name, { kind: _classifyFirestoreError(e), message: e && e.message });
+  renderListenerErrorBar();
+}
+function clearListenerError(name) {
+  if (window._listenerErrors.delete(name)) renderListenerErrorBar();
+}
+window.addEventListener('online', renderListenerErrorBar);
+window.addEventListener('offline', renderListenerErrorBar);
+
 function startRealtimeListeners() {
   if (!db) return;
 
   db.doc(fbDocPath('bookings')).onSnapshot(snap => {
+    clearListenerError('bookings');
     if (!snap.exists) return;
     const data = snap.data().data;
     if (data) {
@@ -3301,9 +3365,10 @@ function startRealtimeListeners() {
       if (adminUnlocked && typeof renderAdminBookings === 'function') renderAdminBookings();
       if (typeof renderDateSlotPreview === 'function') renderDateSlotPreview();
     }
-  }, e => console.warn('bookings listener:', e.message));
+  }, e => setListenerError('bookings', e));
 
   db.doc(fbDocPath('openPlay')).onSnapshot(snap => {
+    clearListenerError('openPlay');
     if (!snap.exists) return;
     const data = snap.data().data;
     if (data) {
@@ -3313,9 +3378,10 @@ function startRealtimeListeners() {
       if (typeof renderOpenPlayList === 'function') renderOpenPlayList();
       if (typeof renderDateSlotPreview === 'function') renderDateSlotPreview();
     }
-  }, e => console.warn('openPlay listener:', e.message));
+  }, e => setListenerError('openPlay', e));
 
   db.doc(fbDocPath('staffReserve')).onSnapshot(snap => {
+    clearListenerError('staffReserve');
     if (!snap.exists) return;
     const parsed = snap.data().data;
     if(!parsed) return;
@@ -3324,9 +3390,10 @@ function startRealtimeListeners() {
     renderSchedule();
     if (typeof renderStaffReserveSection === 'function') renderStaffReserveSection();
     if (typeof updateStaffNote === 'function') updateStaffNote();
-  }, e => console.warn('staffReserve listener:', e.message));
+  }, e => setListenerError('staffReserve', e));
 
   db.doc(fbDocPath('pricing')).onSnapshot(snap => {
+    clearListenerError('pricing');
     if (!snap.exists) return;
     const parsed = snap.data().data;
     if(!parsed) return;
@@ -3335,9 +3402,10 @@ function startRealtimeListeners() {
     renderSchedule();
     recalcTotal();
     if (typeof renderPricingSection === 'function') renderPricingSection();
-  }, e => console.warn('pricing listener:', e.message));
+  }, e => setListenerError('pricing', e));
 
   db.doc(fbDocPath('courtHours')).onSnapshot(snap => {
+    clearListenerError('courtHours');
     if (!snap.exists) return;
     const parsed = snap.data().data;
     if(!parsed) return;
@@ -3348,9 +3416,10 @@ function startRealtimeListeners() {
     recalcTotal();
     renderDateSlotPreview();
     if (typeof renderOperatingHoursSection === 'function') renderOperatingHoursSection();
-  }, e => console.warn('courtHours listener:', e.message));
+  }, e => setListenerError('courtHours', e));
 
   db.doc(fbDocPath('settings')).onSnapshot(snap => {
+    clearListenerError('settings');
     if (!snap.exists) return;
     const d = snap.data().data || {};
     if (d.pin) localStorage.setItem(LS.pin, d.pin);
@@ -3360,18 +3429,20 @@ function startRealtimeListeners() {
       if (typeof renderPublicPayTab === 'function') renderPublicPayTab();
       if (typeof renderAdminQrManager === 'function') renderAdminQrManager();
     }
-  }, e => console.warn('settings listener:', e.message));
+  }, e => setListenerError('settings', e));
 
   db.doc(fbDocPath('queues')).onSnapshot(snap => {
+    clearListenerError('queues');
     if (!snap.exists) return;
     const data = snap.data().data;
     if (data) {
       localStorage.setItem(LS.queues, JSON.stringify(data));
       if (typeof renderQueueModule === 'function') renderQueueModule();
     }
-  }, e => console.warn('queues listener:', e.message));
+  }, e => setListenerError('queues', e));
 
   db.doc(fbDocPath('courts')).onSnapshot(snap => {
+    clearListenerError('courts');
     if (!snap.exists) return;
     const data = snap.data().data;
     if (data) {
@@ -3384,7 +3455,7 @@ function startRealtimeListeners() {
       populateCourtSelectors();
       if (typeof updateStaffNote === 'function') updateStaffNote();
     }
-  }, e => console.warn('courts listener:', e.message));
+  }, e => setListenerError('courts', e));
 }
 
 /* ---------- Seed sample data locally (demo mode) ---------- */
@@ -4752,14 +4823,15 @@ function renderScheduleSlots(container, dateISO, courtFilter){
       const bkId = btn.dataset.payPending;
       const bk = bookings.find(b=>b.id===bkId);
       if(!bk) return;
+      if(!tryBookingPinGate('pay_' + bkId)) return;
       const inputPin = prompt(`Enter Booking PIN for ${bk.name}'s reservation:`);
       if(inputPin === null) return;
-      if(inputPin === bk.pin || inputPin === getPin() || inputPin === '1234'){
+      const correct = inputPin === bk.pin || inputPin === getPin() || inputPin === '1234';
+      reportBookingPinResult('pay_' + bkId, correct);
+      if(correct){
         _currentProofBookingId = bk.id;
         document.querySelector('[data-nav="payment"]').click();
         toast(`Booking verified! Upload your payment proof or scan QR for ${fmtMoney(sumCourtRate(bk.court, bk.start, bk.end))}.`);
-      } else {
-        alert('Incorrect Booking PIN!');
       }
     });
   });
@@ -4769,9 +4841,12 @@ function renderScheduleSlots(container, dateISO, courtFilter){
       const bkId = btn.dataset.cancelBooking;
       const bk = bookings.find(b=>b.id===bkId);
       if(!bk) return;
+      if(!tryBookingPinGate('cancel_' + bkId)) return;
       const inputPin = prompt(`Enter Booking PIN to cancel ${bk.name}'s reservation:`);
       if(inputPin === null) return;
-      if(inputPin === bk.pin || inputPin === getPin() || inputPin === '1234'){
+      const correct = inputPin === bk.pin || inputPin === getPin() || inputPin === '1234';
+      reportBookingPinResult('cancel_' + bkId, correct);
+      if(correct){
         if(confirm(`Cancel booking for ${bk.name} on ${bk.date} at ${bk.startTime}? This cannot be undone.`)){
           removeBooking(bkId);
           renderSchedule();
@@ -4779,8 +4854,6 @@ function renderScheduleSlots(container, dateISO, courtFilter){
           if(adminUnlocked) renderAdminBookings();
           toast('Booking cancelled successfully.');
         }
-      } else {
-        alert('Incorrect Booking PIN!');
       }
     });
   });
@@ -9276,6 +9349,35 @@ document.querySelectorAll('.stats-view-btn').forEach(btn => {
   });
 });
 
+/* ---------- Booking PIN gate: attempt tracking + brief cooldown ----------
+   The pay-pending / cancel-booking PIN prompts below used to just
+   alert('Incorrect Booking PIN!') in an infinite bare loop. The state
+   machine (attempt counting + cooldown window) is pure logic in
+   pin-gate.js (PinGate) so it's unit-testable; this is just the DOM-side
+   prompt()/alert() wiring around it, one independent record per
+   booking+action key so a wrong guess on one booking never penalizes
+   another. This is a walk-in booking PIN, not a security-critical
+   account, so a short cooldown is enough -- not a permanent lockout. */
+const _bookingPinRecords = new Map();
+function tryBookingPinGate(key){
+  const check = PinGate.checkGate(_bookingPinRecords.get(key), Date.now());
+  _bookingPinRecords.set(key, check.record);
+  if(check.blocked){
+    alert(`Too many incorrect PIN attempts. Please wait ${check.secondsLeft}s before trying again.`);
+    return false;
+  }
+  return true;
+}
+function reportBookingPinResult(key, correct){
+  const result = PinGate.recordResult(_bookingPinRecords.get(key), correct, { nowMs: Date.now() });
+  _bookingPinRecords.set(key, result.record);
+  if(result.outcome === 'cooldown'){
+    alert(`Incorrect Booking PIN. Too many wrong attempts -- please wait ${result.cooldownSeconds}s before trying again.`);
+  } else if(result.outcome === 'wrong'){
+    alert(`Incorrect Booking PIN! (${result.attemptsLeft} attempt${result.attemptsLeft === 1 ? '' : 's'} left before a short cooldown)`);
+  }
+}
+
 /* ---------- Toast ---------- */
 let toastTimer;
 function toast(msg){
@@ -9285,6 +9387,30 @@ function toast(msg){
   clearTimeout(toastTimer);
   toastTimer=setTimeout(()=>t.classList.add('hidden'), 2600);
 }
+
+/* ---------- Load-screen timeout ----------
+   initializeApp() awaits loadClientConfig()+loadTenantStatus() with no
+   client-side timeout, so #loadingScreen never gets a fallback if that
+   hangs (e.g. a very slow or stalled connection). Show a "taking longer
+   than expected" message with a Retry button INSIDE the existing
+   loading screen after LOAD_TIMEOUT_MS -- the spinner/text stay, this
+   only augments it. If the load finishes first, the timer is cleared
+   and this never shows. */
+const LOAD_TIMEOUT_MS = 10000;
+let _loadTimeoutTimer = null;
+function armLoadTimeout() {
+  clearTimeout(_loadTimeoutTimer);
+  _loadTimeoutTimer = setTimeout(showLoadTimeoutMessage, LOAD_TIMEOUT_MS);
+}
+function disarmLoadTimeout() {
+  clearTimeout(_loadTimeoutTimer);
+  _loadTimeoutTimer = null;
+}
+function showLoadTimeoutMessage() {
+  const msg = document.getElementById('loadingTimeoutMsg');
+  if (msg) msg.style.display = 'block';
+}
+document.getElementById('loadingTimeoutRetryBtn')?.addEventListener('click', () => location.reload());
 
 /* ---------- Init ---------- */
 async function initializeApp() {
@@ -9306,6 +9432,7 @@ async function initializeApp() {
   applyBranding();           // white-label: brand, theme labels, contact, footer
 
   // Only now does the page actually reflect this tenant -- safe to reveal it.
+  disarmLoadTimeout();
   const loadingScreen = document.getElementById('loadingScreen');
   if (loadingScreen) loadingScreen.style.display = 'none';
 
@@ -9340,6 +9467,7 @@ async function initializeApp() {
   refreshClientConfigFromCloud(); // fire-and-forget: catch up if config changed since last cache
 }
 
+armLoadTimeout();
 initializeApp();
 loadHomeTournaments();
 if(location.hash && location.hash !== '#home') setTimeout(() => routeTo(location.hash.slice(1), true), 350);
@@ -9425,7 +9553,7 @@ document.getElementById('modalGoUpload')?.addEventListener('click', () => {
         offlineBar.classList.add('hidden');
         offlineBar.style.background = '';
         offlineBar.style.color = '';
-        offlineBar.textContent = '⚡ You\'re offline — changes will sync when reconnected';
+        offlineBar.textContent = '⚡ You\'re offline — booking actions won\'t work until you\'re back online';
       }, 2500);
     }
   });

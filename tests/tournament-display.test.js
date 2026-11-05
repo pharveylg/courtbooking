@@ -117,6 +117,50 @@ check('a tournament doc with no displaySession field at all still stamps', eq(pa
 check('defaults to Date.now() when no clock is passed', typeof TD.computeSessionStampPayload({}).startedAtMs === 'number');
 
 /* ================================================================
+   Feed health / stale-data indicator
+   ================================================================ */
+section('computeFeedStatus -- the header\'s "Reconnecting..." decision logic');
+
+const NOW = 1700000000000;
+check('nothing has reported in yet -> hidden (page just loaded, subs not started)',
+  eq(TD.computeFeedStatus({ matches: { lastOkAt: null, errorMsg: null } }, NOW, 30000), { show: false, text: '' }));
+
+check('all listeners fresh -> hidden',
+  TD.computeFeedStatus({
+    matches: { lastOkAt: NOW - 1000, errorMsg: null },
+    live: { lastOkAt: NOW - 500, errorMsg: null },
+  }, NOW, 30000).show === false);
+
+check('one listener stale past the threshold, no others reported -> shown with the age',
+  eq(TD.computeFeedStatus({ matches: { lastOkAt: NOW - 45000, errorMsg: null } }, NOW, 30000),
+    { show: true, text: '⚠ Reconnecting… last updated 45s ago' }));
+
+check('any ONE fresh listener resets the clock for all of them (any update is evidence the connection is alive)',
+  TD.computeFeedStatus({
+    matches: { lastOkAt: NOW - 45000, errorMsg: null }, // stale on its own
+    live: { lastOkAt: NOW - 1000, errorMsg: null },      // but live just updated
+  }, NOW, 30000).show === false);
+
+check('exactly at the threshold is NOT yet stale (strictly greater-than)',
+  TD.computeFeedStatus({ matches: { lastOkAt: NOW - 30000, errorMsg: null } }, NOW, 30000).show === false);
+
+check('an outstanding error shows immediately, even if well within the staleness threshold',
+  eq(TD.computeFeedStatus({
+    matches: { lastOkAt: NOW - 1000, errorMsg: null },
+    live: { lastOkAt: NOW - 1000, errorMsg: 'permission-denied' },
+  }, NOW, 30000), { show: true, text: '⚠ Reconnecting… live feed hit an error' }));
+
+check('error takes priority over a staleness message when both would apply',
+  TD.computeFeedStatus({
+    matches: { lastOkAt: NOW - 99999, errorMsg: 'boom' },
+  }, NOW, 30000).text === '⚠ Reconnecting… live feed hit an error');
+
+check('clears the moment the errored listener reports ok again (errorMsg back to null)',
+  TD.computeFeedStatus({ matches: { lastOkAt: NOW, errorMsg: null } }, NOW, 30000).show === false);
+
+check('defaults to a 30s threshold and Date.now() when not passed', typeof TD.computeFeedStatus({}).show === 'boolean');
+
+/* ================================================================
    Generic Auto/Manual rotator (featured-match panel + leaderboard switcher)
    ================================================================ */
 section('createRotator -- Auto cycles; Manual pins and overrides; release resumes Auto');
@@ -172,6 +216,8 @@ check('reads matches/live/divisions live via onSnapshot, no polling', /collectio
 check('writes the session-start stamp with set(..., {merge:true}), never overwriting an existing one', /maybeStampSessionStart/.test(displayHtml) && /computeSessionStampPayload/.test(displayHtml) && /\{ merge: true \}/.test(displayHtml));
 check('requests a screen wake lock, best-effort (no throw on unsupported browsers)', /navigator\.wakeLock\.request/.test(displayHtml) && /'wakeLock' in navigator/.test(displayHtml));
 check('offers a Fullscreen control, feature-detected', /requestFullscreen/.test(displayHtml));
+check('shows a stale-data/feed-error indicator in the header, driven by the pure computeFeedStatus decision', /id="feedStatus"/.test(displayHtml) && /TournamentDisplay\.computeFeedStatus/.test(displayHtml));
+check('a load failure shows a friendly retry affordance, not the raw exception text', /showLoadFailed/.test(displayHtml) && !/Failed to load: \$\{escapeHtml\(ex\.message\)\}/.test(displayHtml));
 
 const adminHtml = fs.readFileSync(path.join(__dirname, '..', 'tournament-admin.html'), 'utf8');
 check('Tournament Admin links to the new venue display page', /id="displayPageLink"/.test(adminHtml) && /tournament-display\.html\?client=/.test(adminHtml));

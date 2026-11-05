@@ -2187,14 +2187,15 @@ function openLiveScore(matchId){
   const reg = REGISTRATIONS.find(r => r.id === m.participantIds[0]);
   const doubles = reg ? (reg.playerIds || []).length !== 1 : DOUBLES_CATEGORIES.includes(div.category);
   const args = { clientId: currentClientId, tournamentId: CURRENT_TOURNAMENT_ID, matchId };
-  let timer = null, pending = null, last = 0, closed = false;
+  let timer = null, pending = null, last = 0, closed = false, board = null;
   const flush = async () => {
     timer = null; if(closed || !pending) return;
     const live = pending; pending = null; last = Date.now();
-    try { await callEngine('setLiveScore', { ...args, live }); } catch(e) { /* live view is best-effort */ }
+    try { await callEngine('setLiveScore', { ...args, live }); board && board.reportLiveSync(true); }
+    catch(e) { board && board.reportLiveSync(false); /* local scoring still works -- see court-scoreboard.js's "Not syncing" note */ }
   };
   const push = (live) => { pending = live; if(!timer) timer = setTimeout(flush, Math.max(0, 1200 - (Date.now() - last))); };
-  CourtBoard.open({
+  board = CourtBoard.open({
     title: `${div.name || 'Match'} · ${m.participantNames.join(' vs ')}`,
     names: { home: m.participantNames[0], away: m.participantNames[1] },
     config: { ...(div.matchFormat || {}), doubles },

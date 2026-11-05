@@ -341,6 +341,100 @@ check('currentClientId is resolved from ?client= before adminUnlocked is read, s
 })());
 check('#admin in the URL hash is honored on load via routeTo(), which re-checks adminUnlocked and skips the PIN modal when already true', /if\(location\.hash && location\.hash !== '#home'\) setTimeout\(\(\) => routeTo\(location\.hash\.slice\(1\), true\), 350\);/.test(indexHtml));
 
+section('onboarding.html -- "just created" banner flag: set only on the create-submit success path');
+{
+  // Find the create-submit handler's async try block (the one that calls
+  // createFacility) and confirm justCreated is set true inside it, before
+  // the view switch -- not anywhere else.
+  const createBlockStart = onboardingHtml.indexOf("await fns.httpsCallable('createFacility')");
+  const createBlockEnd = onboardingHtml.indexOf('view = \'checklist\'; render();', createBlockStart);
+  check('justCreated declared near the other view-state locals', /let justCreated = false;/.test(onboardingHtml));
+  check('createFacility success handler sets justCreated = true before switching to the checklist view', (() => {
+    if (createBlockStart === -1 || createBlockEnd === -1) return false;
+    const between = onboardingHtml.slice(createBlockStart, createBlockEnd);
+    return /justCreated = true;/.test(between);
+  })());
+}
+check('skipToChecklist clears justCreated before landing on the checklist (a resumed visit, not a fresh creation)', /justCreated = false;\s*if \(slug\) \{ view = 'checklist';/.test(onboardingHtml));
+check('promptForSlug clears justCreated before landing on the checklist', /if \(entered\) \{ justCreated = false; setSlug\(entered\); view = 'checklist';/.test(onboardingHtml));
+check('the auth-state listener (returning/resumed owner on load) clears justCreated before computing the view', (() => {
+  const idx = onboardingHtml.indexOf("view = slug ? 'checklist' : 'create';");
+  if (idx === -1) return false;
+  const before = onboardingHtml.slice(Math.max(0, idx - 400), idx);
+  return /justCreated = false;/.test(before);
+})());
+check('renderChecklist reads justCreated into a local and immediately resets the flag -- one-time per creation, not per render', (() => {
+  const i = onboardingHtml.indexOf('const showCreatedBanner = justCreated;');
+  const j = onboardingHtml.indexOf('justCreated = false;', i);
+  return i !== -1 && j !== -1 && j - i < 60;
+})());
+
+section('onboarding.html -- success banner only renders when showCreatedBanner is true, with the approved copy');
+check('banner markup is conditional on showCreatedBanner', /\$\{showCreatedBanner \? `<div class="card success">/.test(onboardingHtml));
+check('banner copy matches the approved design', onboardingHtml.includes('🎉 Facility created! One step left — publish it below to make it visible on the public booking picker.'));
+
+section('onboarding.html -- checklist card order: banner, then readiness, then Publish, ahead of Admin Console and Recommended');
+{
+  const iBanner = onboardingHtml.indexOf('showCreatedBanner ? `<div class="card success">');
+  const iReadiness = onboardingHtml.indexOf('${READINESS.map(');
+  const iPublish = onboardingHtml.indexOf('id="publishBtn"');
+  const iAdmin = onboardingHtml.indexOf('id="adminUnlockForm"');
+  const iRecommended = onboardingHtml.indexOf('${RECOMMENDED.map(');
+  check('all five markers found', iBanner !== -1 && iReadiness !== -1 && iPublish !== -1 && iAdmin !== -1 && iRecommended !== -1);
+  check('banner comes before the readiness checklist card', iBanner < iReadiness);
+  check('readiness checklist card stays first among the real cards (direct explanation of what\'s required)', iReadiness < iPublish);
+  check('Publish card now comes right after readiness, ahead of Admin Console', iPublish < iAdmin);
+  check('Admin Console card comes before the Recommended card', iAdmin < iRecommended);
+}
+
+section('onboarding.html -- Publish button gating logic is untouched by the reorder (still gated on allDone only)');
+check('publishBtn disabled attribute still driven purely by allDone, no new condition folded in', /id="publishBtn" \$\{allDone \? '' : 'disabled'\}>Publish facility</.test(onboardingHtml));
+
+section('onboarding.html -- Admin Console and Recommended cards both read as optional / not required to publish');
+check('Admin Console card now says it\'s optional right now, not a publish prerequisite', /Open your Admin Console<\/strong> to set up courts, operating hours, pricing, and payment QR codes\. Optional right now/.test(onboardingHtml));
+check('Recommended card already said "Not required to publish" (left as-is, not re-worded)', onboardingHtml.includes('Not required to publish — you can do these anytime from the Admin Console.'));
+
+section('onboarding.html -- resume-by-URL (?slug=) for picker.html\'s "finish setup" link');
+check('reads a ?slug= query param on load and feeds it through the existing setSlug() persistence, not a second mechanism', /new URLSearchParams\(location\.search\)\.get\('slug'\)/.test(onboardingHtml) && /if \(qsSlug\) setSlug\(qsSlug\);/.test(onboardingHtml));
+check('the slug is slugified the same way as every other slug input on this page (no bypass of validation)', /const qsSlug = slugify\(new URLSearchParams/.test(onboardingHtml));
+
+section('picker.html -- unfinished-facility banner markup');
+check('banner container exists, hidden by default', /id="unfinishedFacilityBanner" class="mymatches-card unfinished rise" style="display:none/.test(pickerHtml));
+check('link and dismiss button both present', /id="unfinishedFacilityLink"/.test(pickerHtml) && /id="unfinishedFacilityDismiss"/.test(pickerHtml));
+check('sits after the owner-link entry point, same section of the page', (() => {
+  const ownerIdx = pickerHtml.indexOf('class="owner-link');
+  const bannerIdx = pickerHtml.indexOf('id="unfinishedFacilityBanner"');
+  return ownerIdx !== -1 && bannerIdx !== -1 && bannerIdx > ownerIdx;
+})());
+
+section('picker.html -- unfinished-facility check is lazy, auth-gated, and never blocks the core facility list');
+check('gated behind MyAuth.canShowAccountUi() and an actual signed-in user -- anonymous visitors never reach the Firestore call', /function checkUnfinishedFacility\(\) \{\s*if \(!MyAuth\.canShowAccountUi\(\)\) return;\s*const u = MyAuth\.currentUser\(\);\s*if \(!u \|\| unfinishedCheckedUid === u\.uid\) return;/.test(pickerHtml));
+check('the Firestore read itself is deferred (setTimeout), not inline in the auth callback', (() => {
+  const fnIdx = pickerHtml.indexOf('function checkUnfinishedFacility()');
+  const timeoutIdx = pickerHtml.indexOf('setTimeout(async () => {', fnIdx);
+  const queryIdx = pickerHtml.indexOf("db.collection('platformTenants')", fnIdx);
+  return fnIdx !== -1 && timeoutIdx !== -1 && queryIdx !== -1 && fnIdx < timeoutIdx && timeoutIdx < queryIdx;
+})());
+check('query filters by the caller\'s own uid and the provisioning lifecycle -- never a cross-owner read', /\.where\('ownerUid', '==', u\.uid\)\s*\.where\('lifecycle', '==', 'provisioning'\)/.test(pickerHtml));
+check('wrapped in try/catch -- a permission-denied or offline failure is swallowed, not surfaced to the player-facing page', (() => {
+  const fnIdx = pickerHtml.indexOf('function checkUnfinishedFacility()');
+  const body = pickerHtml.slice(fnIdx, fnIdx + 1600);
+  return /try \{[\s\S]*db\.collection\('platformTenants'\)[\s\S]*\} catch \(e\) \{/.test(body);
+})());
+check('checkUnfinishedFacility runs from the existing MyAuth.onChange hook, independent of loadTenants()/applySearch()', (() => {
+  const onChangeIdx = pickerHtml.indexOf('MyAuth.onChange((evt) => {');
+  const loadTenantsIdx = pickerHtml.indexOf('function loadTenants()');
+  const callIdx = pickerHtml.indexOf('checkUnfinishedFacility();', onChangeIdx);
+  return onChangeIdx !== -1 && callIdx !== -1 && loadTenantsIdx !== -1 && callIdx > onChangeIdx && callIdx < loadTenantsIdx;
+})());
+
+section('picker.html -- unfinished-facility link targets onboarding.html\'s resume-by-URL param');
+check('link href is built from onboarding.html?slug=<slug>, matching what onboarding.html now reads on load', /'\/onboarding\.html\?slug=' \+ encodeURIComponent\(slug\)/.test(pickerHtml));
+
+section('picker.html -- dismiss is per-session (sessionStorage), not permanent');
+check('uses sessionStorage, not localStorage, for the dismiss flag -- the nudge returns on a later visit while still unpublished', /UNFINISHED_DISMISS_PREFIX = 'cb_unfinished_dismiss_v1_'/.test(pickerHtml) && /sessionStorage\.getItem\(UNFINISHED_DISMISS_PREFIX \+ slug\)/.test(pickerHtml) && /sessionStorage\.setItem\(UNFINISHED_DISMISS_PREFIX \+ slug, '1'\)/.test(pickerHtml));
+check('dismiss click hides the banner and is keyed by the specific slug found, not a single global flag', /document\.getElementById\('unfinishedFacilityDismiss'\)\.addEventListener\('click', \(\) => \{/.test(pickerHtml));
+
 console.log(`\n=== FACILITY ONBOARDING: ${passed}/${passed + failed} passed ===`);
 process.exit(failed === 0 ? 0 : 1);
 }

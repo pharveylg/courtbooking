@@ -88,6 +88,11 @@ input[type=color]{width:44px;height:44px;border-radius:50%;border:1px solid var(
 .badge-amber{background:var(--amber);color:var(--amber-ink)}
 .badge-green{background:var(--green);color:var(--green-ink)}
 .resume-row{margin-top:18px;padding-top:16px;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:8px}
+/* One-time "you just created this" banner -- only shown right after a
+   successful createFacility in this same page session, never on a
+   resumed/returning visit. See the `justCreated` flag below. */
+.card.success{background:var(--green);border-color:var(--green-ink)}
+.card.success p{margin:0;font-size:14px;font-weight:700;color:var(--green-ink)}
 
 /* ── Theme toggle + dark mode (dark by default, opt out to light; tokens live in theme.css). Dark is screen only: print stays light. ── */
 .topbar .cb-theme-btn{margin-left:auto;margin-top:-7px;margin-bottom:-7px;min-width:36px;width:36px;position:relative;flex-shrink:0}
@@ -149,11 +154,30 @@ input[type=color]{width:44px;height:44px;border-radius:50%;border:1px solid var(
 
   let view = 'loading'; // loading | signin | create | checklist
   let slug = (() => { try { return localStorage.getItem(SLUG_LS_KEY) || ''; } catch (e) { return ''; } })();
+  // Resume-by-URL: picker.html's "unfinished facility" banner links here as
+  // onboarding.html?slug=<slug> (an owner who already created a facility but
+  // never published it). Reuses the same setSlug()/localStorage persistence
+  // as every other resume path below rather than inventing a second one --
+  // this just seeds `slug` before auth state decides create vs. checklist.
+  try {
+    const qsSlug = slugify(new URLSearchParams(location.search).get('slug') || '');
+    if (qsSlug) setSlug(qsSlug);
+  } catch (e) {}
   let createMsg = { text: '', kind: '' };
   let checklistMsg = { text: '', kind: '' };
   let adminUnlockMsg = { text: '', kind: '' };
   let emailMode = 'signin'; // 'signin' | 'signup'
   let emailFormOpen = false;
+  // True only for the render that immediately follows a successful
+  // createFacility call IN THIS PAGE SESSION -- set right before the
+  // create-submit handler transitions to view='checklist', and explicitly
+  // cleared on every other path that can land on view='checklist'
+  // (skipToChecklist, promptForSlug, the auth-state listener for a
+  // returning/resumed owner). renderChecklist() consumes (reads, then
+  // resets to false) this flag on its first successful render, so the
+  // one-time success banner never reappears on a later refresh/publish
+  // re-render within the same visit, let alone a future visit.
+  let justCreated = false;
 
   function setSlug(s) { slug = s; try { if (s) localStorage.setItem(SLUG_LS_KEY, s); else localStorage.removeItem(SLUG_LS_KEY); } catch (e) {} }
 
@@ -203,7 +227,7 @@ input[type=color]{width:44px;height:44px;border-radius:50%;border:1px solid var(
       setMsg('authMsg', "Couldn't sign in with Google" + (e && e.code ? ' (' + e.code + ')' : '') + ' — try email instead.', 'error');
     }));
     document.getElementById('modeToggle').addEventListener('click', () => { emailMode = signup ? 'signin' : 'signup'; render(); });
-    document.getElementById('skipToChecklist').addEventListener('click', () => { if (slug) { view = 'checklist'; render(); } else { promptForSlug(); } });
+    document.getElementById('skipToChecklist').addEventListener('click', () => { justCreated = false; if (slug) { view = 'checklist'; render(); } else { promptForSlug(); } });
     document.getElementById('emailForm').addEventListener('submit', async (ev) => {
       ev.preventDefault();
       const email = document.getElementById('authEmail').value;
@@ -221,7 +245,7 @@ input[type=color]{width:44px;height:44px;border-radius:50%;border:1px solid var(
   function setMsg(id, text, kind) { const el = document.getElementById(id); if (el) { el.textContent = text || ''; el.className = 'msg' + (kind ? ' ' + kind : ''); } }
   function promptForSlug() {
     const entered = slugify(window.prompt('Enter your facility\'s slug (the part after ?client= in its URL):') || '');
-    if (entered) { setSlug(entered); view = 'checklist'; render(); }
+    if (entered) { justCreated = false; setSlug(entered); view = 'checklist'; render(); }
   }
 
   // ---------- Step 1: name the facility, call createFacility ----------
@@ -276,6 +300,7 @@ input[type=color]{width:44px;height:44px;border-radius:50%;border:1px solid var(
         await fns.httpsCallable('createFacility')({ slug: cSlug, businessName, color, pin, courtCount, hourlyRate });
         setSlug(cSlug);
         createMsg = { text: '', kind: '' };
+        justCreated = true;
         view = 'checklist'; render();
       } catch (e) {
         createMsg = { text: (e && e.message) || 'Something went wrong — please try again.', kind: 'error' };
@@ -345,23 +370,26 @@ input[type=color]{width:44px;height:44px;border-radius:50%;border:1px solid var(
     }
     const allDone = READINESS.every((item) => readiness.done[item.key]);
     const adminUrl = `${location.origin}/?client=${encodeURIComponent(slug)}`;
+    // Consumed here, not earlier -- a transient load failure above (readiness
+    // undefined) returns before this point without spending the flag, so a
+    // reload after a network blip still gets the banner on the next successful
+    // render. Reset to false immediately so this exact render is the ONLY one
+    // that shows it: a later re-render from the "refresh checklist" link or
+    // from clicking Publish (both call renderChecklist()/render() again
+    // without going through createFacility) won't show it a second time.
+    const showCreatedBanner = justCreated;
+    justCreated = false;
     app.innerHTML = `
       <div class="step-label">Step 2 of 2</div>
       <h1>Finish setting up ${esc(readiness.businessName || slug)}</h1>
       <p class="lead">These are the basics every facility starts with. Branding, operating hours, pricing, and payment details all live in the real Admin Console — open it below with the PIN you set, finish those there, then come back to publish.</p>
+      ${showCreatedBanner ? `<div class="card success">
+        <p>🎉 Facility created! One step left — publish it below to make it visible on the public booking picker.</p>
+      </div>` : ''}
       <div class="card">
         <ul class="checklist">
           ${READINESS.map((item) => `<li><span class="chk ${readiness.done[item.key] ? 'done' : 'pending'}">${readiness.done[item.key] ? '✓' : ''}</span>${esc(item.label)}</li>`).join('')}
         </ul>
-      </div>
-      <div class="card">
-        <p style="font-size:13.5px;margin-bottom:10px"><strong>Open your Admin Console</strong> to set up courts, operating hours, pricing, and payment QR codes.</p>
-        <form id="adminUnlockForm" style="gap:10px">
-          <label>Admin PIN<input type="text" inputmode="numeric" id="adminUnlockPin" placeholder="e.g. 1234" autocomplete="off" required/></label>
-          <button type="submit" class="btn-dark" id="adminUnlockSubmit">Unlock &amp; Open Admin Console</button>
-          <div class="msg ${adminUnlockMsg.kind}" id="adminUnlockMsg" role="status">${esc(adminUnlockMsg.text)}</div>
-        </form>
-        <p class="slug-url">${esc(adminUrl)} — opens straight into Admin, already unlocked.</p>
       </div>
       <div class="card">
         <p style="font-size:13.5px;margin-bottom:10px">${allDone
@@ -369,6 +397,15 @@ input[type=color]{width:44px;height:44px;border-radius:50%;border:1px solid var(
           : 'Once the checklist above is complete, you can publish your facility so it appears on the public facility picker.'}</p>
         <button type="button" class="btn-dark" id="publishBtn" ${allDone ? '' : 'disabled'}>Publish facility</button>
         <div class="msg ${checklistMsg.kind}" id="checklistMsg" role="status">${esc(checklistMsg.text)}</div>
+      </div>
+      <div class="card">
+        <p style="font-size:13.5px;margin-bottom:10px"><strong>Open your Admin Console</strong> to set up courts, operating hours, pricing, and payment QR codes. Optional right now — not required to publish, and you can come back to it anytime.</p>
+        <form id="adminUnlockForm" style="gap:10px">
+          <label>Admin PIN<input type="text" inputmode="numeric" id="adminUnlockPin" placeholder="e.g. 1234" autocomplete="off" required/></label>
+          <button type="submit" class="btn-dark" id="adminUnlockSubmit">Unlock &amp; Open Admin Console</button>
+          <div class="msg ${adminUnlockMsg.kind}" id="adminUnlockMsg" role="status">${esc(adminUnlockMsg.text)}</div>
+        </form>
+        <p class="slug-url">${esc(adminUrl)} — opens straight into Admin, already unlocked.</p>
       </div>
       <div class="card">
         <p class="label" style="margin:0 0 4px">Worth finishing before you tell people</p>
@@ -440,6 +477,11 @@ input[type=color]{width:44px;height:44px;border-radius:50%;border:1px solid var(
     if (evt !== 'auth') return;
     const u = MyAuth.currentUser();
     if (!u) { view = 'signin'; render(); return; }
+    // This auth-state path is always a resumed/returning landing (or the
+    // normal sign-in -> create-form hop), never the moment right after
+    // createFacility itself -- that transition is driven directly by the
+    // create-submit handler above, which sets justCreated=true itself.
+    justCreated = false;
     view = slug ? 'checklist' : 'create';
     render();
   });

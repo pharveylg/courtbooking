@@ -162,7 +162,7 @@ function lightRules(css) { // rules outside @media blocks and comments
   return out;
 }
 const ALLOW_FILL = { // selector -> why a literal white / ink-alpha background is still right
-  'picker.html': { '.continue-action:hover': 'white hover on the fixed lime card', '.continue-action': 'translucent white on the fixed lime card', '.mymatches-dot': 'status dot (dark override exists)', '.hero-badge': 'translucent white on the panel', '.feature-pill': 'translucent white on the panel', '.install-dismiss': 'translucent white on the panel', '.install-dismiss:hover': 'translucent white on the panel' },
+  'picker.html': { '.continue-action:hover': 'white hover on the fixed lime card', '.continue-action': 'translucent white on the fixed lime card', '.mymatches-dot': 'status dot (dark override exists)', '.hero-badge': 'translucent white on the panel', '.feature-pill': 'translucent white on the panel', '.install-dismiss': 'translucent white on the panel', '.install-dismiss:hover': 'translucent white on the panel', '.ub-dismiss': 'unfinished-facility banner dismiss button fill (dark override exists)' },
   'account.html': {}, 'onboarding.html': {},
 };
 P2.forEach((f) => {

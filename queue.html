@@ -88,6 +88,38 @@ textarea{height:96px;padding:10px 13px;resize:vertical;font-weight:500;line-heig
 .timer-block{display:flex;align-items:center;gap:12px;padding:8px 0}
 .timer-block + .timer-block{border-top:1px solid var(--line)}
 
+/* ---- Desktop only (phone/tablet layout below 1024px is untouched): the
+   multi-court "On court now" card breaks out of the 720px mobile-first
+   .page column and lays courts out side-by-side in a landscape grid
+   instead of one tall stacked strip. Single-court sessions just render
+   one reasonably-sized, centered card -- not stretched edge to edge.
+   680px below = .page's own content width (720px max-width minus its
+   20px+20px padding), the box this card normally lives inside. ---- */
+@media (min-width:1024px){
+  #activeMatchCard{
+    --amc-w:min(94vw,1400px);
+    width:var(--amc-w);
+    margin-left:calc((680px - var(--amc-w)) / 2);
+    margin-right:calc((680px - var(--amc-w)) / 2);
+  }
+  #activeMatchBlock{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(280px,440px));
+    justify-content:center;
+    gap:16px;
+  }
+  #activeMatchBlock .court-block{
+    padding:16px;
+    border:1px solid var(--line);
+    border-radius:16px;
+    margin-top:0;
+  }
+  #activeMatchBlock .court-block + .court-block{
+    border-top:none;
+    margin-top:0;
+  }
+}
+
 .wait-item{display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--line)}
 .wait-item:last-child{border-bottom:none}
 .wait-item .names{font-weight:700;font-size:13px;display:flex;flex-wrap:wrap;align-items:center;gap:4px}
@@ -238,7 +270,7 @@ td{padding:7px 6px;border-bottom:1px solid var(--sand)}
       <p class="mono" id="rotationNote" style="font-size:11px;opacity:0.65;line-height:1.5;margin-top:6px"></p>
     </div>
 
-    <div class="card">
+    <div class="card" id="activeMatchCard">
       <label style="margin-bottom:10px">On court now</label>
       <div id="activeMatchBlock"></div>
     </div>

@@ -84,7 +84,33 @@ textarea{height:96px;padding:10px 13px;resize:vertical;font-weight:500;line-heig
 .court-block + .court-block{border-top:1px solid var(--line);margin-top:4px}
 .court-header{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}
 .court-label{font-family:"JetBrains Mono",monospace;font-size:10px;text-transform:uppercase;letter-spacing:0.08em;opacity:0.55}
-.match-num{font-family:"JetBrains Mono",monospace;font-size:10px;text-transform:uppercase;letter-spacing:0.08em;opacity:0.55}
+.match-num{font-family:"JetBrains Mono",monospace;font-size:10px;text-transform:uppercase;letter-spacing:0.08em;opacity:0.55;border-radius:999px}
+
+/* ---- Match-number colour coding: a short, cycling palette keyed to the
+   MATCH NUMBER shown in the "Match N" badge (QueueEngine.matchColor), not
+   to which court slot it's playing on -- match 1 is always blue, match 2
+   coral, etc, wrapping back to blue after teal. Light values here read on
+   the near-white card; the [data-theme="dark"] overrides below swap in the
+   same pastel tones already used elsewhere in dark mode (see theme.css),
+   so this follows the exact --red/--green pattern a few lines up instead
+   of inventing a parallel system. --match-coral/--match-green alias the
+   page's own --red/--green so dark mode flips them for free. */
+:root{
+  --match-blue:#1D4ED8; --match-blue-bg:rgba(29,78,216,.10);
+  --match-coral:var(--red); --match-coral-bg:rgba(185,28,28,.08);
+  --match-green:var(--green); --match-green-bg:rgba(21,128,61,.08);
+  --match-amber:#92400E; --match-amber-bg:rgba(146,64,14,.10);
+  --match-purple:#5B21B6; --match-purple-bg:rgba(91,33,182,.08);
+  --match-teal:#0F766E; --match-teal-bg:rgba(15,118,110,.08);
+}
+.court-block.mc-blue{--mc:var(--match-blue);--mc-bg:var(--match-blue-bg)}
+.court-block.mc-coral{--mc:var(--match-coral);--mc-bg:var(--match-coral-bg)}
+.court-block.mc-green{--mc:var(--match-green);--mc-bg:var(--match-green-bg)}
+.court-block.mc-amber{--mc:var(--match-amber);--mc-bg:var(--match-amber-bg)}
+.court-block.mc-purple{--mc:var(--match-purple);--mc-bg:var(--match-purple-bg)}
+.court-block.mc-teal{--mc:var(--match-teal);--mc-bg:var(--match-teal-bg)}
+.court-block{border-left:4px solid var(--mc,transparent);padding-left:12px}
+.match-num{color:var(--mc,inherit)!important;background:var(--mc-bg,transparent);opacity:1!important;padding:3px 9px;font-weight:700}
 .timer-block{display:flex;align-items:center;gap:12px;padding:8px 0}
 .timer-block + .timer-block{border-top:1px solid var(--line)}
 
@@ -113,6 +139,12 @@ textarea{height:96px;padding:10px 13px;resize:vertical;font-weight:500;line-heig
     border:1px solid var(--line);
     border-radius:16px;
     margin-top:0;
+  }
+  /* `border` above resets all four sides incl. left -- reassert the
+     match-colour accent on top of it (same custom property, set by the
+     .mc-* classes above) so the desktop grid cards stay colour-coded too. */
+  #activeMatchBlock .court-block{
+    border-left:4px solid var(--mc,var(--line));
   }
   #activeMatchBlock .court-block + .court-block{
     border-top:none;
@@ -153,6 +185,14 @@ td{padding:7px 6px;border-bottom:1px solid var(--sand)}
 /* ---- Dark mode (dark by default, opt out to light; tokens live in theme.css). Screen only: print stays light. ---- */
 @media screen{
 :root[data-theme="dark"]{--red:#FFB4AB;--green:#5AEF82}
+:root[data-theme="dark"]{
+  --match-blue:#93C5FD; --match-blue-bg:rgba(147,197,253,.16);
+  --match-coral-bg:rgba(255,180,171,.16);
+  --match-green-bg:rgba(90,239,130,.14);
+  --match-amber:#FCD34D; --match-amber-bg:rgba(252,211,77,.16);
+  --match-purple:#CFC4FF; --match-purple-bg:rgba(207,196,255,.16);
+  --match-teal:#5EEAD4; --match-teal-bg:rgba(94,234,212,.16);
+}
 :root[data-theme="dark"] .btn:not(.lime):not(.ghost):not(.outline-red),:root[data-theme="dark"] .toast{color:var(--on-panel)}
 :root[data-theme="dark"] .btn:not(.lime):not(.ghost):not(.outline-red){border-color:var(--control-border)}
 :root[data-theme="dark"] .btn.ghost{border-color:var(--control-border)}
@@ -726,8 +766,9 @@ td{padding:7px 6px;border-bottom:1px solid var(--sand)}
     const courtCount = session.courtCount || 1;
     const fixedPairs = session.rule === 'fixed_pairs';
     const m = session.activeMatches[court];
+    const matchNum = QueueEngine.matchesFinishedOnCourt(session, court) + 1;
     const wrap = document.createElement('div');
-    wrap.className = 'court-block';
+    wrap.className = `court-block mc-${QueueEngine.matchColor(matchNum).name}`;
     wrap.dataset.court = String(court);
     const header = courtHeaderHtml(session, court, courtCount);
     if (!m) {

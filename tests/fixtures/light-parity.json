@@ -1802,13 +1802,17 @@
     "classTokenDelta": {
       "bg-[#FFF0D6]": 1,
       "fixed": 1,
-      "font-[700]": 1,
+      "font-[700]": 2,
       "hidden": 1,
       "left-0": 1,
       "mono": 1,
+      "opacity-50": -1,
+      "px-2": 1,
       "px-4": 1,
+      "py-0.5": 1,
       "py-2": 1,
       "right-0": 1,
+      "rounded-full": 1,
       "text-[#8A5A00]": 1,
       "text-[11px]": 1,
       "text-center": 1,
@@ -1876,6 +1880,21 @@
       {
         "from": "offlineBar.style.color = '';\n        offlineBar.textContent = '⚡ You\\'re offline — changes will sync when reconnected';\n      }, 2500);",
         "to": "offlineBar.style.color = '';\n        offlineBar.textContent = '⚡ You\\'re offline — booking actions won\\'t work until you\\'re back online';\n      }, 2500);",
+        "count": 1
+      },
+      {
+        "from": "pullRestedPlayers, checkAndFillActiveMatch, recordMatchResult, removeWaitingPlayer,\n  matchesFinishedOnCourt,\n  setFirstServer, swapActivePlayer, swapActiveTeam,",
+        "to": "pullRestedPlayers, checkAndFillActiveMatch, recordMatchResult, removeWaitingPlayer,\n  matchesFinishedOnCourt, matchColor,\n  setFirstServer, swapActivePlayer, swapActiveTeam,",
+        "count": 1
+      },
+      {
+        "from": "/* One card per court (data-court), same per-item loop pattern as the\n   Waiting Room list -- replaces the old singleton teamAPlayers/teamBPlayers/\n   scoreA/scoreB/qServeFirstRow/qTimerWrapper/liveScoreBtn/submitScoreBtn ids\n   with one full set of controls per court slot: `_<court>`-suffixed ids, a\n   `data-court` attribute on every per-court control, and its own listeners.\n   Each court's score entry, live-score button, serve-first toggle, and\n   (for Timed Rotation) timer are fully independent of every other court's.\n   `affectedCourts`, when given, redraws only those specific court cards\n   (replacing each one's existing DOM node in place) instead of wiping and\n   rebuilding every card -- so a single-court action never touches any\n   OTHER court's still-unsubmitted score inputs. */",
+        "to": "/* Match-number colour coding for the dashboard's own court cards: same\n   palette/cycle as queue.html (QueueEngine.matchColor keyed to the match\n   NUMBER, not the court slot), just mapped to literal hex here instead of\n   CSS variables -- this card (bg-[#201C19], see queueDashboard above) is a\n   fixed dark panel regardless of the page's own light/dark theme toggle\n   (bg-[#201C19] only ever remaps to the equally-dark --panel in dark mode,\n   per theme.css), so one dark-friendly hex per colour is enough; no\n   separate light-mode variant needed the way queue.html needs one for its\n   own light cards. Values are the same pastel tones queue.html's own dark\n   theme uses for blue/coral/green/amber/purple/teal (see its --match-*\n   dark overrides), so both pages render the SAME colour per match number. */\nconst MATCH_COLOR_HEX = {\n  blue:   { text: '#93C5FD', bg: 'rgba(147,197,253,.16)' },\n  coral:  { text: '#FFB4AB', bg: 'rgba(255,180,171,.16)' },\n  green:  { text: '#5AEF82', bg: 'rgba(90,239,130,.14)' },\n  amber:  { text: '#FCD34D', bg: 'rgba(252,211,77,.16)' },\n  purple: { text: '#CFC4FF', bg: 'rgba(207,196,255,.16)' },\n  teal:   { text: '#5EEAD4', bg: 'rgba(94,234,212,.16)' },\n};\n\n/* One card per court (data-court), same per-item loop pattern as the\n   Waiting Room list -- replaces the old singleton teamAPlayers/teamBPlayers/\n   scoreA/scoreB/qServeFirstRow/qTimerWrapper/liveScoreBtn/submitScoreBtn ids\n   with one full set of controls per court slot: `_<court>`-suffixed ids, a\n   `data-court` attribute on every per-court control, and its own listeners.\n   Each court's score entry, live-score button, serve-first toggle, and\n   (for Timed Rotation) timer are fully independent of every other court's.\n   `affectedCourts`, when given, redraws only those specific court cards\n   (replacing each one's existing DOM node in place) instead of wiping and\n   rebuilding every card -- so a single-court action never touches any\n   OTHER court's still-unsubmitted score inputs. */",
+        "count": 1
+      },
+      {
+        "from": "const matchNum = matchesFinishedOnCourt(session, court) + 1;\n    const courtLabel = `<div class=\"flex items-center justify-between mb-2\">\n        <span class=\"mono text-[10px] uppercase tracking-wider opacity-50\">${courtCount > 1 ? escapeHtml(courtName) : ''}</span>\n        <span class=\"mono text-[10px] uppercase tracking-wider opacity-50\">Match ${matchNum}</span>\n      </div>`;",
+        "to": "const matchNum = matchesFinishedOnCourt(session, court) + 1;\n    const mcHex = MATCH_COLOR_HEX[matchColor(matchNum).name];\n    wrap.style.borderLeft = `4px solid ${mcHex.text}`;\n    const courtLabel = `<div class=\"flex items-center justify-between mb-2\">\n        <span class=\"mono text-[10px] uppercase tracking-wider opacity-50\">${courtCount > 1 ? escapeHtml(courtName) : ''}</span>\n        <span class=\"mono text-[10px] uppercase tracking-wider font-[700] px-2 py-0.5 rounded-full\" style=\"color:${mcHex.text};background:${mcHex.bg}\">Match ${matchNum}</span>\n      </div>`;",
         "count": 1
       }
     ]

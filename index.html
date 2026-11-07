@@ -2032,7 +2032,7 @@ body:not(.staff-mode) .staff-link{display:none!important}
 const {
   teamLabel, ensureTeam, applyMatchResult, computeStandings,
   pullRestedPlayers, checkAndFillActiveMatch, recordMatchResult, removeWaitingPlayer,
-  matchesFinishedOnCourt,
+  matchesFinishedOnCourt, matchColor,
   setFirstServer, swapActivePlayer, swapActiveTeam,
   normalizeName: _normalizeName, nameSimilarity: _nameSimilarity,
   getAllPlayerNamesInSession, findSimilarNames, promptNameConflict,
@@ -8239,6 +8239,26 @@ function renderActiveQueueDashboard(affectedCourts) {
   }
 }
 
+/* Match-number colour coding for the dashboard's own court cards: same
+   palette/cycle as queue.html (QueueEngine.matchColor keyed to the match
+   NUMBER, not the court slot), just mapped to literal hex here instead of
+   CSS variables -- this card (bg-[#201C19], see queueDashboard above) is a
+   fixed dark panel regardless of the page's own light/dark theme toggle
+   (bg-[#201C19] only ever remaps to the equally-dark --panel in dark mode,
+   per theme.css), so one dark-friendly hex per colour is enough; no
+   separate light-mode variant needed the way queue.html needs one for its
+   own light cards. Values are the same pastel tones queue.html's own dark
+   theme uses for blue/coral/green/amber/purple/teal (see its --match-*
+   dark overrides), so both pages render the SAME colour per match number. */
+const MATCH_COLOR_HEX = {
+  blue:   { text: '#93C5FD', bg: 'rgba(147,197,253,.16)' },
+  coral:  { text: '#FFB4AB', bg: 'rgba(255,180,171,.16)' },
+  green:  { text: '#5AEF82', bg: 'rgba(90,239,130,.14)' },
+  amber:  { text: '#FCD34D', bg: 'rgba(252,211,77,.16)' },
+  purple: { text: '#CFC4FF', bg: 'rgba(207,196,255,.16)' },
+  teal:   { text: '#5EEAD4', bg: 'rgba(94,234,212,.16)' },
+};
+
 /* One card per court (data-court), same per-item loop pattern as the
    Waiting Room list -- replaces the old singleton teamAPlayers/teamBPlayers/
    scoreA/scoreB/qServeFirstRow/qTimerWrapper/liveScoreBtn/submitScoreBtn ids
@@ -8266,9 +8286,11 @@ function renderActiveMatchCourts(session, affectedCourts) {
     wrap.dataset.court = String(court);
     const courtName = (session.courtLabels && session.courtLabels[court]) || `Court ${court + 1}`;
     const matchNum = matchesFinishedOnCourt(session, court) + 1;
+    const mcHex = MATCH_COLOR_HEX[matchColor(matchNum).name];
+    wrap.style.borderLeft = `4px solid ${mcHex.text}`;
     const courtLabel = `<div class="flex items-center justify-between mb-2">
         <span class="mono text-[10px] uppercase tracking-wider opacity-50">${courtCount > 1 ? escapeHtml(courtName) : ''}</span>
-        <span class="mono text-[10px] uppercase tracking-wider opacity-50">Match ${matchNum}</span>
+        <span class="mono text-[10px] uppercase tracking-wider font-[700] px-2 py-0.5 rounded-full" style="color:${mcHex.text};background:${mcHex.bg}">Match ${matchNum}</span>
       </div>`;
 
     const recordChip = (tid) => {

@@ -1144,5 +1144,29 @@ check('a legacy match with no `court` field at all (recorded before multi-court 
   return Q.matchesFinishedOnCourt(s, 0) === 1;
 })());
 
+section('matchColor: colour-codes the "Match N" badge by MATCH NUMBER, cycling through a 6-colour palette, shared by queue.html and index.html');
+check('6 named colours, in the documented cycle order', eq(Q.MATCH_COLOR_NAMES, ['blue', 'coral', 'green', 'amber', 'purple', 'teal']));
+check('match 1 is always blue', eq(Q.matchColor(1), { index: 0, name: 'blue' }));
+check('match 2 is coral', Q.matchColor(2).name === 'coral');
+check('match 3 is green', Q.matchColor(3).name === 'green');
+check('match 4 is amber', Q.matchColor(4).name === 'amber');
+check('match 5 is purple', Q.matchColor(5).name === 'purple');
+check('match 6 is teal', Q.matchColor(6).name === 'teal');
+check('match 7 wraps back around to blue, same as match 1 (palette length is 6)', Q.matchColor(7).name === Q.matchColor(1).name && Q.matchColor(7).name === 'blue');
+check('match 13 (two full cycles + 1) is blue again', Q.matchColor(13).name === 'blue');
+check('every match number keyed by MATCH NUMBER, not by court -- two different courts on their 2nd match both get the same colour', (() => {
+  const s = base2('four_off_four_on', 'doubles');
+  s.activeMatches[0] = { id: 'm0', court: 0, teamA: ['a', 'b'], teamB: ['c', 'd'] };
+  s.activeMatches[1] = { id: 'm1', court: 1, teamA: ['w', 'x'], teamB: ['y', 'z'] };
+  Q.recordMatchResult(s, 0, 11, 4); // court 0's 2nd match is now in progress
+  Q.recordMatchResult(s, 1, 11, 4); // court 1's 2nd match is now in progress
+  const c0 = Q.matchColor(Q.matchesFinishedOnCourt(s, 0) + 1);
+  const c1 = Q.matchColor(Q.matchesFinishedOnCourt(s, 1) + 1);
+  return c0.name === c1.name && c0.name === 'coral';
+})());
+check('defensive: a missing/zero/negative/non-numeric match number falls back to index 0 (blue) instead of throwing', (() => {
+  return [undefined, null, 0, -1, NaN, 'x'].every((v) => { const c = Q.matchColor(v); return c.index === 0 && c.name === 'blue'; });
+})());
+
 console.log(`\n=== QUEUE ENGINE: ${passed}/${passed + failed} passed ===`);
 process.exit(failed === 0 ? 0 : 1);

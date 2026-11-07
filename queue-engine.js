@@ -441,6 +441,25 @@
     return ((session && session.matches) || []).filter((m) => (m.court == null ? 0 : m.court) === court).length;
   }
 
+  /* Colour-codes the "Match N" badge by MATCH NUMBER (matchesFinishedOnCourt(...)
+     + 1), not by which physical court it's playing on -- match 1 is always
+     blue, match 2 coral, etc, wrapping back to blue after teal (6 colours),
+     the same cycle on every court and on every page that shows a Match N
+     badge. That's what lets staff track "the blue match" across a whole
+     session instead of just telling today's courts apart.
+
+     Pure name/index only, no hex values here: queue.html themes its own
+     CSS variables (light vs. its own [data-theme="dark"] block) while
+     index.html's queue card is a fixed dark panel regardless of the page's
+     own light/dark toggle, so each page maps `name` to whatever literal
+     colours fit its own styling convention. */
+  const MATCH_COLOR_NAMES = ['blue', 'coral', 'green', 'amber', 'purple', 'teal'];
+  function matchColor(matchNum) {
+    const n = Math.trunc(Number(matchNum));
+    const i = Number.isFinite(n) && n > 0 ? (n - 1) % MATCH_COLOR_NAMES.length : 0;
+    return { index: i, name: MATCH_COLOR_NAMES[i] };
+  }
+
   /* Fills ONE empty court slot, same per-rule logic as before -- just now
      scoped to `court` (a single slot in session.activeMatches) instead of
      the single session-wide session.activeMatch. Called once per empty
@@ -909,6 +928,7 @@
     ensureTeam, applyMatchResult, computeStandings,
     pullRestedPlayers, pullRestedPlayersAvoiding, checkAndFillActiveMatch, recordMatchResult, removeWaitingPlayer,
     matchesFinishedOnCourt,
+    matchColor, MATCH_COLOR_NAMES,
     setFirstServer, justPlayed, swapActivePlayer, swapActiveTeam,
     partnerCount, bestPartnerPairing,
     normalizeName, nameSimilarity, getAllPlayerNamesInSession, findSimilarNames, promptNameConflict,

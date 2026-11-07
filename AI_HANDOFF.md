@@ -2,7 +2,7 @@
 
 **Purpose:** continuity when switching Claude accounts/sessions or hitting a usage limit mid-task. Read this FIRST when picking this project back up. Keep it updated — refresh it after every merge, every new background agent spawned, and especially right before a session is expected to end or hit a limit.
 
-Last updated: 2026-11-06 — refreshed against git state (`main` at `cb01461`). Earlier entries in this file were stale; git log is the source of truth if they disagree.
+Last updated: 2026-11-06 — refreshed after the hosting deploy (`main` at `7889148`, pushed; hosting deployed from `7889148`). Earlier entries in this file were stale; git log is the source of truth if they disagree.
 
 ## Shared across both accounts (personal + enterprise)
 
@@ -13,11 +13,11 @@ Last updated: 2026-11-06 — refreshed against git state (`main` at `cb01461`). 
 
 ## Current state of `main`
 
-- Branch: `main`, commit `cb01461`. Local `main` is ahead of `origin/main` by 4 commits, **none pushed**: `11d1650` + `b9c4b9f` (tournament division color-coding), `773c056` (`.gitattributes`: LF normalisation), `cb01461` (Graphify docs + `graphify-out/` ignore). Push is pending the user's go-ahead.
+- Branch: `main`, commit `7889148`. **Everything is pushed** to `origin/main` (`7889148`). Recent: `7f7d68a` (this handoff file), `7889148` (hosting ignore for local-only dirs), `cb01461`/`773c056` (Graphify docs, `.gitattributes`), `b9c4b9f`/`11d1650` (tournament division color-coding).
 - Working tree: only untracked files remain — this `AI_HANDOFF.md` and `CLAUDE.md.backup-20261104-153227` (a backup snapshot, not source; leave it out of commits). `.gitignore` and `CLAUDE.md` are committed.
 - Line endings: `.gitattributes` (`* text=auto eol=lf`) is committed. The theme tests were failing on Windows because autocrlf wrote CRLF into the working copy; that is fixed.
 - Deploy state (what is confirmed live):
-  - **Hosting**: last confirmed deployed at `5bd1f7e` (queue grid, store/tournament desktop widening, superadmin UI, queue match color-coding). **Not yet confirmed deployed:** `0c3dc20`/`5999328` (superadmin owner email) and `11d1650`/`b9c4b9f` (tournament division color-coding). Check with the user before assuming either is live.
+  - **Hosting**: deployed 2026-11-06 from `7889148` (hosting only, `firebase deploy --only hosting`, project `courtbooking-85175`). Live now includes the superadmin owner email (`0c3dc20`/`5999328`) and tournament division color-coding (`11d1650`/`b9c4b9f`). Also added `.claude/**`, `graphify-out/**`, `*.backup-*` to `hosting.ignore` in `7889148`. Note: the `**` → `picker.html` rewrite means unknown paths return the app shell (HTTP 200), so probe for file exclusion by content, not status code.
   - **functions**: deployed at `6695c08` — "Publish on their behalf" superadmin feature is live. No functions changes in the newer commits.
   - **firestore.rules**: deployed and production-verified at `0285be8`. Nothing newer pending for rules.
 - Full test suite: **47/47 test files pass** on `cb01461` (run at `773c056`, after the line-ending fix). Re-run before any new commit or deploy.

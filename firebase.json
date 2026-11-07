@@ -30,6 +30,7 @@
       "**/*.pem",
       "**/.env*",
       ".claude/**",
+      "guides/**",
       "graphify-out/**",
       "*.backup-*",
       "tests/**",

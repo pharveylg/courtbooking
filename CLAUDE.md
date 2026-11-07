@@ -28,3 +28,9 @@ Guidance for Claude Code working in this repository.
 - Read source files when the graph identifies relevant locations or when additional verification is needed.
 - After code changes, run `graphify update .` to refresh the local graph.
 - Keep `graphify-out/` local and ignored by Git unless explicitly deciding to share the generated graph.
+
+## Central AI Workspace
+
+Before starting, read `C:\Users\usgadp00\gadzai-forge\AI-Workspace\Dashboard.md` and `AI-Instructions.md`, then the central handoff `AI-Workspace\Handoffs\Pickleball-Court-Booking.md` (the old repo-root AI_HANDOFF.md was moved there).
+Before ending a significant task: update that handoff, then `AI-Workspace\Projects\Pickleball-Court-Booking.md` ("Last central sync") and the Dashboard if status changed.
+Project rules in this file take precedence over the central ones if they conflict.

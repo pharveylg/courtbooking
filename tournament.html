@@ -12,6 +12,7 @@
 <script src="firebase-config.js"></script>
 <script src="pickleball-scoring.js"></script>
 <script src="court-scoreboard.js"></script>
+<script src="division-color.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
@@ -345,17 +346,28 @@ function publicSchedLine(s){
   const primary = PUB_T && PUB_T.scheduleConfig && PUB_T.scheduleConfig.primaryVenueId === s.venueId && venues.length > 1;
   return `<div class="mono text-[10.5px] opacity-70 mt-1">📍 <b>${escapeHtml(v ? v.name : 'Venue')}</b>${c ? ' · ' + escapeHtml(c.name) : ''} · ${escapeHtml(s.date)} · ${pubFmtMin(s.startMin)}${primary ? ' <span class="opacity-60">(primary venue)</span>' : ''}</div>${v && v.address ? `<div class="mono text-[9.5px] opacity-40">${escapeHtml(v.address)}</div>` : ''}`;
 }
+/* Division colour-coding: each match card's left-border accent is keyed to its
+   division's stable INDEX in DIVISIONS (the tournament's own createdAt-ordered
+   division list, loaded by loadDivisionsAndRender) via DivisionColor.divisionColorFor
+   -- the same index tournament-admin.html and tournament-display.html resolve the
+   SAME divisionId against, so the colour is consistent across all three pages. */
+function divisionAccentClass(divisionId){
+  if(typeof DivisionColor === 'undefined' || !divisionId) return '';
+  const dc = DivisionColor.divisionColorFor(divisionId, DIVISIONS);
+  return ` divc-${dc.name} div-accent`;
+}
 function matchLine(m){
   const [nameA, nameB] = m.participantNames;
+  const accentCls = divisionAccentClass(m.divisionId);
   if(m.participantIds.includes('BYE')){
-    return `<div class="p-3 rounded-[14px] bg-[#FFFBF5] border border-[#EAE0D5] opacity-60"><span class="font-[700] text-[12.5px]">${escapeHtml(nameA)}</span> <span class="mono text-[10px] ml-1">advances (bye)</span></div>`;
+    return `<div class="p-3 rounded-[14px] bg-[#FFFBF5] border border-[#EAE0D5] opacity-60${accentCls}"><span class="font-[700] text-[12.5px]">${escapeHtml(nameA)}</span> <span class="mono text-[10px] ml-1">advances (bye)</span></div>`;
   }
   const resultLine = m.status !== 'scheduled'
     ? `<div class="mono text-[11px] mt-1">${m.games && m.games.length ? m.games.map(g => `${g.a}-${g.b}`).join(', ') : m.score ? `${m.score.a} - ${m.score.b}` : 'Forfeit'} · winner: <b>${escapeHtml(m.participantNames[m.participantIds.indexOf(m.winnerParticipantId)] || '')}</b></div>`
     : (schedulePublished() && m.sched ? publicSchedLine(m.sched)
       : (m.court || m.scheduledDate ? `<div class="mono text-[10.5px] opacity-60 mt-1">📍 ${escapeHtml(m.scheduledDate || '')}${m.scheduledHour != null ? ' · ' + fmtHour(m.scheduledHour) : ''}</div>` : ''));
   return `
-    <div class="p-3 rounded-[14px] bg-white border border-[#EAE0D5]">
+    <div class="p-3 rounded-[14px] bg-white border border-[#EAE0D5]${accentCls}">
       <div class="flex items-center justify-between gap-2 flex-wrap">
         <span class="font-[700] text-[12.5px]">${escapeHtml(nameA)} <span class="opacity-40 font-[500]">vs</span> ${escapeHtml(nameB)}</span>
         <span class="flex items-center gap-1.5">${liveTag(m)}${matchStatusBadge(m.status)}</span>

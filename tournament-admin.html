@@ -53,7 +53,7 @@
     </div>
   </header>
 
-  <main class="max-w-[1100px] mx-auto px-4 py-6">
+  <main class="max-w-[1100px] xl:max-w-[1600px] mx-auto px-4 py-6">
 
     <!-- LIST VIEW -->
     <section id="view-list">
@@ -61,7 +61,7 @@
         <h2 class="text-[18px] font-[800] tracking-[-0.02em]">Tournaments</h2>
         <button id="newTournamentBtn" class="h-9 px-4 rounded-full bg-[#D6FF5F] hover:bg-[#CBF052] text-[#201C19] font-[800] text-[12px] border border-[#201C19]/10 transition cursor-pointer">+ New Tournament</button>
       </div>
-      <div id="tournamentList" class="grid grid-cols-1 md:grid-cols-2 gap-3">
+      <div id="tournamentList" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
         <div class="mono text-[11px] opacity-50">Loading tournaments...</div>
       </div>
     </section>
@@ -406,7 +406,7 @@
         </div>
 
         <div class="mono text-[10px] uppercase tracking-widest opacity-60 mb-2 pt-3 border-t border-dashed border-[#EAE0D5]">Moderation Queue</div>
-        <div id="photosGrid" class="grid grid-cols-2 md:grid-cols-4 gap-2.5">
+        <div id="photosGrid" class="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-2.5">
           <div class="mono text-[11px] opacity-50 col-span-full">No photos yet.</div>
         </div>
       </div>
@@ -2050,7 +2050,7 @@ function renderMatchesList(division, matches){
     sec.matches.forEach(m => { (byRound[m.round] = byRound[m.round] || []).push(m); });
     const roundBlocks = Object.keys(byRound).sort((a,b)=>a-b).map(r => `
       <div class="mono text-[9.5px] uppercase tracking-widest opacity-50 mt-2 mb-1">Round ${r}</div>
-      <div class="space-y-1.5">${byRound[r].sort((a,b)=>a.position-b.position).map(renderMatchCard).join('')}</div>
+      <div class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-1.5 lg:gap-2.5">${byRound[r].sort((a,b)=>a.position-b.position).map(renderMatchCard).join('')}</div>
     `).join('');
     return `<div>${sec.label ? `<div class="mono text-[11px] font-[700] mb-1">${escapeHtml(sec.label)}</div>` : ''}${roundBlocks}</div>`;
   }).join('');

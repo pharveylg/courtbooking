@@ -52,7 +52,7 @@
     </div>
   </header>
 
-  <main class="max-w-[860px] mx-auto px-4 py-5">
+  <main class="max-w-[860px] lg:max-w-[1100px] xl:max-w-[1400px] mx-auto px-4 py-5">
     <div id="cancelledBanner" class="hidden mb-4 p-3.5 rounded-[16px] bg-[#FFE9E0] border border-[#FFC9B6] text-[#8C2C10] mono text-[12px] font-[700] text-center">
       This tournament has been cancelled.
     </div>
@@ -382,7 +382,7 @@ function renderSchedule(matches){
     sec.matches.forEach(m => { (byRound[m.round] = byRound[m.round] || []).push(m); });
     const roundBlocks = Object.keys(byRound).sort((a,b)=>a-b).map(r => `
       <div class="mono text-[9.5px] uppercase tracking-widest opacity-50 mt-3 mb-1.5">Round ${r}</div>
-      <div class="space-y-1.5">${byRound[r].sort((a,b)=>a.position-b.position).map(matchLine).join('')}</div>
+      <div class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-1.5 lg:gap-2.5">${byRound[r].sort((a,b)=>a.position-b.position).map(matchLine).join('')}</div>
     `).join('');
     return `<div>${sec.label ? `<div class="mono text-[11px] font-[700] mt-2">${escapeHtml(sec.label)}</div>` : ''}${roundBlocks}</div>`;
   }).join('');

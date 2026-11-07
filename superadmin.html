@@ -2861,6 +2861,7 @@ function renderTenantRow(slug, data, status, isVisible){
         <div class="min-w-0">
           <div class="font-[750] text-[14px] truncate">${escapeHtml(data.businessName || slug)}${data.source === 'self-serve' ? ' <span class="mono text-[8.5px] px-1.5 py-0.5 rounded-full bg-[#EDE8FF] text-[#3B2A9E] font-[800] align-middle">SELF-SERVE</span>' : ''}</div>
           <div class="mono text-[10px] opacity-60">?client=${escapeHtml(slug)} • <span class="${isActive?'text-[#3F7019]':'text-[#8A5A00]'} font-[700]">${isActive?'ACTIVE':'SUSPENDED'}</span> • <span class="px-1.5 py-0.5 rounded-full" style="background:${lcMeta.bg};color:${lcMeta.fg}">${lcMeta.label}</span>${sub ? ` • <span class="font-[700]" title="pricing v${escapeHtml(sub.pricingVersion || 'n/a')}">${escapeHtml(sub.planName || sub.planId)}</span>` : ' • <span class="opacity-50">no plan</span>'}</div>
+          ${data.source === 'self-serve' && data.ownerEmail ? `<div class="mono text-[9.5px] opacity-50 truncate" title="${data.ownerUid ? 'Owner UID: ' + escapeHtml(data.ownerUid) : ''}">Signed up as ${escapeHtml(data.ownerEmail)}</div>` : ''}
         </div>
       </div>
       <div class="flex items-center gap-2 shrink-0">
@@ -2930,6 +2931,12 @@ function renderTenantRow(slug, data, status, isVisible){
         <div class="mono text-[10px] uppercase tracking-widest opacity-60 mb-1">Subscription</div>
         <div class="mono text-[11px]">${sub ? `<span class="font-[800]">${escapeHtml(sub.planName || sub.planId)}</span> • status <span class="font-[700]">${escapeHtml(sub.status || 'active')}</span> • pricing v${escapeHtml(sub.pricingVersion || 'n/a')} • started ${sub.startedAt && sub.startedAt.toDate ? sub.startedAt.toDate().toLocaleDateString() : '—'}` : `No plan assigned — manual billing formula below. Assign one under <span class="font-[700]">Plans &amp; Pricing</span>.`}</div>
       </div>
+      ${data.source === 'self-serve' && data.ownerEmail ? `
+      <div class="md:col-span-2 lg:col-span-4 rounded-[14px] bg-[#FAF8FF] border border-[#EAE0D5] p-3 flex flex-wrap items-center gap-2" title="${data.ownerUid ? 'Owner UID: ' + escapeHtml(data.ownerUid) : ''}">
+        <span class="mono text-[10px] uppercase tracking-widest opacity-60">Self-Serve Signup Account</span>
+        <span class="mono text-[11px] font-[700]">${escapeHtml(data.ownerEmail)}</span>
+      </div>
+      ` : ''}
       ${lifecycle === 'provisioning' ? `
       <div class="md:col-span-2 lg:col-span-4 rounded-[14px] border p-3" style="background:#EDE8FF;border-color:#D6CCFF">
         <div class="mono text-[10px] uppercase tracking-widest font-[800]" style="color:#3B2A9E">Needs Publish — owner hasn't finished onboarding</div>

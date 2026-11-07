@@ -64,6 +64,39 @@ node set-superadmin-claim.js staff@example.com --revoke   # removes all platform
 
 `--perms` **replaces** the account's permission set (re-run with the full desired list) and removes an owner claim if one existed. Claim changes need a fresh sign-in to take effect. Enforcement is three-layered from one vocabulary: Firestore rules (per collection), tab visibility (per view), and guards on every mutating action — so a scoped account can't be talked past the UI by an out-of-scope action anyway.
 
+### 2.2 Scoped platform staff and their permissions
+
+A scoped account sees only the tabs and actions that its `platformPerms` permissions cover. The table maps each permission to the tabs it makes visible, the actions it unlocks, and its coverage in `firestore.rules`.
+
+How to read it:
+- **Tabs:** a tab appears when the account holds at least one of the permissions listed for it. Overview is visible to every platform staff account, but its figures need one of the tenant-data permissions: `manage_organizations`, `manage_entitlements`, `manage_plans`, `view_platform_billing`, `verify_platform_payment`, `issue_platform_credit`, `view_platform_usage`, or `diagnose_access`.
+- **Actions:** each action needs the permission named. An out-of-scope action is refused with a "Not permitted" message, and the server-side callables check the same permissions.
+
+| Permission | Tabs it shows | Actions it unlocks | Firestore rules |
+|---|---|---|---|
+| `manage_organizations` | Tenants, Provision Tenant, Entitlements (view), Diagnostics | Create or register a tenant; set lifecycle and billing status; rename; change primary color; reset Admin PIN; data retention; upload or remove watermark; Publish on Their Behalf; Delete Tenant | Create and delete tenant records; update tenant records; write the public tenant directory |
+| `manage_entitlements` | Entitlements | Grant, Trial, Activate, Pause, Suspend, and Revoke for Store and Tournaments; entitlement history | Write entitlement records. The runtime status write is owner-only (see the known gap below) |
+| `manage_plans` | Plans & Pricing, Usage Reports | Create and edit plans; seed starter plans; set the self-serve default plan; assign a plan to a tenant; save a tenant's billing formula; set tournament fees | Write the plan catalog; update only a tenant's subscription and billing fields |
+| `view_platform_billing` | Tenants, Plans & Pricing, Invoices | Read-only view of invoices, suggested charges, and prepaid balances | Read invoices |
+| `verify_platform_payment` | Invoices | Generate Draft Invoices; Issue; Verify & Apply; Reject; Mark Submitted; Record Verified Payment; Waive; Cancel Invoice; status override; Apply This Month's Charge (Tenants) | Create and delete invoices; update payer submissions |
+| `issue_platform_credit` | None on its own (see note) | Top Up prepaid balance; Apply from Credit Balance on an invoice | Update a tenant's credit balance; on invoices, update only status, credits applied, payments, and verified-date fields |
+| `view_platform_usage` | Tenants, Usage Reports | Usage reports; CSV export; read the usage events ledger | Read usage and events |
+| `view_platform_audit` | Audit & Security | Read the audit log | Read the audit log (every staff account can still write entries) |
+| `manage_platform_configuration` | None on its own (see note) | Save platform payment instructions (Plans & Pricing); the lifecycle policy toggle that also pauses Store and Tournaments (Entitlements) | Write platform settings |
+| `manage_support` | Feature Ideas | Read and write feature ideas | Read and write feature ideas |
+| `diagnose_access` | Tenants, Diagnostics | Access explainer; Re-sync mirror | Re-sync writes the runtime status (see the known gap below) |
+
+**Notes on permissions that do not show a tab by themselves:**
+- `issue_platform_credit` shows no tab alone. Pair it with `view_platform_billing` or `manage_organizations` so that the Tenants or Invoices tab appears.
+- `manage_platform_configuration` shows no tab alone. Pair it with `manage_plans` or `manage_entitlements` so that the Plans & Pricing or Entitlements tab appears.
+
+**Known gap (confirmed in the code, not yet tested with a live scoped account):** after any entitlement, lifecycle, policy, or re-sync change, the console writes the tenant's runtime status document (`clients/{slug}/status/state`). `firestore.rules` allow that write only for the owner (`superadmin` claim). For a scoped account:
+- **Entitlement change:** the entitlement record is saved, then the runtime write fails. The action reports "Failed" and its audit entry is not written, so the tenant's site may not match the platform record.
+- **Lifecycle change:** the platform record and the public picker listing are updated first, then the runtime write fails. The picker can show the tenant as suspended while its booking site keeps running.
+- **Policy change and Diagnostics re-sync:** the same runtime write fails.
+
+Until this is fixed, make lifecycle and entitlement changes with the owner account, then check the tenant on the Diagnostics tab.
+
 ## 3. Layout
 
 The console is a single page with a left sidebar (top bar on mobile) and ten tabs, organized as a platform control plane — the same shape the DulaHQ platform roadmap prescribes (Overview → Tenants → Entitlements → Plans & Billing → Usage → Support → Audit):
@@ -178,11 +211,10 @@ Two checkboxes above the list filter which rows show, without changing the under
 
 Each row shows the tenant's name, color swatch, slug, operational state (ACTIVE/SUSPENDED), lifecycle chip, and plan (or "no plan"), with three actions:
 
-- **Open Site ↗** — opens the tenant's live booking page in a new tab, at the canonical `/?client=<slug>` URL. Because your superadmin sign-in session carries over to that new tab (same origin), the tenant's Admin Console **unlocks automatically** — you don't need their PIN.
-- **Manage** — expands an in-place panel (see below).
+- **Open Site ↗** — opens the tenant's live booking page in a new tab, at the canonical `/?client=<slug>` URL.- **Manage** — expands an in-place panel (see below).
 - **Suspend / Activate** — the fast path between the `suspended` and `active` lifecycle states (Section 3.3). It takes the tenant's booking site offline and updates the status flag shown in this directory, in Reports, and on the public facility picker. The full lifecycle (trial, grace, restricted, cancelled, archived) is set from the Manage panel's Lifecycle control.
 
-Suspend sets `status` on the tenant's `platformTenants/{slug}` document (superadmin-only, for the directory/Reports display), mirrors that same status to `tenantDirectory/{slug}` (so a suspended tenant also disappears from the public facility picker — Section 9), **and** mirrors a `paused` flag onto the tenant's own `clients/{slug}/config/state` document, which the tenant-facing app actually reads. When paused, the tenant's site replaces its entire booking app with a "Booking Page Paused" screen (showing the facility's name/logo and contact info, if set) for every visitor — players and staff alike, with no PIN bypass. Realtime listeners, view counting, and the retention check are all skipped while paused, so nothing runs in the background either. A tenant that's already open in someone's browser when you suspend it will pick this up and reload within moments, the same way any other config change propagates (Section 9). Activating reverses all of this immediately.
+Suspend sets `status` on the tenant's `platformTenants/{slug}` document (superadmin-only, for the directory/Reports display), mirrors that same status to `tenantDirectory/{slug}` (so a suspended tenant also disappears from the public facility picker — Section 9), **and** mirrors the runtime gate onto the tenant's `clients/{slug}/status/state` document, which the tenant-facing app reads (see Section 3.2). When paused, the tenant's site replaces its entire booking app with a "Booking Page Paused" screen (showing the facility's name/logo and contact info, if set) for every visitor — players and staff alike, with no PIN bypass. Realtime listeners, view counting, and the retention check are all skipped while paused, so nothing runs in the background either. A tenant that's already open in someone's browser when you suspend it will pick this up and reload within moments, the same way any other config change propagates (Section 9). Activating reverses all of this immediately.
 
 Expanding **Manage** loads a few fields lazily (data-retention days and the current watermark, if any) and gives you:
 
@@ -336,3 +368,184 @@ They can *submit* a claim (billing.html → "I've Paid — Submit for Verificati
 
 **My login works but I still can't reach the console / I get a permissions error reading `platformTenants`.**
 The `superadmin` custom claim isn't on your token yet — either it was never granted (re-run `set-superadmin-claim.js`) or you haven't signed out and back in since it was granted. Custom claims are baked into the ID token at sign-in time; they don't apply retroactively to an already-open session.
+
+---
+
+## 11. Step-by-Step Flows
+
+Each flow uses the same headings as the other guides in this set. Permissions are listed in Section 2.2.
+
+### 11.1 Provision a new tenant
+
+**Goal**
+Create a tenant from the platform side, with its name, color, Admin PIN, and optional plan, trial, and watermark. This path is separate from the self-service setup that facility owners use.
+
+**Who this is for**
+Platform staff with `manage_organizations`, and the owner.
+
+**Where**
+The **Provision Tenant** tab, the **Create / Register Tenant** button.
+
+**Steps**
+1. Open the **Provision Tenant** tab.
+2. In **Slug (used as ?client=)**, enter the tenant's address name: lowercase letters, numbers, and hyphens. It cannot be changed later.
+3. In **Business Name**, enter the name shown on the site.
+4. In **Starter Color**, pick a color, or type a six-digit hex code.
+5. In **Initial Admin PIN**, enter the PIN staff will use. The form pre-fills `1234`. Change it before you hand the site over.
+6. Optional: in **Plan**, pick a plan. Leave "No plan" for a manual billing formula.
+7. Optional: tick **Start in Trial** for a 7-day trial.
+8. Optional: in **Watermark Image**, choose an image file.
+9. Click **Create / Register Tenant**.
+10. Wait for the confirmation. If the slug already had data, the console registers the existing tenant and keeps its current name and color. The message says the slug "already had data."
+11. Open the tenant from the **Tenants** tab with **Open Site ↗** and check the booking page.
+12. Give the staff the site address and PIN. Add Store or Tournaments from the **Entitlements** tab if the tenant bought them.
+
+**What you should see when it worked**
+A message reads "Tenant ... created" (or the "already had data" message). The form resets and the PIN field returns to `1234`. The tenant appears in the **Tenants** list, and it appears on the public facility picker straight away because its status is Active.
+
+**If something goes wrong**
+- **"Slug must be lowercase letters, numbers, and hyphens only."**: fix the slug, then submit again.
+- **"Business name is required," "Starter color must be a valid hex value," or "Initial PIN is required."**: fix the field shown.
+- **"Failed: ..."**: the message names the cause. Check the **Tenants** list before you retry, to see whether the tenant was created.
+- **"Not permitted: manage_organizations"**: the account does not have this permission. Ask the owner to grant it.
+- **The tenant is missing from the picker**: check that its status is Active, and that it is not waiting in **Needs Publish** (Section 11.5).
+
+**Related flows**
+Section 11.2 (entitlements), Section 11.5 (publish on their behalf).
+
+### 11.2 Change a tenant's entitlements (Store and Tournaments)
+
+**Goal**
+Grant, start a trial for, activate, pause, suspend, or revoke Store or Tournaments for one tenant.
+
+**Who this is for**
+Staff with `manage_entitlements`, and the owner. Until the known gap in Section 2.2 is fixed, make these changes with the owner account.
+
+**Where**
+The **Entitlements** tab, in the matrix row for the tenant, under the **Store** or **Tournaments** column.
+
+**Steps**
+1. Open the **Entitlements** tab.
+2. Find the tenant's row. The Booking column follows the tenant's lifecycle, so you cannot change it here.
+3. In the Store or Tournaments column, read the current chip: Not added, Trial, Active, Suspended, or Cancelled.
+4. Click an action that the chip allows:
+   - Not added or Cancelled: **Grant**, or **Trial** for 7 days.
+   - Trial: **Activate**, **Pause**, **Suspend**, or **Revoke**.
+   - Active: **Pause** (it shows **Unpause** while paused), **Suspend**, or **Revoke**.
+   - Suspended: **Activate** or **Revoke**.
+5. For Store only, when you grant or start a trial, enter the initial Store PIN in the prompt. The default is `1234`. The Store PIN is separate from the Admin PIN.
+6. Confirm the prompt for **Suspend** or **Revoke**.
+7. To see the change record, click **history** under the product.
+
+Use **Suspend** when you expect to switch the product back on for the same tenant. Use **Revoke** when the tenant no longer has the product on its plan. Tenant data is kept in both cases (Section 3.1).
+
+**What you should see when it worked**
+A message names the product and the tenant (for example, "Store suspended for ..."). The chip changes, and the history shows a new entry with your email.
+
+**If something goes wrong**
+- **"Not permitted: manage_entitlements"**: the account does not have this permission.
+- **"Failed: ..."**: the record may have changed while the tenant's site did not. Check Diagnostics for mirror drift, and ask the owner to re-sync (Section 2.2).
+- **The Store still works after a tenant-level suspend**: this is expected. Tenant-level Suspend pauses the booking site only. Suspend Store separately if needed (Section 10).
+
+**Related flows**
+Section 11.1 (provision), Section 2.2 (permissions and known gap).
+
+### 11.3 Generate and manage invoices
+
+**Goal**
+Produce a month's draft invoices, issue them to tenants, and settle the payments that tenants report.
+
+**Who this is for**
+Staff with `verify_platform_payment`, and the owner. Staff with only `view_platform_billing` can read the Invoices tab but cannot act on it.
+
+**Where**
+The **Invoices** tab: the **Invoice period** picker, the **Generate Draft Invoices** button, the **Verification Queue**, and the invoice cards.
+
+**Steps**
+1. Open the **Invoices** tab.
+2. In **Invoice period**, pick the month. The current month bills month-to-date. Earlier months bill the whole month.
+3. Click **Generate Draft Invoices**. Read the note under the buttons. It lists the tenants that were created, refreshed, or skipped, with the reasons.
+4. Review the draft invoices. Each line shows its source.
+5. For each draft you are ready to bill, click **Issue (awaiting payment)** and confirm. The invoice then shows the platform payment instructions to the payer.
+6. When a payer submits a claim, it appears in the **Verification Queue**. Check its reference, amount, and proof.
+7. Click **Verify & Apply** to record the payment. The invoice becomes Verified, or Partially paid if the amount falls short. Or click **Reject** and enter a reason. The payer sees the reason in their portal.
+8. For a payment reported outside the portal, use the invoice's actions: **Mark Submitted for Verification** (this does not verify it), or **Record Verified Payment** (you enter the method, reference, and amount).
+9. To settle from the tenant's prepaid balance, click **Apply from Credit Balance** (requires `issue_platform_credit`).
+10. If an invoice should not be paid, click **Waive** (you enter a reason) or **Cancel Invoice** (confirm the prompt). Cancelled invoices stay on record for audit.
+
+A submission never verifies itself. Only **Verify & Apply** or **Record Verified Payment** settles an invoice. Issued invoices are never rewritten, so correct a mistake by waiving or cancelling the invoice, with a reason.
+
+**What you should see when it worked**
+After **Issue**, the invoice shows Awaiting payment. After **Verify & Apply**, it shows Verified / paid or Partially paid, and the item leaves the **Verification Queue**. The audit log records each step.
+
+**If something goes wrong**
+- **A tenant is missing from the draft run**: the generation note gives the reason. Tenants with nothing to bill are skipped on purpose.
+- **"Invoice document not found for this submission."**: refresh the page, then try again.
+- **"Not permitted: verify_platform_payment"**: the account does not have this permission.
+- **An invoice was issued by mistake**: use **Cancel Invoice** and confirm. Cancelled invoices stay on record for audit.
+
+**Related flows**
+Section 3.5 (invoice states), Section 11.2 (entitlements).
+
+### 11.4 Delete a tenant permanently
+
+**Goal**
+Permanently remove a tenant's site data and platform records. Invoices, payment submissions, tournament charges, and the audit log are kept.
+
+**Who this is for**
+The owner, and staff with `manage_organizations`. This cannot be undone.
+
+**Where**
+The **Tenants** tab, then **Manage** on the tenant, then the **Tenant Lifecycle** control and the **Delete Tenant — irreversible** box.
+
+**Steps**
+1. Export anything you need first, as described in `CLIENTS.md`.
+2. Open the **Tenants** tab and click **Manage** on the tenant.
+3. In **Tenant Lifecycle**, choose **Cancelled** or **Archived**, then click **Set**. The booking site goes offline.
+4. In the **Delete Tenant — irreversible** box, click **Delete Tenant Permanently**. The button appears only when the lifecycle is Cancelled or Archived.
+5. Read the confirmation prompt. It lists what will be deleted and what will be kept.
+6. Type the tenant's slug exactly, then click **OK**. Any other text cancels the deletion.
+7. Wait for the message "... permanently deleted." The tenant disappears from the **Tenants** list.
+
+**What you should see when it worked**
+A message confirms the deletion. The tenant no longer appears in the Tenants list or on the public picker. The audit log records a delete-tenant entry.
+
+**If something goes wrong**
+- **"Cancel or archive this tenant first"**: the lifecycle is not Cancelled or Archived. Set it, then try again.
+- **"Slug did not match -- deletion cancelled"**: type the slug exactly as shown in the prompt.
+- **"Tenant deletion failed: ..."**: the deletion stopped partway through. The audit log records what was removed. Do not retry until the owner has reviewed the audit log.
+
+**Related flows**
+Section 3.3 (lifecycle), Section 11.1 (provision).
+
+### 11.5 Publish a facility on its owner's behalf
+
+**Goal**
+Publish a self-service facility that its owner created but did not finish publishing.
+
+**Who this is for**
+Staff with `manage_organizations`, and the owner. Use this only when the owner asks for help or cannot publish.
+
+**Where**
+The **Tenants** tab, with the **Needs Publish** filter, then **Manage** on the tenant, then the **Needs Publish — owner hasn't finished onboarding** box.
+
+**Steps**
+1. Open the **Tenants** tab and tick **Needs Publish** to list facilities that owners created but did not publish.
+2. Click **Manage** on the facility.
+3. In the **Needs Publish** box, read the note. It says the same readiness checks run as the owner's own Publish button.
+4. Click **Publish on Their Behalf**.
+5. If the message says "Can't publish yet -- missing: ...", stop. Tell the owner what is missing. Do not work around the check.
+6. On success, a message says the facility is live on the public picker. Its lifecycle moves to Trial.
+
+**What you should see when it worked**
+A message reads "... published — now live on the public picker." The lifecycle shows Trial, the facility appears on the public picker, and the audit log records a publish-facility-staff entry with your email.
+
+If the platform has a self-serve default plan set, publishing also assigns that plan, the same as the owner's own publish.
+
+**If something goes wrong**
+- **"Can't publish yet -- missing: ..."**: the facility is not ready. Relay the missing items to the owner.
+- **"Not permitted: manage_organizations"**: the account does not have this permission.
+- **"Failed: ..."**: the button becomes active again. Read the message, then retry if it is safe to do so.
+
+**Related flows**
+Section 11.1 (provision), Section 3.3 (lifecycle). The owner's own publish steps are in the Facility Owner Guide (`guides/facility-owner.md`).

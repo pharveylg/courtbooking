@@ -87,6 +87,12 @@ Each tenant has one shared 4-digit Admin PIN (Admin → Security to change it), 
 | [`BILLING_PORTAL.md`](BILLING_PORTAL.md) | Tenant-facing guide to `billing.html` |
 | [`QUEUE_MODULE.md`](QUEUE_MODULE.md) | Walk-in queue engine design (rotation rules, winner ranking, admin overrides) |
 | [`USER_ONE_PAGER.md`](USER_ONE_PAGER.md) | Quick guide for players |
+| [`guides/player.md`](guides/player.md) | Per-role action flows: players and guests |
+| [`guides/facility-staff.md`](guides/facility-staff.md) | Per-role action flows: facility staff (Admin PIN) |
+| [`guides/tournament-organizer.md`](guides/tournament-organizer.md) | Per-role action flows: tournament organizers |
+| [`guides/facility-owner.md`](guides/facility-owner.md) | Per-role action flows: self-serve facility owners |
+| [`guides/billing.md`](guides/billing.md) | Per-role action flows: billing users |
+| [`guides/venue-display.md`](guides/venue-display.md) | Per-role action flows: venue TV display operators |
 | [`FACILITY_ONBOARDING_PROPOSAL.md`](FACILITY_ONBOARDING_PROPOSAL.md) | Design for self-service facility signup — partially built, see `onboarding.html` |
 
 ## Licensing

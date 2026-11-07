@@ -195,6 +195,76 @@ section('publishFacility -- happy path makes the facility visible on the picker'
   check('writes a platformAuditLog entry for the publish', log.some((e) => e.action === 'publish-facility' && e.slug === 'riverside'));
 }
 
+const STAFF = { uid: 'staff-1', token: { email: 'staff@test.dev', platformPerms: ['manage_organizations'] } };
+const STAFF_NO_PERM = { uid: 'staff-2', token: { email: 'nope@test.dev', platformPerms: ['manage_entitlements'] } };
+
+section('publishFacility -- platform staff holding manage_organizations can publish on the owner\'s behalf');
+{
+  store.clear();
+  await fns.createFacility({ auth: OWNER, data: BASE });
+  const res = await fns.publishFacility({ auth: STAFF, data: { slug: 'riverside' } });
+  check('a staffer holding manage_organizations can publish a ready tenant they do not own', res && res.ok === true && res.slug === 'riverside');
+
+  const tenant = await doc('platformTenants/riverside');
+  check('lifecycle still moves out of provisioning, same as an owner-initiated publish', tenant && tenant.lifecycle === 'trial');
+
+  const dir = await doc('tenantDirectory/riverside');
+  check('tenantDirectory still gets written -- a staff-initiated publish makes the facility visible on the picker too', dir && dir.status === 'active');
+
+  const log = await auditLog();
+  check('writes a DISTINCT staff-initiated audit entry, not the plain owner publish-facility action', log.some((e) => e.action === 'publish-facility-staff' && e.slug === 'riverside' && e.actorEmail === 'staff@test.dev' && /published on the owner.s behalf/.test(e.details) && /staff@test\.dev/.test(e.details)));
+  check('the staff audit entry also names the facility\'s actual owner', log.some((e) => e.action === 'publish-facility-staff' && /owner@example\.com/.test(e.details)));
+  check('no plain publish-facility entry was ALSO written for this call', !log.some((e) => e.action === 'publish-facility' && e.slug === 'riverside'));
+}
+
+section('publishFacility -- the grandfathered superadmin claim counts as staff too (same assertPlatformPerm OR as every other staff-gated callable)');
+{
+  store.clear();
+  await fns.createFacility({ auth: OWNER, data: BASE });
+  const SUPERADMIN = { uid: 'root-1', token: { email: 'root@test.dev', superadmin: true } };
+  const res = await fns.publishFacility({ auth: SUPERADMIN, data: { slug: 'riverside' } });
+  check('a superadmin claim (no platformPerms array needed) can publish on the owner\'s behalf too', res && res.ok === true);
+}
+
+section('publishFacility -- a staffer WITHOUT manage_organizations is denied');
+{
+  store.clear();
+  await fns.createFacility({ auth: OWNER, data: BASE });
+  const err = await expectError(fns.publishFacility({ auth: STAFF_NO_PERM, data: { slug: 'riverside' } }), 'permission-denied');
+  check('missing manage_organizations -> permission-denied, same as any other staff-gated callable in this file', err && !err.wrong, err && err.message);
+  check('tenant left in provisioning -- no partial publish on a denied attempt', (await doc('platformTenants/riverside')).lifecycle === 'provisioning');
+  check('tenantDirectory still not written', (await fakeDb.doc('tenantDirectory/riverside').get()).exists === false);
+}
+
+section('publishFacility -- a staffer WITH manage_organizations gets the SAME readiness rejection an owner would -- no bypass path');
+{
+  store.clear();
+  await fns.createFacility({ auth: OWNER, data: BASE });
+  await fakeDb.doc('clients/riverside/courts/state').set({ data: [] }); // not ready: no active court
+  const err = await expectError(fns.publishFacility({ auth: STAFF, data: { slug: 'riverside' } }), 'failed-precondition');
+  check('staff call on an unready tenant -> failed-precondition naming what\'s missing, identical to the owner\'s own path', err && !err.wrong && /active court/.test(err.message), err && err.message);
+  check('tenantDirectory still not written -- readiness genuinely blocks staff too, not just the owner', (await fakeDb.doc('tenantDirectory/riverside').get()).exists === false);
+  check('tenant still in provisioning', (await doc('platformTenants/riverside')).lifecycle === 'provisioning');
+}
+
+section('publishFacility -- the owner\'s own publish path is completely unchanged by the new staff branch');
+{
+  store.clear();
+  await fns.createFacility({ auth: OWNER, data: BASE });
+  const res = await fns.publishFacility({ auth: OWNER, data: { slug: 'riverside' } });
+  check('owner publish still succeeds exactly as before', res && res.ok === true);
+  const log = await auditLog();
+  check('owner-initiated publish still logs the plain publish-facility action, never the staff variant', log.some((e) => e.action === 'publish-facility' && e.slug === 'riverside') && !log.some((e) => e.action === 'publish-facility-staff'));
+}
+
+section('publishFacility -- a signed-in non-staff stranger still cannot publish someone else\'s facility (regression for the original owner-only check)');
+{
+  store.clear();
+  await fns.createFacility({ auth: OWNER, data: BASE });
+  const err = await expectError(fns.publishFacility({ auth: OTHER, data: { slug: 'riverside' } }), 'permission-denied');
+  check('a different signed-in player (no platform claims at all) is still refused', err && !err.wrong, err && err.message);
+}
+
 section('publishFacility -- self-serve billing: no self-serve plan configured');
 {
   store.clear();

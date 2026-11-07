@@ -71,8 +71,12 @@
       const [idA, idB] = m.participantIds || [];
       const [nameA, nameB] = m.participantNames || [];
       if (!idA || !idB || idA === 'BYE' || idB === 'BYE') return;
-      if (!stats[idA]) stats[idA] = { participantId: idA, name: nameA, gp: 0, w: 0, l: 0, pf: 0, pa: 0 };
-      if (!stats[idB]) stats[idB] = { participantId: idB, name: nameB, gp: 0, w: 0, l: 0, pf: 0, pa: 0 };
+      // divisionId travels with each row so the Combined view (every division's
+      // matches concatenated) can still show which division a row belongs to --
+      // a participant only ever plays within one division, so the first match
+      // seen for an id sets it and every later match agrees.
+      if (!stats[idA]) stats[idA] = { participantId: idA, name: nameA, divisionId: m.divisionId || null, gp: 0, w: 0, l: 0, pf: 0, pa: 0 };
+      if (!stats[idB]) stats[idB] = { participantId: idB, name: nameB, divisionId: m.divisionId || null, gp: 0, w: 0, l: 0, pf: 0, pa: 0 };
       stats[idA].gp++; stats[idB].gp++;
       stats[idA].pf += m.score.a; stats[idA].pa += m.score.b;
       stats[idB].pf += m.score.b; stats[idB].pa += m.score.a;

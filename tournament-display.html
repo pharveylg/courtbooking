@@ -9,6 +9,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 <script src="firebase-config.js"></script>
 <script src="tournament-display.js"></script>
+<script src="division-color.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
@@ -95,7 +96,7 @@ html,body{margin:0; background:var(--bg); color:var(--ink); overflow-x:hidden}
   <main style="flex:1; display:grid; grid-template-columns:1.1fr 1fr; gap:14px; margin:0 14px 14px; align-items:start">
 
     <!-- 2. Featured match panel -->
-    <section class="card" style="padding:22px; min-height:320px; display:flex; flex-direction:column">
+    <section id="featuredPanel" class="card" style="padding:22px; min-height:320px; display:flex; flex-direction:column; border-left:4px solid var(--line)">
       <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px">
         <div class="mono" style="font-size:11px; text-transform:uppercase; letter-spacing:0.1em; color:var(--muted)">On court now</div>
         <div id="featuredDots" style="display:flex; gap:5px"></div>
@@ -258,9 +259,21 @@ function featuredSide(v, names, points, side, serving){
     <div class="mono" style="font-size:11px; text-transform:uppercase; letter-spacing:0.08em; color:var(--lime); min-height:14px; margin-top:4px">${serving === side ? 'Serving' : ''}</div>
   </div>`;
 }
+/* Division colour coding for the featured panel: this page is always dark, own
+   CSS, no light/dark toggle (see the top-of-file comment), so there's only one
+   hex per colour to pick -- DivisionColor.DIVISION_COLOR_HEX[name].dark, the
+   same dark value tournament.html/tournament-admin.html's --div-* tokens use
+   in dark mode, keyed off the SAME DIVISIONS array (createdAt asc) those pages
+   resolve a divisionId against, so a division is the same colour everywhere. */
+function divisionHex(divisionId){
+  if(typeof DivisionColor === 'undefined' || !divisionId) return null;
+  const dc = DivisionColor.divisionColorFor(divisionId, DIVISIONS);
+  return DivisionColor.DIVISION_COLOR_HEX[dc.name].dark;
+}
 function renderFeatured(){
   const dotsWrap = document.getElementById('featuredDots');
   const body = document.getElementById('featuredBody');
+  const panel = document.getElementById('featuredPanel');
   const venues = (PUB_T && PUB_T.venues) || [];
   const liveMap = {};
   LIVE_DOCS.forEach(l => { liveMap[l.id] = l; });
@@ -274,11 +287,14 @@ function renderFeatured(){
   const live = current && liveMap[current];
   if(!live){
     body.innerHTML = `<div class="mono" style="color:var(--muted); font-size:13px">No match is live right now.</div>`;
+    panel.style.borderLeftColor = 'var(--line)';
     return;
   }
   const match = matchesById()[live.id];
   const courtLabel = match && schedulePublished() ? TournamentDisplay.venueCourtLabel(match.sched, venues) : null;
-  const divName = (DIVISIONS.find(d => d.id === (live.divisionId || (match && match.divisionId))) || {}).name || '';
+  const divisionId = live.divisionId || (match && match.divisionId) || null;
+  const divName = (DIVISIONS.find(d => d.id === divisionId) || {}).name || '';
+  panel.style.borderLeftColor = divisionHex(divisionId) || 'var(--line)';
   body.innerHTML = `
     <div class="mono" style="font-size:11px; color:var(--muted); text-align:center">${escapeHtml([divName, courtLabel].filter(Boolean).join(' · ') || 'Court assignment pending')}</div>
     <div style="display:flex; gap:14px; width:100%">${featuredSide(live, live.names, live.points, 'home', live.serving)}${featuredSide(live, live.names, live.points, 'away', live.serving)}</div>
@@ -311,7 +327,17 @@ function renderLeaderboardTabs(){
   const autoBtn = document.getElementById('lbAutoBtn');
   if(autoBtn) autoBtn.addEventListener('click', () => { LEADERBOARD_ROTATOR.release(); renderLeaderboard(); });
 }
-function podiumHtml(rows){
+/* Small inline swatch marking a row's division -- only shown on the Combined
+   view (where divisions are mixed together and a colour cue helps most; a
+   single-division view already names its division in the header/tab, so the
+   dot would be redundant there). Same divisionHex() resolution as the
+   featured panel, keyed off the same DIVISIONS array. */
+function divisionDot(divisionId){
+  const hex = divisionHex(divisionId);
+  if(!hex) return '';
+  return `<span title="${escapeHtml((DIVISIONS.find(d => d.id === divisionId) || {}).name || '')}" style="display:inline-block; width:8px; height:8px; border-radius:999px; background:${hex}; margin-right:6px; flex:none"></span>`;
+}
+function podiumHtml(rows, showDivision){
   const top3 = rows.slice(0, 3);
   if(!top3.length) return '';
   const order = [1, 0, 2]; // 2nd, 1st, 3rd across the podium
@@ -320,18 +346,18 @@ function podiumHtml(rows){
   return order.filter(i => top3[i]).map(i => `
     <div class="podium-step" style="width:120px">
       <div style="font-size:22px">${medal[i]}</div>
-      <div style="font-weight:800; font-size:13px; text-align:center; overflow-wrap:break-word">${escapeHtml(top3[i].name)}</div>
+      <div style="font-weight:800; font-size:13px; text-align:center; overflow-wrap:break-word">${showDivision ? divisionDot(top3[i].divisionId) : ''}${escapeHtml(top3[i].name)}</div>
       <div class="mono" style="font-size:10px; color:var(--muted)">${Math.round(top3[i].winPct)}% · ${top3[i].w}-${top3[i].l}</div>
       <div style="width:100%; height:${heights[i]}px; margin-top:6px; border-radius:10px 10px 0 0; background:${i === 0 ? 'var(--lime)' : 'var(--panel2)'}; border:1px solid var(--line)"></div>
     </div>`).join('');
 }
-function leaderboardRowsHtml(rows, hasAnyRows){
+function leaderboardRowsHtml(rows, hasAnyRows, showDivision){
   if(!rows.length) return hasAnyRows ? '' : `<div class="mono" style="color:var(--muted); font-size:12px; text-align:center; padding:24px 0">Leaderboard will appear once matches are scored.</div>`;
   return `<table class="mono" style="width:100%; font-size:12px; border-collapse:collapse">
     <thead><tr style="text-align:left; color:var(--muted)"><th style="padding:4px 6px">#</th><th style="padding:4px 6px">Player / Team</th><th style="padding:4px 6px">GP</th><th style="padding:4px 6px">W-L</th><th style="padding:4px 6px; text-align:right">+/-</th><th style="padding:4px 6px; text-align:right">Win%</th></tr></thead>
     <tbody>${rows.map((r,i) => `<tr style="border-top:1px solid var(--line)">
       <td style="padding:5px 6px; font-weight:800">${i+1}</td>
-      <td style="padding:5px 6px; font-weight:700">${escapeHtml(r.name)}</td>
+      <td style="padding:5px 6px; font-weight:700; display:flex; align-items:center">${showDivision ? divisionDot(r.divisionId) : ''}${escapeHtml(r.name)}</td>
       <td style="padding:5px 6px">${r.gp}</td>
       <td style="padding:5px 6px">${r.w}-${r.l}</td>
       <td style="padding:5px 6px; text-align:right; color:${r.diff>0?'var(--win)':r.diff<0?'var(--loss)':'var(--muted)'}">${r.diff>0?'+':''}${r.diff}</td>
@@ -341,10 +367,13 @@ function leaderboardRowsHtml(rows, hasAnyRows){
 function renderLeaderboard(){
   renderLeaderboardTabs();
   const view = LEADERBOARD_ROTATOR.current();
-  const matches = view === 'combined' ? ALL_MATCHES : ALL_MATCHES.filter(m => m.divisionId === view);
+  const isCombined = view === 'combined';
+  const matches = isCombined ? ALL_MATCHES : ALL_MATCHES.filter(m => m.divisionId === view);
   const { rows } = TournamentDisplay.computeLeaderboardRows(matches);
-  document.getElementById('lbPodium').innerHTML = podiumHtml(rows);
-  document.getElementById('lbList').innerHTML = leaderboardRowsHtml(rows.slice(3), rows.length > 0);
+  // Division dot: only on Combined, where rows from different divisions are
+  // mixed together -- a single-division view already names its division.
+  document.getElementById('lbPodium').innerHTML = podiumHtml(rows, isCombined);
+  document.getElementById('lbList').innerHTML = leaderboardRowsHtml(rows.slice(3), rows.length > 0, isCombined);
 }
 let leaderboardTimer = null;
 function ensureLeaderboardRotating(){

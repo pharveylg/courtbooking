@@ -85,6 +85,16 @@ check('a single division\'s matches produce only that division\'s players', d1On
 const empty = TD.computeLeaderboardRows([]);
 check('no matches -> empty rows, zeroed summary, no NaN', empty.rows.length === 0 && empty.totalMatches === 0 && empty.avgScore === 0 && empty.biggestBlowout === 0);
 
+/* Each row carries its divisionId (division colour-coding task): the Combined view mixes every
+   division's rows together, so the page needs to know which division a row came from to show a
+   per-row colour indicator. A participant only ever plays within one division. */
+check('each row carries the divisionId of the matches it was built from (A/B -> D1)', combined.rows.find(r => r.participantId === 'A').divisionId === 'D1' && combined.rows.find(r => r.participantId === 'B').divisionId === 'D1');
+check('rows from a different division carry THAT division\'s id (C/D -> D2)', combined.rows.find(r => r.participantId === 'C').divisionId === 'D2' && combined.rows.find(r => r.participantId === 'D').divisionId === 'D2');
+check('a match with no divisionId at all leaves the row\'s divisionId null, not undefined/crashing', (() => {
+  const r = TD.computeLeaderboardRows([{ status: 'completed', participantIds: ['X', 'Y'], participantNames: ['X', 'Y'], score: { a: 11, b: 2 }, winnerParticipantId: 'X' }]).rows;
+  return r.find(x => x.participantId === 'X').divisionId === null;
+})());
+
 /* ================================================================
    Spotlight ticker callouts
    ================================================================ */
@@ -217,6 +227,7 @@ check('writes the session-start stamp with set(..., {merge:true}), never overwri
 check('requests a screen wake lock, best-effort (no throw on unsupported browsers)', /navigator\.wakeLock\.request/.test(displayHtml) && /'wakeLock' in navigator/.test(displayHtml));
 check('offers a Fullscreen control, feature-detected', /requestFullscreen/.test(displayHtml));
 check('shows a stale-data/feed-error indicator in the header, driven by the pure computeFeedStatus decision', /id="feedStatus"/.test(displayHtml) && /TournamentDisplay\.computeFeedStatus/.test(displayHtml));
+
 check('a load failure shows a friendly retry affordance, not the raw exception text', /showLoadFailed/.test(displayHtml) && !/Failed to load: \$\{escapeHtml\(ex\.message\)\}/.test(displayHtml));
 
 const adminHtml = fs.readFileSync(path.join(__dirname, '..', 'tournament-admin.html'), 'utf8');
@@ -225,6 +236,16 @@ check('the display link is shown/hidden alongside the existing public-page link 
 
 const archHtml = fs.readFileSync(path.join(__dirname, '..', 'ARCHITECTURE.md'), 'utf8');
 check('ARCHITECTURE.md\'s runtime-pages table lists the new page', /tournament-display\.html/.test(archHtml));
+
+/* Division colour coding: this page, tournament.html and tournament-admin.html all load the
+   shared division-color.js helper and resolve a division's colour off the SAME DIVISIONS array
+   (createdAt asc) -- that's what makes a division's colour consistent across all three. */
+section('wiring -- division colour coding loads division-color.js and uses it consistently');
+check('tournament-display.html loads division-color.js', /<script src="division-color\.js">/.test(displayHtml));
+check('the featured panel and Combined leaderboard rows resolve colour via DivisionColor, keyed off the DIVISIONS array', /DivisionColor\.divisionColorFor\(\w+,\s*DIVISIONS\)/.test(displayHtml));
+const tHtml = fs.readFileSync(path.join(__dirname, '..', 'tournament.html'), 'utf8');
+check('tournament.html loads division-color.js and resolves colour off its own DIVISIONS array', /<script src="division-color\.js">/.test(tHtml) && /DivisionColor\.divisionColorFor\(\w+,\s*DIVISIONS\)/.test(tHtml));
+check('tournament-admin.html loads division-color.js and resolves colour off its own CURRENT_DIVISIONS array', /<script src="division-color\.js">/.test(adminHtml) && /DivisionColor\.divisionColorFor\(\w+,\s*CURRENT_DIVISIONS\)/.test(adminHtml));
 
 console.log(`\n=== TOURNAMENT DISPLAY (venue screen): ${passed}/${passed + failed} passed ===`);
 process.exit(failed === 0 ? 0 : 1);

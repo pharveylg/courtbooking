@@ -13,6 +13,7 @@
 <script src="firebase-config.js"></script>
 <script src="pickleball-scoring.js"></script>
 <script src="court-scoreboard.js"></script>
+<script src="division-color.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
@@ -2078,6 +2079,16 @@ function renderMatchesList(division, matches){
   wrap.querySelectorAll('[data-save-vsched]').forEach(btn => btn.addEventListener('click', () => saveVenueSchedule(btn.dataset.saveVsched)));
   wrap.querySelectorAll('[data-unvsched]').forEach(btn => btn.addEventListener('click', () => moveMatchTo(btn.dataset.unvsched, null)));
 }
+/* Division colour-coding: left-border accent keyed to the division's stable INDEX
+   in CURRENT_DIVISIONS (the tournament's own createdAt-ordered division list,
+   loaded by loadDivisions) -- the same createdAt order tournament.html and
+   tournament-display.html resolve the SAME divisionId against, so a division
+   reads as the same colour on every page. */
+function divisionAccentClass(divisionId){
+  if(typeof DivisionColor === 'undefined' || !divisionId) return '';
+  const dc = DivisionColor.divisionColorFor(divisionId, CURRENT_DIVISIONS);
+  return ` divc-${dc.name} div-accent`;
+}
 function renderMatchCard(m){
   const [nameA, nameB] = m.participantNames;
   const isBye = m.isBye || m.participantIds.includes('BYE');
@@ -2155,7 +2166,7 @@ function renderMatchCard(m){
       <button data-dismiss-proposal="${m.id}" class="h-8 px-2.5 rounded-full bg-white border border-[#EAE0D5] mono text-[9px] font-[700] cursor-pointer">Dismiss</button>
     </div>` : '';
   return `
-    <div class="p-3 rounded-[14px] bg-[#FFFBF5] border border-[#EAE0D5]">
+    <div class="p-3 rounded-[14px] bg-[#FFFBF5] border border-[#EAE0D5]${divisionAccentClass(m.divisionId)}">
       <div class="flex items-center justify-between gap-2 flex-wrap">
         <span class="font-[700] text-[12.5px]">${escapeHtml(nameA)} <span class="opacity-40 font-[500]">vs</span> ${escapeHtml(nameB)}</span>
         <div class="flex items-center gap-1.5">

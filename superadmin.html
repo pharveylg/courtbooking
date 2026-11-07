@@ -137,6 +137,10 @@ body{background:#FFFBF5;color:#201C19}
                 <input type="checkbox" id="selfServeOnlyFilter" class="w-3.5 h-3.5 accent-[#201C19]"/>
                 <span class="mono text-[10px] font-[700] opacity-70">Self-serve only</span>
               </label>
+              <label class="flex items-center gap-1.5 cursor-pointer">
+                <input type="checkbox" id="needsPublishFilter" class="w-3.5 h-3.5 accent-[#201C19]"/>
+                <span class="mono text-[10px] font-[700] opacity-70">Needs Publish</span>
+              </label>
               <div class="mono text-[11px] opacity-60"><span id="tenantCount">0</span> tenants</div>
             </div>
           </div>
@@ -1659,6 +1663,7 @@ document.getElementById('planForm').addEventListener('submit', (e) => { e.preven
 document.getElementById('assignPlanBtn').addEventListener('click', () => assignPlanToTenant());
 document.getElementById('saveSelfServePlanBtn').addEventListener('click', () => saveSelfServeDefaultPlan().catch(ex => toast('Failed: ' + ex.message)));
 document.getElementById('selfServeOnlyFilter').addEventListener('change', () => { selectedDirectoryTenant = null; renderTenantList(_lastEntries, _lastStatusMap); });
+document.getElementById('needsPublishFilter').addEventListener('change', () => { selectedDirectoryTenant = null; renderTenantList(_lastEntries, _lastStatusMap); });
 document.getElementById('paySettingsForm').addEventListener('submit', async (e) => {
   e.preventDefault();
     requirePerm('manage_platform_configuration');
@@ -2025,11 +2030,14 @@ function renderTenantList(allEntries, statusMap){
   const tabBar = document.getElementById('tenantTabBar');
   const countEl = document.getElementById('tenantCount');
   const selfServeOnly = document.getElementById('selfServeOnlyFilter')?.checked;
-  const entries = selfServeOnly ? allEntries.filter(e => e.data.source === 'self-serve') : allEntries;
+  const needsPublishOnly = document.getElementById('needsPublishFilter')?.checked;
+  let entries = selfServeOnly ? allEntries.filter(e => e.data.source === 'self-serve') : allEntries;
+  if(needsPublishOnly) entries = entries.filter(e => e.data.lifecycle === 'provisioning');
   countEl.textContent = entries.length;
   if(entries.length === 0){
     tabBar.innerHTML = '';
-    list.innerHTML = `<div class="p-8 text-center mono text-[12px] opacity-50">${selfServeOnly ? 'No self-serve tenants yet.' : 'No tenants registered yet. Create one above.'}</div>`;
+    const emptyMsg = needsPublishOnly ? 'No facilities waiting on publish.' : (selfServeOnly ? 'No self-serve tenants yet.' : 'No tenants registered yet. Create one above.');
+    list.innerHTML = `<div class="p-8 text-center mono text-[12px] opacity-50">${emptyMsg}</div>`;
     if(allEntries.length === 0) document.getElementById('reportingList').innerHTML = `<div class="p-8 text-center mono text-[12px] opacity-50">No tenants to report on yet.</div>`;
     return;
   }
@@ -2922,6 +2930,13 @@ function renderTenantRow(slug, data, status, isVisible){
         <div class="mono text-[10px] uppercase tracking-widest opacity-60 mb-1">Subscription</div>
         <div class="mono text-[11px]">${sub ? `<span class="font-[800]">${escapeHtml(sub.planName || sub.planId)}</span> • status <span class="font-[700]">${escapeHtml(sub.status || 'active')}</span> • pricing v${escapeHtml(sub.pricingVersion || 'n/a')} • started ${sub.startedAt && sub.startedAt.toDate ? sub.startedAt.toDate().toLocaleDateString() : '—'}` : `No plan assigned — manual billing formula below. Assign one under <span class="font-[700]">Plans &amp; Pricing</span>.`}</div>
       </div>
+      ${lifecycle === 'provisioning' ? `
+      <div class="md:col-span-2 lg:col-span-4 rounded-[14px] border p-3" style="background:#EDE8FF;border-color:#D6CCFF">
+        <div class="mono text-[10px] uppercase tracking-widest font-[800]" style="color:#3B2A9E">Needs Publish — owner hasn't finished onboarding</div>
+        <div class="mono text-[11px] opacity-70 mt-1.5 mb-2">Created but never published, so <span class="font-[700]">${escapeHtml(data.businessName || slug)}</span> isn't on the public facility picker yet. This re-runs the exact same server-side readiness check the owner's own Publish button uses (business name, at least one active court, an admin PIN, and an hourly rate for every active court) — if something's still missing, you'll see exactly what, with no bypass.</div>
+        <button type="button" data-publish-tenant="${slug}" class="h-9 px-3.5 rounded-full text-white mono text-[10px] font-[800] cursor-pointer hover:opacity-90" style="background:#3B2A9E">Publish on Their Behalf</button>
+      </div>
+      ` : ''}
       <div class="md:col-span-2 lg:col-span-4 rounded-[14px] border p-3" style="background:#FFF5F2;border-color:#FFC9B6">
         <div class="mono text-[10px] uppercase tracking-widest font-[800]" style="color:#8C2C10">Delete Tenant — irreversible</div>
         ${lifecycle === 'cancelled' || lifecycle === 'archived' ? `
@@ -3190,6 +3205,22 @@ function renderTenantRow(slug, data, status, isVisible){
       loadTenants();
     } catch(ex) { toast('Failed: ' + ex.message); }
     finally { e.target.disabled = false; }
+  });
+  // Only rendered when lifecycle is 'provisioning' (see the conditional
+  // block above) -- optional chaining because the button legitimately isn't
+  // in the DOM otherwise. Calls the SAME publishFacility callable the
+  // owner's own onboarding.html Publish button calls -- functions/index.js
+  // re-runs the identical readiness checks for a staff caller, so a tenant
+  // that genuinely isn't ready yet surfaces the same "missing: X" message
+  // here, verbatim, rather than this UI generalizing/swallowing it.
+  row.querySelector(`[data-publish-tenant="${cssAttr(slug)}"]`)?.addEventListener('click', async (e) => {
+    requirePerm('manage_organizations');
+    e.target.disabled = true;
+    try {
+      await fns.httpsCallable('publishFacility')({ slug });
+      toast(`${data.businessName || slug} published — now live on the public picker`);
+      loadTenants();
+    } catch(ex) { toast('Failed: ' + ex.message); e.target.disabled = false; }
   });
   // Only rendered when lifecycle is cancelled/archived (see the conditional
   // block above) -- optional chaining because the button legitimately isn't
@@ -3995,6 +4026,7 @@ const AUDIT_ACTION_LABELS = {
   'invoice-credit-applied': 'Applied credit balance to invoice', 'invoice-reject': 'Rejected payment proof',
   'invoice-waive': 'Waived invoice', 'invoice-cancel': 'Cancelled invoice', 'invoice-override': 'Overrode invoice status',
   'delete-tenant': 'Deleted tenant permanently',
+  'publish-facility-staff': 'Published facility on owner\'s behalf',
 };
 async function loadAuditLog(){
   const list = document.getElementById('auditLogList');

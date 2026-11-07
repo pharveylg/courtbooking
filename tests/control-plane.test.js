@@ -466,6 +466,33 @@ const C = globalThis.__makeCtx();
     handlerBlock.includes("await fns.httpsCallable('deleteTenant')({ slug })") && /delete TENANT_INDEX\[slug\]/.test(handlerBlock));
   check('wiring: the new action is registered in AUDIT_ACTION_LABELS', /'delete-tenant':\s*'Deleted tenant permanently'/.test(html));
 
+  /* ===== wiring: "Needs Publish" filter + "Publish on Their Behalf" (regex-over-HTML,
+     same style as the Delete Tenant wiring checks above) ===== */
+  const needsPublishCheckboxIdx = html.indexOf('id="needsPublishFilter"');
+  check('wiring: the Needs Publish filter checkbox exists next to Self-serve only', (() => {
+    const selfServeIdx = html.indexOf('id="selfServeOnlyFilter"');
+    return selfServeIdx > -1 && needsPublishCheckboxIdx > -1 && needsPublishCheckboxIdx > selfServeIdx && needsPublishCheckboxIdx - selfServeIdx < 400;
+  })());
+  check('wiring: the Needs Publish checkbox has its own change listener that re-renders the list (same pattern as selfServeOnlyFilter)',
+    /document\.getElementById\('needsPublishFilter'\)\.addEventListener\('change', \(\) => \{ selectedDirectoryTenant = null; renderTenantList\(_lastEntries, _lastStatusMap\); \}\);/.test(html));
+  check('wiring: renderTenantList filters to lifecycle === \'provisioning\' when the Needs Publish checkbox is checked, without changing the underlying query',
+    /const needsPublishOnly = document\.getElementById\('needsPublishFilter'\)\?\.checked;[\s\S]{0,300}?if\(needsPublishOnly\) entries = entries\.filter\(e => e\.data\.lifecycle === 'provisioning'\);/.test(html));
+
+  const publishBtnMarkupIdx = html.indexOf('data-publish-tenant="${slug}"');
+  const provisioningGateIdx = html.indexOf("lifecycle === 'provisioning' ?");
+  check('wiring: the Publish on Their Behalf button markup exists, gated behind lifecycle === \'provisioning\', in the same Manage panel as Delete Tenant',
+    publishBtnMarkupIdx > -1 && provisioningGateIdx > -1 && publishBtnMarkupIdx > provisioningGateIdx && publishBtnMarkupIdx - provisioningGateIdx < 900 && provisioningGateIdx < deleteBtnMarkupIdx);
+  const publishHandlerMarker = 'data-publish-tenant="${cssAttr(slug)}"]`)?.addEventListener(\'click\', async (e) => {';
+  const publishHandlerIdx = html.indexOf(publishHandlerMarker);
+  const publishHandlerBlock = publishHandlerIdx > -1 ? html.slice(publishHandlerIdx, publishHandlerIdx + 600) : '';
+  check('wiring: the Publish on Their Behalf click handler exists and is gated on manage_organizations, same as Delete Tenant',
+    publishHandlerIdx > -1 && /requirePerm\('manage_organizations'\)/.test(publishHandlerBlock));
+  check('wiring: it calls the SAME publishFacility callable onboarding.html\'s owner-facing Publish button calls -- one readiness implementation, not a second one',
+    publishHandlerBlock.includes("await fns.httpsCallable('publishFacility')({ slug })"));
+  check('wiring: on failure it surfaces the server\'s exact error message rather than a generic one',
+    /catch\(ex\) \{ toast\('Failed: ' \+ ex\.message\); e\.target\.disabled = false; \}/.test(publishHandlerBlock));
+  check('wiring: the staff-initiated action is registered in AUDIT_ACTION_LABELS', /'publish-facility-staff':\s*'Published facility on owner\\'s behalf'/.test(html));
+
   const passed = results.filter(r => r[1]).length;
   console.log(`\n=== CONTROL-PLANE TESTS: ${passed}/${results.length} passed ===`);
   results.filter(r => !r[1]).forEach(r => console.log('  FAILED:', r[0]));

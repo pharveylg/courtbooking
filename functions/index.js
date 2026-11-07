@@ -1349,7 +1349,19 @@ exports.createFacility = onCall({ region: REGION }, async (request) => {
    section 6's table) rather than trusting whatever the client's own
    checklist UI last showed -- the same "don't trust the browser for
    the one sensitive check" posture as the rest of this file, just
-   applied to ownership instead of bracket structure. */
+   applied to ownership instead of bracket structure.
+
+   A platform staffer holding `manage_organizations` may ALSO call this
+   on the owner's behalf -- support's only lever for the "owner created a
+   facility and never came back to publish it" case (superadmin's Tenant
+   Directory surfaces these via the "Needs Publish" filter). Reuses
+   assertPlatformPerm, the exact same custom-claim check every other
+   staff-gated callable in this file uses (deleteTenant, etc.), rather
+   than inventing a new one. Deliberately NOT a bypass: the readiness
+   re-validation below is one shared code path run identically for the
+   owner and for staff, so a tenant that genuinely isn't ready still gets
+   the same "missing: X" rejection either way -- staff can see what's
+   blocking it and relay that to the owner, not force past it. */
 exports.publishFacility = onCall({ region: REGION }, async (request) => {
   if (!request.auth) throw new HttpsError('unauthenticated', 'Sign in before publishing a facility.');
   const { slug } = request.data || {};
@@ -1359,9 +1371,8 @@ exports.publishFacility = onCall({ region: REGION }, async (request) => {
   const tenantSnap = await tenantRef.get();
   if (!tenantSnap.exists) throw new HttpsError('not-found', `No facility found for "${slug}".`);
   const tenant = tenantSnap.data();
-  if (tenant.ownerUid !== request.auth.uid) {
-    throw new HttpsError('permission-denied', 'Only the facility\'s owner can publish it.');
-  }
+  const isOwner = tenant.ownerUid === request.auth.uid;
+  const staffTok = isOwner ? null : assertPlatformPerm(request, ['manage_organizations']);
 
   const [configSnap, courtsSnap, settingsSnap, pricingSnap] = await Promise.all([
     db.doc(`clients/${slug}/config/state`).get(),
@@ -1396,7 +1407,16 @@ exports.publishFacility = onCall({ region: REGION }, async (request) => {
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
   }, { merge: true });
   const billingNote = await applySelfServeBilling(slug, tenant, businessName, request.auth);
-  await logPlatformAudit('publish-facility', slug, `Facility "${businessName}" published by ${request.auth.token.email || request.auth.uid}${billingNote ? ' -- ' + billingNote : ''}`, request.auth.token.email);
+  if (isOwner) {
+    await logPlatformAudit('publish-facility', slug, `Facility "${businessName}" published by ${request.auth.token.email || request.auth.uid}${billingNote ? ' -- ' + billingNote : ''}`, request.auth.token.email);
+  } else {
+    // Staff-initiated publish is the one privileged/audited path here --
+    // the owner's own publish above is just a normal self-service action,
+    // not something that needs calling out as a staff override.
+    const staffEmail = (staffTok && staffTok.email) || request.auth.uid;
+    const detail = `Facility "${businessName}" (${slug}) published on the owner's behalf by platform staff ${staffEmail}${tenant.ownerEmail ? ` (owner: ${tenant.ownerEmail})` : ''}${billingNote ? ' -- ' + billingNote : ''}`;
+    await logPlatformAudit('publish-facility-staff', slug, detail, staffEmail);
+  }
   return { ok: true, slug };
 });
 

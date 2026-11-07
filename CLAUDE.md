@@ -20,3 +20,11 @@ Guidance for Claude Code working in this repository.
   ```
   All currently pass; a change that breaks one needs a fix, not a skip.
 - `.md` files (and a few setup/seed scripts) are excluded from Firebase Hosting — see `firebase.json`'s `hosting.ignore` list. Documentation-only changes never need a deploy step.
+
+## Graphify
+
+- For codebase architecture, dependency, or implementation questions, when `graphify-out/graph.json` exists, start with `graphify query "<question>"` to locate relevant code and relationships.
+- Use `graphify path "<A>" "<B>"` for relationships and `graphify explain "<concept>"` for focused concepts.
+- Read source files when the graph identifies relevant locations or when additional verification is needed.
+- After code changes, run `graphify update .` to refresh the local graph.
+- Keep `graphify-out/` local and ignored by Git unless explicitly deciding to share the generated graph.

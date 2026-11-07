@@ -493,6 +493,27 @@ const C = globalThis.__makeCtx();
     /catch\(ex\) \{ toast\('Failed: ' \+ ex\.message\); e\.target\.disabled = false; \}/.test(publishHandlerBlock));
   check('wiring: the staff-initiated action is registered in AUDIT_ACTION_LABELS', /'publish-facility-staff':\s*'Published facility on owner\\'s behalf'/.test(html));
 
+  /* ===== wiring: self-serve owner email/UID surfaced on the tenant row and
+     in the Manage panel (regex-over-HTML, same style as the checks above) ===== */
+  const renderTenantRowFnIdx = html.indexOf('function renderTenantRow');
+  const nextFnAfterTenantRowIdx = html.indexOf('\nfunction ', renderTenantRowFnIdx + 1);
+  const ownerEmailRowIdx = html.indexOf("Signed up as ${escapeHtml(data.ownerEmail)}");
+  const businessNameLineIdx = html.indexOf('SELF-SERVE</span>');
+  const ownerEmailManageIdx = html.indexOf('Self-Serve Signup Account');
+  const subscriptionBoxIdx = html.indexOf('mono text-[10px] uppercase tracking-widest opacity-60 mb-1">Subscription');
+  check('wiring: the tenant row shows "Signed up as <email>" only when source is self-serve AND ownerEmail is present (graceful when either is missing)',
+    /\$\{data\.source === 'self-serve' && data\.ownerEmail \? `<div class="mono text-\[9\.5px\] opacity-50 truncate" title="\$\{data\.ownerUid \? 'Owner UID: ' \+ escapeHtml\(data\.ownerUid\) : ''\}">Signed up as \$\{escapeHtml\(data\.ownerEmail\)\}<\/div>` : ''\}/.test(html));
+  check('wiring: the owner-email row sits inside renderTenantRow, right after the business name / SELF-SERVE badge line, still on the tenant row (not inside the Manage panel)',
+    ownerEmailRowIdx > -1 && businessNameLineIdx > -1 && renderTenantRowFnIdx > -1 && nextFnAfterTenantRowIdx > -1 &&
+    renderTenantRowFnIdx < businessNameLineIdx && businessNameLineIdx < ownerEmailRowIdx &&
+    ownerEmailRowIdx < ownerEmailManageIdx && ownerEmailRowIdx < nextFnAfterTenantRowIdx);
+  check('wiring: the Manage panel also shows a dedicated "Self-Serve Signup Account" box, inside renderTenantRow, placed right after Subscription and before the Needs Publish block',
+    ownerEmailManageIdx > -1 && subscriptionBoxIdx > -1 &&
+    renderTenantRowFnIdx < subscriptionBoxIdx && subscriptionBoxIdx < ownerEmailManageIdx &&
+    ownerEmailManageIdx < provisioningGateIdx && provisioningGateIdx < nextFnAfterTenantRowIdx);
+  check('wiring: the Manage panel box is also gated on source === self-serve AND ownerEmail present, and puts ownerUid only in a tooltip (title=), never rendered as visible text',
+    /\$\{data\.source === 'self-serve' && data\.ownerEmail \? `[\s\S]{0,300}?title="\$\{data\.ownerUid \? 'Owner UID: ' \+ escapeHtml\(data\.ownerUid\) : ''\}"[\s\S]{0,200}?Self-Serve Signup Account[\s\S]{0,100}?escapeHtml\(data\.ownerEmail\)/.test(html));
+
   const passed = results.filter(r => r[1]).length;
   console.log(`\n=== CONTROL-PLANE TESTS: ${passed}/${results.length} passed ===`);
   results.filter(r => !r[1]).forEach(r => console.log('  FAILED:', r[0]));

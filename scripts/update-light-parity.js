@@ -55,6 +55,11 @@ function describe(html) {
 const BASELINE_REF = '31fe4ac';
 const SUBSTITUTIONS = [
   {
+    "from": "  const pin = pinInput ? pinInput.value.trim() : '1234';",
+    "to": "  const pin = pinInput ? pinInput.value.trim() : '';",
+    "count": 1
+  },
+  {
     "from": "<div style=\"font-family:'JetBrains Mono',monospace;font-size:11px;opacity:0.6;margin-top:8px\">Preparing your booking page</div>\n  </div>\n  <style>@keyframes pulse",
     "to": "<div style=\"font-family:'JetBrains Mono',monospace;font-size:11px;opacity:0.6;margin-top:8px\">Preparing your booking page</div>\n    <!-- Shown only if initializeApp() hasn't resolved within LOAD_TIMEOUT_MS; augments the\n         spinner above rather than replacing it, since the load may still finish on its own. -->\n    <div id=\"loadingTimeoutMsg\" style=\"display:none;margin-top:18px;max-width:280px\">\n      <div id=\"loadingTimeoutHeading\" style=\"font-size:13px;font-weight:700;color:#201C19\">Taking longer than expected</div>\n      <div style=\"font-family:'JetBrains Mono',monospace;font-size:11px;opacity:0.7;margin-top:4px\">This can happen on a slow or unstable connection.</div>\n      <button type=\"button\" id=\"loadingTimeoutRetryBtn\" style=\"margin-top:12px;background:#201C19;color:white;border:none;border-radius:999px;padding:8px 20px;font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;cursor:pointer\">Retry</button>\n    </div>\n  </div>\n  <style>@keyframes pulse",
     "count": 1
@@ -81,12 +86,12 @@ const SUBSTITUTIONS = [
   },
   {
     "from": "      const bkId = btn.dataset.payPending;\n      const bk = bookings.find(b=>b.id===bkId);\n      if(!bk) return;\n      const inputPin = prompt(`Enter Booking PIN for ${bk.name}'s reservation:`);\n      if(inputPin === null) return;\n      if(inputPin === bk.pin || inputPin === getPin() || inputPin === '1234'){\n        _currentProofBookingId = bk.id;\n        document.querySelector('[data-nav=\"payment\"]').click();\n        toast(`Booking verified! Upload your payment proof or scan QR for ${fmtMoney(sumCourtRate(bk.court, bk.start, bk.end))}.`);\n      } else {\n        alert('Incorrect Booking PIN!');\n      }\n    });",
-    "to": "      const bkId = btn.dataset.payPending;\n      const bk = bookings.find(b=>b.id===bkId);\n      if(!bk) return;\n      if(!tryBookingPinGate('pay_' + bkId)) return;\n      const inputPin = prompt(`Enter Booking PIN for ${bk.name}'s reservation:`);\n      if(inputPin === null) return;\n      const correct = inputPin === bk.pin || inputPin === getPin() || inputPin === '1234';\n      reportBookingPinResult('pay_' + bkId, correct);\n      if(correct){\n        _currentProofBookingId = bk.id;\n        document.querySelector('[data-nav=\"payment\"]').click();\n        toast(`Booking verified! Upload your payment proof or scan QR for ${fmtMoney(sumCourtRate(bk.court, bk.start, bk.end))}.`);\n      }\n    });",
+    "to": "      const bkId = btn.dataset.payPending;\n      const bk = bookings.find(b=>b.id===bkId);\n      if(!bk) return;\n      if(!bk.pin){ toast('This booking has no Booking PIN on file. Please contact the club.'); return; }\n      if(!tryBookingPinGate('pay_' + bkId)) return;\n      const inputPin = prompt(`Enter Booking PIN for ${bk.name}'s reservation:`);\n      if(inputPin === null) return;\n      const correct = String(inputPin).trim() === String(bk.pin).trim();\n      reportBookingPinResult('pay_' + bkId, correct);\n      if(correct){\n        _currentProofBookingId = bk.id;\n        document.querySelector('[data-nav=\"payment\"]').click();\n        toast(`Booking verified! Upload your payment proof or scan QR for ${fmtMoney(sumCourtRate(bk.court, bk.start, bk.end))}.`);\n      }\n    });",
     "count": 1
   },
   {
     "from": "      const bkId = btn.dataset.cancelBooking;\n      const bk = bookings.find(b=>b.id===bkId);\n      if(!bk) return;\n      const inputPin = prompt(`Enter Booking PIN to cancel ${bk.name}'s reservation:`);\n      if(inputPin === null) return;\n      if(inputPin === bk.pin || inputPin === getPin() || inputPin === '1234'){\n        if(confirm(`Cancel booking for ${bk.name} on ${bk.date} at ${bk.startTime}? This cannot be undone.`)){\n          removeBooking(bkId);\n          renderSchedule();\n          renderBookingsList();\n          if(adminUnlocked) renderAdminBookings();\n          toast('Booking cancelled successfully.');\n        }\n      } else {\n        alert('Incorrect Booking PIN!');\n      }\n    });",
-    "to": "      const bkId = btn.dataset.cancelBooking;\n      const bk = bookings.find(b=>b.id===bkId);\n      if(!bk) return;\n      if(!tryBookingPinGate('cancel_' + bkId)) return;\n      const inputPin = prompt(`Enter Booking PIN to cancel ${bk.name}'s reservation:`);\n      if(inputPin === null) return;\n      const correct = inputPin === bk.pin || inputPin === getPin() || inputPin === '1234';\n      reportBookingPinResult('cancel_' + bkId, correct);\n      if(correct){\n        if(confirm(`Cancel booking for ${bk.name} on ${bk.date} at ${bk.startTime}? This cannot be undone.`)){\n          removeBooking(bkId);\n          renderSchedule();\n          renderBookingsList();\n          if(adminUnlocked) renderAdminBookings();\n          toast('Booking cancelled successfully.');\n        }\n      }\n    });",
+    "to": "      const bkId = btn.dataset.cancelBooking;\n      const bk = bookings.find(b=>b.id===bkId);\n      if(!bk) return;\n      if(!bk.pin){ toast('This booking has no Booking PIN on file. Please contact the club.'); return; }\n      if(!tryBookingPinGate('cancel_' + bkId)) return;\n      const inputPin = prompt(`Enter Booking PIN to cancel ${bk.name}'s reservation:`);\n      if(inputPin === null) return;\n      const correct = String(inputPin).trim() === String(bk.pin).trim();\n      reportBookingPinResult('cancel_' + bkId, correct);\n      if(correct){\n        if(confirm(`Cancel booking for ${bk.name} on ${bk.date} at ${bk.startTime}? This cannot be undone.`)){\n          removeBooking(bkId);\n          renderSchedule();\n          renderBookingsList();\n          if(adminUnlocked) renderAdminBookings();\n          toast('Booking cancelled successfully.');\n        }\n      }\n    });",
     "count": 1
   },
   {
@@ -135,7 +140,13 @@ const SUBSTITUTIONS = [
     "count": 1
   },
 ];
-const ADDITION_RES = [];
+const lit = (s) => new RegExp(s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+const ADDITION_RES = [
+  lit(",\n    pin: generateBookingPin()"),
+  lit("/* Booking PINs are 4 digits (1000-9999). Used for open-play joins (which\n   have no customer-typed PIN) and for the staff reset in renderAdminBookings. */\nfunction generateBookingPin(){\n  const n = (window.crypto && crypto.getRandomValues) ? crypto.getRandomValues(new Uint32Array(1))[0] : Math.floor(Math.random() * 0x100000000);\n  return String(1000 + (n % 9000));\n}\n"),
+  lit("        ${b.status!=='OpenPlay' ? `<button data-reset-pin=\"${b.id}\" class=\"h-8 px-3 rounded-full bg-white border border-[#EAE0D5] mono text-[10px] font-[700] hover:bg-[#F1E9DF]\">Reset PIN</button>` : ''}\n"),
+  lit("  list.querySelectorAll('button[data-reset-pin]').forEach(btn=>{\n    btn.addEventListener('click', ()=>{\n      if(!adminUnlocked) return;\n      const b = bookings.find(x=>x.id===btn.dataset.resetPin);\n      if(!b) return;\n      const who = b.name || 'this booking';\n      if(!confirm(`Generate a new Booking PIN for ${who}? The old PIN will stop working.`)) return;\n      b.pin = generateBookingPin();\n      saveBookings(bookings);\n      renderAdminBookings();\n      alert(`New Booking PIN for ${who}: ${b.pin}\\n\\nGive this to the player.`);\n    });\n  });\n"),
+];
 function bodyOf(html) { const h = norm(html); return h.slice(h.indexOf('<body')); }
 function reverseDelta(body, additions, substitutions) {
   let b = body;

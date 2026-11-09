@@ -4823,10 +4823,11 @@ function renderScheduleSlots(container, dateISO, courtFilter){
       const bkId = btn.dataset.payPending;
       const bk = bookings.find(b=>b.id===bkId);
       if(!bk) return;
+      if(!bk.pin){ toast('This booking has no Booking PIN on file. Please contact the club.'); return; }
       if(!tryBookingPinGate('pay_' + bkId)) return;
       const inputPin = prompt(`Enter Booking PIN for ${bk.name}'s reservation:`);
       if(inputPin === null) return;
-      const correct = inputPin === bk.pin || inputPin === getPin() || inputPin === '1234';
+      const correct = String(inputPin).trim() === String(bk.pin).trim();
       reportBookingPinResult('pay_' + bkId, correct);
       if(correct){
         _currentProofBookingId = bk.id;
@@ -4841,10 +4842,11 @@ function renderScheduleSlots(container, dateISO, courtFilter){
       const bkId = btn.dataset.cancelBooking;
       const bk = bookings.find(b=>b.id===bkId);
       if(!bk) return;
+      if(!bk.pin){ toast('This booking has no Booking PIN on file. Please contact the club.'); return; }
       if(!tryBookingPinGate('cancel_' + bkId)) return;
       const inputPin = prompt(`Enter Booking PIN to cancel ${bk.name}'s reservation:`);
       if(inputPin === null) return;
-      const correct = inputPin === bk.pin || inputPin === getPin() || inputPin === '1234';
+      const correct = String(inputPin).trim() === String(bk.pin).trim();
       reportBookingPinResult('cancel_' + bkId, correct);
       if(correct){
         if(confirm(`Cancel booking for ${bk.name} on ${bk.date} at ${bk.startTime}? This cannot be undone.`)){
@@ -5132,7 +5134,7 @@ document.getElementById('reserveForm').addEventListener('submit', (ev)=>{
   const email = document.getElementById('fEmail').value.trim();
   const group = document.getElementById('fGroup').value.trim();
   const pinInput = document.getElementById('fPin');
-  const pin = pinInput ? pinInput.value.trim() : '1234';
+  const pin = pinInput ? pinInput.value.trim() : '';
   const s = parseInt(document.getElementById('fStart').value,10);
   const e = parseInt(document.getElementById('fEnd').value,10);
   if(!name || !email) { showFormError('Name and email required.'); return; }
@@ -5726,6 +5728,7 @@ function renderAdminBookings(){
       </div>
       <div class="flex items-center gap-2">
         ${statusSelect}
+        ${b.status!=='OpenPlay' ? `<button data-reset-pin="${b.id}" class="h-8 px-3 rounded-full bg-white border border-[#EAE0D5] mono text-[10px] font-[700] hover:bg-[#F1E9DF]">Reset PIN</button>` : ''}
         <button data-del="${b.id}" class="w-8 h-8 rounded-full bg-white border border-[#EAE0D5] grid place-items-center hover:bg-[#FFE9E0]">✕</button>
       </div>
     `;
@@ -5736,6 +5739,19 @@ function renderAdminBookings(){
     sel.addEventListener('change', ()=>{
       const b = setBookingStatus(sel.dataset.status, sel.value);
       if(b) toast(`Marked as ${sel.value}`);
+    });
+  });
+  list.querySelectorAll('button[data-reset-pin]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      if(!adminUnlocked) return;
+      const b = bookings.find(x=>x.id===btn.dataset.resetPin);
+      if(!b) return;
+      const who = b.name || 'this booking';
+      if(!confirm(`Generate a new Booking PIN for ${who}? The old PIN will stop working.`)) return;
+      b.pin = generateBookingPin();
+      saveBookings(bookings);
+      renderAdminBookings();
+      alert(`New Booking PIN for ${who}: ${b.pin}\n\nGive this to the player.`);
     });
   });
   list.querySelectorAll('button[data-del]').forEach(btn=>{
@@ -6844,7 +6860,8 @@ async function ogJoinFacilityOpenPlay(gameId, name, email){
     name, email, court: game.court, date: game.date,
     start: game.startHour, end: game.endHour != null ? game.endHour : game.startHour + 1,
     status: 'Pending', group: 'Open Play join', source: 'openplay-join',
-    linkedOpenGameId: gameId, amountDue, createdAt: Date.now()
+    linkedOpenGameId: gameId, amountDue, createdAt: Date.now(),
+    pin: generateBookingPin()
   };
   bookings.unshift(booking);
   saveBookings(bookings);
@@ -9381,6 +9398,12 @@ document.querySelectorAll('.stats-view-btn').forEach(btn => {
    another. This is a walk-in booking PIN, not a security-critical
    account, so a short cooldown is enough -- not a permanent lockout. */
 const _bookingPinRecords = new Map();
+/* Booking PINs are 4 digits (1000-9999). Used for open-play joins (which
+   have no customer-typed PIN) and for the staff reset in renderAdminBookings. */
+function generateBookingPin(){
+  const n = (window.crypto && crypto.getRandomValues) ? crypto.getRandomValues(new Uint32Array(1))[0] : Math.floor(Math.random() * 0x100000000);
+  return String(1000 + (n % 9000));
+}
 function tryBookingPinGate(key){
   const check = PinGate.checkGate(_bookingPinRecords.get(key), Date.now());
   _bookingPinRecords.set(key, check.record);

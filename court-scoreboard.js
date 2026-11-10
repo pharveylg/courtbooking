@@ -188,12 +188,32 @@
 
     /* ---------- speech / haptics / wake lock ---------- */
     let voiceOk = typeof window.speechSynthesis !== 'undefined' && typeof window.SpeechSynthesisUtterance !== 'undefined';
+    /* Calls are spoken one after another, never cut off. speechCurrent holds the
+       utterance being spoken until its onend/onerror fires (so the browser cannot
+       drop it); speechWaiting holds calls not yet started, capped at the newest
+       SPEECH_BACKLOG so a fast run of taps does not lag far behind the score. */
+    const SPEECH_BACKLOG = 2;
+    let speechCurrent = null;
+    let speechWaiting = [];
+    function speechAdvance() {
+      if (speechCurrent || !speechWaiting.length || !voiceOk) return;
+      const u = speechWaiting.shift();
+      speechCurrent = u;
+      const done = () => { if (speechCurrent === u) speechCurrent = null; speechAdvance(); };
+      u.onend = done; u.onerror = done;
+      try { window.speechSynthesis.speak(u); } catch (e) { speechCurrent = null; speechWaiting = []; voiceOk = false; }
+    }
+    function cancelSpeech() {
+      speechWaiting = []; speechCurrent = null;
+      try { window.speechSynthesis && window.speechSynthesis.cancel(); } catch (e) { /* ignore */ }
+    }
     function speak(text, force) {
       if ((!audioOn && !force) || !text || !voiceOk) return;
       try {
-        window.speechSynthesis.cancel();
         const u = new SpeechSynthesisUtterance(text); u.lang = 'en-US'; u.rate = 0.95;
-        window.speechSynthesis.speak(u);
+        speechWaiting.push(u);
+        while (speechWaiting.length > SPEECH_BACKLOG) speechWaiting.shift();
+        speechAdvance();
       } catch (e) { voiceOk = false; }
     }
     const buzz = (ms) => { try { if (navigator.vibrate) navigator.vibrate(ms); } catch (e) { /* not supported */ } };
@@ -428,7 +448,7 @@
     function undo() {
       if (!history.length) return;
       const prev = history.pop(); buzz(10);
-      try { window.speechSynthesis && window.speechSynthesis.cancel(); } catch (e) { /* ignore */ }
+      cancelSpeech();
       change(prev);
     }
     function nextGame() {
@@ -499,7 +519,7 @@
     function close(finished) {
       clearTimeout(liveTimer);
       document.removeEventListener('visibilitychange', onVis);
-      try { window.speechSynthesis && window.speechSynthesis.cancel(); } catch (e) { /* ignore */ }
+      cancelSpeech();
       try { if (wake) wake.release(); } catch (e) { /* ignore */ }
       try { if (document.fullscreenElement) document.exitFullscreen(); } catch (e) { /* ignore */ }
       document.body.style.overflow = prevOverflow;

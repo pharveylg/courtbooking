@@ -85,12 +85,14 @@ const b5 = (() => { let s = S.createMatch({ bestOf: 5, doubles: false }, N); for
 check('best of 5 needs three games', b5.complete && b5.gamesWon.home === 3 && b5.games.length === 5);
 
 section('calls and announcements');
-check('spoken call uses commas', S.scoreCallSpoken(play(S.createMatch({}, N), 'a')) === '0, 0, 1' && S.scoreCallSpoken(S.createMatch({ scoring: 'rally' }, N)) === '0, 0');
+check('spoken call uses commas; doubles side-out says the server number as "server N"', S.scoreCallSpoken(play(S.createMatch({}, N), 'a')) === '0, 0, server 1' && S.scoreCallSpoken(S.createMatch({ scoring: 'rally' }, N)) === '0, 0');
+check('singles spoken call keeps the plain comma form (no server number)', S.scoreCallSpoken(play(S.createMatch({ doubles: false }, N), 'a')) === '0, 0' && S.scoreCallSpoken(play(S.createMatch({ doubles: false, scoring: 'sideout' }, N), 'hh')) === '2, 0');
+check('on-screen text call is unchanged (dashes, no "server" word)', call(play(S.createMatch({}, N), 'a')) === '0-0-1');
 const a0 = S.createMatch({}, N);
-check('side out is announced with the new call', S.announcement(a0, S.applyRally(a0, 'away', 1)) === 'Side out. 0, 0, 1');
+check('side out is announced with the new call', S.announcement(a0, S.applyRally(a0, 'away', 1)) === 'Side out. 0, 0, server 1');
 const a1 = S.applyRally(S.applyRally(a0, 'away', 1), 'away', 1);
-check('a point is just the call', S.announcement(S.applyRally(a0, 'away', 1), a1) === '1, 0, 1');
-check('second-server hand-over is not called a side out', S.announcement(a1, S.applyRally(a1, 'home', 1)) === '1, 0, 2');
+check('a point is just the call', S.announcement(S.applyRally(a0, 'away', 1), a1) === '1, 0, server 1');
+check('second-server hand-over is not called a side out', S.announcement(a1, S.applyRally(a1, 'home', 1)) === '1, 0, server 2');
 check('rally scoring never says "side out"', (() => { const r = S.createMatch({ scoring: 'rally' }, N); return !/Side out/.test(S.announcement(r, S.applyRally(r, 'away', 1))); })());
 const gEnd = { ...S.createMatch({ bestOf: 3, doubles: false }, N), home: 10, away: 4, serving: 'home' };
 check('game end (mid-match) uses the unified "Game!" phrasing', S.announcement(gEnd, S.applyRally(gEnd, 'home', 1)) === 'Game! Winner, Alex & Sam. 11 to 4');
@@ -143,7 +145,7 @@ check('match point re-announces on a first-server fault that does not convert it
    nowhere near winning, can. Set/match point must NOT be announced here; it falls
    through to the normal side-out callout instead. */
 const stick2 = S.applyRally(stick1, 'away', 1);
-check('a side-out to the non-winning side drops the match-point call, not just re-announces it', !stick2.gameOver && stick2.home === 10 && stick2.away === 4 && stick2.serving === 'away' && S.announcement(stick1, stick2) === 'Side out. 4, 10, 1');
+check('a side-out to the non-winning side drops the match-point call, not just re-announces it', !stick2.gameOver && stick2.home === 10 && stick2.away === 4 && stick2.serving === 'away' && S.announcement(stick1, stick2) === 'Side out. 4, 10, server 1');
 
 section('set/match point is gated on who is serving');
 /* The serving side itself is one away: announces normally (same mechanism as every

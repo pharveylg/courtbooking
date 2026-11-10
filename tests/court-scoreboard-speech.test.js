@@ -36,7 +36,11 @@ function makeBoard(opts = {}) {
   const store = { getItem: () => (opts.audio === 'off' ? 'off' : null), setItem() {}, removeItem() {} };
   const win = { PickleScore: require('../pickleball-scoring.js'), speechSynthesis, SpeechSynthesisUtterance: Utt, addEventListener() {}, removeEventListener() {}, matchMedia: () => ({ matches: false }), innerWidth: 400, innerHeight: 800 };
   win.window = win;
-  const ctx = vm.createContext(Object.assign({ document: doc, localStorage: store, console, setTimeout, clearTimeout, navigator: {}, requestAnimationFrame: (f) => f() }, win));
+  /* Fake timers: the watchdog timer is recorded, never run on its own. */
+  const timers = { next: 1, pending: new Map(), fire(id) { const t = this.pending.get(id); this.pending.delete(id); t.fn(); } };
+  const fakeSetTimeout = (fn, ms) => { const id = timers.next++; timers.pending.set(id, { fn, ms }); return id; };
+  const fakeClearTimeout = (id) => { timers.pending.delete(id); };
+  const ctx = vm.createContext(Object.assign({ document: doc, localStorage: store, console, setTimeout: fakeSetTimeout, clearTimeout: fakeClearTimeout, navigator: {}, requestAnimationFrame: (f) => f() }, win));
   vm.runInContext(board, ctx);
   const B = win.CourtBoard;
   const api = B.open({ title: 't', names: { home: 'A', away: 'B' }, config: { target: 11, winBy: 2, scoring: 'sideout', bestOf: 1, doubles: true } });
@@ -45,7 +49,7 @@ function makeBoard(opts = {}) {
     if (!b) throw new Error(`no button "${text}"`);
     (b.listeners.click || []).forEach((fn) => fn({}));
   };
-  return { api, synth, press, uttStore };
+  return { api, synth, press, uttStore, timers };
 }
 
 /* ---- source checks ---- */
@@ -102,6 +106,29 @@ section('(d) an utterance is held until its onend fires');
   check('a duplicate onend for a finished utterance does not start an extra call', b.synth.spoken.length === 2, `spoke ${b.synth.spoken.length}`);
   check('the held utterance is still the speaking one while it plays (second call waits)', b.synth.spoken.length === 2 && b.synth.spoken[1].id === 2);
 }
+
+section('(e) the watchdog advances a stuck utterance');
+{
+  const b = makeBoard();
+  /* The board arms its own timers (keep-awake and similar); only timers armed after this point are speech watchdogs. */
+  const baseKeys = new Set(b.timers.pending.keys());
+  const speechTimers = () => [...b.timers.pending.entries()].filter(([id]) => !baseKeys.has(id));
+  b.press('Test voice'); b.press('Test voice');
+  check('one watchdog timer is armed for the speaking utterance', speechTimers().length === 1, `armed=${speechTimers().length}`);
+  const [wdId, wd] = speechTimers()[0];
+  check('watchdog delay is max(4000, 120 ms per character)', wd.ms === Math.max(4000, 120 * b.uttStore[0].text.length), `ms=${wd.ms}`);
+  b.timers.fire(wdId);
+  check('a stuck utterance is treated as ended: the next call starts', b.synth.spoken.map((s) => s.id).join(',') === '1,2', b.synth.spoken.map((s) => s.id).join(','));
+  b.uttStore[0].onend();
+  check('a late onend for the timed-out utterance does not start a third call', b.synth.spoken.length === 2, `spoke ${b.synth.spoken.length}`);
+  check('the second call has its own watchdog armed', speechTimers().length === 1, `armed=${speechTimers().length}`);
+  b.uttStore[1].onend();
+  check('onend clears the watchdog timer', speechTimers().length === 0, `armed=${speechTimers().length}`);
+  b.press('Test voice'); b.press('Test voice');
+  b.press('Close');
+  check('close() clears the watchdog timer', speechTimers().length === 0, `armed=${speechTimers().length}`);
+}
+check('source: the watchdog is armed on speechCurrent and cleared in cancelSpeech', /speechWatchdog = setTimeout\(done, Math\.max\(4000, 120 \* String\(u\.text \|\| ''\)\.length\)\);/.test(board) && /function cancelSpeech\(\) \{\s*clearTimeout\(speechWatchdog\);/.test(board));
 
 section('force semantics: Test voice speaks even with audio off');
 {

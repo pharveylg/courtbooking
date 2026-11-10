@@ -195,15 +195,25 @@
     const SPEECH_BACKLOG = 2;
     let speechCurrent = null;
     let speechWaiting = [];
+    /* Watchdog for the speaking utterance: if the browser never fires onend or
+       onerror, treat it as ended after max(4000, 120 ms per character) so the
+       queue cannot stall until the board closes. */
+    let speechWatchdog = null;
     function speechAdvance() {
       if (speechCurrent || !speechWaiting.length || !voiceOk) return;
       const u = speechWaiting.shift();
       speechCurrent = u;
-      const done = () => { if (speechCurrent === u) speechCurrent = null; speechAdvance(); };
+      const done = () => {
+        if (speechCurrent !== u) return; /* stale or duplicate event for a finished utterance */
+        clearTimeout(speechWatchdog); speechWatchdog = null;
+        speechCurrent = null; speechAdvance();
+      };
       u.onend = done; u.onerror = done;
-      try { window.speechSynthesis.speak(u); } catch (e) { speechCurrent = null; speechWaiting = []; voiceOk = false; }
+      speechWatchdog = setTimeout(done, Math.max(4000, 120 * String(u.text || '').length));
+      try { window.speechSynthesis.speak(u); } catch (e) { clearTimeout(speechWatchdog); speechWatchdog = null; speechCurrent = null; speechWaiting = []; voiceOk = false; }
     }
     function cancelSpeech() {
+      clearTimeout(speechWatchdog); speechWatchdog = null;
       speechWaiting = []; speechCurrent = null;
       try { window.speechSynthesis && window.speechSynthesis.cancel(); } catch (e) { /* ignore */ }
     }

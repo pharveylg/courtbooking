@@ -205,12 +205,7 @@
     return [srv, rec];
   }
   const scoreCallText = (state) => scoreCall(state).join('-');
-  /* Spoken form. The doubles side-out server number is said as "server N" so it
-     is not heard as a third score; singles and rally calls are unchanged. */
-  const scoreCallSpoken = (state) => {
-    const call = scoreCall(state);
-    return call.length === 3 ? `${call[0]}, ${call[1]}, server ${call[2]}` : call.join(', ');
-  };
+  const scoreCallSpoken = (state) => scoreCall(state).join(', ');
 
   function gameScoreText(g) { return `${Math.max(g.home, g.away)} to ${Math.min(g.home, g.away)}`; }
 

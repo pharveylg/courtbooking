@@ -244,7 +244,7 @@
        they could in fact reach it on the very next rally too. */
     if (oneAwayFromGameWin(next, next.serving)) {
       const isMatchPoint = next.gamesWon[next.serving] === gamesToWin(next.config) - 1;
-      return `${isMatchPoint ? 'Match' : 'Set'} point, ${nm[next.serving]}`;
+      return `${isMatchPoint ? 'Match' : 'Set'} point, ${scoreCallSpoken(next)}`;
     }
     const sideOut = prev.serving !== next.serving;
     return `${sideOut && next.config.scoring === 'sideout' ? 'Side out. ' : ''}${scoreCallSpoken(next)}`;
